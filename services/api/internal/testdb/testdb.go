@@ -213,12 +213,24 @@ func migrateAndOpen(ctx context.Context, adminURL string) (*DB, error) {
 		_ = conn.Close(ctx)
 		return nil, err
 	}
-	_ = conn.Close(ctx)
 
 	admin, err := db.Connect(ctx, db.Options{URL: adminURL, ApplicationName: "docmatch-test-admin", MaxConns: 8})
 	if err != nil {
+		_ = conn.Close(ctx)
 		return nil, err
 	}
+	// Mirror cmd/migrate: River's schema, then grants for the application role.
+	if _, err := db.MigrateRiver(ctx, admin, log); err != nil {
+		_ = conn.Close(ctx)
+		admin.Close()
+		return nil, err
+	}
+	if err := db.GrantAppRole(ctx, conn, AppRole); err != nil {
+		_ = conn.Close(ctx)
+		admin.Close()
+		return nil, err
+	}
+	_ = conn.Close(ctx)
 	app, err := db.Connect(ctx, db.Options{URL: adminURL, AppRole: AppRole, ApplicationName: "docmatch-test-app", MaxConns: 32})
 	if err != nil {
 		admin.Close()

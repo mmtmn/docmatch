@@ -78,7 +78,8 @@ func TestMigratorDownUpRoundTrip(t *testing.T) {
 		t.Fatalf("Down: %v %v", reverted, err)
 	}
 	var n int
-	if err := d.Admin.QueryRow(ctx, "SELECT count(*) FROM pg_tables WHERE schemaname = 'public' AND tablename <> 'schema_migrations'").Scan(&n); err != nil || n != 0 {
+	// River's tables belong to its own migrator and stay in place.
+	if err := d.Admin.QueryRow(ctx, "SELECT count(*) FROM pg_tables WHERE schemaname = 'public' AND tablename <> 'schema_migrations' AND tablename NOT LIKE 'river\\_%'").Scan(&n); err != nil || n != 0 {
 		t.Fatalf("tabelas restantes após down: %d (%v)", n, err)
 	}
 	applied, err := m.Up(ctx, ms)

@@ -25,8 +25,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/riverqueue/river/riverdriver/riverpgxv5"
-	"github.com/riverqueue/river/rivermigrate"
 
 	"github.com/mmtmn/docmatch/services/api/internal/config"
 	"github.com/mmtmn/docmatch/services/api/internal/db"
@@ -145,17 +143,9 @@ func migrateRiver(ctx context.Context, dbURL string, log *slog.Logger) error {
 		return fmt.Errorf("river: abrir pool: %w", err)
 	}
 	defer pool.Close()
-	migrator, err := rivermigrate.New(riverpgxv5.New(pool), &rivermigrate.Config{Logger: log})
+	versions, err := db.MigrateRiver(ctx, pool, log)
 	if err != nil {
-		return fmt.Errorf("river: migrador: %w", err)
-	}
-	res, err := migrator.Migrate(ctx, rivermigrate.DirectionUp, nil)
-	if err != nil {
-		return fmt.Errorf("river: migrar: %w", err)
-	}
-	versions := make([]int, 0, len(res.Versions))
-	for _, v := range res.Versions {
-		versions = append(versions, v.Version)
+		return err
 	}
 	log.Info("migrações do River aplicadas", slog.Int("count", len(versions)), slog.Any("versions", versions))
 	return nil
