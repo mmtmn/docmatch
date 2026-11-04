@@ -4,7 +4,8 @@ Infraestrutura como código da docmatch na **fase tiny**: uma `t4g.small` atrás
 conta AWS única (sem Organizations, compartilhada com outros projetos: tudo o que é nosso começa com
 `docmatch-`), domínio registrado fora da AWS e conta de cerca de US$ 15–20/mês. Tudo aqui é
 **validado, não aplicado**: `make ci` roda `terraform validate`, `tflint`, `trivy config`,
-`ansible-lint`, `packer validate` e `shellcheck`, e nunca toca a conta.
+`ansible-lint`, `packer validate`, `shellcheck` e os testes locais de `tests/` (função de borda do
+CloudFront com `node --test`, `render-env.sh` com `systemd-run`), e nunca toca a conta.
 
 ## Topologia
 
@@ -87,12 +88,17 @@ por `aws iam get-user` e depois por `aws ec2 describe-security-groups`.
    valida sem a delegação, e o CloudFront recusa uma distribuição que aponte para um certificado
    pendente; com `false` a distribuição nasce no certificado padrão `*.cloudfront.net` e sem os
    aliases do domínio, de modo que o apply termina inteiro. Anote os outputs `app_subnet_id`,
-   `app_security_group_id` e `packer_instance_profile_name`.
+   `app_security_group_id` e `packer_instance_profile_name`. O primeiro `plan` roda inteiro, sem
+   `-target`: nenhum `count` ou `for_each` depende de um valor que só existe depois do apply (as
+   políticas de guardrail viajam em mapas com chaves fixas e os alarmes têm interruptores booleanos).
 3. **AMI**: copie `packer/example.pkrvars.hcl` para `packer/build.auto.pkrvars.hcl` com os três
    outputs acima e rode `make -C infra packer-build` (exige o `session-manager-plugin` da AWS na
    máquina de build). O Packer entra pela SSM (nada de porta 22),
    aplica o papel `hardening`, roda o portão do Lynis (índice ≥ 90, senão a AMI não é criada),
-   remove o OpenSSH e inicializa o AIDE. O id da AMI fica em `packer/manifest.json`.
+   remove o OpenSSH e inicializa o AIDE. O id da AMI fica em `packer/manifest.json`. O papel
+   termina com asserções que derrubam a construção se as regras do auditd não carregaram inteiras
+   (`augenrules --check`, `auditctl -l`, `-e 2`), se `/tmp` e `/var/tmp` não são tmpfs
+   `nodev,nosuid,noexec` ou se um `apt-get update` pelo proxy de saída falha.
 4. **prod**: mesmo fluxo de tfvars; `make -C infra init-prod plan-prod apply-prod`. Depois do
    primeiro apply, preencha os segredos no SSM (abaixo), grave o `origin_secret` no KVS do
    CloudFront, coloque `ami_id` e `lambda_image_tag` no tfvars e aplique de novo.
@@ -127,7 +133,9 @@ por `aws iam get-user` e depois por `aws ec2 describe-security-groups`.
   modo 0400, dono `docmatch`) no formato `EnvironmentFile` do systemd, mais os subconjuntos
   `/run/docmatch/env.caddy` (dono `caddy`) e `/run/docmatch/env.postgres` (dono `postgres`). O
   serviço recusa concluir enquanto algum segredo ainda estiver com `__UNSET__`, e as unidades da
-  aplicação dependem dele. Nada é gravado em disco persistente.
+  aplicação dependem dele. Nada é gravado em disco persistente. Quebras de linha reais (chaves
+  PEM) chegam ao serviço como os dois caracteres `\n`, barras e aspas chegam intactas; o teste
+  `tests/render-env.test.sh` mede isso com o próprio `systemd-run`.
 - O papel da instância só lê `/docmatch/<env>/*`; a política gerenciada
   `AmazonSSMManagedInstanceCore` foi evitada de propósito porque dá `GetParameter` em toda a conta.
 
@@ -142,9 +150,12 @@ por `aws iam get-user` e depois por `aws ec2 describe-security-groups`.
    serviços. Os workers spot (mínimo 0) seguem o mesmo launch template.
 4. Rollback: volte o `ami_id` anterior e aplique. AMIs têm `deprecate_at` em 90 dias.
 
-Pacotes de terceiros (Caddy, PGDG, CrowdSec, Falco) só mudam com AMI nova; o
-`unattended-upgrades` aplica apenas atualizações de segurança do Ubuntu, com reinício às 04:00
-(America/Sao_Paulo) quando necessário.
+Pacotes de terceiros (Caddy, PGDG, CrowdSec, Falco) só mudam com AMI nova: as fontes ficam
+desativadas na imagem (`Enabled: no`), porque packagecloud.io e download.falco.org redirecionam
+índices e pacotes para hosts do CloudFront fora da lista de saída (cadeia de HEAD documentada em
+`ansible/roles/hardening/tasks/apt_proxy.yml`). Na construção o apt só passa a usar o proxy depois
+de instalá-los. O `unattended-upgrades` aplica apenas atualizações de segurança do Ubuntu, com
+reinício às 04:00 (America/Sao_Paulo) quando necessário.
 
 ## O que NÃO é criado na fase tiny
 
@@ -225,7 +236,7 @@ Pacotes de terceiros (Caddy, PGDG, CrowdSec, Falco) só mudam com AMI nova; o
 
 ```
 infra/
-├── Makefile              setup · lint · validate · test · ci · ci-full · clean · init/plan/apply-<env> · packer-build
+├── Makefile              setup · lint · validate · test · test-unit · ci · ci-full · clean · init/plan/apply-<env> · packer-build
 ├── .tflint.hcl           ruleset terraform + aws
 ├── .trivyignore.yaml     linha de base de achados aceitos (um comentário por achado)
 ├── terraform/
@@ -233,7 +244,8 @@ infra/
 │   └── envs/{dev,prod}   composição, backend parcial, terraform.tfvars.example, backend.hcl.example
 ├── packer/               docmatch.pkr.hcl (amazon-ebs via SSM, ansible, lynis-gate, finalize), variables, exemplo
 ├── ansible/              site.yml, ansible.cfg, requirements.yml (collections fixadas), roles/hardening
-└── scripts/              bootstrap-state.sh · render-env.sh · lynis-gate.sh · deploy-site.sh · lib.sh
+├── scripts/              bootstrap-state.sh · render-env.sh · lynis-gate.sh · deploy-site.sh · lib.sh
+└── tests/                viewer-request.test.mjs (função de borda, node --test) · render-env.test.sh
 ```
 
 `make -C infra ci` leva cerca de um minuto com o cache de providers em `~/.cache/docmatch`.

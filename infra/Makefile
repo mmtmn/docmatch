@@ -37,7 +37,7 @@ TF_ROOTS   := $(TF_ENVS) $(TF_MODULES)
 
 .PHONY: help setup setup-tflint setup-packer setup-ansible lint lint-terraform lint-tflint \
         lint-ansible lint-packer lint-shell validate validate-terraform validate-packer \
-        test trivy ci ci-full clean init-% plan-% apply-% packer-build
+        test test-unit trivy ci ci-full clean init-% plan-% apply-% packer-build
 
 help: ## lista os alvos
 	@grep -E '^[a-zA-Z_%-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -99,7 +99,7 @@ lint-packer: ## packer fmt -check
 
 lint-shell: ## shellcheck nos scripts (instalado pelo setup via shellcheck-py; nunca pula)
 	@command -v shellcheck >/dev/null || { echo "erro: shellcheck não encontrado; rode make -C infra setup-ansible"; exit 1; }
-	@shellcheck -x "$(INFRA_DIR)"/scripts/*.sh "$(INFRA_DIR)"/packer/scripts/*.sh "$(INFRA_DIR)"/ansible/roles/hardening/files/*.sh
+	@shellcheck -x "$(INFRA_DIR)"/scripts/*.sh "$(INFRA_DIR)"/packer/scripts/*.sh "$(INFRA_DIR)"/ansible/roles/hardening/files/*.sh "$(INFRA_DIR)"/tests/*.sh
 
 # ---------------------------------------------------------------------------------- validate
 validate: validate-terraform validate-packer ## terraform validate em cada env e módulo + packer validate
@@ -121,7 +121,12 @@ validate-packer: ## packer init + packer validate com o arquivo de exemplo de va
 	@cd "$(INFRA_DIR)/packer" && packer init . >/dev/null && packer validate -var-file=example.pkrvars.hcl .
 
 # -------------------------------------------------------------------------------------- test
-test: validate trivy ## validate + trivy config com a linha de base de achados aceitos
+test: validate trivy test-unit ## validate + trivy config com a linha de base de achados aceitos + testes locais
+
+test-unit: ## testes sem AWS: função de borda do CloudFront (node --test) e render-env.sh (bash + systemd-run)
+	@command -v node >/dev/null || { echo "erro: node não encontrado (>= 20, para node --test)"; exit 1; }
+	@node --test "$(INFRA_DIR)/tests/viewer-request.test.mjs"
+	@bash "$(INFRA_DIR)/tests/render-env.test.sh"
 
 trivy: ## trivy config (misconfigurações em Terraform) com .trivyignore.yaml como linha de base
 	@cd "$(INFRA_DIR)" && trivy config --quiet --exit-code 1 --severity LOW,MEDIUM,HIGH,CRITICAL \
