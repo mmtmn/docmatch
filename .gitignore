@@ -61,3 +61,9 @@ Thumbs.db
 tmp/
 scratch/
 *.log
+
+# Worktrees e estado de ferramentas locais de agentes
+.claude/
+
+# Corpora gerados em tempo de teste (contêm EICAR, bombas de compressão etc.)
+testdata/security-corpus/**/generated/
