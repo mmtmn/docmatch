@@ -1,0 +1,11 @@
+# Arquivos locais da infra que nunca entram no repositório.
+# backend.hcl carrega o id da conta (gerado por scripts/bootstrap-state.sh).
+terraform/envs/*/backend.hcl
+terraform/envs/*/*.tfplan
+terraform/**/.init.err
+terraform/**/.validate.err
+packer/manifest.json
+packer/packer_cache/
+packer/*.auto.pkrvars.hcl
+ansible/.ansible-lint-cache/
+ansible/collections/
