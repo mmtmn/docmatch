@@ -1,0 +1,87 @@
+# Preços padrão dos tokens docmatch. Sobrescrevíveis por ambiente (DM_TARGET_MARGIN etc.) e, em
+# produção, pela tabela editada no painel admin (aplicada só a orçamentos novos).
+#
+# tokens = ceil( (C_modelo * (1 + fee_openrouter) + C_computo) / ((1 - margem/(1-imposto) - pagamento - infra) * token_usd) )
+
+token_usd: 0.01
+
+rates:
+  target_margin: 0.30        # margem após tudo
+  income_tax: 0.21           # imposto de renda federal (Delaware C corp)
+  payment: 0.076             # pior caso: cartão brasileiro em conta Stripe dos EUA, plano de US$ 20
+  infra: 0.10                # parcela de infraestrutura na receita (recalculada mensalmente)
+  openrouter_fee: 0.055      # taxa na compra de créditos
+
+min_tokens_per_run: 10
+quote_ttl_minutes: 15
+quote_cap_percentile: 0.99
+
+lanes:                       # multiplicador sobre o custo em tokens de uma execução no app
+  app: 1.0
+  api_batch: 2.0
+  api_standard: 3.0
+  api_priority: 4.5
+
+plans:
+  starter:
+    price_usd: 20
+    tokens: 2000
+    document_files_per_run: 10
+    document_file_mb: 25
+    document_run_mb: 100
+    media_files_per_run: 2000
+    media_run_gb: 2
+    media_run_hours: 2
+    concurrent_runs: 1
+    api_keys: 1
+    api_lanes: [api_batch]
+    auto_rule_learning: false
+    ui_customizations_per_month: 1
+    escalation_model: false
+    retention_days: 30
+  pro:
+    price_usd: 100
+    tokens: 10000
+    document_files_per_run: 30
+    document_file_mb: 25
+    document_run_mb: 100
+    media_files_per_run: 10000
+    media_run_gb: 20
+    media_run_hours: 20
+    concurrent_runs: 3
+    api_keys: 5
+    api_lanes: [api_batch, api_standard]
+    auto_rule_learning: true
+    ui_customizations_per_month: 5
+    escalation_model: false
+    retention_days: 30
+  business:
+    price_usd: 200
+    tokens: 20000
+    document_files_per_run: 100
+    document_file_mb: 50
+    document_run_mb: 500
+    media_files_per_run: 50000
+    media_run_gb: 100
+    media_run_hours: 100
+    concurrent_runs: 10
+    api_keys: 20
+    api_lanes: [api_batch, api_standard, api_priority]
+    auto_rule_learning: true
+    ui_customizations_per_month: -1   # ilimitado (tokens se aplicam)
+    escalation_model: true
+    retention_days: 365
+
+rollover:
+  plan_tokens_cycles: 1
+  topup_tokens_months: 12
+
+# Estimativas de custo em USD usadas pelo estimador antes das calibrações semanais.
+estimates:
+  audio_minute_usd: 0.0011
+  audio_minute_batch_usd: 0.00054
+  video_minute_usd: 0.006
+  frame_usd: 0.00014
+  new_tool_usd: 0.89
+  scan_file_usd: 0.0008
+  web_search_request_usd: 0.012

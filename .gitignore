@@ -1,0 +1,63 @@
+# Secrets and environment — never committed
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
+terraform.tfvars
+*.auto.tfvars
+!terraform.tfvars.example
+
+# Private test data (the Vantara case pack and its answer key)
+testdata/private/
+
+# Build outputs
+target/
+dist/
+build/
+out/
+coverage/
+*.test
+*.out
+*.prof
+bin/
+.turbo/
+.astro/
+.next/
+.cache/
+
+# Dependencies
+node_modules/
+.pnpm-store/
+vendor/
+.venv/
+__pycache__/
+*.pyc
+
+# Tool state
+.terraform/
+.terraform.lock.hcl
+!infra/**/.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.log
+packer_cache/
+.gradle/
+local.properties
+*.xcuserstate
+xcuserdata/
+DerivedData/
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Local scratch
+tmp/
+scratch/
+*.log

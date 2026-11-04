@@ -1,0 +1,53 @@
+# Segunda checagem: repete o mesmo `make ci` que roda localmente antes de cada push.
+# Ninguém espera por este workflow; o portão é local.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/api/go.mod
+          cache-dependency-path: services/api/go.sum
+        if: hashFiles('services/api/go.mod') != ''
+
+      - uses: dtolnay/rust-toolchain@stable
+        if: hashFiles('services/harness/Cargo.toml') != ''
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: services/harness
+        if: hashFiles('services/harness/Cargo.toml') != ''
+
+      - uses: pnpm/action-setup@v4
+        if: hashFiles('pnpm-lock.yaml') != ''
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+        if: hashFiles('.nvmrc') != ''
+
+      - uses: hashicorp/setup-terraform@v3
+        if: hashFiles('infra/terraform/**/*.tf') != ''
+
+      - name: make ci
+        env:
+          CI_BASE_REF: ${{ github.event.pull_request.base.sha || 'HEAD~1' }}
+        run: make ci

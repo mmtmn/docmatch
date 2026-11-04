@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# pre-commit: bloqueia caminhos proibidos, segredos e falhas de formatação nos arquivos staged.
+set -euo pipefail
+
+root="$(git rev-parse --show-toplevel)"
+cd "$root"
+
+staged="$(git diff --cached --name-only --diff-filter=ACMR)"
+[[ -z "$staged" ]] && exit 0
+
+# 1. Caminhos que nunca entram no repositório, mesmo com --force.
+forbidden='^(\.env($|\.)|.*terraform\.tfvars$|.*\.auto\.tfvars$|testdata/private/|.*\.(pem|p12|jks|keystore)$)'
+bad="$(echo "$staged" | grep -E "$forbidden" | grep -vE '^\.env\.example$|terraform\.tfvars\.example$' || true)"
+if [[ -n "$bad" ]]; then
+  echo "pre-commit: estes caminhos nunca podem ser commitados:" >&2
+  echo "$bad" | sed 's/^/  /' >&2
+  exit 1
+fi
+
+# 2. Segredos (gitleaks quando instalado; sempre o lint de hardcode).
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks protect --staged --redact --no-banner
+else
+  echo "pre-commit: aviso — gitleaks não instalado (make setup instala)." >&2
+fi
+tools/lint/hardcode.sh $staged
+
+# 3. Formatação por subsistema, apenas nos arquivos staged.
+go_files="$(echo "$staged" | grep -E '\.go$' || true)"
+if [[ -n "$go_files" ]] && command -v gofmt >/dev/null 2>&1; then
+  unformatted="$(gofmt -l $go_files || true)"
+  if [[ -n "$unformatted" ]]; then
+    echo "pre-commit: gofmt precisa rodar em:" >&2; echo "$unformatted" | sed 's/^/  /' >&2; exit 1
+  fi
+fi
+rs_files="$(echo "$staged" | grep -E '\.rs$' || true)"
+if [[ -n "$rs_files" ]] && command -v rustfmt >/dev/null 2>&1; then
+  rustfmt --check --edition 2021 $rs_files
+fi
+tf_files="$(echo "$staged" | grep -E '\.tf$' || true)"
+if [[ -n "$tf_files" ]] && command -v terraform >/dev/null 2>&1; then
+  terraform fmt -check $tf_files
+fi
+
+exit 0

@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# commit-msg hook: Conventional Commits + proibição de atribuição a assistentes de IA.
+set -euo pipefail
+
+msg_file="$1"
+first_line="$(sed -n '1p' "$msg_file")"
+
+# Merge e revert gerados pelo git passam direto.
+if [[ "$first_line" =~ ^(Merge|Revert) ]]; then
+  exit 0
+fi
+
+types='feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|security'
+if ! [[ "$first_line" =~ ^($types)(\([a-z0-9/_.,-]+\))?!?:\ .{1,72}$ ]]; then
+  echo "commit-msg: a primeira linha precisa seguir Conventional Commits:" >&2
+  echo "  <tipo>(<escopo opcional>): <resumo com até 72 caracteres>" >&2
+  echo "  tipos: ${types//|/, }" >&2
+  echo "  recebido: $first_line" >&2
+  exit 1
+fi
+
+# Nenhuma linha de atribuição a assistentes de IA entra no histórico.
+if grep -qiE '(co-authored-by:.*(claude|anthropic|openai|gpt|copilot)|generated (with|by) .*(claude|ai|copilot)|noreply@anthropic\.com|claude code)' "$msg_file"; then
+  echo "commit-msg: linhas de atribuição a assistentes de IA não são permitidas." >&2
+  exit 1
+fi
+
+exit 0

@@ -1,0 +1,123 @@
+# Roteamento de modelos por papel. Valores padrão; qualquer entrada pode ser sobrescrita por
+# variável de ambiente no formato DM_MODEL_<PAPEL>_<CAMPO> (ex.: DM_MODEL_DISCOVERY_PRIMARY).
+# Preços são lidos diariamente da OpenRouter e guardados no banco; nunca aqui.
+#
+# Regra fixa: adjudicator e verifier (e toolsmith e tool_reviewer) são sempre de famílias diferentes.
+# Com DM_LLM_MODE=local, o campo `local` é usado para todos os papéis via DM_LOCAL_LLM_BASE_URL.
+
+defaults:
+  temperature: 0
+  timeout_s: 120
+  max_output_tokens: 4096
+  provider_preferences:
+    data_collection: deny          # só provedores com retenção zero que não treinam com os dados
+    require_parameters: true
+
+roles:
+  guard:
+    primary: openai/gpt-oss-safeguard-20b
+    fallback: nvidia/nemotron-3.5-content-safety
+    local: gpt-oss-safeguard:20b
+    max_output_tokens: 512
+    timeout_s: 30
+
+  extraction:
+    primary: anthropic/claude-haiku-5.5
+    fallback: openai/gpt-6-luna
+    local: qwen3.6:35b
+    structured_output: true
+
+  discovery:
+    primary: anthropic/claude-opus-5.5
+    fallback: google/gemini-4-argon
+    local: qwen3.8:27b
+    reasoning: true
+    max_output_tokens: 8192
+    timeout_s: 300
+
+  adjudicator:
+    primary: anthropic/claude-sonnet-5.5
+    fallback: google/gemini-4-argon
+    local: qwen3.8:27b
+    structured_output: true
+
+  verifier:
+    primary: openai/gpt-6.1-sol
+    fallback: moonshotai/kimi-k3.1-pro
+    local: gemma4:31b
+    structured_output: true
+
+  escalation:
+    primary: anthropic/claude-fable-5.1
+    fallback: openai/gpt-6-astra
+    local: ""
+    reasoning: true
+    max_output_tokens: 16384
+    timeout_s: 600
+    plans: [business]
+
+  long_context:
+    primary: google/gemini-4-argon
+    fallback: x-ai/grok-4.20
+    local: ""
+    min_prompt_tokens: 200000
+
+  embeddings:
+    primary: qwen/qwen3-embedding-8b
+    fallback: baai/bge-m3
+    local: bge-m3
+
+  stt:
+    primary: google/gemini-3.5-flash-lite
+    fallback: qwen/qwen3.8-omni-flash
+    local: whisper-large-v3-turbo
+    batch_variant: google/gemini-3.5-flash-lite:batch
+
+  vision:
+    primary: qwen/qwen3.8-flash
+    fallback: google/gemini-3.5-flash-lite
+    local: qwen3.8:27b
+
+  video:
+    primary: google/gemini-3.5-flash-lite
+    fallback: qwen/qwen3.8-omni-flash
+    local: gemma4:31b
+
+  toolsmith:
+    primary: anthropic/claude-opus-5.5
+    fallback: openai/gpt-6.1-sol
+    local: qwen3.8:27b
+    reasoning: true
+    max_output_tokens: 16384
+    timeout_s: 600
+
+  tool_reviewer:
+    primary: openai/gpt-6.1-sol
+    fallback: google/gemini-4-argon
+    local: gemma4:31b
+    structured_output: true
+
+  blog_writer:
+    primary: deepseek/deepseek-v4.1-flash
+    fallback: anthropic/claude-haiku-5.5
+    local: qwen3.6:35b
+    batch_variant: deepseek/deepseek-v4.1-flash:batch
+    max_output_tokens: 6000
+
+  blog_judge:
+    primary: openai/gpt-6-luna
+    fallback: anthropic/claude-haiku-5.5
+    local: gemma4:31b
+    structured_output: true
+
+  ui_planner:
+    primary: anthropic/claude-sonnet-5.5
+    fallback: openai/gpt-6.1-sol
+    local: qwen3.8:27b
+    structured_output: true
+
+web_search:
+  plugin: web
+  engine: exa
+  max_results: 5
+  max_requests_per_run: 5

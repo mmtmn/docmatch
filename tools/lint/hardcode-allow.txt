@@ -1,0 +1,27 @@
+# Lista de permissões do lint de hardcode.
+#   path:<regex de caminho>    — arquivos ignorados por inteiro
+#   literal:<regex>            — ocorrências permitidas em qualquer arquivo
+#
+# Documentação, testes e manifestos de pacotes podem conter URLs e exemplos.
+path:docs/
+path:.*\.md$
+path:testdata/
+path:\.env\.example$
+path:.*terraform\.tfvars\.example$
+path:tools/lint/
+path:.*/(Cargo|Package)\.(toml|resolved|swift)$
+path:.*(package|package-lock|pnpm-lock|go|go\.sum|Cargo\.lock|Gemfile|Podfile)(\.json|\.yaml|\.lock|\.mod|\.sum)?$
+path:.*\.lock$
+path:\.github/
+path:.*gradle.*
+path:.*\.xcodeproj/
+path:.*\.xcworkspace/
+path:packages/locales/
+path:.*/LICENSE$
+path:LICENSE$
+# Esquemas e namespaces públicos usados por bibliotecas e protocolos.
+literal:https?://(www\.)?(w3\.org|schema\.org|json-schema\.org|xmlns\.com|purl\.org|example\.(com|org|net)|localhost)
+literal:https?://(openrouter\.ai/api|api\.stripe\.com|api\.resend\.com|accounts\.google\.com|oauth2\.googleapis\.com|www\.googleapis\.com|appleid\.apple\.com)
+literal:https?://(registry\.npmjs\.org|pypi\.org|crates\.io|proxy\.golang\.org|github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)
+literal:127\.0\.0\.1|0\.0\.0\.0|255\.255\.255\.255|169\.254\.169\.254
+literal:(no-?reply|security|contato|suporte)@example\.com

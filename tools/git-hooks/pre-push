@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# pre-push: o portão completo roda localmente antes de qualquer push (make ci, < 6 min).
+set -euo pipefail
+root="$(git rev-parse --show-toplevel)"
+cd "$root"
+exec make ci
