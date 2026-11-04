@@ -1,0 +1,51 @@
+# Limites de entrada compartilhados por cliente e servidor. Este arquivo gera constantes para
+# TypeScript, Go, Rust, Kotlin e Swift (tools/codegen); nenhum limite é digitado em outro lugar.
+# O cliente aplica `maxlength` com contador a partir de 80%; o servidor reaplica após normalização
+# Unicode NFC e rejeita caracteres de controle. Limites por plano (arquivos por execução,
+# tamanho por execução) ficam em config/pricing.yaml.
+version: 1
+
+text:                       # em caracteres (code points após NFC)
+  rules_text: 4000
+  ui_customization_request: 2000
+  saved_rule_title: 120
+  saved_rule_body: 2000
+  rule_picker_search: 100
+  workflow_name: 80
+  display_name: 80
+  company_name: 120
+  email: 254
+  password_min: 12
+  password_max: 128
+  api_key_label: 60
+  coupon_code: 32
+  contact_message: 2000
+  admin_note: 1000
+  finding_feedback_note: 500
+  blog_comment: 0           # comentários desativados
+
+files:
+  uploaded_file_name_bytes: 255
+  document_file_max_mb: 50        # teto absoluto; o plano pode ser menor
+  document_run_max_mb: 500
+  media_file_max_gb: 4
+  media_file_max_hours: 4
+  media_run_max_gb: 100
+  media_run_max_hours: 100
+  zip_max_entries: 1000
+  zip_max_ratio: 100
+  zip_max_uncompressed_mb: 200
+  zip_max_depth: 1
+
+http:
+  json_body_max_kb: 256
+  header_max_kb: 16
+  read_header_timeout_s: 5
+  request_timeout_s: 30
+  sse_idle_timeout_s: 300
+
+ids:
+  idempotency_key_max: 128
+  api_key_scopes_max: 10
+  files_per_run_hard_max: 100
+  media_files_per_run_hard_max: 50000
