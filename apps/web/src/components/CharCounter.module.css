@@ -1,0 +1,15 @@
+.counter {
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--color-muted);
+  text-align: right;
+}
+
+.counter:empty {
+  display: none;
+}
+
+.counter[data-at-limit='true'] {
+  color: var(--color-danger);
+  font-weight: 600;
+}

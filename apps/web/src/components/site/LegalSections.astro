@@ -1,0 +1,24 @@
+---
+import { t } from '../../lib/i18n';
+
+interface Props {
+  title: string;
+  updated: string;
+  sections: ReadonlyArray<{ title: string; paragraphs: readonly string[] }>;
+}
+
+const { title, updated, sections } = Astro.props;
+---
+
+<main id="conteudo" class="container section prose">
+  <h1>{title}</h1>
+  <p class="muted small">{t('legal.last_updated', { date: updated })}</p>
+  {sections.map((section) => (
+    <section>
+      <h2>{section.title}</h2>
+      {section.paragraphs.map((paragraph) => (
+        <p>{paragraph}</p>
+      ))}
+    </section>
+  ))}
+</main>

@@ -1,0 +1,18 @@
+{
+  "lane": "app",
+  "lane_multiplier": 1.0,
+  "items": [
+    { "item": "scan_files", "quantity": 3, "unit": "files", "credits": 1 },
+    { "item": "documents", "quantity": 12, "unit": "pages", "credits": 4 },
+    { "item": "audio_minutes", "quantity": 38.5, "unit": "minutes", "credits": 9, "note": "1 nota de voz (38 min)" },
+    { "item": "frames", "quantity": 420, "unit": "frames", "credits": 12 },
+    { "item": "llm_tokens", "quantity": 18400, "unit": "tokens", "credits": 6, "note": "resíduo após a cascata determinística" },
+    { "item": "new_tools", "quantity": 1, "unit": "tools", "credits": 180, "note": "1 formato nunca visto" },
+    { "item": "web_requests", "quantity": 2, "unit": "requests", "credits": 5 }
+  ],
+  "subtotal_credits": 217,
+  "minimum_credits": 10,
+  "total_credits": 217,
+  "pricing_version": "2026-11-01-a3f9",
+  "calibration": { "sample_runs": 1240, "p99_overrun": 1.35, "calibrated_at": "2026-11-02T03:00:00Z" }
+}

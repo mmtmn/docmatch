@@ -1,0 +1,29 @@
+.wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+}
+
+.button {
+  min-width: 12rem;
+  min-height: 3rem;
+  font-size: var(--fs-lg);
+}
+
+.status {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--color-muted);
+}
+
+.status[data-kind='estimate'] {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-fg);
+}
+
+@media (max-width: 30em) {
+  .button {
+    width: 100%;
+  }
+}

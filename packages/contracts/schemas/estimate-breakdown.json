@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EstimateBreakdown",
+  "description": "Como o estimador chegou ao número de créditos de uma execução: cada componente de custo (minutos de áudio, quadros, ferramentas novas, requisições web, tokens de modelo), o multiplicador da faixa e o mínimo por execução. Créditos são inteiros; a fórmula e as taxas vivem em config/pricing.yaml.",
+  "type": "object",
+  "required": ["lane", "lane_multiplier", "items", "subtotal_credits", "minimum_credits", "total_credits", "pricing_version"],
+  "properties": {
+    "lane": {
+      "type": "string",
+      "enum": ["app", "api_batch", "api_standard", "api_priority"],
+      "description": "Faixa de prioridade. `app` é a execução pelo site; as faixas `api_*` têm multiplicadores próprios."
+    },
+    "lane_multiplier": {
+      "type": "number",
+      "minimum": 1,
+      "description": "Multiplicador da faixa aplicado ao subtotal (ex.: 1.0 para `app`, 2.0 para `api_batch`)."
+    },
+    "items": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Item" },
+      "description": "Componentes de custo. Pode ser vazio quando a execução é puramente determinística e cai no mínimo."
+    },
+    "subtotal_credits": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Soma dos itens antes do multiplicador da faixa."
+    },
+    "minimum_credits": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Mínimo por execução (min_tokens_per_run em config/pricing.yaml)."
+    },
+    "total_credits": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "max(ceil(subtotal × multiplicador), mínimo). É o `expected_credits` do orçamento."
+    },
+    "pricing_version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Identificador da tabela de preços usada (hash da tabela vigente), para auditoria."
+    },
+    "calibration": {
+      "type": "object",
+      "description": "Dados da calibração semanal usada pelo estimador.",
+      "properties": {
+        "sample_runs": { "type": "integer", "minimum": 0 },
+        "p99_overrun": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Razão entre custo real e estimado no percentil 99 das execuções recentes; base do `cap_credits`."
+        },
+        "calibrated_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "Item": {
+      "title": "EstimateItem",
+      "type": "object",
+      "required": ["item", "quantity", "unit", "credits"],
+      "properties": {
+        "item": {
+          "type": "string",
+          "enum": [
+            "documents",
+            "scan_files",
+            "audio_minutes",
+            "video_minutes",
+            "frames",
+            "llm_tokens",
+            "embeddings",
+            "new_tools",
+            "web_requests"
+          ],
+          "description": "`documents` (páginas e linhas a extrair), `scan_files` (verificação de segurança), `audio_minutes`, `video_minutes`, `frames` (quadros analisados), `llm_tokens` (resíduo enviado aos modelos), `embeddings`, `new_tools` (ferramentas a construir), `web_requests` (busca na web)."
+        },
+        "quantity": { "type": "number", "minimum": 0 },
+        "unit": {
+          "type": "string",
+          "enum": ["files", "pages", "mb", "minutes", "frames", "tokens", "tools", "requests"]
+        },
+        "credits": { "type": "integer", "minimum": 0 },
+        "note": {
+          "type": "string",
+          "description": "Observação em pt-BR exibida ao lado do item (ex.: `2 formatos nunca vistos`)."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

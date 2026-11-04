@@ -1,0 +1,17 @@
+{
+  "id": "rul_01JBXK6D0G6H1J2K3M4N5P6Q7R",
+  "tenant_id": "org_01JBXK9G3K9M4N5P6Q7R8S9T0V",
+  "scope": "tenant",
+  "title": "Compilada sem hash",
+  "body": "Deve ser rejeitada.",
+  "version": 1,
+  "status": "candidate",
+  "compiled": {
+    "language": "sql",
+    "text": "SELECT 1",
+    "compiled_at": "2026-10-20T15:12:00Z"
+  },
+  "stats": { "runs_evaluated": 0, "true_positives": 0, "false_positives": 0, "explained_amount": 0 },
+  "provenance": { "origin": "user", "proposed_at": "2026-11-04T10:00:00Z" },
+  "created_at": "2026-11-04T10:00:00Z"
+}

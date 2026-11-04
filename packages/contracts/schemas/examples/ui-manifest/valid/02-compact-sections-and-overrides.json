@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "theme": {
+    "mode": "light",
+    "tokens": {
+      "light": { "color.brand.primary": "#1D4ED8", "color.brand.on_primary": "#FFFFFF" },
+      "dark": { "color.brand.primary": "#93C5FD", "color.brand.on_primary": "#0B1220" }
+    },
+    "radius": "lg",
+    "density": "compact"
+  },
+  "labels": {
+    "results.title": "Divergências do mês",
+    "findings.column.amount_at_risk": "Valor em aberto",
+    "upload.cta": "Solte o extrato e o razão aqui"
+  },
+  "results": {
+    "layout": "split",
+    "group_by": "severity",
+    "sort": { "by": "severity", "direction": "desc" },
+    "columns": ["title", "amount_at_risk", "confidence", "status"],
+    "show_evidence_inline": false,
+    "severity_filter_default": ["medium", "high", "critical"]
+  },
+  "defaults": {
+    "lane": "app",
+    "llm_mode": "openrouter",
+    "web_search": false,
+    "export_format": "pdf",
+    "auto_approve_up_to_credits": 150,
+    "workflow_id": "wfl_01JBXKBJ5N1P6Q7R8S9T0V1W2X"
+  },
+  "composition": {
+    "components": [
+      { "type": "heading", "props": { "text": "Fechamento mensal", "level": 1 } },
+      {
+        "type": "columns",
+        "props": { "ratio": "2:1" },
+        "children": [
+          {
+            "type": "section",
+            "id": "entrada",
+            "props": { "title": "Fontes" },
+            "children": [
+              { "type": "workflow_picker" },
+              { "type": "upload_dropzone", "props": { "accept": [".ofx", ".csv", ".xlsx", ".pdf"] } },
+              { "type": "source_list" }
+            ]
+          },
+          {
+            "type": "section",
+            "id": "orcamento",
+            "props": { "title": "Orçamento" },
+            "children": [
+              { "type": "credit_meter" },
+              { "type": "quote_card", "props": { "show_breakdown": true } },
+              { "type": "callout", "props": { "tone": "info", "text": "Execuções até 150 créditos começam sem confirmação." } }
+            ]
+          }
+        ]
+      },
+      { "type": "divider" },
+      { "type": "run_progress" },
+      { "type": "summary_cards", "props": { "metrics": ["amount_at_risk", "findings", "matched_percent"] } },
+      { "type": "findings_table" },
+      { "type": "finding_detail" },
+      { "type": "evidence_viewer" },
+      { "type": "match_list", "props": { "collapsed": true } },
+      { "type": "export_bar", "props": { "formats": ["pdf", "xlsx"] } },
+      { "type": "history_list", "props": { "limit": 10 } }
+    ]
+  }
+}

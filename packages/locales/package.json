@@ -1,0 +1,14 @@
+{
+  "name": "@docmatch/locales",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Textos em pt-BR usados pelo site, pelo app web e, depois, por Android e iOS.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "files": [
+    "*.json"
+  ],
+  "exports": {
+    "./*.json": "./*.json"
+  }
+}

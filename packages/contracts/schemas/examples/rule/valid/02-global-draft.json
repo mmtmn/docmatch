@@ -1,0 +1,13 @@
+{
+  "id": "rul_01JBXK6D0G6H1J2K3M4N5P6Q7R",
+  "tenant_id": null,
+  "scope": "global",
+  "title": "IOF em compra internacional acompanha a compra",
+  "body": "Um débito identificado como IOF no mesmo dia e com valor entre 1% e 4% de uma compra internacional é parte dessa compra.",
+  "version": 1,
+  "status": "draft",
+  "compiled": null,
+  "stats": { "runs_evaluated": 0, "true_positives": 0, "false_positives": 0, "explained_amount": 0 },
+  "provenance": { "origin": "admin", "proposed_at": "2026-11-04T10:00:00Z" },
+  "created_at": "2026-11-04T10:00:00Z"
+}

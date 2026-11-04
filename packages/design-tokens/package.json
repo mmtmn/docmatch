@@ -1,0 +1,25 @@
+{
+  "name": "@docmatch/design-tokens",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tokens de design da docmatch (cores claro/escuro, tipografia, espaçamento em passos de 8, raio, movimento) e o CSS gerado a partir deles.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "files": [
+    "tokens.json",
+    "tokens.css",
+    "build.mjs"
+  ],
+  "exports": {
+    "./tokens.json": "./tokens.json",
+    "./tokens.css": "./tokens.css",
+    "./build": "./build.mjs"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "node build.mjs --check"
+  }
+}

@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "UiManifest",
+  "description": "Manifesto de personalização da interface. É o que o modelo planejador (papel ui_planner) produz a partir de um pedido em linguagem natural e o que o cliente renderiza: nunca código, só dados validados por este esquema. Só componentes da lista de permissões existem; textos são renderizados como texto puro (nunca HTML); cores sobrescritas passam pela mesma checagem de contraste AA dos tokens padrão, e uma personalização que falhe é recusada com `customization_refused`.",
+  "type": "object",
+  "required": ["version", "theme", "labels", "results", "defaults", "composition"],
+  "properties": {
+    "version": { "type": "integer", "const": 1 },
+    "theme": {
+      "type": "object",
+      "required": ["mode"],
+      "properties": {
+        "mode": { "type": "string", "enum": ["system", "light", "dark"] },
+        "tokens": {
+          "type": "object",
+          "description": "Sobrescritas de cor por nome de token (packages/design-tokens/tokens.json), por modo. Só cores de marca, superfície e texto podem mudar.",
+          "properties": {
+            "light": { "$ref": "#/$defs/ColorOverrides" },
+            "dark": { "$ref": "#/$defs/ColorOverrides" }
+          },
+          "additionalProperties": false
+        },
+        "radius": { "type": "string", "enum": ["sm", "md", "lg", "full"] },
+        "density": { "type": "string", "enum": ["comfortable", "compact"], "default": "comfortable" }
+      },
+      "additionalProperties": false
+    },
+    "labels": {
+      "type": "object",
+      "description": "Sobrescritas de rótulos da interface, por chave de packages/locales. Sempre em pt-BR.",
+      "propertyNames": { "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$" },
+      "additionalProperties": { "type": "string", "minLength": 1 }
+    },
+    "results": {
+      "type": "object",
+      "required": ["layout", "columns"],
+      "properties": {
+        "layout": { "type": "string", "enum": ["table", "cards", "timeline", "split"] },
+        "group_by": { "type": "string", "enum": ["none", "severity", "kind", "source", "rule"], "default": "none" },
+        "sort": {
+          "type": "object",
+          "required": ["by", "direction"],
+          "properties": {
+            "by": { "type": "string", "enum": ["severity", "amount_at_risk", "confidence", "created_at", "source"] },
+            "direction": { "type": "string", "enum": ["asc", "desc"] }
+          },
+          "additionalProperties": false
+        },
+        "columns": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": ["title", "kind", "severity", "amount_at_risk", "confidence", "sources", "status", "rule", "created_at"]
+          }
+        },
+        "show_evidence_inline": { "type": "boolean", "default": true },
+        "severity_filter_default": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "enum": ["info", "low", "medium", "high", "critical"] }
+        }
+      },
+      "additionalProperties": false
+    },
+    "defaults": {
+      "type": "object",
+      "properties": {
+        "lane": { "type": "string", "enum": ["app", "api_batch", "api_standard", "api_priority"] },
+        "llm_mode": { "type": "string", "enum": ["openrouter", "local", "off"] },
+        "web_search": { "type": "boolean" },
+        "export_format": { "type": "string", "enum": ["xlsx", "csv", "pdf"] },
+        "auto_approve_up_to_credits": { "type": "integer", "minimum": 0 },
+        "workflow_id": { "type": "string", "pattern": "^wfl_[0-9A-HJKMNP-TV-Z]{26}$" }
+      },
+      "additionalProperties": false
+    },
+    "composition": {
+      "type": "object",
+      "required": ["components"],
+      "properties": {
+        "components": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": { "$ref": "#/$defs/Component" }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "ColorOverrides": {
+      "title": "ColorOverrides",
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^color\\.(brand\\.(primary|primary_hover|on_primary)|bg\\.(canvas|surface|elevated|subtle)|text\\.(primary|secondary|muted|link)|border\\.(default|strong))$"
+      },
+      "additionalProperties": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" }
+    },
+    "Component": {
+      "title": "UiComponent",
+      "description": "Um componente da lista de permissões. `props` só aceita valores primitivos ou listas de texto; `children` só existe em `section` e `columns`.",
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "upload_dropzone",
+            "source_list",
+            "workflow_picker",
+            "rules_panel",
+            "quote_card",
+            "run_progress",
+            "summary_cards",
+            "findings_table",
+            "finding_detail",
+            "evidence_viewer",
+            "match_list",
+            "credit_meter",
+            "export_bar",
+            "history_list",
+            "heading",
+            "text",
+            "callout",
+            "divider",
+            "section",
+            "columns"
+          ]
+        },
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,39}$" },
+        "props": {
+          "type": "object",
+          "propertyNames": { "pattern": "^[a-z][a-z0-9_]*$" },
+          "additionalProperties": {
+            "anyOf": [
+              { "type": ["string", "number", "boolean"] },
+              { "type": "array", "maxItems": 32, "items": { "type": "string" } }
+            ]
+          }
+        },
+        "children": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": { "$ref": "#/$defs/Component" }
+        }
+      },
+      "additionalProperties": false,
+      "if": { "properties": { "type": { "enum": ["section", "columns"] } } },
+      "else": { "properties": { "children": false } }
+    }
+  }
+}

@@ -1,0 +1,194 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ToolManifest",
+  "description": "Manifesto de uma ferramenta da biblioteca: o que ela aceita (predicado sobre a impressão digital do arquivo), o que emite (esquema dos registros), onde roda, quais testes precisa passar, de onde veio e como vem se saindo. Ferramentas nascem `candidate` em sandbox, viram `verified` ao passar nos testes e na revisão cruzada, `trusted` após uso sem falhas, e `retired` quando substituídas.",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "version",
+    "kind",
+    "accepts",
+    "emits",
+    "entrypoint",
+    "tests_ref",
+    "provenance",
+    "stats",
+    "status",
+    "scope",
+    "created_at"
+  ],
+  "properties": {
+    "id": { "type": "string", "pattern": "^tool_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{2,63}$",
+      "description": "Nome técnico único (ex.: `ofx_parser`, `itau_pdf_statement`)."
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$",
+      "description": "Versão semântica."
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["parser", "media", "extractor", "normalizer", "validator", "matcher", "probe", "plan"],
+      "description": "`parser` (arquivo -> registros), `media` (áudio/vídeo -> segmentos), `extractor` (registros -> campos), `normalizer` (campos -> forma canônica), `validator` (recalcula e confere), `matcher` (estratégia de casamento), `probe` (só identifica o formato), `plan` (plano de execução para um formato)."
+    },
+    "description": { "type": "string", "description": "Descrição em pt-BR." },
+    "accepts": {
+      "type": "object",
+      "required": ["fingerprint"],
+      "properties": {
+        "fingerprint": { "$ref": "#/$defs/Predicate" },
+        "max_size_bytes": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "emits": {
+      "type": "object",
+      "required": ["record_kind", "schema"],
+      "properties": {
+        "record_kind": {
+          "type": "string",
+          "enum": ["transactions", "lines", "entities", "segments", "frames", "fields", "matches", "plan", "fingerprint"]
+        },
+        "schema": {
+          "type": "object",
+          "description": "JSON Schema 2020-12 dos registros emitidos. Validado por tools/codegen (precisa compilar) e, em runtime, contra cada registro produzido."
+        }
+      },
+      "additionalProperties": false
+    },
+    "entrypoint": {
+      "type": "object",
+      "required": ["runtime", "handler", "artifact_sha256"],
+      "properties": {
+        "runtime": { "type": "string", "enum": ["lambda_python", "lambda_node", "wasm", "native_rust"] },
+        "handler": { "type": "string", "minLength": 1 },
+        "artifact_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "timeout_s": { "type": "integer", "minimum": 1, "maximum": 900 },
+        "memory_mb": { "type": "integer", "minimum": 128, "maximum": 10240 }
+      },
+      "additionalProperties": false
+    },
+    "permissions": {
+      "type": "object",
+      "description": "Sempre mínimo: ferramentas geradas nunca têm rede.",
+      "properties": {
+        "network": { "type": "boolean", "default": false },
+        "filesystem": { "type": "string", "enum": ["none", "read_input", "scratch"], "default": "read_input" }
+      },
+      "additionalProperties": false
+    },
+    "tests_ref": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Caminho (no bucket de ferramentas) ou URI do pacote de testes que a ferramenta precisa passar antes de ser usada: amostras de entrada e saídas esperadas."
+    },
+    "provenance": { "$ref": "#/$defs/Provenance" },
+    "stats": { "$ref": "#/$defs/Stats" },
+    "status": { "type": "string", "enum": ["candidate", "verified", "trusted", "retired"] },
+    "scope": { "type": "string", "enum": ["tenant", "global"] },
+    "tenant_id": {
+      "type": ["string", "null"],
+      "pattern": "^org_[0-9A-HJKMNP-TV-Z]{26}$",
+      "description": "Obrigatório quando `scope` é `tenant`; nulo quando `global`."
+    },
+    "supersedes": {
+      "type": "string",
+      "pattern": "^tool_[0-9A-HJKMNP-TV-Z]{26}$",
+      "description": "Ferramenta que esta substitui."
+    },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": { "properties": { "scope": { "const": "tenant" } } },
+      "then": { "required": ["tenant_id"], "properties": { "tenant_id": { "type": "string" } } },
+      "else": { "properties": { "tenant_id": { "type": "null" } } }
+    }
+  ],
+  "$defs": {
+    "Predicate": {
+      "title": "FingerprintPredicate",
+      "description": "Predicado sobre a impressão digital de um arquivo. Um objeto com exatamente uma chave: um combinador (`all`, `any`, `not`) ou um teste atômico.",
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "properties": {
+        "all": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/Predicate" } },
+        "any": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/Predicate" } },
+        "not": { "$ref": "#/$defs/Predicate" },
+        "mime": {
+          "type": "string",
+          "pattern": "^[a-z0-9!#$&^_.+-]+/[a-z0-9!#$&^_.+*-]+$",
+          "description": "Tipo MIME detectado pelo conteúdo (não pela extensão). `*` permitido no subtipo."
+        },
+        "extension": { "type": "string", "pattern": "^[a-z0-9]{1,10}$" },
+        "magic": {
+          "type": "object",
+          "required": ["hex"],
+          "properties": {
+            "hex": { "type": "string", "pattern": "^([0-9a-f]{2})+$" },
+            "offset": { "type": "integer", "minimum": 0, "default": 0 }
+          },
+          "additionalProperties": false
+        },
+        "header_regex": {
+          "type": "object",
+          "required": ["pattern"],
+          "properties": {
+            "pattern": { "type": "string", "minLength": 1, "description": "Expressão regular (sintaxe RE2, sem retrocesso)." },
+            "max_bytes": { "type": "integer", "minimum": 1, "maximum": 65536, "default": 4096 },
+            "encoding": { "type": "string", "default": "utf-8" }
+          },
+          "additionalProperties": false
+        },
+        "sheet_name_regex": { "type": "string", "minLength": 1 },
+        "size_min_bytes": { "type": "integer", "minimum": 0 },
+        "size_max_bytes": { "type": "integer", "minimum": 1 },
+        "media_container": { "type": "string", "enum": ["mp3", "mp4", "m4a", "wav", "flac", "ogg", "webm", "mkv", "mov", "aac"] }
+      },
+      "additionalProperties": false
+    },
+    "Provenance": {
+      "title": "ToolProvenance",
+      "type": "object",
+      "required": ["origin", "created_at"],
+      "properties": {
+        "origin": { "type": "string", "enum": ["model", "human", "import"] },
+        "model": { "type": "string", "description": "Modelo toolsmith que escreveu a ferramenta." },
+        "reviewer_model": {
+          "type": "string",
+          "description": "Modelo de outra família que revisou o código (regra fixa de famílias diferentes)."
+        },
+        "run_id": { "type": "string", "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "reviewed_at": { "type": "string", "format": "date-time" },
+        "reviewed_by": {
+          "type": "string",
+          "description": "Administrador (`usr_...`) ou modelo que aprovou a promoção."
+        },
+        "review_notes": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "Stats": {
+      "title": "ToolStats",
+      "type": "object",
+      "required": ["uses", "successes", "failures"],
+      "properties": {
+        "uses": { "type": "integer", "minimum": 0 },
+        "successes": { "type": "integer", "minimum": 0 },
+        "failures": { "type": "integer", "minimum": 0 },
+        "distinct_tenants": { "type": "integer", "minimum": 0 },
+        "avg_ms": { "type": "number", "minimum": 0 },
+        "last_used_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

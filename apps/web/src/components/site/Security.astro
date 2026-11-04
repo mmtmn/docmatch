@@ -1,0 +1,43 @@
+---
+import { t, tf } from '../../lib/i18n';
+
+const items = tf('security.items');
+---
+
+<section class="section" id="seguranca" aria-labelledby="seguranca-titulo">
+  <div class="container">
+    <h2 class="section__heading" id="seguranca-titulo">
+      {t('security.heading')}
+    </h2>
+    <p class="section__lead">{t('security.lead')}</p>
+    <ul class="grid-3 items">
+      {items.map((item) => (
+        <li class="card item">
+          <h3>{item.title}</h3>
+          <p class="muted">{item.text}</p>
+        </li>
+      ))}
+    </ul>
+    <p class="link-row">
+      <a href="/.well-known/security.txt">{t('security.security_txt')}</a>
+    </p>
+  </div>
+</section>
+
+<style>
+  .items {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .item {
+    display: grid;
+    gap: var(--space-2);
+    align-content: start;
+  }
+
+  .link-row {
+    margin-top: var(--space-4);
+  }
+</style>
