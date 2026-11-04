@@ -3,7 +3,10 @@
 //! Tudo o que os outros crates compartilham mora aqui: dinheiro em centavos ([`Money`]),
 //! tabelas tipadas com papéis inferidos ([`Table`], [`ColumnRole`]) e o modelo de evidência
 //! ([`Item`], [`Fact`], [`Finding`], [`Rule`]). Todos os tipos serializam em JSON com nomes de
-//! campo estáveis, os mesmos de `packages/contracts/schemas`.
+//! campo estáveis. Os campos de [`Finding`] seguem `packages/contracts/schemas/finding.json`;
+//! [`Locator`] e [`FindingKind`] ainda usam a forma interna do harness (tag `kind`, linhas
+//! base 0, tipos finos) e ganham o mapeamento para `evidence-locator.json` e para a
+//! taxonomia grossa do contrato na fase 1 (ver README, "Pendências").
 #![forbid(unsafe_code)]
 
 pub mod error;

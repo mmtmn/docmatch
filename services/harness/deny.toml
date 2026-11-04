@@ -19,22 +19,24 @@ ignore = []
 
 [licenses]
 version = 2
+# As entradas além da lista do briefing são todas permissivas e exigidas por dependências
+# transitivas; cada uma nomeia o crate que a pede (conferido com `cargo deny list`).
 allow = [
   "MIT",
   "Apache-2.0",
-  "Apache-2.0 WITH LLVM-exception",
+  "Apache-2.0 WITH LLVM-exception", # rustix, linux-raw-sys
   "BSD-2-Clause",
   "BSD-3-Clause",
   "ISC",
   "MPL-2.0",
-  "Unicode-3.0",
+  "Unicode-3.0",                    # icu_* (idna/url)
   "Unicode-DFS-2016",
   "CC0-1.0",
   "Zlib",
   "OpenSSL",
-  "0BSD",
-  "BSL-1.0",
-  "CDLA-Permissive-2.0",
+  "0BSD",                           # adler2, mailparse, quoted_printable
+  "BSL-1.0",                        # ryu
+  "CDLA-Permissive-2.0",            # webpki-roots
 ]
 confidence-threshold = 0.8
 exceptions = []

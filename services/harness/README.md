@@ -14,7 +14,7 @@ token; modelos de linguagem só veem o resíduo, sempre atrás de uma guarda.
 | `dm-normalize` | implementado | dinheiro pt-BR, datas em todos os formatos usuais (inclusive `dd/mm hh:mm` sem ano), CNPJ/CPF com zeros restaurados, chave de nome com abreviações corporativas e prefixo truncado, número de documento, percentuais, status |
 | `dm-ingest` | implementado | `sniff` (formato, codificação, separador, cabeçalho, estilo decimal/data, idioma), CSV, XLSX/XLS/ODS, dumps de inbox e WhatsApp, `.eml`/mbox, OFX e NF-e XML mínimos; CNAB e PDF só com assinatura; todo parser é total |
 | `dm-match` | implementado | chaves exatas (`KeySpec`), tolerâncias (multa, juros pro rata, retenções, arredondamento, D+1), soma de subconjuntos (meet-in-the-middle, ≤ 12), pontuação Fellegi–Sunter, atribuição um-para-um (húngaro) |
-| `dm-guard` | implementado | spotlighting do texto não confiável, detector de injeção pt-BR/en, achados `injected_instructions` (nunca executados), triagem de saídas (URLs, comandos, idioma, limites) |
+| `dm-guard` | implementado | spotlighting do texto não confiável, detector de injeção pt-BR/en afinado por corpus versionado (60 injeções, 30 benignos parecidos; detecção ≥ 95% e zero falso positivo são portões do CI), achados `injected_instructions` (nunca executados), triagem de saídas (URLs, comandos, idioma, limites) |
 | `dm-llm` | implementado | `LlmClient` com OpenRouter (preferências de provedor `data_collection=deny`, tentativas com jitter, fallback), endpoint local compatível com OpenAI e modo `off`; cache em disco por `sha256(modelo, prompt, schema)` com modo *replay*; medição de tokens e custo |
 | `dm-sandbox` | implementado | DuckDB em memória sem acesso externo, configuração travada, validador léxico de sondas, tempo limite com interrupção; corpus de escape |
 | `dm-graph` | esqueleto | grafo de evidências em DuckDB (`item`, `fact`, `fact_arg`, `fact_qual`, `lineage`, `source_reliability`), `explain`, `Constraint` → SQL |
@@ -58,6 +58,20 @@ arquivos ──► dm-ingest (sniff → Table/Item + menções) ──► dm-nor
   `lock_configuration=true` valem mesmo que a validação léxica falhe.
 - Nenhum teste toca a rede: `dm-llm` roda contra `wiremock`; dados privados (`DM_VANTARA_PATH`)
   só entram em testes que pulam quando a variável não existe.
+- O grafo de evidências (`dm-graph`) abre o DuckDB pela mesma função de blindagem do sandbox
+  (`dm_sandbox::open_hardened`) e passa toda consulta pelo mesmo validador léxico, porque a
+  fase 1 roda ali o `body_sql` de regras descobertas pelo modelo.
+- O detector de injeção casa verbos só nas formas imperativa e infinitiva ("marque",
+  "marcar"): texto de negócio narra ("trata-se", "ignorando centavos", "os dados serão
+  enviados") e narração não é instrução. Padrões médios (0,6) precisam de companhia para
+  cruzar o limiar; o corpus em `crates/dm-guard/tests/data/injection` fixa os dois lados.
+- Somas de `Money` saturam no limite do `Decimal` em vez de entrar em pânico; totais de
+  relatório usam `Money::checked_sum` e reportam estouro como erro.
+- Um código de barras de 44 dígitos começando com `8` é ambíguo entre boleto bancário (bancos
+  `8xx`) e arrecadação: os DVs de bloco da arrecadação são recalculados a partir do próprio
+  código, então só o DV geral discrimina. `parse_boleto_with_reference` prefere a leitura de
+  arrecadação quando ela fecha e cai para a bancária; para um boleto de banco `8xx`, passe a
+  linha digitável de 47 dígitos.
 
 ## Comandos
 
@@ -86,6 +100,13 @@ então o DuckDB embutido compila uma vez por máquina.
 
 ## Pendências para a fase 1
 
-- Corpus de injeção em `crates/dm-guard/tests/data/injection/` (o teste pula enquanto vazio).
+- Mapear `Locator` e `FindingKind` do `dm-core` para `packages/contracts/schemas`:
+  `evidence-locator.json` usa a tag `type`, linhas base 1 e `page_box` com `box{x,y,w,h}`;
+  `finding.json` usa a taxonomia grossa `missing|duplicate|mismatch|partial|contradiction|anomaly|unreadable|note`.
+  Os nomes de campo de `Finding` já batem e o `code` segue o padrão do contrato
+  (`guard.injected_instructions`); falta a camada de mapeamento ou a emenda do contrato.
+- Trocar a heurística de idioma de `dm-guard::screen_output` (contagem de stopwords com
+  mínimo de 60 caracteres: texto livre curto em inglês passa) pelo papel `guard` de
+  `config/models.yaml`.
 - Parsers CNAB 240/400 e texto de PDF (assinaturas prontas em `dm-ingest`).
 - Cascata completa em `dm-server`, gRPC e o teste dourado do gêmeo Vantara.

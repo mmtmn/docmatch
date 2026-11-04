@@ -1,8 +1,11 @@
 //! The evidence model: items, entities, facts, findings and rules.
 //!
 //! Every claim from every source becomes an [`Item`]; relations between items are [`Fact`]s;
-//! what the user sees are [`Finding`]s, each pointing at the items that prove it. Field names
-//! are the JSON contract shared with the API and the apps (`packages/contracts/schemas`).
+//! what the user sees are [`Finding`]s, each pointing at the items that prove it. [`Finding`]
+//! field names follow `packages/contracts/schemas/finding.json`; [`Locator`] and
+//! [`FindingKind`] keep the harness-internal shape (tag `kind`, zero-based rows, fine-grained
+//! kinds) until phase 1 maps them to `evidence-locator.json` and the contract's coarse `kind`
+//! taxonomy.
 
 use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use indexmap::IndexMap;
