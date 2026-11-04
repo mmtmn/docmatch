@@ -4,11 +4,20 @@
 //! [`EvidenceGraph::add_item`] e [`EvidenceGraph::add_fact`] gravam; [`EvidenceGraph::query`]
 //! roda consultas somente leitura; [`EvidenceGraph::explain`] lista os fatos que citam um
 //! item. [`Constraint`] compila restrições para SQL sobre duas tabelas registradas.
+//!
+//! O banco abre com a mesma blindagem do `dm-sandbox` ([`dm_sandbox::open_hardened`]: sem
+//! acesso externo, sem autoload de extensões, configuração travada) e toda consulta passa
+//! pelo mesmo validador léxico ([`dm_sandbox::validate_sql`]), porque a fase 1 roda aqui o
+//! `body_sql` de regras descobertas pelo modelo.
 #![forbid(unsafe_code)]
 
 use dm_core::{Fact, Item};
+use dm_sandbox::{open_hardened, validate_sql, SandboxConfig};
 use duckdb::types::ValueRef;
 use duckdb::{params, Connection};
+
+/// Characters a query may have (same bar as a sandbox probe).
+const MAX_QUERY_CHARS: usize = 20_000;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -103,9 +112,15 @@ fn enum_name<T: Serialize>(v: &T) -> Result<String, GraphError> {
 }
 
 impl EvidenceGraph {
-    /// Opens an empty in-memory graph.
+    /// Opens an empty in-memory graph on a hardened DuckDB with the default sandbox limits.
     pub fn open_in_memory() -> Result<Self, GraphError> {
-        let conn = Connection::open_in_memory().map_err(|e| GraphError::Open(e.to_string()))?;
+        EvidenceGraph::open_in_memory_with(&SandboxConfig::default())
+    }
+
+    /// Opens an empty in-memory graph on a hardened DuckDB (`memory_limit` and `threads` of
+    /// the config apply; the probe limits do not).
+    pub fn open_in_memory_with(config: &SandboxConfig) -> Result<Self, GraphError> {
+        let conn = open_hardened(config).map_err(|e| GraphError::Open(e.to_string()))?;
         conn.execute_batch(SCHEMA)
             .map_err(|e| GraphError::Open(e.to_string()))?;
         Ok(EvidenceGraph { conn })
@@ -207,17 +222,13 @@ impl EvidenceGraph {
         }
     }
 
-    /// Runs a read-only query (one `SELECT`/`WITH` statement).
-    ///
-    /// TODO(fase 1): usar o validador léxico do dm-sandbox em vez desta checagem simples.
+    /// Runs a read-only query: one `SELECT`/`WITH` statement that passes the lexical
+    /// validator of `dm-sandbox` (no file functions, settings, extensions, comments or second
+    /// statements). The connection itself has no external access, so the validator is the
+    /// first line, not the only one.
     pub fn query(&self, sql: &str) -> Result<QueryResult, GraphError> {
+        validate_sql(sql, MAX_QUERY_CHARS).map_err(|e| GraphError::Rejected(e.to_string()))?;
         let trimmed = sql.trim().trim_end_matches(';');
-        let upper = trimmed.to_ascii_uppercase();
-        if !(upper.starts_with("SELECT") || upper.starts_with("WITH")) || trimmed.contains(';') {
-            return Err(GraphError::Rejected(
-                "apenas uma instrução SELECT/WITH".to_string(),
-            ));
-        }
         let mut stmt = self.conn.prepare(trimmed).map_err(q)?;
         let mut rows = stmt.query([]).map_err(q)?;
         let mut out = Vec::new();
@@ -513,6 +524,28 @@ mod tests {
             g.query("SELECT * FROM nope"),
             Err(GraphError::Query(_))
         ));
+        // the sandbox validator and the hardened connection both stand between a query and
+        // the filesystem
+        assert!(matches!(
+            g.query("SELECT * FROM read_csv('/etc/passwd')"),
+            Err(GraphError::Rejected(_))
+        ));
+        assert!(matches!(
+            g.query("SELECT 1 -- comentário"),
+            Err(GraphError::Rejected(_))
+        ));
+        assert!(
+            g.query("SELECT * FROM 'x.csv'").is_err(),
+            "sem acesso externo, um arquivo nunca abre"
+        );
+        let r = g
+            .query("SELECT CAST(current_setting('enable_external_access') AS VARCHAR)")
+            .unwrap();
+        assert_eq!(r.rows[0][0].as_deref(), Some("false"));
+        let r = g
+            .query("SELECT CAST(current_setting('lock_configuration') AS VARCHAR)")
+            .unwrap();
+        assert_eq!(r.rows[0][0].as_deref(), Some("true"));
         g.set_source_reliability("src", 1.7, Some("extrato oficial"))
             .unwrap();
         assert_eq!(g.source_reliability("src").unwrap(), Some(1.0));

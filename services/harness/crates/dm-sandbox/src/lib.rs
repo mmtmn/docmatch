@@ -86,36 +86,46 @@ pub struct Sandbox {
     config: SandboxConfig,
 }
 
+/// Opens an in-memory DuckDB connection with the hardening applied: external access and
+/// extension autoload off, memory and thread limits, no temp files, configuration locked.
+/// The sandbox and the evidence graph (`dm-graph`) both open their databases here, so there
+/// is a single definition of "hardened"; nothing run on the connection afterwards can undo
+/// it, because `lock_configuration` is the last setting applied.
+pub fn open_hardened(config: &SandboxConfig) -> Result<Connection, SandboxError> {
+    let open = |e: duckdb::Error| SandboxError::Open(e.to_string());
+    let flags = Config::default()
+        .enable_external_access(false)
+        .map_err(open)?
+        .enable_autoload_extension(false)
+        .map_err(open)?
+        .max_memory(&config.memory_limit)
+        .map_err(open)?
+        .threads(config.threads)
+        .map_err(open)?;
+    let conn = Connection::open_in_memory_with_flags(flags).map_err(open)?;
+    // No spilling to disk: an empty temp_directory disables temp files; builds that refuse
+    // the empty string get a zero-byte cap instead.
+    if conn.execute_batch("SET temp_directory=''").is_err() {
+        conn.execute_batch("SET max_temp_directory_size='0 bytes'")
+            .map_err(open)?;
+    }
+    // Belt and braces: settings that may be unknown to a given DuckDB build are optional.
+    for optional in [
+        "SET disabled_filesystems='LocalFileSystem,HTTPFileSystem,S3FileSystem'",
+        "SET allow_persistent_secrets=false",
+        "SET enable_object_cache=false",
+    ] {
+        let _ = conn.execute_batch(optional);
+    }
+    conn.execute_batch("SET lock_configuration=true")
+        .map_err(open)?;
+    Ok(conn)
+}
+
 impl Sandbox {
-    /// Opens a hardened in-memory database.
+    /// Opens a hardened in-memory database (see [`open_hardened`]).
     pub fn new(config: SandboxConfig) -> Result<Self, SandboxError> {
-        let open = |e: duckdb::Error| SandboxError::Open(e.to_string());
-        let flags = Config::default()
-            .enable_external_access(false)
-            .map_err(open)?
-            .enable_autoload_extension(false)
-            .map_err(open)?
-            .max_memory(&config.memory_limit)
-            .map_err(open)?
-            .threads(config.threads)
-            .map_err(open)?;
-        let conn = Connection::open_in_memory_with_flags(flags).map_err(open)?;
-        // No spilling to disk: an empty temp_directory disables temp files; builds that refuse
-        // the empty string get a zero-byte cap instead.
-        if conn.execute_batch("SET temp_directory=''").is_err() {
-            conn.execute_batch("SET max_temp_directory_size='0 bytes'")
-                .map_err(open)?;
-        }
-        // Belt and braces: settings that may be unknown to a given DuckDB build are optional.
-        for optional in [
-            "SET disabled_filesystems='LocalFileSystem,HTTPFileSystem,S3FileSystem'",
-            "SET allow_persistent_secrets=false",
-            "SET enable_object_cache=false",
-        ] {
-            let _ = conn.execute_batch(optional);
-        }
-        conn.execute_batch("SET lock_configuration=true")
-            .map_err(open)?;
+        let conn = open_hardened(&config)?;
         Ok(Sandbox { conn, config })
     }
 

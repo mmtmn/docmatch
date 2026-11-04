@@ -877,6 +877,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "dm-core",
+ "dm-sandbox",
  "duckdb",
  "indexmap",
  "serde",
