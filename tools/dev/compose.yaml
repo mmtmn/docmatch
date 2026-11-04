@@ -1,0 +1,119 @@
+# Ambiente local da docmatch (Docker Compose v2). Suba com `make dev` na raiz
+# ou `tools/dev/up.sh`, que lê o .env, exporta as variáveis abaixo e espera o
+# Postgres antes de migrar.
+#
+# Variáveis (todas com padrão em up.sh, derivadas do .env):
+#   DM_DEV_PG_USER / DM_DEV_PG_PASSWORD / DM_DEV_PG_DB / DM_DEV_PG_PORT  (de DATABASE_URL)
+#   DM_DEV_S3_IMAGE / DM_DEV_S3_ACCESS_KEY / DM_DEV_S3_SECRET_KEY / DM_DEV_S3_PORT / DM_DEV_S3_CONSOLE_PORT
+#   DM_DEV_MAILPIT_PORT / DM_DEV_MAILPIT_SMTP_PORT
+#   DM_DEV_STRIPE_MOCK_PORT / DM_DEV_STRIPE_MOCK_HTTPS_PORT
+#   DM_DEV_OLLAMA_PROXY_PORT / DM_DEV_OLLAMA_UPSTREAM_PORT  (perfil "llm")
+#
+# S3 local: as imagens públicas do MinIO deixaram de ser distribuídas (Docker Hub
+# e quay.io exigem login); RustFS fala a mesma API S3 na porta 9000 e tem console
+# na 9001. Quem tiver um espelho do MinIO pode apontar DM_DEV_S3_IMAGE para ele
+# (mesmas portas; ajuste as variáveis de credencial no serviço).
+name: docmatch
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg18
+    environment:
+      POSTGRES_USER: ${DM_DEV_PG_USER:-docmatch}
+      POSTGRES_PASSWORD: ${DM_DEV_PG_PASSWORD:-docmatch}
+      POSTGRES_DB: ${DM_DEV_PG_DB:-docmatch}
+      # Checksums como em produção.
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - log_min_duration_statement=250ms
+      - -c
+      - timezone=UTC
+    ports:
+      - "127.0.0.1:${DM_DEV_PG_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DM_DEV_PG_USER:-docmatch} -d ${DM_DEV_PG_DB:-docmatch}"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  s3:
+    image: ${DM_DEV_S3_IMAGE:-rustfs/rustfs:latest}
+    environment:
+      RUSTFS_ACCESS_KEY: ${DM_DEV_S3_ACCESS_KEY:-docmatch}
+      RUSTFS_SECRET_KEY: ${DM_DEV_S3_SECRET_KEY:-docmatch-dev}
+      RUSTFS_CONSOLE_ENABLE: "true"
+    ports:
+      - "127.0.0.1:${DM_DEV_S3_PORT:-9000}:9000"
+      - "127.0.0.1:${DM_DEV_S3_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - s3-data:/data
+
+  # Cria os buckets de uploads, backups e mídia (nomes do .env) e termina.
+  # Usa a AWS CLI oficial: funciona contra qualquer servidor S3.
+  s3-init:
+    image: public.ecr.aws/aws-cli/aws-cli:latest
+    depends_on:
+      - s3
+    environment:
+      AWS_ACCESS_KEY_ID: ${DM_DEV_S3_ACCESS_KEY:-docmatch}
+      AWS_SECRET_ACCESS_KEY: ${DM_DEV_S3_SECRET_KEY:-docmatch-dev}
+      AWS_DEFAULT_REGION: ${AWS_REGION:-us-east-1}
+      AWS_EC2_METADATA_DISABLED: "true"
+      # Nome do serviço na rede do compose; o endpoint é montado no entrypoint.
+      S3_HOST: s3
+      DM_S3_UPLOADS_BUCKET: ${DM_S3_UPLOADS_BUCKET:-docmatch-uploads-dev}
+      DM_S3_BACKUPS_BUCKET: ${DM_S3_BACKUPS_BUCKET:-docmatch-backups-dev}
+      DM_R2_MEDIA_BUCKET: ${DM_R2_MEDIA_BUCKET:-docmatch-media-dev}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        endpoint="http://$${S3_HOST}:9000"
+        for i in $$(seq 1 60); do
+          aws --endpoint-url "$$endpoint" s3 ls >/dev/null 2>&1 && break
+          sleep 2
+        done
+        for b in "$$DM_S3_UPLOADS_BUCKET" "$$DM_S3_BACKUPS_BUCKET" "$$DM_R2_MEDIA_BUCKET"; do
+          aws --endpoint-url "$$endpoint" s3api head-bucket --bucket "$$b" >/dev/null 2>&1 \
+            || aws --endpoint-url "$$endpoint" s3 mb "s3://$$b"
+        done
+        echo "buckets prontos"
+
+  mailpit:
+    image: axllent/mailpit:latest
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    ports:
+      - "127.0.0.1:${DM_DEV_MAILPIT_PORT:-8025}:8025"
+      - "127.0.0.1:${DM_DEV_MAILPIT_SMTP_PORT:-1025}:1025"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8025/livez"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  stripe-mock:
+    image: stripe/stripe-mock:latest
+    ports:
+      - "127.0.0.1:${DM_DEV_STRIPE_MOCK_PORT:-12111}:12111"
+      - "127.0.0.1:${DM_DEV_STRIPE_MOCK_HTTPS_PORT:-12112}:12112"
+
+  # Opcional (perfil "llm"): expõe o Ollama/llama.cpp do host para outros
+  # contêineres. Usa a rede do host para alcançar o processo local.
+  ollama-proxy:
+    image: alpine/socat:latest
+    profiles: ["llm"]
+    network_mode: host
+    command: >
+      TCP-LISTEN:${DM_DEV_OLLAMA_PROXY_PORT:-11435},fork,reuseaddr
+      TCP:127.0.0.1:${DM_DEV_OLLAMA_UPSTREAM_PORT:-11434}
+
+volumes:
+  postgres-data:
+  s3-data:
