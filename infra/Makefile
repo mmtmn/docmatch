@@ -18,6 +18,8 @@ TFLINT_VERSION        := 0.65.0
 PACKER_VERSION        := 1.16.2
 ANSIBLE_CORE_VERSION  := 2.21.6
 ANSIBLE_LINT_VERSION  := 26.10.1
+# shellcheck-py empacota o binário do shellcheck 0.11.0 como wheel (sem root, mesmo venv).
+SHELLCHECK_PY_VERSION := 0.11.0.1
 
 GOARCH := $(shell uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/')
 
@@ -68,15 +70,17 @@ setup-packer: ## packer $(PACKER_VERSION) em ~/.local/bin, com verificação de 
 	mkdir -p "$(LOCAL_BIN)" && unzip -o -q "$$tmp/packer.zip" -d "$$tmp" && install -m 0755 "$$tmp/packer" "$(LOCAL_BIN)/packer"
 	packer version
 
-setup-ansible: ## ansible-core + ansible-lint em um venv do usuário (sem root) e as collections fixadas
+setup-ansible: ## ansible-core, ansible-lint e shellcheck em um venv do usuário (sem root) e as collections fixadas
 	@if [ ! -x "$(VENV_DIR)/bin/pip" ]; then python3 -m venv "$(VENV_DIR)"; fi
 	"$(VENV_DIR)/bin/pip" install --quiet --disable-pip-version-check \
-	  "ansible-core==$(ANSIBLE_CORE_VERSION)" "ansible-lint==$(ANSIBLE_LINT_VERSION)" passlib
+	  "ansible-core==$(ANSIBLE_CORE_VERSION)" "ansible-lint==$(ANSIBLE_LINT_VERSION)" \
+	  "shellcheck-py==$(SHELLCHECK_PY_VERSION)" passlib
 	mkdir -p "$(LOCAL_BIN)"
-	for b in ansible ansible-playbook ansible-galaxy ansible-lint ansible-vault; do ln -sfn "$(VENV_DIR)/bin/$$b" "$(LOCAL_BIN)/$$b"; done
+	for b in ansible ansible-playbook ansible-galaxy ansible-lint ansible-vault shellcheck; do ln -sfn "$(VENV_DIR)/bin/$$b" "$(LOCAL_BIN)/$$b"; done
 	"$(VENV_DIR)/bin/ansible-galaxy" collection install -r "$(INFRA_DIR)/ansible/requirements.yml" >/dev/null
 	"$(VENV_DIR)/bin/ansible" --version | head -1
 	"$(VENV_DIR)/bin/ansible-lint" --version | head -1
+	"$(VENV_DIR)/bin/shellcheck" --version | sed -n 2p
 
 # -------------------------------------------------------------------------------------- lint
 lint: lint-terraform lint-tflint lint-ansible lint-packer lint-shell ## todos os lints
@@ -93,9 +97,9 @@ lint-ansible: ## ansible-lint no playbook e no papel hardening
 lint-packer: ## packer fmt -check
 	@packer fmt -check -recursive "$(INFRA_DIR)/packer"
 
-lint-shell: ## shellcheck nos scripts (pula com aviso se não estiver instalado)
-	@if command -v shellcheck >/dev/null; then shellcheck -x "$(INFRA_DIR)"/scripts/*.sh "$(INFRA_DIR)"/packer/scripts/*.sh "$(INFRA_DIR)"/ansible/roles/hardening/files/*.sh; \
-	else echo "aviso: shellcheck não instalado (apt install shellcheck); pulando"; fi
+lint-shell: ## shellcheck nos scripts (instalado pelo setup via shellcheck-py; nunca pula)
+	@command -v shellcheck >/dev/null || { echo "erro: shellcheck não encontrado; rode make -C infra setup-ansible"; exit 1; }
+	@shellcheck -x "$(INFRA_DIR)"/scripts/*.sh "$(INFRA_DIR)"/packer/scripts/*.sh "$(INFRA_DIR)"/ansible/roles/hardening/files/*.sh
 
 # ---------------------------------------------------------------------------------- validate
 validate: validate-terraform validate-packer ## terraform validate em cada env e módulo + packer validate

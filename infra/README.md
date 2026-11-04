@@ -30,14 +30,15 @@ conta AWS única (sem Organizations, compartilhada com outros projetos: tudo o q
                                         │  nftables deny/deny · proxy de saída      │
                                         │  auditd · AIDE · rkhunter · ClamAV · Falco│
                                         └──────────┬──────────────────────────────┘
-                                 SSM Session Manager (sem SSH)      │ S3 gateway endpoint
+                                 SSM Session Manager (sem SSH)      │ S3 (IGW; endpoint opcional)
                                                                     │
         VPC 10.40.0.0/16 (dual-stack)                               │
         ├─ sub-rede pública: instância, build do Packer              │
-        └─ sub-rede isolada (sem rota para a internet): Lambdas scanner, mediarunner, toolrunner
+        └─ sub-rede isolada (só o S3 gateway endpoint): Lambdas scanner, mediarunner, toolrunner
                                                    fetcher e signature-updater fora da VPC
-        S3: uploads (quarantine/ clean/ derived/) · backups (versionado) · site · signatures · logs
-        SQS: veredictos do scanner (+ DLQs) · EventBridge: assinaturas a cada 6 h
+        S3: uploads (quarantine/ clean/ derived/ verdicts/) · backups (versionado) · site · signatures · logs
+        veredictos: scanner grava verdicts/<chave>.json → evento S3 → SQS → worker (+ DLQs)
+        EventBridge: assinaturas a cada 6 h
         SSM Parameter Store /docmatch/<env>/* · CloudTrail · Budgets · alarmes · Route 53 + DNSSEC
         Cloudflare R2: bucket de mídia (módulo validado; token chega depois)
 ```
@@ -70,8 +71,8 @@ de custos: `aws ce update-cost-allocation-tags-status --cost-allocation-tags-sta
 
 ## Ordem de bootstrap
 
-Pré-requisitos: `make -C infra setup` (tflint, packer, ansible, ansible-lint e collections, tudo sem
-root), AWS CLI autenticada com um usuário/papel do grupo `docmatch-<env>-operators` (MFA
+Pré-requisitos: `make -C infra setup` (tflint, packer, ansible, ansible-lint, shellcheck e
+collections, tudo sem root), AWS CLI autenticada com um usuário/papel do grupo `docmatch-<env>-operators` (MFA
 obrigatório pela própria política do grupo), `AWS_REGION=us-east-1`. O `aws sts get-caller-identity`
 do snap falha às vezes: os scripts aceitam `ACCOUNT_ID=<12 dígitos>` e, sem ele, descobrem a conta
 por `aws iam get-user` e depois por `aws ec2 describe-security-groups`.
@@ -82,7 +83,10 @@ por `aws iam get-user` e depois por `aws ec2 describe-security-groups`.
    (nunca commitado; o backend S3 usa `use_lockfile = true`, sem DynamoDB).
 2. **dev**: `cp terraform/envs/dev/terraform.tfvars.example terraform/envs/dev/terraform.tfvars`,
    preencha, `make -C infra init-dev plan-dev apply-dev`. No primeiro apply deixe
-   `wait_for_certificate_validation = false` e `ami_id = ""`. Anote os outputs `app_subnet_id`,
+   `wait_for_certificate_validation = false` e `ami_id = ""`: o certificado ACM é pedido mas não
+   valida sem a delegação, e o CloudFront recusa uma distribuição que aponte para um certificado
+   pendente; com `false` a distribuição nasce no certificado padrão `*.cloudfront.net` e sem os
+   aliases do domínio, de modo que o apply termina inteiro. Anote os outputs `app_subnet_id`,
    `app_security_group_id` e `packer_instance_profile_name`.
 3. **AMI**: copie `packer/example.pkrvars.hcl` para `packer/build.auto.pkrvars.hcl` com os três
    outputs acima e rode `make -C infra packer-build` (exige o `session-manager-plugin` da AWS na
@@ -94,8 +98,10 @@ por `aws iam get-user` e depois por `aws ec2 describe-security-groups`.
    CloudFront, coloque `ami_id` e `lambda_image_tag` no tfvars e aplique de novo.
 5. **Registros NS e DS no registrador**: `terraform output name_servers` e
    `terraform output dnssec_ds_record` do ambiente prod. Só depois da delegação o certificado ACM
-   valida: volte `wait_for_certificate_validation = true` e aplique (o Terraform espera até 75 min).
-   Para o dev, adicione o NS de `dev` em `extra_dns_records` do prod.
+   valida: volte `wait_for_certificate_validation = true` e aplique (o Terraform espera até 75 min
+   pela validação e então troca a distribuição para o certificado ACM com os aliases do domínio;
+   o output `custom_domain_enabled` confirma). Para o dev, adicione o NS de `dev` em
+   `extra_dns_records` do prod.
 6. **Site**: `make -C apps/web build` e `infra/scripts/deploy-site.sh --env prod` (sincroniza
    `apps/web/dist` com o bucket e invalida a distribuição, lendo tudo dos outputs).
 
@@ -148,6 +154,18 @@ Pacotes de terceiros (Caddy, PGDG, CrowdSec, Falco) só mudam com AMI nova; o
   gerenciadas pela AWS; a do DNSSEC é a única CMK). Os achados aceitos estão em `.trivyignore.yaml`.
 - Envio de logs da instância para o CloudWatch Logs (o grupo `/docmatch/<env>/app` existe e o papel
   pode escrever; o agente fica para a fase seguinte). VPC Flow Logs desligados por padrão.
+- Páginas de erro personalizadas no CloudFront: elas valem para a distribuição inteira, então um
+  `/404.html` estático também substituiria os corpos JSON 403/404 de `/api/*`, `/auth/*` e
+  `/webhooks/*` (e transformaria proibido em não encontrado). Um caminho inexistente do site recebe
+  o 404 simples do S3; o site trata "não encontrado" no cliente até a API ganhar a própria
+  distribuição.
+- S3 gateway endpoint na sub-rede pública (`s3_endpoint_on_app_route_table = false`): a política do
+  endpoint só admite os buckets do projeto e negaria artefatos de terceiros servidos direto do S3
+  na região (espelhos apt, downloads) durante o build e em produção. A instância fala com o S3
+  pelo IGW (sem custo dentro da região); ligue a variável depois de verificar um build e um boot.
+- Fila SQS acessível pelo scanner: a sub-rede isolada não tem rota para o SQS e um interface
+  endpoint custaria ~US$ 7/mês, por isso o veredicto é um objeto em `verdicts/` e o S3 é quem
+  publica na fila.
 - Alarmes a partir de eventos do CloudTrail, GuardDuty, Security Hub, Config, Inspector.
 - Imagens do sandbox e binários da aplicação: os repositórios ECR e as unidades systemd existem;
   as Lambdas só nascem quando `lambda_image_tag` aponta para imagens já enviadas, e as unidades
@@ -166,11 +184,24 @@ Pacotes de terceiros (Caddy, PGDG, CrowdSec, Falco) só mudam com AMI nova; o
   estático com `override = false`; as páginas dinâmicas da API enviam a própria CSP com nonce por
   requisição (um nonce fixo num cabeçalho compartilhado seria um valor conhecido, ou seja, nenhum
   nonce). O `Server` é removido na borda e no Caddy.
-- **Endereço real do cliente.** Atrás do CloudFront, o par TCP é sempre uma borda da AWS. O Caddy
-  confia no `X-Forwarded-For` (só o CloudFront alcança a 443 e cada requisição precisa do segredo de
-  origem), o CrowdSec decide sobre o `client_ip` do log e aplica a decisão dentro do Caddy
-  (bouncer HTTP), e o fail2ban bane pelo mesmo endereço regenerando um trecho do Caddyfile. O
-  bouncer nftables continua ativo para o que chegar direto à máquina.
+- **Endereço real do cliente.** Atrás do CloudFront, o par TCP é sempre uma borda da AWS, e o
+  `X-Forwarded-For` não serve: o CloudFront só acrescenta o endereço do visitante ao que o próprio
+  visitante enviou, e o Caddy usaria a entrada mais à esquerda (escolhida pelo atacante). A função
+  de borda sobrescreve o cabeçalho `x-docmatch-viewer-ip` (`DM_VIEWER_IP_HEADER`) com
+  `event.viewer.ip`, o Caddy tira o `{client_ip}` dele (`client_ip_headers`), o CrowdSec decide
+  sobre esse endereço e aplica a decisão dentro do Caddy (bouncer HTTP), o fail2ban bane pelo
+  mesmo endereço regenerando um trecho do Caddyfile, e a API recebe-o em `X-Real-IP`. O bouncer
+  nftables continua ativo para o que chegar direto à máquina.
+- **Veredictos do scanner.** O scanner roda na sub-rede isolada e só enxerga o S3: grava o
+  veredicto em `uploads/verdicts/<chave da quarentena>.json` (e copia o objeto limpo para
+  `clean/`); a notificação S3 do prefixo `verdicts/` publica na fila `scan-verdicts`, cuja
+  política só aceita `s3.amazonaws.com` com `aws:SourceArn` do bucket de uploads. O worker lê a
+  mensagem, busca o objeto do veredicto, age e o apaga (ciclo de vida de 7 dias para o que sobrar).
+  Cada fila tem exatamente um `aws_sqs_queue_policy`; o documento da DLQ ganha o principal do
+  EventBridge quando a regra agendada existe.
+- **Primeiro apply sem delegação.** Com `wait_for_certificate_validation = false` a distribuição
+  usa o certificado padrão do CloudFront e não declara aliases; só o apply seguinte, com `true`,
+  espera a validação do ACM e passa a atender o domínio. Assim nenhum apply fica pela metade.
 - **Saída da instância.** nftables nega tudo por padrão nos dois sentidos: resolvedor da VPC só
   para o `systemd-resolved`, NTP link-local, IMDS para usuários listados, endpoints da AWS (sets
   gerados do `ip-ranges.json` na construção e atualizados diariamente) para `root`, `docmatch`,
@@ -180,8 +211,10 @@ Pacotes de terceiros (Caddy, PGDG, CrowdSec, Falco) só mudam com AMI nova; o
   (slice `docmatch-go`), Caddy 96, CrowdSec 160, Falco 192, clamscan semanal 1200 sob `nice 19`,
   zram de 2 GiB. Não há clamd residente.
 - **Guardrails sem Organizations.** Políticas de negação (parar o CloudTrail, sair da região,
-  ACLs públicas no S3, apagar backups/state/chave DNSSEC) anexadas ao grupo de operadores e a todos
-  os papéis criados. Elas não alcançam o usuário root: mantenha-o com MFA e sem chaves de acesso.
+  ACLs públicas no S3 e remoção dos bloqueios de acesso público, apagar backups/state/chave DNSSEC)
+  anexadas ao grupo de operadores e a todos os papéis criados. Nenhuma delas exige tag no
+  principal: um operador do grupo roda `terraform apply` e `bootstrap-state.sh` sem preparo extra.
+  Elas não alcançam o usuário root: mantenha-o com MFA e sem chaves de acesso.
 - **Break-glass.** `fwknop` + WireGuard ficam instalados, mascarados e sem chaves; o procedimento
   está nos próprios modelos em `ansible/roles/hardening/templates/`. O caminho normal é o SSM.
 - **Lynis ≥ 90.** O portão roda no final do build (`scripts/lynis-gate.sh`) e semanalmente na
