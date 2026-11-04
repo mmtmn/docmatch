@@ -1,0 +1,8 @@
+{
+  "lane": "api_batch",
+  "lane_multiplier": 2.0,
+  "items": [{ "item": "documents", "quantity": 3, "unit": "pages", "credits": -2 }],
+  "subtotal_credits": 0,
+  "minimum_credits": 10,
+  "total_credits": 10
+}

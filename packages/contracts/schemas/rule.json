@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Rule",
+  "description": "Regra de conciliação: uma hipótese executável. O usuário (ou o modelo de descoberta) escreve a regra em linguagem natural; o harness compila para SQL, verifica contra o histórico confirmado e só a mantém se explicar dinheiro sem falsos positivos. Regras são versionadas: cada nova versão é um registro novo com o mesmo `id` e `version` incrementado.",
+  "type": "object",
+  "required": ["id", "scope", "title", "body", "version", "status", "compiled", "stats", "provenance", "created_at"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^rul_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "tenant_id": {
+      "type": ["string", "null"],
+      "pattern": "^org_[0-9A-HJKMNP-TV-Z]{26}$",
+      "description": "Organização dona da regra. Nulo quando `scope` é `global`."
+    },
+    "scope": {
+      "type": "string",
+      "enum": ["tenant", "global"],
+      "description": "`tenant`: só a organização vê e usa. `global`: curada pelos administradores, disponível a todos."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120,
+      "x-limit": "text.saved_rule_title"
+    },
+    "body": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000,
+      "x-limit": "text.saved_rule_body",
+      "description": "A regra em linguagem natural, em pt-BR (ex.: `Tarifa bancária até R$ 30 no mesmo dia de um pagamento é parte dele`)."
+    },
+    "version": { "type": "integer", "minimum": 1 },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "candidate", "verified", "trusted", "retired"],
+      "description": "`draft` (salva, não compilada), `candidate` (compilada, em avaliação), `verified` (explica dinheiro sem falsos positivos no histórico), `trusted` (promovida; aplicada automaticamente), `retired`."
+    },
+    "compiled": { "$ref": "#/$defs/Compiled" },
+    "applies_to": {
+      "type": "object",
+      "description": "Restrições opcionais de aplicação.",
+      "properties": {
+        "source_kinds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "enum": ["document", "table", "media", "email", "archive"] }
+        },
+        "workflow_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^wfl_[0-9A-HJKMNP-TV-Z]{26}$" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "stats": { "$ref": "#/$defs/Stats" },
+    "provenance": { "$ref": "#/$defs/Provenance" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "Compiled": {
+      "title": "RuleCompiled",
+      "description": "Forma executável da regra. Nula enquanto `status` é `draft`.",
+      "type": ["object", "null"],
+      "required": ["language", "text", "hash", "compiled_at"],
+      "properties": {
+        "language": { "type": "string", "enum": ["sql"] },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Consulta parametrizada sobre o grafo de evidências (somente leitura)."
+        },
+        "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "SHA-256 de `text`." },
+        "parameters": {
+          "type": "object",
+          "description": "Parâmetros nomeados extraídos da regra (ex.: `max_amount_centavos`: 3000).",
+          "additionalProperties": { "type": ["string", "number", "integer", "boolean"] }
+        },
+        "compiled_by": {
+          "type": "string",
+          "description": "Modelo (papel e nome) ou `deterministic` quando a regra foi compilada por código."
+        },
+        "compiled_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "Stats": {
+      "title": "RuleStats",
+      "description": "Desempenho acumulado contra achados confirmados pelo usuário.",
+      "type": "object",
+      "required": ["runs_evaluated", "true_positives", "false_positives", "explained_amount"],
+      "properties": {
+        "runs_evaluated": { "type": "integer", "minimum": 0 },
+        "true_positives": { "type": "integer", "minimum": 0 },
+        "false_positives": { "type": "integer", "minimum": 0 },
+        "explained_amount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Soma, em centavos, do dinheiro que a regra explicou corretamente."
+        },
+        "currency": { "type": "string", "pattern": "^[A-Z]{3}$", "default": "BRL" },
+        "last_evaluated_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "Provenance": {
+      "title": "RuleProvenance",
+      "type": "object",
+      "required": ["origin", "proposed_at"],
+      "properties": {
+        "origin": {
+          "type": "string",
+          "enum": ["user", "model", "import", "admin"],
+          "description": "Quem propôs: o usuário, o modelo de descoberta, uma importação ou um administrador."
+        },
+        "model": { "type": "string", "description": "Nome do modelo quando `origin` é `model`." },
+        "run_id": {
+          "type": "string",
+          "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$",
+          "description": "Execução em que a regra foi descoberta."
+        },
+        "proposed_at": { "type": "string", "format": "date-time" },
+        "accepted_by": {
+          "type": "string",
+          "pattern": "^usr_[0-9A-HJKMNP-TV-Z]{26}$",
+          "description": "Usuário que aceitou a proposta, quando houve aceite explícito."
+        },
+        "accepted_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

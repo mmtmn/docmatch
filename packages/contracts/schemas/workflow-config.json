@@ -1,0 +1,195 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "WorkflowConfig",
+  "description": "Configuração reutilizável de um fluxo de conciliação: quais papéis de fonte ele espera (ex.: extrato e razão), como casar, quais regras aplicar, quanto gastar e como exibir. Uma execução criada com `workflow_id` herda tudo isto e pode sobrescrever campo a campo.",
+  "type": "object",
+  "required": ["name", "sources", "matching"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "x-limit": "text.workflow_name"
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/SourceRole" },
+      "description": "Papéis de fonte. Os `role` precisam ser únicos dentro do fluxo."
+    },
+    "matching": { "$ref": "#/$defs/Matching" },
+    "rules": { "$ref": "#/$defs/Rules" },
+    "llm": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["openrouter", "local", "off"],
+          "description": "Ausente: usa o padrão do ambiente (DM_LLM_MODE)."
+        },
+        "web_search": { "type": "boolean", "default": false }
+      },
+      "additionalProperties": false
+    },
+    "budget": {
+      "type": "object",
+      "properties": {
+        "default_credits": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Orçamento sugerido ao criar a execução."
+        },
+        "auto_approve_up_to_credits": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Até este valor a execução começa sem clique de aprovação."
+        },
+        "lane": { "type": "string", "enum": ["app", "api_batch", "api_standard", "api_priority"] }
+      },
+      "additionalProperties": false
+    },
+    "outputs": {
+      "type": "object",
+      "properties": {
+        "formats": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "enum": ["xlsx", "csv", "pdf"] }
+        },
+        "ui_manifest_id": {
+          "type": "string",
+          "pattern": "^cst_[0-9A-HJKMNP-TV-Z]{26}$",
+          "description": "Personalização de interface aplicada aos resultados deste fluxo."
+        }
+      },
+      "additionalProperties": false
+    },
+    "version": { "type": "integer", "minimum": 1, "default": 1 }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "SourceRole": {
+      "title": "WorkflowSourceRole",
+      "type": "object",
+      "required": ["role", "kind"],
+      "properties": {
+        "role": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,39}$",
+          "description": "Identificador do papel (ex.: `bank_statement`, `ledger`, `payroll`)."
+        },
+        "label": {
+          "type": "string",
+          "description": "Nome exibido em pt-BR (ex.: `Extrato bancário`)."
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["document", "table", "media", "email", "archive", "any"]
+        },
+        "required": { "type": "boolean", "default": true },
+        "multiple": {
+          "type": "boolean",
+          "default": false,
+          "description": "Aceita mais de um arquivo neste papel."
+        },
+        "accept": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^([a-z0-9!#$&^_.+-]+/[a-z0-9!#$&^_.+*-]+|\\.[a-z0-9]{1,10})$"
+          },
+          "description": "Tipos MIME (com `*` permitido no subtipo) ou extensões com ponto. Vazio: qualquer tipo suportado."
+        },
+        "hints": { "$ref": "#/$defs/LocatorHints" }
+      },
+      "additionalProperties": false
+    },
+    "LocatorHints": {
+      "title": "LocatorHints",
+      "description": "Dicas de leitura passadas às ferramentas de ingestão. Todas opcionais; o harness detecta o resto.",
+      "type": "object",
+      "properties": {
+        "sheet": { "type": "string" },
+        "header_row": { "type": "integer", "minimum": 1 },
+        "delimiter": { "type": "string", "minLength": 1 },
+        "encoding": { "type": "string" },
+        "date_format": { "type": "string", "description": "Ex.: `dd/MM/yyyy`." },
+        "decimal_separator": { "type": "string", "enum": [",", "."] },
+        "timezone": { "type": "string", "description": "IANA, ex.: `America/Sao_Paulo`." },
+        "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+        "language": { "type": "string", "description": "BCP 47 da mídia, ex.: `pt-BR`." }
+      },
+      "additionalProperties": false
+    },
+    "Matching": {
+      "title": "WorkflowMatching",
+      "type": "object",
+      "required": ["keys"],
+      "properties": {
+        "keys": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": ["amount", "date", "document_number", "counterparty", "description", "reference", "tax_id", "account", "period"]
+          },
+          "description": "Campos normalizados usados como chave de casamento, em ordem de prioridade."
+        },
+        "tolerances": {
+          "type": "object",
+          "properties": {
+            "amount_centavos": { "type": "integer", "minimum": 0, "default": 0 },
+            "amount_percent": { "type": "number", "minimum": 0, "maximum": 100, "default": 0 },
+            "days": { "type": "integer", "minimum": 0, "default": 0 },
+            "text_similarity": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "default": 0.85,
+              "description": "Similaridade mínima para casamento difuso de descrições."
+            }
+          },
+          "additionalProperties": false
+        },
+        "strategies": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "enum": ["exact", "tolerance", "sum", "fuzzy", "rules", "model"] },
+          "default": ["exact", "tolerance", "sum", "fuzzy", "rules", "model"],
+          "description": "Cascata, da mais barata para a mais cara. `model` só vê o resíduo."
+        },
+        "one_to_many": {
+          "type": "boolean",
+          "default": true,
+          "description": "Permite que uma linha case com a soma de várias (parcelas, lotes)."
+        }
+      },
+      "additionalProperties": false
+    },
+    "Rules": {
+      "title": "WorkflowRules",
+      "type": "object",
+      "properties": {
+        "rule_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^rul_[0-9A-HJKMNP-TV-Z]{26}$" }
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 4000,
+          "x-limit": "text.rules_text",
+          "description": "Regras avulsas em linguagem natural, aplicadas só neste fluxo."
+        },
+        "auto_learning": {
+          "type": "boolean",
+          "default": false,
+          "description": "Propor regras novas a partir do feedback (planos pro e business)."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
