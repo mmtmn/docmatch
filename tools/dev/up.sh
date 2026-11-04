@@ -34,10 +34,7 @@ if [[ ! -f .env ]]; then
   echo "erro: .env não existe. Rode: cp .env.example .env" >&2
   exit 1
 fi
-set -a
-# shellcheck disable=SC1091
-source .env
-set +a
+eval "$(tools/dev/env.sh .env)"
 
 : "${DATABASE_URL:?DATABASE_URL precisa estar no .env}"
 
@@ -57,9 +54,9 @@ if [[ -z "$DM_DEV_PG_PASSWORD" ]]; then
   exit 1
 fi
 
-# Porta do MinIO a partir do DM_S3_ENDPOINT, quando definido.
+# Porta do S3 local a partir do DM_S3_ENDPOINT, quando definido.
 if [[ "${DM_S3_ENDPOINT:-}" =~ :([0-9]+)/?$ ]]; then
-  export DM_DEV_MINIO_PORT="${BASH_REMATCH[1]}"
+  export DM_DEV_S3_PORT="${BASH_REMATCH[1]}"
 fi
 # Porta do Ollama a partir de DM_LOCAL_LLM_BASE_URL, quando definida.
 if [[ "${DM_LOCAL_LLM_BASE_URL:-}" =~ :([0-9]+)(/|$) ]]; then
@@ -85,8 +82,8 @@ if [[ $migrate -eq 1 ]]; then
   (cd services/api && go run ./cmd/migrate up)
 fi
 
-minio_port="${DM_DEV_MINIO_PORT:-9000}"
-minio_console="${DM_DEV_MINIO_CONSOLE_PORT:-9001}"
+s3_port="${DM_DEV_S3_PORT:-9000}"
+s3_console="${DM_DEV_S3_CONSOLE_PORT:-9001}"
 mailpit_port="${DM_DEV_MAILPIT_PORT:-8025}"
 stripe_port="${DM_DEV_STRIPE_MOCK_PORT:-12111}"
 
@@ -94,7 +91,7 @@ cat <<EOF
 
 ambiente local pronto:
   Postgres      postgres://${DM_DEV_PG_USER}:***@127.0.0.1:${DM_DEV_PG_PORT}/${DM_DEV_PG_DB}
-  MinIO (S3)    http://127.0.0.1:${minio_port}   console: http://127.0.0.1:${minio_console}  (usuário ${DM_DEV_MINIO_USER:-docmatch})
+  S3 local      http://127.0.0.1:${s3_port}   console: http://127.0.0.1:${s3_console}  (chave ${DM_DEV_S3_ACCESS_KEY:-docmatch}; RustFS, API compatível com MinIO)
   Mailpit       http://127.0.0.1:${mailpit_port}   SMTP em 127.0.0.1:${DM_DEV_MAILPIT_SMTP_PORT:-1025}
   stripe-mock   http://127.0.0.1:${stripe_port}
 EOF

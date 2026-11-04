@@ -127,17 +127,20 @@ build: ## compila api, worker e migrate em bin/ com git sha nos ldflags
 	@mkdir -p bin
 	go build -trimpath -ldflags '$(LDFLAGS)' -o bin/ ./cmd/...
 
+# tools/dev/env.sh lê o .env com aspas seguras (valores com espaços e "<>").
+LOAD_ENV := eval "$$($(ROOT)/tools/dev/env.sh $(ROOT)/.env)"
+
 migrate: ## aplica as migrações (lê $(ROOT)/.env)
-	@set -a; source $(ROOT)/.env; set +a; go run ./cmd/migrate up
+	@$(LOAD_ENV); go run ./cmd/migrate up
 
 run-api: ## roda a API (lê $(ROOT)/.env)
-	@set -a; source $(ROOT)/.env; set +a; go run -ldflags '$(LDFLAGS)' ./cmd/api
+	@$(LOAD_ENV); go run -ldflags '$(LDFLAGS)' ./cmd/api
 
 run-worker: ## roda o worker (lê $(ROOT)/.env)
-	@set -a; source $(ROOT)/.env; set +a; go run -ldflags '$(LDFLAGS)' ./cmd/worker
+	@$(LOAD_ENV); go run -ldflags '$(LDFLAGS)' ./cmd/worker
 
 dev: migrate ## migra e sobe API + worker juntos (Ctrl-C encerra os dois)
-	@set -a; source $(ROOT)/.env; set +a; \
+	@$(LOAD_ENV); \
 	  trap 'kill 0' INT TERM; \
 	  go run -ldflags '$(LDFLAGS)' ./cmd/api & \
 	  go run -ldflags '$(LDFLAGS)' ./cmd/worker & \

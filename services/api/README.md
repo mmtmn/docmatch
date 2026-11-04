@@ -43,7 +43,7 @@ Compose v2 (ambiente local e testes de integração).
 ```bash
 cp .env.example .env                 # na raiz; DATABASE_URL é obrigatória
 make -C services/api setup           # sqlc, golangci-lint, govulncheck, gotestsum em ~/go/bin
-tools/dev/up.sh                      # Postgres (pgvector), MinIO, Mailpit, stripe-mock + migrações
+tools/dev/up.sh                      # Postgres (pgvector), S3 local (RustFS), Mailpit, stripe-mock + migrações
 make -C services/api run-api         # ou run-worker, ou dev (os dois)
 curl -s http://127.0.0.1:8080/readyz
 ```
@@ -64,6 +64,11 @@ Alvos do Makefile: `setup`, `generate`, `lint`, `test`, `test-integration`, `vul
 Variáveis de ambiente: todas as de `.env.example`, mais `DM_DB_APP_ROLE` (opcional, padrão
 `docmatch_app`): nome do papel NOBYPASSRLS que o migrador cria e que a API e o worker assumem
 com `SET ROLE` ao conectar.
+
+Ambiente local (`tools/dev/compose.yaml`): o S3 local é o RustFS (mesma API do MinIO, portas
+9000/9001), porque as imagens públicas do MinIO não estão mais disponíveis sem login;
+`DM_DEV_S3_IMAGE` troca a imagem. `tools/dev/env.sh` carrega o `.env` com aspas seguras
+(valores com espaços e `<>`), e é o que `make run-api`, `run-worker`, `migrate` e `dev` usam.
 
 ## Decisões
 
