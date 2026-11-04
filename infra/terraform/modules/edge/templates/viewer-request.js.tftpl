@@ -75,8 +75,13 @@ async function handler(event) {
     };
   }
 
+  // Astro writes every page as <dir>/index.html. The root is its own case: '/' + '/index.html'
+  // would be '//index.html', which S3 answers with 404 (and default_root_object no longer
+  // applies once the function has rewritten the URI).
   if (!isApi) {
-    if (uri.length > 1 && uri.charAt(uri.length - 1) === '/') {
+    if (uri === '/') {
+      request.uri = '/index.html';
+    } else if (uri.charAt(uri.length - 1) === '/') {
       request.uri = uri + 'index.html';
     } else if (uri.indexOf('.', uri.lastIndexOf('/')) === -1) {
       request.uri = uri + '/index.html';
