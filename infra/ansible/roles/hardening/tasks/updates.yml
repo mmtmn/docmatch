@@ -1,0 +1,62 @@
+---
+- name: Configure unattended security upgrades with the 04:00 reboot window
+  ansible.builtin.template:
+    src: 50unattended-upgrades.j2
+    dest: /etc/apt/apt.conf.d/50unattended-upgrades
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Enable periodic upgrades
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Download-Upgradeable-Packages "1";
+      APT::Periodic::AutocleanInterval "7";
+      APT::Periodic::Unattended-Upgrade "1";
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Route apt through the egress proxy at runtime
+  ansible.builtin.template:
+    src: apt-proxy.conf.j2
+    dest: /etc/apt/apt.conf.d/80docmatch-proxy
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Create the needrestart drop-in directory first
+  ansible.builtin.file:
+    path: /etc/needrestart/conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Let needrestart restart services automatically after upgrades
+  ansible.builtin.copy:
+    dest: /etc/needrestart/conf.d/docmatch.conf
+    content: |
+      $nrconf{restart} = 'a';
+      $nrconf{kernelhints} = -1;
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Verify package checksums weekly (debsums)
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [docmatch-debsums.service, docmatch-debsums.timer]
+  notify: Reload systemd
+
+- name: Enable the debsums timer
+  ansible.builtin.systemd_service:
+    name: docmatch-debsums.timer
+    enabled: true
+    daemon_reload: true

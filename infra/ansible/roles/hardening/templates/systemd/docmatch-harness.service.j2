@@ -1,0 +1,58 @@
+# {{ ansible_managed }}
+[Unit]
+Description=docmatch harness (Rust): ingestion, deterministic cascade, rule discovery, verification
+After=docmatch-env.service
+Requires=docmatch-env.service
+ConditionPathExists={{ hardening_app_bin_dir }}/docmatch-harness
+
+[Service]
+Type=simple
+Slice=docmatch.slice
+User={{ hardening_app_user }}
+Group={{ hardening_app_group }}
+EnvironmentFile={{ hardening_env_file }}
+Environment=DM_HARNESS_SOCKET={{ hardening_harness_socket }} DM_LLM_CACHE_DIR={{ hardening_app_home }}/cache/llm
+Environment=RUST_LOG=info RUST_BACKTRACE=0
+WorkingDirectory={{ hardening_app_home }}
+RuntimeDirectory=docmatch-harness
+RuntimeDirectoryMode=0750
+ExecStart={{ hardening_app_bin_dir }}/docmatch-harness --socket {{ hardening_harness_socket }}
+Restart=always
+RestartSec=3
+TimeoutStopSec=120
+MemoryMax={{ hardening_mem_harness }}
+MemoryHigh=448M
+LimitNOFILE=16384
+
+# Sandboxing
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RemoveIPC=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+SystemCallArchitectures=native
+UMask=0077
+ReadWritePaths={{ hardening_app_home }} /var/log/docmatch
+ReadOnlyPaths={{ hardening_env_file }}
+
+[Install]
+WantedBy=multi-user.target

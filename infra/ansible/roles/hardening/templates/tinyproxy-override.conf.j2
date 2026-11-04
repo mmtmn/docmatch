@@ -1,0 +1,23 @@
+# {{ ansible_managed }}
+[Service]
+ExecReload=
+ExecReload=/bin/kill -HUP $MAINPID
+MemoryMax=64M
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+SystemCallFilter=@system-service
+SystemCallArchitectures=native
+RuntimeDirectory=tinyproxy
+ReadWritePaths=/var/log/tinyproxy
+Environment=HTTP_PROXY= HTTPS_PROXY= http_proxy= https_proxy=

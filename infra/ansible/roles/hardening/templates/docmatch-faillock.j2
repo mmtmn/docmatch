@@ -1,0 +1,11 @@
+Name: docmatch: lock accounts after repeated failures (pam_faillock)
+Default: yes
+Priority: 1024
+Auth-Type: Primary
+Auth:
+	[default=die]	pam_faillock.so authfail deny=5 unlock_time=900 audit
+Auth-Initial:
+	required	pam_faillock.so preauth deny=5 unlock_time=900 audit
+Account-Type: Primary
+Account:
+	required	pam_faillock.so

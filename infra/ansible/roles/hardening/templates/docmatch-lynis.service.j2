@@ -1,0 +1,10 @@
+# {{ ansible_managed }}
+[Unit]
+Description=docmatch: weekly Lynis audit (alerts when the hardening index drops below the gate)
+
+[Service]
+Type=oneshot
+Nice=19
+IOSchedulingClass=idle
+Environment=LYNIS_MIN_SCORE={{ hardening_lynis_min_score | default(90) }}
+ExecStart=/bin/sh -c '/usr/local/sbin/lynis-gate 2>&1 | tee /run/docmatch-lynis.out >/dev/null; rc=$?; if [ "$rc" -ne 0 ]; then /usr/local/sbin/docmatch-alert --subject "Lynis abaixo do minimo" --stdin < /run/docmatch-lynis.out; fi; rm -f /run/docmatch-lynis.out; exit 0'

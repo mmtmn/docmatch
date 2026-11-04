@@ -1,0 +1,6 @@
+# {{ ansible_managed }}
+# Caddy JSON access log: {"request":{"client_ip":"<endereco do cliente>",...},"status":404,...}
+[Definition]
+failregex = ^.*"client_ip":"<HOST>".*"status":4(0[0-9]|1[0-9]|2[0-9]|3[0-9]|4[0-9]|5[0-9])\b
+ignoreregex = ^.*"status":4(01|03)\b.*"uri":"/api/v1/(auth|session)
+datepattern = "ts":{EPOCH}

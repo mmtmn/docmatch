@@ -1,0 +1,48 @@
+---
+# Separate tmpfs for /tmp and /var/tmp, hardened /dev/shm and a nodev,nosuid,noexec bind of
+# /var/log. Applied late in the build so package installers still get an executable /tmp.
+- name: Mount /tmp as tmpfs
+  ansible.posix.mount:
+    path: /tmp
+    src: tmpfs
+    fstype: tmpfs
+    opts: defaults,rw,nodev,nosuid,noexec,relatime,size=512M,mode=1777
+    state: present
+
+- name: Mount /var/tmp as tmpfs
+  ansible.posix.mount:
+    path: /var/tmp
+    src: tmpfs
+    fstype: tmpfs
+    opts: defaults,rw,nodev,nosuid,noexec,relatime,size=256M,mode=1777
+    state: present
+
+- name: Harden /dev/shm
+  ansible.posix.mount:
+    path: /dev/shm
+    src: tmpfs
+    fstype: tmpfs
+    opts: defaults,rw,nodev,nosuid,noexec,relatime,size=256M
+    state: present
+
+- name: Bind-mount /var/log with restrictive options
+  ansible.posix.mount:
+    path: /var/log
+    src: /var/log
+    fstype: none
+    opts: bind,nodev,nosuid,noexec
+    state: present
+
+- name: Keep the systemd tmp.mount unit out of the way (fstab wins)
+  ansible.builtin.systemd_service:
+    name: tmp.mount
+    masked: true
+  failed_when: false
+
+- name: Set a hardened umask for the root filesystem remount options
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: '^(\S+\s+/\s+\S+\s+)(\S+)(\s+.*)$'
+    line: '\1\2,nodev\3'
+    backrefs: true
+  when: "'nodev' not in lookup('ansible.builtin.file', '/etc/fstab')"

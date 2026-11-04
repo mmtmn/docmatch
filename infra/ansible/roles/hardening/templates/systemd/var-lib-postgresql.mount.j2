@@ -1,0 +1,14 @@
+# {{ ansible_managed }}
+# Persistent data volume (attached and labelled by user-data on the application instance).
+[Unit]
+Description=docmatch data volume (PostgreSQL)
+After=cloud-init.service
+
+[Mount]
+What=/dev/disk/by-label/docmatch-data
+Where=/var/lib/postgresql
+Type=ext4
+Options=defaults,noatime,nodev,nosuid,noexec
+
+[Install]
+WantedBy=multi-user.target

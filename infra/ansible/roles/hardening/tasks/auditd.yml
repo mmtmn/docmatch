@@ -1,0 +1,49 @@
+---
+- name: Install the CIS audit rules
+  ansible.builtin.template:
+    src: audit-cis.rules.j2
+    dest: "{{ hardening_audit_rules_file }}"
+    owner: root
+    group: root
+    mode: "0640"
+  notify: Reload audit rules
+
+- name: Remove the default audit rules file
+  ansible.builtin.file:
+    path: /etc/audit/rules.d/audit.rules
+    state: absent
+  notify: Reload audit rules
+
+- name: Configure auditd
+  ansible.builtin.lineinfile:
+    path: /etc/audit/auditd.conf
+    regexp: '^#?\s*{{ item.key }}\s*='
+    line: "{{ item.key }} = {{ item.value }}"
+  loop:
+    - { key: max_log_file, value: "32" }
+    - { key: num_logs, value: "8" }
+    - { key: max_log_file_action, value: rotate }
+    - { key: space_left, value: "15%" }
+    - { key: space_left_action, value: syslog }
+    - { key: admin_space_left, value: "5%" }
+    - { key: admin_space_left_action, value: suspend }
+    - { key: disk_full_action, value: suspend }
+    - { key: disk_error_action, value: syslog }
+    - { key: log_format, value: ENRICHED }
+    - { key: flush, value: incremental_async }
+  loop_control:
+    label: "{{ item.key }}"
+  notify: Restart auditd
+
+- name: Enable auditd
+  ansible.builtin.systemd_service:
+    name: auditd
+    enabled: true
+    state: started
+
+- name: Tighten permissions of the audit log directory
+  ansible.builtin.file:
+    path: /var/log/audit
+    owner: root
+    group: root
+    mode: "0700"

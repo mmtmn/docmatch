@@ -1,0 +1,29 @@
+---
+- name: Install the legal banners
+  ansible.builtin.copy:
+    content: "{{ hardening_banner }}"
+    dest: "{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [/etc/issue, /etc/issue.net, /etc/motd]
+
+- name: Disable the dynamic message of the day
+  ansible.builtin.file:
+    path: "{{ item }}"
+    mode: "0644"
+  loop:
+    - /etc/update-motd.d/10-help-text
+    - /etc/update-motd.d/50-motd-news
+    - /etc/update-motd.d/91-contract-ua-esm-status
+  failed_when: false
+
+- name: Disable motd news
+  ansible.builtin.lineinfile:
+    path: /etc/default/motd-news
+    regexp: '^ENABLED='
+    line: "ENABLED=0"
+    create: true
+    owner: root
+    group: root
+    mode: "0644"

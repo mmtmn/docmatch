@@ -1,0 +1,78 @@
+---
+# tinyproxy on loopback is the only path to the internet for anything that is not an AWS
+# endpoint (nftables enforces it by user). The allowlist is rendered at boot from
+# DM_EGRESS_ALLOWLIST; the file installed here is the build-time default.
+- name: Configure tinyproxy
+  ansible.builtin.template:
+    src: tinyproxy.conf.j2
+    dest: /etc/tinyproxy/tinyproxy.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart tinyproxy
+
+- name: Install the default allowlist
+  ansible.builtin.template:
+    src: tinyproxy-filter.j2
+    dest: "{{ hardening_proxy_allowlist_file }}"
+    owner: root
+    group: "{{ hardening_proxy_user }}"
+    mode: "0640"
+  notify: Restart tinyproxy
+
+- name: Install the allowlist renderer (runs after the env is rendered at boot)
+  ansible.builtin.template:
+    src: docmatch-egress-allowlist.sh.j2
+    dest: /usr/local/sbin/docmatch-egress-allowlist
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Harden the tinyproxy unit
+  ansible.builtin.template:
+    src: tinyproxy-override.conf.j2
+    dest: /etc/systemd/system/tinyproxy.service.d/override.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart tinyproxy
+
+- name: Create the tinyproxy drop-in directory first
+  ansible.builtin.file:
+    path: /etc/systemd/system/tinyproxy.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Enable tinyproxy
+  ansible.builtin.systemd_service:
+    name: tinyproxy
+    enabled: true
+    daemon_reload: true
+
+- name: Export the proxy to every systemd service (NO_PROXY keeps AWS endpoints direct)
+  ansible.builtin.template:
+    src: systemd-proxy.conf.j2
+    dest: /etc/systemd/system.conf.d/10-docmatch-proxy.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Create the system.conf drop-in directory first
+  ansible.builtin.file:
+    path: /etc/systemd/system.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Export the proxy to interactive sessions
+  ansible.builtin.template:
+    src: environment-proxy.sh.j2
+    dest: /etc/profile.d/98-docmatch-proxy.sh
+    owner: root
+    group: root
+    mode: "0644"

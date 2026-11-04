@@ -1,0 +1,29 @@
+---
+# Kernel command line hardening and the (documented) GRUB password hook. EC2 instances have no
+# interactive console, so the password protects only against a future console path; it is set
+# from hardening_grub_password_hash (grub-mkpasswd-pbkdf2) and stays off when the hash is empty.
+- name: Set hardened kernel parameters
+  ansible.builtin.template:
+    src: grub-docmatch.cfg.j2
+    dest: /etc/default/grub.d/99-docmatch.cfg
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Update grub
+
+- name: Install the GRUB superuser hook
+  ansible.builtin.template:
+    src: grub-40_custom_password.j2
+    dest: /etc/grub.d/40_custom_password
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Update grub
+
+- name: Restrict permissions of the boot loader configuration
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: "0600"
+  loop: [/etc/default/grub]

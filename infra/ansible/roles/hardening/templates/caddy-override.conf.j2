@@ -1,0 +1,29 @@
+# {{ ansible_managed }}
+[Unit]
+After=docmatch-env.service
+Wants=docmatch-env.service
+
+[Service]
+EnvironmentFile={{ hardening_caddy_env_file }}
+EnvironmentFile=-/etc/caddy/crowdsec.env
+ExecReload=
+ExecReload=/usr/bin/caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile --address unix//run/caddy/admin.sock --force
+RuntimeDirectory=caddy
+RuntimeDirectoryMode=0750
+MemoryMax={{ hardening_mem_caddy }}
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+SystemCallFilter=@system-service
+SystemCallArchitectures=native
+ReadWritePaths=/var/lib/caddy /var/log/caddy

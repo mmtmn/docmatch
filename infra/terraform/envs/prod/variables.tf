@@ -118,6 +118,8 @@ variable "egress_allowlist" {
     "api.crowdsec.net",
     "hub-cdn.crowdsec.net",
     "api.snapcraft.io",
+    "snapcraftcontent.com",
+    "esm.ubuntu.com",
     "dl.cloudsmith.io",
     "apt.postgresql.org",
     "packagecloud.io",

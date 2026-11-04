@@ -1,0 +1,10 @@
+# {{ ansible_managed }}
+[Unit]
+After=var-lib-postgresql.mount docmatch-env.service
+
+[Service]
+MemoryMax={{ hardening_mem_postgres }}
+MemoryHigh=448M
+OOMScoreAdjust=-500
+Restart=on-failure
+RestartSec=5

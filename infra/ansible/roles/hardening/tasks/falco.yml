@@ -1,0 +1,63 @@
+---
+- name: Install Falco (modern eBPF driver, no kernel module)
+  ansible.builtin.apt:
+    name: falco
+    state: present
+    install_recommends: false
+  environment:
+    FALCO_FRONTEND: noninteractive
+    FALCO_DRIVER_CHOICE: modern_ebpf
+
+- name: Configure outputs and the e-mail alert hook
+  ansible.builtin.template:
+    src: falco-docmatch.yaml.j2
+    dest: /etc/falco/config.d/docmatch.yaml
+    owner: root
+    group: root
+    mode: "0640"
+  notify: Restart falco
+
+- name: Install the docmatch rules (noise suppression and local overrides)
+  ansible.builtin.template:
+    src: falco-rules-docmatch.yaml.j2
+    dest: /etc/falco/rules.d/docmatch_rules.yaml
+    owner: root
+    group: root
+    mode: "0640"
+  notify: Restart falco
+
+- name: Create the Falco drop-in directories first
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: [/etc/falco/config.d, /etc/falco/rules.d, /etc/systemd/system/falco-modern-bpf.service.d]
+
+- name: Limit Falco memory
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/falco-modern-bpf.service.d/override.conf
+    content: |
+      [Service]
+      MemoryMax={{ hardening_mem_falco }}
+      Nice=5
+      Restart=always
+      RestartSec=10
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Disable rule downloads from the internet (falcoctl artifact follow)
+  ansible.builtin.systemd_service:
+    name: falcoctl-artifact-follow
+    enabled: false
+    masked: true
+  failed_when: false
+
+- name: Enable Falco with the modern eBPF driver
+  ansible.builtin.systemd_service:
+    name: falco-modern-bpf
+    enabled: true
+    daemon_reload: true

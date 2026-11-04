@@ -1,0 +1,35 @@
+---
+# Break-glass path for the day Session Manager itself is unavailable: single packet
+# authorization (fwknop) opens a WireGuard port for one source address. Both ship disabled and
+# with placeholder keys; the templates document how to enable them (keys never live in the AMI).
+- name: Install the fwknop access policy template
+  ansible.builtin.template:
+    src: fwknop-access.conf.j2
+    dest: /etc/fwknop/access.conf
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Install the fwknop daemon configuration
+  ansible.builtin.template:
+    src: fwknopd.conf.j2
+    dest: /etc/fwknop/fwknopd.conf
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Install the WireGuard interface template
+  ansible.builtin.template:
+    src: wg0.conf.j2
+    dest: /etc/wireguard/wg0.conf
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Keep the break-glass services disabled and masked
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: false
+    masked: "{{ not hardening_breakglass_enabled }}"
+  loop: [fwknop-server.service, wg-quick@wg0.service]
+  failed_when: false

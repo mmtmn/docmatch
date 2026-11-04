@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# {{ ansible_managed }}
+# Nightly backup: full on {{ hardening_pgbackrest_full_day }}, differential on the other days.
+# Failures are mailed through the sendmail shim (cron-style) and logged to the journal.
+set -euo pipefail
+type=diff
+[[ "$(date +%a)" == "{{ hardening_pgbackrest_full_day }}" ]] && type=full
+if ! out="$(/usr/local/bin/docmatch-pgbackrest --stanza=docmatch --type="$type" backup 2>&1)"; then
+  printf 'Subject: pgBackRest: falha no backup %s\n\n%s\n' "$type" "$out" | /usr/sbin/sendmail root
+  echo "$out" >&2
+  exit 1
+fi
+/usr/local/bin/docmatch-pgbackrest --stanza=docmatch info --output=text | head -20

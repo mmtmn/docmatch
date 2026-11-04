@@ -1,0 +1,67 @@
+---
+- name: Create the application group
+  ansible.builtin.group:
+    name: "{{ hardening_app_group }}"
+    system: true
+
+- name: Create the application user (no shell, no password)
+  ansible.builtin.user:
+    name: "{{ hardening_app_user }}"
+    group: "{{ hardening_app_group }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: "{{ hardening_app_home }}"
+    create_home: false
+    password_lock: true
+
+- name: Create the su group
+  ansible.builtin.group:
+    name: "{{ hardening_su_group }}"
+    system: true
+
+- name: Create application directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ hardening_app_home }}", owner: "{{ hardening_app_user }}", group: "{{ hardening_app_group }}", mode: "0750" }
+    - { path: "{{ hardening_app_home }}/cache", owner: "{{ hardening_app_user }}", group: "{{ hardening_app_group }}", mode: "0750" }
+    - { path: /opt/docmatch, owner: root, group: root, mode: "0755" }
+    - { path: "{{ hardening_app_bin_dir }}", owner: root, group: root, mode: "0755" }
+    - { path: /etc/docmatch, owner: root, group: "{{ hardening_app_group }}", mode: "0750" }
+    - { path: /var/log/docmatch, owner: "{{ hardening_app_user }}", group: "{{ hardening_app_group }}", mode: "0750" }
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Restrict cron and at to root
+  ansible.builtin.copy:
+    content: "root\n"
+    dest: "{{ item }}"
+    owner: root
+    group: root
+    mode: "0600"
+  loop: [/etc/cron.allow, /etc/at.allow]
+
+- name: Remove cron and at deny lists
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: [/etc/cron.deny, /etc/at.deny]
+
+- name: Tighten permissions of cron directories and files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: "0700"
+  loop: [/etc/cron.d, /etc/cron.daily, /etc/cron.hourly, /etc/cron.weekly, /etc/cron.monthly]
+
+- name: Tighten permissions of crontab
+  ansible.builtin.file:
+    path: /etc/crontab
+    owner: root
+    group: root
+    mode: "0600"

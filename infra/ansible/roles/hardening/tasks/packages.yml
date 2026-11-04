@@ -1,0 +1,115 @@
+---
+- name: Create the apt keyrings directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Download repository keys
+  ansible.builtin.get_url:
+    url: "{{ item.url }}"
+    dest: "/etc/apt/keyrings/{{ item.name }}.asc"
+    owner: root
+    group: root
+    mode: "0644"
+    force: false
+  loop:
+    - { name: caddy-stable, url: "{{ hardening_repo_caddy_key_url }}" }
+    - { name: pgdg, url: "{{ hardening_repo_pgdg_key_url }}" }
+    - { name: crowdsec, url: "{{ hardening_repo_crowdsec_key_url }}" }
+    - { name: falcosecurity, url: "{{ hardening_repo_falco_key_url }}" }
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Read the fingerprints of the downloaded keys
+  ansible.builtin.command:
+    cmd: gpg --batch --with-colons --import-options show-only --import /etc/apt/keyrings/{{ item }}.asc
+  loop: [caddy-stable, pgdg, crowdsec, falcosecurity]
+  register: hardening_key_fingerprints
+  changed_when: false
+
+- name: Verify the repository key fingerprints
+  ansible.builtin.assert:
+    that: item.1 in (hardening_key_fingerprints.results[item.0].stdout | regex_findall('^fpr:+([0-9A-F]{40}):', multiline=true))
+    fail_msg: "Unexpected fingerprint for {{ hardening_key_fingerprints.results[item.0].item }}"
+  loop:
+    - [0, "{{ hardening_repo_caddy_fingerprint }}"]
+    - [1, "{{ hardening_repo_pgdg_fingerprint }}"]
+    - [2, "{{ hardening_repo_crowdsec_fingerprint }}"]
+    - [3, "{{ hardening_repo_falco_fingerprint }}"]
+  loop_control:
+    label: "{{ hardening_key_fingerprints.results[item.0].item }}"
+
+- name: Add the third-party repositories (deb822, pinned to the verified keys)
+  ansible.builtin.deb822_repository:
+    name: "{{ item.name }}"
+    types: [deb]
+    uris: "{{ item.uri }}"
+    suites: "{{ item.suite }}"
+    components: [main]
+    signed_by: "/etc/apt/keyrings/{{ item.name }}.asc"
+    architectures: [arm64]
+    enabled: true
+    state: present
+  loop:
+    - { name: caddy-stable, uri: "{{ hardening_repo_caddy_url }}", suite: any-version }
+    - { name: pgdg, uri: "{{ hardening_repo_pgdg_url }}", suite: "{{ ansible_facts['distribution_release'] }}-pgdg" }
+    - { name: crowdsec, uri: "{{ hardening_repo_crowdsec_url }}", suite: "{{ ansible_facts['distribution_release'] }}" }
+    - { name: falcosecurity, uri: "{{ hardening_repo_falco_url }}", suite: stable }
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Remove packages the image must not carry
+  ansible.builtin.apt:
+    name: "{{ hardening_removed_packages }}"
+    state: absent
+    purge: true
+    autoremove: true
+
+- name: Upgrade the base image
+  ansible.builtin.apt:
+    update_cache: true
+    upgrade: safe
+    cache_valid_time: 600
+
+- name: Install the base packages
+  ansible.builtin.apt:
+    name: "{{ hardening_base_packages }}"
+    state: present
+    install_recommends: false
+
+- name: Check whether the AWS CLI is installed at the pinned version
+  ansible.builtin.command:
+    cmd: /usr/local/bin/aws --version
+  register: hardening_awscli_version_out
+  changed_when: false
+  failed_when: false
+
+- name: Download the AWS CLI (pinned version, checksum verified)
+  ansible.builtin.get_url:
+    url: "{{ hardening_awscli_url }}"
+    dest: /tmp/awscli.zip
+    checksum: "sha256:{{ hardening_awscli_sha256 }}"
+    mode: "0644"
+  when: hardening_awscli_version not in hardening_awscli_version_out.stdout | default('')
+
+- name: Unpack the AWS CLI
+  ansible.builtin.unarchive:
+    src: /tmp/awscli.zip
+    dest: /tmp
+    remote_src: true
+  when: hardening_awscli_version not in hardening_awscli_version_out.stdout | default('')
+
+- name: Install the AWS CLI
+  ansible.builtin.command:
+    cmd: /tmp/aws/install --update --install-dir /usr/local/aws-cli --bin-dir /usr/local/bin
+  when: hardening_awscli_version not in hardening_awscli_version_out.stdout | default('')
+  changed_when: true
+
+- name: Remove the AWS CLI installer
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: [/tmp/awscli.zip, /tmp/aws]

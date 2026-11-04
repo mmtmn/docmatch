@@ -112,6 +112,7 @@ module "secrets" {
     DM_PUBLIC_BASE_URL        = "https://${var.domain}"
     DM_API_BASE_URL           = "https://${var.domain}/api"
     DM_ORIGIN_SECRET_HEADER   = module.edge.origin_secret_header_name
+    DM_ROUTE53_ZONE_ID        = module.edge.hosted_zone_id
     AWS_REGION                = var.region
     DM_S3_UPLOADS_BUCKET      = module.storage.bucket_names["uploads"]
     DM_S3_BACKUPS_BUCKET      = module.storage.bucket_names["backups"]

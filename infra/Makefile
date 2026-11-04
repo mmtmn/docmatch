@@ -1,7 +1,8 @@
 # infra — Terraform, Packer e Ansible. Alvos obrigatórios do monorepo: setup, lint, test, ci,
 # ci-full, clean (+ validate). Nenhum alvo deste arquivo toca a conta AWS, exceto os alvos
 # explícitos init-<env>/plan-<env>/apply-<env>, que o operador roda à mão.
-SHELL := /usr/bin/env bash
+# /bin/bash (not "env bash"): with .ONESHELL make executes SHELL directly, without a PATH lookup.
+SHELL := /bin/bash
 .DEFAULT_GOAL := help
 .ONESHELL:
 .SHELLFLAGS := -eu -o pipefail -c
@@ -93,7 +94,7 @@ lint-packer: ## packer fmt -check
 	@packer fmt -check -recursive "$(INFRA_DIR)/packer"
 
 lint-shell: ## shellcheck nos scripts (pula com aviso se não estiver instalado)
-	@if command -v shellcheck >/dev/null; then shellcheck -x "$(INFRA_DIR)"/scripts/*.sh "$(INFRA_DIR)"/ansible/roles/hardening/files/*.sh; \
+	@if command -v shellcheck >/dev/null; then shellcheck -x "$(INFRA_DIR)"/scripts/*.sh "$(INFRA_DIR)"/packer/scripts/*.sh "$(INFRA_DIR)"/ansible/roles/hardening/files/*.sh; \
 	else echo "aviso: shellcheck não instalado (apt install shellcheck); pulando"; fi
 
 # ---------------------------------------------------------------------------------- validate
@@ -113,8 +114,7 @@ validate-terraform: ## terraform init -backend=false && terraform validate em ca
 	exit $$status
 
 validate-packer: ## packer init + packer validate com o arquivo de exemplo de variáveis
-	@cd "$(INFRA_DIR)/packer" && packer init . >/dev/null && \
-	  packer validate -var-file=example.pkrvars.hcl -var "ansible_check=false" .
+	@cd "$(INFRA_DIR)/packer" && packer init . >/dev/null && packer validate -var-file=example.pkrvars.hcl .
 
 # -------------------------------------------------------------------------------------- test
 test: validate trivy ## validate + trivy config com a linha de base de achados aceitos

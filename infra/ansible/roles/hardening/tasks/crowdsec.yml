@@ -1,0 +1,115 @@
+---
+# CrowdSec: the local API moves to 8181 (8080 belongs to the docmatch API). Decisions are
+# enforced twice: in nftables (IP level, for anything that reaches the box directly) and inside
+# Caddy with the real client IP that CloudFront forwards, which is where it actually matters.
+- name: Install CrowdSec
+  ansible.builtin.apt:
+    name: crowdsec
+    state: present
+    install_recommends: false
+
+- name: Move the local API off port 8080
+  ansible.builtin.copy:
+    dest: /etc/crowdsec/config.yaml.local
+    content: |
+      api:
+        server:
+          listen_uri: 127.0.0.1:8181
+      prometheus:
+        enabled: false
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Restart crowdsec
+
+- name: Point the local credentials at the new port
+  ansible.builtin.lineinfile:
+    path: /etc/crowdsec/local_api_credentials.yaml
+    regexp: '^url:'
+    line: "url: http://127.0.0.1:8181/"
+  notify: Restart crowdsec
+
+- name: Install the acquisition sources (Caddy access log and the application journal)
+  ansible.builtin.template:
+    src: crowdsec-acquis.yaml.j2
+    dest: /etc/crowdsec/acquis.d/docmatch.yaml
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Restart crowdsec
+
+- name: Install the hub collections
+  ansible.builtin.command:
+    cmd: cscli collections install --ignore crowdsecurity/caddy crowdsecurity/linux crowdsecurity/base-http-scenarios crowdsecurity/http-cve
+  register: hardening_cscli_collections
+  changed_when: "'installed' in hardening_cscli_collections.stdout or 'Enabled' in hardening_cscli_collections.stdout"
+
+- name: Restart CrowdSec so the new port is live before the bouncers register
+  ansible.builtin.systemd_service:
+    name: crowdsec
+    state: restarted
+    enabled: true
+
+- name: Install the nftables bouncer (registers itself with the local API)
+  ansible.builtin.apt:
+    name: crowdsec-firewall-bouncer-nftables
+    state: present
+    install_recommends: false
+
+- name: Configure the nftables bouncer
+  ansible.builtin.template:
+    src: crowdsec-firewall-bouncer.yaml.j2
+    dest: /etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml.local
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Restart crowdsec-firewall-bouncer
+
+- name: List the registered bouncers
+  ansible.builtin.command:
+    cmd: cscli bouncers list -o json
+  register: hardening_cscli_bouncers
+  changed_when: false
+
+- name: Register the Caddy bouncer
+  ansible.builtin.command:
+    cmd: cscli bouncers add caddy-bouncer -o raw
+  register: hardening_caddy_bouncer_key
+  when: "'caddy-bouncer' not in hardening_cscli_bouncers.stdout"
+  changed_when: true
+  no_log: true
+
+- name: Store the Caddy bouncer key for the Caddy unit
+  ansible.builtin.copy:
+    content: "CROWDSEC_BOUNCER_KEY={{ hardening_caddy_bouncer_key.stdout | trim }}\n"
+    dest: /etc/caddy/crowdsec.env
+    owner: root
+    group: caddy
+    mode: "0640"
+  when: hardening_caddy_bouncer_key is not skipped
+  no_log: true
+
+- name: Harden the CrowdSec units
+  ansible.builtin.template:
+    src: "crowdsec-override.conf.j2"
+    dest: "/etc/systemd/system/{{ item }}.service.d/override.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [crowdsec, crowdsec-firewall-bouncer]
+  notify: Reload systemd
+
+- name: Create the CrowdSec drop-in directories first
+  ansible.builtin.file:
+    path: "/etc/systemd/system/{{ item }}.service.d"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: [crowdsec, crowdsec-firewall-bouncer]
+
+- name: Enable the bouncer
+  ansible.builtin.systemd_service:
+    name: crowdsec-firewall-bouncer
+    enabled: true
+    daemon_reload: true

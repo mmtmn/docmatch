@@ -1,0 +1,16 @@
+# {{ ansible_managed }}
+# Break-glass WireGuard interface (disabled by default: wg-quick@wg0 is masked). The private key is
+# generated on the instance when the tunnel is enabled (wg genkey) and never leaves it; the public
+# key goes into the operator's client configuration. See fwknop/access.conf for the procedure.
+[Interface]
+Address = 10.255.255.1/30
+ListenPort = {{ hardening_wireguard_port }}
+PrivateKey = __GENERATE_ON_THE_INSTANCE_WITH_wg_genkey__
+# Only the operator's tunnel address is allowed; nothing is forwarded.
+PostUp = nft add rule inet docmatch input iifname "wg0" ip saddr 10.255.255.2 accept
+PostDown = nft flush chain inet docmatch input; nft -f /etc/nftables.conf
+
+[Peer]
+PublicKey = __OPERATOR_PUBLIC_KEY__
+AllowedIPs = 10.255.255.2/32
+PersistentKeepalive = 25

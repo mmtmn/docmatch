@@ -1,0 +1,16 @@
+---
+- name: Remove compilers and build tools (prod profile)
+  ansible.builtin.apt:
+    name: "{{ hardening_compilers }}"
+    state: absent
+    purge: true
+    autoremove: true
+  when: hardening_profile == 'prod'
+
+- name: Restrict the remaining compiler binaries, if any, to root (dev profile)
+  ansible.builtin.file:
+    path: "{{ item }}"
+    mode: "0700"
+  loop: [/usr/bin/gcc, /usr/bin/cc, /usr/bin/g++, /usr/bin/as]
+  failed_when: false
+  when: hardening_profile == 'dev'

@@ -1,0 +1,31 @@
+---
+- name: Flush handlers before the final checks
+  ansible.builtin.meta: flush_handlers
+
+- name: Remove the apt cache
+  ansible.builtin.apt:
+    autoclean: true
+    autoremove: true
+
+- name: Remove world-writable permissions from home directories
+  ansible.builtin.file:
+    path: /home/ubuntu
+    mode: "0750"
+  failed_when: false
+
+- name: Tighten permissions of the boot directory
+  ansible.builtin.file:
+    path: /boot
+    mode: "0700"
+
+- name: Record the role version in the image
+  ansible.builtin.copy:
+    dest: /etc/docmatch/image-info
+    content: |
+      profile={{ hardening_profile }}
+      built_at={{ ansible_facts['date_time']['iso8601'] }}
+      postgresql={{ hardening_pg_version }}
+      awscli={{ hardening_awscli_version }}
+    owner: root
+    group: "{{ hardening_app_group }}"
+    mode: "0640"

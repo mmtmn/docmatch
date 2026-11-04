@@ -1,0 +1,10 @@
+# {{ ansible_managed }}
+# TYPE  DATABASE  USER      ADDRESS        METHOD
+# Local maintenance (postgres over the Unix socket, peer identity).
+local   all       postgres                 peer
+# Application over TLS on loopback only, scram-sha-256.
+hostssl all       all       127.0.0.1/32   scram-sha-256
+hostssl all       all       ::1/128        scram-sha-256
+# Anything else is rejected explicitly.
+hostnossl all     all       all            reject
+host    all       all       all            reject

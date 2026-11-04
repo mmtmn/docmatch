@@ -1,0 +1,7 @@
+# {{ ansible_managed }}
+[Unit]
+Description=docmatch Go processes (API and worker share one budget)
+
+[Slice]
+MemoryMax={{ hardening_mem_go }}
+MemoryHigh=128M

@@ -1,0 +1,13 @@
+# {{ ansible_managed }}
+# Caddy access log (JSON, client_ip is the viewer address forwarded by CloudFront).
+filenames:
+  - /var/log/caddy/access.log
+labels:
+  type: caddy
+---
+# Application journal: the API logs authentication failures as structured events.
+source: journalctl
+journalctl_filter:
+  - "_SYSTEMD_UNIT=docmatch-api.service"
+labels:
+  type: syslog

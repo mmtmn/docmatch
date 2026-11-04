@@ -1,0 +1,22 @@
+# {{ ansible_managed }}
+# Egress proxy on loopback. Only hosts in the allowlist are reachable; CONNECT is limited to 443.
+User {{ hardening_proxy_user }}
+Group {{ hardening_proxy_user }}
+Port {{ hardening_proxy_port }}
+Listen 127.0.0.1
+Timeout 120
+DefaultErrorFile "/usr/share/tinyproxy/default.html"
+StatFile "/usr/share/tinyproxy/stats.html"
+LogLevel Warning
+PidFile "/run/tinyproxy/tinyproxy.pid"
+MaxClients 64
+Allow 127.0.0.1
+Allow ::1
+ViaProxyName "docmatch"
+DisableViaHeader Yes
+ConnectPort 443
+Filter "{{ hardening_proxy_allowlist_file }}"
+FilterURLs Off
+FilterExtended On
+FilterCaseSensitive Off
+FilterDefaultDeny Yes

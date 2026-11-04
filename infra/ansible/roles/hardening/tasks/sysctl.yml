@@ -1,0 +1,17 @@
+---
+- name: Apply kernel parameters
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    sysctl_file: /etc/sysctl.d/90-docmatch-hardening.conf
+    sysctl_set: true
+    reload: false
+  loop: "{{ hardening_sysctl | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  notify: Reload sysctl
+
+- name: Remove the distribution defaults that conflict with the hardened values
+  ansible.builtin.file:
+    path: /etc/sysctl.d/10-ptrace.conf
+    state: absent

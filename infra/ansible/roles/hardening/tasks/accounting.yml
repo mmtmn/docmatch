@@ -1,0 +1,60 @@
+---
+- name: Enable process accounting
+  ansible.builtin.systemd_service:
+    name: acct
+    enabled: true
+    state: started
+
+- name: Enable sysstat collection
+  ansible.builtin.lineinfile:
+    path: /etc/default/sysstat
+    regexp: '^ENABLED='
+    line: 'ENABLED="true"'
+
+- name: Enable the sysstat timer
+  ansible.builtin.systemd_service:
+    name: sysstat
+    enabled: true
+    state: started
+
+- name: Create the journald drop-in directory first
+  ansible.builtin.file:
+    path: /etc/systemd/journald.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Make the journal persistent and bounded
+  ansible.builtin.copy:
+    dest: /etc/systemd/journald.conf.d/docmatch.conf
+    content: |
+      [Journal]
+      Storage=persistent
+      Compress=yes
+      SystemMaxUse=400M
+      SystemKeepFree=1G
+      MaxRetentionSec=30day
+      ForwardToSyslog=no
+      ForwardToWall=no
+      RateLimitIntervalSec=30s
+      RateLimitBurst=20000
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart journald
+
+- name: Create the persistent journal directory
+  ansible.builtin.file:
+    path: /var/log/journal
+    state: directory
+    owner: root
+    group: systemd-journal
+    mode: "2755"
+
+- name: Restrict access to log files
+  ansible.builtin.file:
+    path: /var/log
+    owner: root
+    group: syslog
+    mode: "0750"
