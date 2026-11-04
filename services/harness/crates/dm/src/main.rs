@@ -449,10 +449,18 @@ fn cmd_run(dir: &Path, out: &Path, year: Option<i32>) -> Result<i32> {
                             find(left_items, &p.left_id, la),
                             find(right_items, &p.right_id, ra),
                         ) {
-                            (Some(expected), Some(observed)) => {
+                            (Some(left_value), Some(right_value)) => {
+                                // Bank debits are negative: the positive side is the title
+                                // (expected), the other side the payment (observed).
+                                let (expected, observed) =
+                                    if left_value.is_negative() && !right_value.is_negative() {
+                                        (right_value.abs(), left_value.abs())
+                                    } else {
+                                        (left_value.abs(), right_value.abs())
+                                    };
                                 let ctx = AmountContext {
-                                    expected: expected.abs(),
-                                    observed: observed.abs(),
+                                    expected,
+                                    observed,
                                     due: None,
                                     paid: None,
                                 };
@@ -467,9 +475,7 @@ fn cmd_run(dir: &Path, out: &Path, year: Option<i32>) -> Result<i32> {
                                         ),
                                         Some(e.residual.format_brl()),
                                     ),
-                                    None => {
-                                        (None, Some(expected.abs_diff(observed.abs()).format_brl()))
-                                    }
+                                    None => (None, Some(expected.abs_diff(observed).format_brl())),
                                 }
                             }
                             _ => (None, None),
