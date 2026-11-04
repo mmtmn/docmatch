@@ -23,6 +23,7 @@ dm-ingest.workspace = true
 dm-match.workspace = true
 dm-sandbox.workspace = true
 dm-report.workspace = true
+dm-guard.workspace = true
 clap.workspace = true
 anyhow.workspace = true
 serde.workspace = true

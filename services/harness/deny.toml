@@ -43,7 +43,9 @@ exceptions = []
 ignore = true
 
 [bans]
-multiple-versions = "warn"
+# Duas versões major do mesmo crate falham a build; as exceções abaixo são transitivas
+# (puxadas por arrow/duckdb, reqwest e proptest) e saem da lista quando o ecossistema alinhar.
+multiple-versions = "deny"
 wildcards = "deny"
 # Os crates do workspace são privados (publish = false) e se referenciam por path.
 allow-wildcard-paths = true
@@ -56,7 +58,13 @@ deny = [
   { crate = "openssl-sys", reason = "TLS é sempre rustls" },
   { crate = "native-tls", reason = "TLS é sempre rustls" },
 ]
-skip = []
+skip = [
+  { crate = "base64@0.22.1", reason = "duckdb/arrow ainda em base64 0.22; reqwest já em 0.23" },
+  { crate = "getrandom@0.2.17", reason = "proptest/rand_xorshift em getrandom 0.2" },
+  { crate = "getrandom@0.3.4", reason = "rustls/ring em getrandom 0.3; rand 0.10 em 0.4" },
+  { crate = "hashbrown@0.15.5", reason = "indexmap em hashbrown 0.15; arrow em 0.17" },
+  { crate = "syn@2.0.119", reason = "macros de derive em syn 2; serde-saphyr em syn 3" },
+]
 skip-tree = []
 
 [sources]
