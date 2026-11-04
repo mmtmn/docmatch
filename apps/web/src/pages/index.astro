@@ -10,10 +10,15 @@ import Base from '../layouts/Base.astro';
 import { t } from '../lib/i18n';
 ---
 
-<Base hideHeader>
+<Base hideHeader skipTarget="#inicio">
   <div class="first-screen">
     <Header />
-    <section class="first-screen__hero" aria-label={t('landing.hero_region')}>
+    <section
+      id="inicio"
+      class="first-screen__hero"
+      aria-label={t('landing.hero_region')}
+      tabindex="-1"
+    >
       <HeroApp client:load />
     </section>
   </div>

@@ -112,6 +112,7 @@
     "required": "Campo obrigatório.",
     "invalid_email": "Informe um e-mail válido.",
     "network": "Falha de conexão. Tente de novo.",
+    "timeout": "O servidor demorou demais para responder. Tente de novo.",
     "server": "O servidor respondeu com erro ({status}).",
     "unknown": "Algo deu errado. Tente de novo.",
     "not_found_title": "Página não encontrada",
@@ -245,6 +246,7 @@
     "value_unlimited": "Ilimitado",
     "value_yes": "Incluído",
     "value_no": "Não incluído",
+    "lane_app": "app",
     "lane_api_batch": "lote",
     "lane_api_standard": "padrão",
     "lane_api_priority": "prioritária",
@@ -318,7 +320,7 @@
       },
       {
         "q": "Como funciona a cobrança?",
-        "a": "Planos mensais em dólar pela Stripe, com tokens que valem por um ciclo extra. Recargas avulsas valem por 12 meses."
+        "a": "Planos mensais em dólar pela Stripe, com tokens que valem por um ciclo extra. Recargas avulsas valem por {months} meses."
       }
     ]
   },
@@ -372,7 +374,7 @@
           "title": "5. Tokens e cobrança",
           "paragraphs": [
             "Planos são mensais, cobrados em dólar pela Stripe. Cada conciliação recebe um orçamento com valor esperado e teto; nunca cobramos acima do teto apresentado.",
-            "Tokens do plano valem pelo ciclo contratado e por um ciclo extra. Recargas avulsas valem por doze meses. Não há reembolso de tokens consumidos."
+            "Tokens do plano valem pelo ciclo contratado e por um ciclo extra. Recargas avulsas valem por {months} meses. Não há reembolso de tokens consumidos."
           ]
         },
         {

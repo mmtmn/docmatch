@@ -41,4 +41,15 @@ describe('i18n-check', () => {
     });
     expect(result.problems).toEqual([]);
   });
+
+  it('reports reserved keys apart from stale ones, and flags reserved entries in use', () => {
+    const result = checkSources({
+      messages: { ...messages, auth: { login: 'Entrar', signup: 'Criar conta' } },
+      files: [{ path: 'a.tsx', text: "t('landing.title'); t('nav.home'); t('nav.unused')" }],
+      reserved: ['auth.', 'tags', 'nav.unused'],
+    });
+    expect(result.unused).toEqual(['faq.items']);
+    expect([...result.reserved].sort()).toEqual(['auth.login', 'auth.signup', 'tags']);
+    expect(result.staleReserved).toEqual(['nav.unused']);
+  });
 });

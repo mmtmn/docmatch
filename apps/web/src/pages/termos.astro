@@ -1,17 +1,25 @@
 ---
+import pricing from 'virtual:pricing';
 import LegalSections from '../components/site/LegalSections.astro';
 import Base from '../layouts/Base.astro';
 import { formatShortDate } from '../lib/format';
-import { t, tf } from '../lib/i18n';
+import { interpolate, t, tf } from '../lib/i18n';
 
 // Updated whenever the text in packages/locales changes.
 const UPDATED_AT = '2026-11-04';
+
+// The rollover period comes from config/pricing.yaml, never typed into the legal copy.
+const vars = { months: pricing.rollover.topup_tokens_months };
+const sections = tf('legal.terms.sections').map((section) => ({
+  title: section.title,
+  paragraphs: section.paragraphs.map((paragraph) => interpolate(paragraph, vars)),
+}));
 ---
 
 <Base title={t('legal.terms.title')} description={t('legal.terms.description')}>
   <LegalSections
     title={t('legal.terms.title')}
     updated={formatShortDate(UPDATED_AT)}
-    sections={tf('legal.terms.sections')}
+    sections={sections}
   />
 </Base>

@@ -16,6 +16,16 @@ const SOURCE_EXT = /\.(ts|tsx|mts|js|mjs|astro)$/;
 const TEST_FILE = /\.test\.[a-z]+$/;
 // t('key') / tl("key") / tf(`key`) with a static key (no `${}`).
 const CALL = /\b(t|tl|tf)\(\s*(['"`])([^'"`$]+)\2/g;
+// Copy written ahead of the screens that will use it (plan phases: auth, confirm dialogs). These
+// keys are reported separately so the "unused" warning keeps pointing at stale copy only; remove
+// an entry here as soon as its screen lands.
+export const RESERVED_KEYS = [
+  'auth.',
+  'common.cancel',
+  'common.confirm',
+  'common.yes',
+  'common.no',
+];
 
 function walk(dir, out = []) {
   for (const entry of readdirSync(dir)) {
@@ -57,7 +67,12 @@ function shapeOk(fn, value) {
   return false;
 }
 
-export function checkSources({ messages, files }) {
+/** A reserved entry is a full key or a prefix ending in "." covering a whole screen. */
+function isReserved(key, reserved) {
+  return reserved.some((entry) => (entry.endsWith('.') ? key.startsWith(entry) : key === entry));
+}
+
+export function checkSources({ messages, files, reserved = RESERVED_KEYS }) {
   const problems = [];
   const used = new Set();
   const corpus = [];
@@ -75,14 +90,20 @@ export function checkSources({ messages, files }) {
     }
   }
   const all = corpus.join('\n');
-  const unused = leaves(messages).filter((key) => {
+  const idle = leaves(messages).filter((key) => {
     if (used.has(key)) return false;
     // Keys referenced as plain string literals (lookup tables such as KIND_LABEL_KEY) count.
     if (all.includes(`'${key}'`) || all.includes(`"${key}"`)) return false;
     // A list used through tl()/tf() covers its children.
     return ![...used].some((u) => key.startsWith(`${u}.`));
   });
-  return { problems, unused, usedCount: used.size };
+  const unused = idle.filter((key) => !isReserved(key, reserved));
+  const reservedUnused = idle.filter((key) => isReserved(key, reserved));
+  // A reserved entry whose keys are all in use (or gone) is stale and should be removed.
+  const staleReserved = reserved.filter(
+    (entry) => !reservedUnused.some((key) => isReserved(key, [entry])),
+  );
+  return { problems, unused, reserved: reservedUnused, staleReserved, usedCount: used.size };
 }
 
 function main() {
@@ -91,7 +112,18 @@ function main() {
     path: relative(appRoot, path),
     text: readFileSync(path, 'utf8'),
   }));
-  const { problems, unused, usedCount } = checkSources({ messages, files });
+  const { problems, unused, reserved, staleReserved, usedCount } = checkSources({
+    messages,
+    files,
+  });
+  if (reserved.length > 0) {
+    console.log(`i18n: ${reserved.length} chave(s) reservadas para telas futuras (RESERVED_KEYS).`);
+  }
+  if (staleReserved.length > 0) {
+    console.warn(
+      `i18n: entradas de RESERVED_KEYS já em uso ou inexistentes: ${staleReserved.join(', ')}`,
+    );
+  }
   if (unused.length > 0) {
     console.warn(`i18n: ${unused.length} chave(s) sem uso em src/: ${unused.join(', ')}`);
   }

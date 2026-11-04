@@ -2,12 +2,19 @@ import { useId, useState, type SubmitEvent } from 'react';
 import { useCharLimit } from '../hooks/useCharLimit';
 import { apiUrl } from '../lib/env';
 import { t } from '../lib/i18n';
-import { textLimits } from '../lib/limits';
+import { limits, textLimits } from '../lib/limits';
 import { CharCounter } from './CharCounter';
 import styles from './ContactForm.module.css';
 
 const CONTACT_PATH = '/v1/contact';
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+/** The browser gives up when the API would too (limits.yaml http.request_timeout_s). */
+const REQUEST_TIMEOUT_MS = limits.http.request_timeout_s * 1000;
+
+function requestSignal(): AbortSignal | null {
+  // AbortSignal.timeout is missing in a few older engines; the request then simply has no timeout.
+  return typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(REQUEST_TIMEOUT_MS) : null;
+}
 
 type Status =
   { kind: 'idle' } | { kind: 'sending' } | { kind: 'ok' } | { kind: 'error'; message: string };
@@ -37,6 +44,8 @@ export function ContactForm() {
 
   const onSubmit = async (event: SubmitEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
+    // Enter or a second click while a request is in flight must not post the message twice.
+    if (status.kind === 'sending') return;
     if (!validate()) return;
     if (website !== '') {
       // Bots fill the hidden field; pretend it worked.
@@ -54,6 +63,7 @@ export function ContactForm() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify({ name: name.trim(), email: email.trim(), message: message.trim() }),
+        signal: requestSignal(),
       });
       if (!response.ok) {
         setStatus({
@@ -66,8 +76,9 @@ export function ContactForm() {
       setName('');
       setEmail('');
       setMessage('');
-    } catch {
-      setStatus({ kind: 'error', message: t('errors.network') });
+    } catch (error) {
+      const timedOut = error instanceof DOMException && error.name === 'TimeoutError';
+      setStatus({ kind: 'error', message: t(timedOut ? 'errors.timeout' : 'errors.network') });
     }
   };
 

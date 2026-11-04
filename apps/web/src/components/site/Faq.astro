@@ -1,7 +1,10 @@
 ---
-import { t, tf } from '../../lib/i18n';
+import pricing from 'virtual:pricing';
+import { interpolate, t, tf } from '../../lib/i18n';
 
-const items = tf('faq.items');
+// Numbers from config/pricing.yaml are never typed in the copy: the answers interpolate them.
+const vars = { months: pricing.rollover.topup_tokens_months };
+const items = tf('faq.items').map((item) => ({ q: item.q, a: interpolate(item.a, vars) }));
 ---
 
 <section class="section" id="faq" aria-labelledby="faq-titulo">
