@@ -948,6 +948,8 @@ dependencies = [
  "chrono",
  "dm-core",
  "dm-normalize",
+ "dm-validators",
+ "indexmap",
  "pathfinding",
  "rust_decimal",
  "serde",
