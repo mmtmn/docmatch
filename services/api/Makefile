@@ -89,14 +89,14 @@ sqlc-check: ## falha se o código gerado estiver desatualizado (pula se o sqlc n
 
 # --------------------------------------------------------------------- lint
 fmt: ## gofmt em todo o módulo
-	gofmt -w $$(git ls-files '*.go')
+	gofmt -w .
 
 vet: ## go vet nas duas combinações de tags
 	go vet ./...
 	go vet -tags integration ./...
 
 lint: tools sync-check vet ## gofmt -l, go vet, golangci-lint (gosec, errcheck, staticcheck...) e deriva do sqlc
-	@unformatted="$$(gofmt -l $$(git ls-files '*.go'))"; \
+	@unformatted="$$(gofmt -l .)"; \
 	  if [ -n "$$unformatted" ]; then echo "gofmt precisa rodar em:"; echo "$$unformatted"; exit 1; fi
 	golangci-lint run ./...
 	golangci-lint run --build-tags integration ./...
