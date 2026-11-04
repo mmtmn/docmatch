@@ -69,7 +69,7 @@ data "aws_iam_policy_document" "workload" {
     condition {
       test     = "StringLike"
       variable = "s3:prefix"
-      values   = [for p in local.upload_prefixes : "${p}/*"]
+      values   = concat([for p in local.upload_prefixes : "${p}/*"], ["${var.verdicts_prefix}*"])
     }
   }
 
@@ -86,6 +86,15 @@ data "aws_iam_policy_document" "workload" {
       "s3:PutObjectTagging",
     ]
     resources = [for p in local.upload_prefixes : "${var.uploads_bucket_arn}/${p}/*"]
+  }
+
+  # Verdict objects are written by the scanner only; the worker reads one when its S3 event
+  # arrives on the queue and deletes it afterwards.
+  statement {
+    sid       = "ConsumeVerdictObjects"
+    effect    = "Allow"
+    actions   = ["s3:GetObject", "s3:DeleteObject"]
+    resources = ["${var.uploads_bucket_arn}/${var.verdicts_prefix}*"]
   }
 
   statement {

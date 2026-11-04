@@ -3,8 +3,12 @@
 # only talk to S3 through the gateway endpoint. fetcher and signature-updater need the internet
 # and therefore run outside the VPC, where they cannot see anything private.
 #
-# Flow: upload lands in uploads/quarantine/ -> S3 event -> scanner -> verdict on SQS; clean
-# objects are copied to clean/ by the scanner, the worker on the instance consumes verdicts.
+# Flow: upload lands in uploads/quarantine/ -> S3 event -> scanner. The scanner is S3-only (the
+# isolated subnet has no route to SQS, and an SQS interface endpoint would cost more than the
+# whole sandbox), so it copies clean objects to clean/ and writes its verdict as an object under
+# verdicts/ (<quarantine key>.json). A second S3 notification on verdicts/ publishes to the SQS
+# verdicts queue, which the worker on the instance consumes: it reads the verdict object named in
+# the message, acts on it and deletes it.
 
 locals {
   enabled       = var.image_tag != ""
@@ -106,6 +110,10 @@ resource "aws_sqs_queue" "lambda_dlq" {
   tags = merge(var.tags, { Name = "${var.name}-lambda-dlq" })
 }
 
+# Queue policies. Every queue has exactly one aws_sqs_queue_policy: two resources managing the
+# same queue would each see the other's document as drift and overwrite it on alternate applies.
+# The TLS-only statement is shared; the verdicts queue adds the S3 notification principal and the
+# Lambda dead-letter queue adds EventBridge once the schedule rule exists.
 data "aws_iam_policy_document" "queue_tls_only" {
   for_each = {
     verdicts     = aws_sqs_queue.verdicts.arn
@@ -130,15 +138,69 @@ data "aws_iam_policy_document" "queue_tls_only" {
   }
 }
 
-resource "aws_sqs_queue_policy" "tls_only" {
-  for_each = {
-    verdicts     = aws_sqs_queue.verdicts.id
-    verdicts_dlq = aws_sqs_queue.verdicts_dlq.id
-    lambda_dlq   = aws_sqs_queue.lambda_dlq.id
-  }
+# S3 publishes the verdicts/ object-created events; only this account's uploads bucket may.
+data "aws_iam_policy_document" "verdicts_queue" {
+  source_policy_documents = [data.aws_iam_policy_document.queue_tls_only["verdicts"].json]
 
-  queue_url = each.value
-  policy    = data.aws_iam_policy_document.queue_tls_only[each.key].json
+  statement {
+    sid    = "S3VerdictNotifications"
+    effect = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["s3.amazonaws.com"]
+    }
+    actions   = ["sqs:SendMessage"]
+    resources = [aws_sqs_queue.verdicts.arn]
+    condition {
+      test     = "ArnEquals"
+      variable = "aws:SourceArn"
+      values   = [var.uploads_bucket_arn]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [var.account_id]
+    }
+  }
+}
+
+# EventBridge needs to be allowed to write to the dead-letter queue of the schedule target.
+data "aws_iam_policy_document" "lambda_dlq_queue" {
+  source_policy_documents = [data.aws_iam_policy_document.queue_tls_only["lambda_dlq"].json]
+
+  dynamic "statement" {
+    for_each = local.enabled ? [1] : []
+    content {
+      sid    = "EventBridgeDeadLetter"
+      effect = "Allow"
+      principals {
+        type        = "Service"
+        identifiers = ["events.amazonaws.com"]
+      }
+      actions   = ["sqs:SendMessage"]
+      resources = [aws_sqs_queue.lambda_dlq.arn]
+      condition {
+        test     = "ArnEquals"
+        variable = "aws:SourceArn"
+        values   = [aws_cloudwatch_event_rule.signature_update[0].arn]
+      }
+    }
+  }
+}
+
+locals {
+  queue_policies = {
+    verdicts     = { url = aws_sqs_queue.verdicts.id, json = data.aws_iam_policy_document.verdicts_queue.json }
+    verdicts_dlq = { url = aws_sqs_queue.verdicts_dlq.id, json = data.aws_iam_policy_document.queue_tls_only["verdicts_dlq"].json }
+    lambda_dlq   = { url = aws_sqs_queue.lambda_dlq.id, json = data.aws_iam_policy_document.lambda_dlq_queue.json }
+  }
+}
+
+resource "aws_sqs_queue_policy" "this" {
+  for_each = local.queue_policies
+
+  queue_url = each.value.url
+  policy    = each.value.json
 }
 
 # -------------------------------------------------------------------------------- log groups
@@ -263,11 +325,12 @@ data "aws_iam_policy_document" "scanner" {
     actions   = ["s3:ListBucket"]
     resources = [var.signatures_bucket_arn]
   }
+  # The verdict is an object, not an SQS message: the function has no path to SQS.
   statement {
-    sid       = "PublishVerdict"
+    sid       = "WriteVerdict"
     effect    = "Allow"
-    actions   = ["sqs:SendMessage"]
-    resources = [aws_sqs_queue.verdicts.arn]
+    actions   = ["s3:PutObject"]
+    resources = ["${var.uploads_bucket_arn}/${var.verdicts_prefix}*"]
   }
 }
 
@@ -389,14 +452,15 @@ resource "aws_lambda_function" "this" {
     system_log_level      = "WARN"
   }
 
-  # No secrets here: the sandbox never holds credentials beyond its role.
+  # No secrets here: the sandbox never holds credentials beyond its role. No queue URL either:
+  # the in-VPC functions cannot reach SQS, verdicts travel as objects under the verdicts prefix.
   environment {
     variables = {
-      DM_ENV                 = var.env
-      DM_SANDBOX_FUNCTION    = each.key
-      DM_S3_UPLOADS_BUCKET   = var.uploads_bucket_name
-      DM_SIGNATURES_BUCKET   = var.signatures_bucket_name
-      DM_SCAN_VERDICTS_QUEUE = aws_sqs_queue.verdicts.url
+      DM_ENV                  = var.env
+      DM_SANDBOX_FUNCTION     = each.key
+      DM_S3_UPLOADS_BUCKET    = var.uploads_bucket_name
+      DM_SIGNATURES_BUCKET    = var.signatures_bucket_name
+      DM_SCAN_VERDICTS_PREFIX = var.verdicts_prefix
     }
   }
 
@@ -418,7 +482,7 @@ resource "aws_lambda_function_event_invoke_config" "async" {
   maximum_event_age_in_seconds = 3600
 }
 
-# --------------------------------------------------------------------- S3 event -> scanner
+# ------------------------------------------------ S3 events: quarantine -> scanner, verdicts -> SQS
 resource "aws_lambda_permission" "s3_scanner" {
   count = local.enabled ? 1 : 0
 
@@ -430,19 +494,32 @@ resource "aws_lambda_permission" "s3_scanner" {
   source_account = var.account_id
 }
 
+# A bucket has a single notification configuration, so one resource owns both legs. The
+# verdicts/ -> SQS leg exists from the first apply; the quarantine/ -> scanner leg appears with
+# the functions. The prefixes never overlap, which S3 requires for the same event type.
 resource "aws_s3_bucket_notification" "uploads" {
-  count = local.enabled ? 1 : 0
-
   bucket = var.uploads_bucket_name
 
-  lambda_function {
-    id                  = "quarantine-to-scanner"
-    lambda_function_arn = aws_lambda_function.this["scanner"].arn
-    events              = ["s3:ObjectCreated:*"]
-    filter_prefix       = "quarantine/"
+  dynamic "lambda_function" {
+    for_each = local.enabled ? [1] : []
+    content {
+      id                  = "quarantine-to-scanner"
+      lambda_function_arn = aws_lambda_function.this["scanner"].arn
+      events              = ["s3:ObjectCreated:*"]
+      filter_prefix       = "quarantine/"
+    }
   }
 
-  depends_on = [aws_lambda_permission.s3_scanner]
+  queue {
+    id            = "verdicts-to-queue"
+    queue_arn     = aws_sqs_queue.verdicts.arn
+    events        = ["s3:ObjectCreated:*"]
+    filter_prefix = var.verdicts_prefix
+    filter_suffix = ".json"
+  }
+
+  # S3 checks the destination permissions when the configuration is written.
+  depends_on = [aws_lambda_permission.s3_scanner, aws_sqs_queue_policy.this]
 }
 
 # ------------------------------------------------------- EventBridge -> signature updater
@@ -472,6 +549,9 @@ resource "aws_cloudwatch_event_target" "signature_update" {
   dead_letter_config {
     arn = aws_sqs_queue.lambda_dlq.arn
   }
+
+  # The queue policy (EventBridgeDeadLetter statement) must exist before the target uses it.
+  depends_on = [aws_sqs_queue_policy.this]
 }
 
 resource "aws_lambda_permission" "events_signature_update" {
@@ -482,37 +562,4 @@ resource "aws_lambda_permission" "events_signature_update" {
   function_name = aws_lambda_function.this["signature-updater"].function_name
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.signature_update[0].arn
-}
-
-# EventBridge needs to be allowed to write to the dead-letter queue.
-data "aws_iam_policy_document" "lambda_dlq_events" {
-  count = local.enabled ? 1 : 0
-
-  source_policy_documents = [data.aws_iam_policy_document.queue_tls_only["lambda_dlq"].json]
-
-  statement {
-    sid    = "EventBridgeDeadLetter"
-    effect = "Allow"
-    principals {
-      type        = "Service"
-      identifiers = ["events.amazonaws.com"]
-    }
-    actions   = ["sqs:SendMessage"]
-    resources = [aws_sqs_queue.lambda_dlq.arn]
-    condition {
-      test     = "ArnEquals"
-      variable = "aws:SourceArn"
-      values   = [aws_cloudwatch_event_rule.signature_update[0].arn]
-    }
-  }
-}
-
-resource "aws_sqs_queue_policy" "lambda_dlq_events" {
-  count = local.enabled ? 1 : 0
-
-  queue_url = aws_sqs_queue.lambda_dlq.id
-  policy    = data.aws_iam_policy_document.lambda_dlq_events[0].json
-
-  # The generic TLS-only policy is replaced by this superset when functions exist.
-  depends_on = [aws_sqs_queue_policy.tls_only]
 }

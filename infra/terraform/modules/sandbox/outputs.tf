@@ -24,8 +24,13 @@ output "ecr_repository_urls" {
 }
 
 output "verdict_queue_url" {
-  description = "URL of the scan verdicts queue (DM_SCAN_VERDICTS_QUEUE)."
+  description = "URL of the scan verdicts queue (DM_SCAN_VERDICTS_QUEUE), fed by S3 notifications on the verdicts prefix."
   value       = aws_sqs_queue.verdicts.url
+}
+
+output "verdicts_prefix" {
+  description = "Key prefix of the verdict objects in the uploads bucket (DM_SCAN_VERDICTS_PREFIX)."
+  value       = var.verdicts_prefix
 }
 
 output "verdict_queue_arn" {

@@ -34,8 +34,19 @@ variable "security_group_id" {
 }
 
 variable "uploads_bucket_name" {
-  description = "Name of the uploads bucket (quarantine/, clean/, derived/)."
+  description = "Name of the uploads bucket (quarantine/, clean/, derived/, verdicts/)."
   type        = string
+}
+
+variable "verdicts_prefix" {
+  description = "Key prefix in the uploads bucket where the scanner writes one JSON object per verdict; S3 notifies the verdicts queue for objects created under it."
+  type        = string
+  default     = "verdicts/"
+
+  validation {
+    condition     = can(regex("^[a-z0-9-]+/$", var.verdicts_prefix))
+    error_message = "verdicts_prefix must be a single lowercase path segment ending in a slash."
+  }
 }
 
 variable "uploads_bucket_arn" {

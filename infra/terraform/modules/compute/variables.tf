@@ -73,8 +73,14 @@ variable "ssm_path_prefix" {
 }
 
 variable "uploads_bucket_arn" {
-  description = "ARN of the uploads bucket (quarantine/, clean/, derived/)."
+  description = "ARN of the uploads bucket (quarantine/, clean/, derived/, verdicts/)."
   type        = string
+}
+
+variable "verdicts_prefix" {
+  description = "Key prefix of the verdict objects the scanner writes in the uploads bucket (module sandbox); the worker reads and deletes them."
+  type        = string
+  default     = "verdicts/"
 }
 
 variable "backups_bucket_arn" {
@@ -83,7 +89,7 @@ variable "backups_bucket_arn" {
 }
 
 variable "verdict_queue_arn" {
-  description = "ARN of the scan verdicts queue consumed by the worker."
+  description = "ARN of the scan verdicts queue (S3 notifications on the verdicts prefix) consumed by the worker."
   type        = string
 }
 

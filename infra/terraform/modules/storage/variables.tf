@@ -35,6 +35,12 @@ variable "uploads_expiration_days" {
   default     = 30
 }
 
+variable "verdicts_expiration_days" {
+  description = "Days after which unconsumed verdict objects under verdicts/ expire (the worker deletes consumed ones within minutes)."
+  type        = number
+  default     = 7
+}
+
 variable "signatures_expiration_days" {
   description = "Days after which stale signature bundles expire (the updater rewrites them every 6 hours)."
   type        = number

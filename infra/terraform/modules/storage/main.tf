@@ -1,7 +1,8 @@
 # Storage: five private buckets, all with public access blocked, bucket-owner-enforced ownership
 # (no ACLs), SSE-S3 and a TLS-only policy. Bucket names embed the account id to be unique.
 #
-#   uploads     quarantine/ (fresh uploads, scanned by the sandbox) · clean/ · derived/
+#   uploads     quarantine/ (fresh uploads, scanned by the sandbox) · clean/ · derived/ ·
+#               verdicts/ (one JSON per scan, written by the scanner, consumed by the worker)
 #   backups     pgBackRest repository (versioned)
 #   site        static site served by CloudFront through an origin access control (policy in edge)
 #   signatures  ClamAV signature bundles written by the updater Lambda, read by the scanner
@@ -120,6 +121,18 @@ resource "aws_s3_bucket_lifecycle_configuration" "uploads" {
     }
     expiration {
       days = var.uploads_expiration_days
+    }
+  }
+
+  # The worker deletes each verdict after acting on it; this catches the ones it never saw.
+  rule {
+    id     = "expire-verdicts"
+    status = "Enabled"
+    filter {
+      prefix = "verdicts/"
+    }
+    expiration {
+      days = var.verdicts_expiration_days
     }
   }
 
