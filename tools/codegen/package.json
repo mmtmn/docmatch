@@ -17,7 +17,7 @@
     "check": "node codegen.mjs check",
     "validate": "node codegen.mjs validate",
     "smoke": "node codegen.mjs smoke",
-    "test": "node --test test/"
+    "test": "node --test 'test/**/*.test.mjs'"
   },
   "dependencies": {
     "@bufbuild/buf": "1.75.0",
