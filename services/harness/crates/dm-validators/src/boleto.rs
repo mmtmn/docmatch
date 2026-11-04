@@ -13,6 +13,12 @@
 //! 2025-02-21 and restarted at 1000 on 2025-02-22 (second cycle). A factor is therefore
 //! ambiguous between two dates ~24.6 years apart; [`parse_boleto_with_reference`] picks the
 //! candidate closest to a reference date and reports both.
+//!
+//! A 44-digit barcode starting with `8` is ambiguous between a bank slip of an `8xx` bank and
+//! an arrecadação slip: the arrecadação block check digits are recomputed from the barcode
+//! itself, so only the general check digit discriminates. The arrecadação reading wins when
+//! it closes, then the bank reading; callers holding a bank slip from an `8xx` bank should
+//! pass the 47-digit line, which is never ambiguous.
 
 use chrono::{Days, NaiveDate};
 use serde::{Deserialize, Serialize};
@@ -173,18 +179,23 @@ pub fn parse_boleto_with_reference(
         47 => Ok(parse_bank_line(&digits, reference)),
         48 => Ok(parse_arrecadacao_line(&digits)),
         44 => {
-            // A leading 8 is the arrecadação product id, but bank codes 8xx exist: when the
-            // arrecadação reading fails its own check digits and the bank reading passes,
-            // the bank reading wins.
+            // The conversions only fail on non-digit input, which the filter above excludes.
+            let as_bank = bank_barcode_to_line(&digits).ok_or(BoletoError::Length(44))?;
+            // A leading 8 is the arrecadação product id, but bank codes 8xx exist: the block
+            // check digits of the arrecadação reading come from the barcode itself, so only
+            // the general check digit discriminates (see the module docs). The arrecadação
+            // reading wins when it closes, then the bank reading, else the invalid one.
             if digits.starts_with('8') {
-                let arrecadacao = parse_arrecadacao_line(&arrecadacao_barcode_to_line(&digits));
+                let as_arrecadacao =
+                    arrecadacao_barcode_to_line(&digits).ok_or(BoletoError::Length(44))?;
+                let arrecadacao = parse_arrecadacao_line(&as_arrecadacao);
                 if arrecadacao.valid {
                     return Ok(arrecadacao);
                 }
-                let bank = parse_bank_line(&bank_barcode_to_line(&digits), reference);
+                let bank = parse_bank_line(&as_bank, reference);
                 Ok(if bank.valid { bank } else { arrecadacao })
             } else {
-                Ok(parse_bank_line(&bank_barcode_to_line(&digits), reference))
+                Ok(parse_bank_line(&as_bank, reference))
             }
         }
         n => Err(BoletoError::Length(n)),
@@ -369,8 +380,12 @@ fn parse_arrecadacao_line(line: &str) -> Boleto {
     }
 }
 
-/// Converts a 44-digit bank barcode into its 47-digit line (check digits recomputed).
-pub fn bank_barcode_to_line(barcode: &str) -> String {
+/// Converts a 44-digit bank barcode into its 47-digit line (field check digits recomputed).
+/// `None` unless the input is exactly 44 ASCII digits; never panics.
+pub fn bank_barcode_to_line(barcode: &str) -> Option<String> {
+    if barcode.len() != 44 || !all_digits(barcode) {
+        return None;
+    }
     let bank_currency = &barcode[0..4];
     let general = &barcode[4..5];
     let factor_value = &barcode[5..19];
@@ -378,16 +393,21 @@ pub fn bank_barcode_to_line(barcode: &str) -> String {
     let f1 = format!("{bank_currency}{}", &free[0..5]);
     let f2 = &free[5..15];
     let f3 = &free[15..25];
-    format!(
+    Some(format!(
         "{f1}{}{f2}{}{f3}{}{general}{factor_value}",
         mod10(&f1).unwrap_or(0),
         mod10(f2).unwrap_or(0),
         mod10(f3).unwrap_or(0)
-    )
+    ))
 }
 
-/// Converts a 44-digit arrecadação barcode into its 48-digit line.
-pub fn arrecadacao_barcode_to_line(barcode: &str) -> String {
+/// Converts a 44-digit arrecadação barcode into its 48-digit line (block check digits
+/// recomputed with the módulo the identifier digit selects). `None` unless the input is
+/// exactly 44 ASCII digits; never panics.
+pub fn arrecadacao_barcode_to_line(barcode: &str) -> Option<String> {
+    if barcode.len() != 44 || !all_digits(barcode) {
+        return None;
+    }
     let identifier = barcode.as_bytes()[2];
     let modulus: fn(&str) -> Option<u32> = match identifier {
         b'8' | b'9' => mod11_zero_rule,
@@ -399,7 +419,7 @@ pub fn arrecadacao_barcode_to_line(barcode: &str) -> String {
         out.push_str(block);
         out.push_str(&modulus(block).unwrap_or(0).to_string());
     }
-    out
+    Some(out)
 }
 
 /// Builds a valid 47-digit bank line from its parts (tests, generators, synthetic data).
@@ -421,7 +441,7 @@ pub fn compose_bank_line(
     let body = format!("{bank}{currency}{factor:04}{value_centavos:010}{free_field}");
     let general = mod11_boleto(&body)?;
     let barcode = format!("{}{general}{}", &body[0..4], &body[4..]);
-    Some(bank_barcode_to_line(&barcode))
+    bank_barcode_to_line(&barcode)
 }
 
 /// Builds a valid 48-digit arrecadação line from its parts.
@@ -454,7 +474,7 @@ pub fn compose_arrecadacao_line(
         _ => mod11_zero_rule(&body)?,
     };
     let barcode = format!("{}{general}{}", &body[0..3], &body[3..]);
-    Some(arrecadacao_barcode_to_line(&barcode))
+    arrecadacao_barcode_to_line(&barcode)
 }
 
 #[cfg(test)]
@@ -463,6 +483,35 @@ mod tests {
 
     fn date(y: i32, m: u32, d: u32) -> NaiveDate {
         NaiveDate::from_ymd_opt(y, m, d).unwrap()
+    }
+
+    #[test]
+    fn barcode_to_line_is_total() {
+        // short, full-width (non-ASCII) digits and a trailing letter: all refused, no panic
+        let fullwidth: String = "１２３４５６７８９０".repeat(5).chars().take(44).collect();
+        for bad in [
+            "",
+            "123",
+            fullwidth.as_str(),
+            "2379338128600078271369500006330518434000001234x",
+        ] {
+            assert_eq!(bank_barcode_to_line(bad), None, "{bad:?}");
+            assert_eq!(arrecadacao_barcode_to_line(bad), None, "{bad:?}");
+        }
+        let ok = "23791843400000123453381286000782713695000063305";
+        assert_eq!(ok.len(), 47);
+        // a 44-digit barcode converts, whatever the check digits say
+        let barcode = format!(
+            "{}{}{}{}{}",
+            &ok[0..4],
+            &ok[32..47],
+            &ok[4..9],
+            &ok[10..20],
+            &ok[21..31]
+        );
+        assert_eq!(barcode.len(), 44);
+        assert!(bank_barcode_to_line(&barcode).is_some());
+        assert!(arrecadacao_barcode_to_line(&barcode).is_some());
     }
 
     #[test]

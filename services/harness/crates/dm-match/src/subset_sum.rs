@@ -41,23 +41,26 @@ pub fn subset_sum(
     let mut right_sums = half_sums(right);
     right_sums.sort_unstable_by_key(|(sum, _)| *sum);
     let mut solutions: Vec<(i64, usize, u32, Vec<String>, i64)> = Vec::new();
+    // Centavos saturate at i64 (see `Money::centavos`), so every sum and difference here
+    // saturates too: absurd inputs degrade to a wrong candidate, never to a panic.
     for (lsum, lmask) in &left_sums {
-        let lo = target_c - tol - lsum;
-        let hi = target_c + tol - lsum;
+        let lo = target_c.saturating_sub(tol).saturating_sub(*lsum);
+        let hi = target_c.saturating_add(tol).saturating_sub(*lsum);
         let start = right_sums.partition_point(|(s, _)| *s < lo);
         for (rsum, rmask) in right_sums[start..].iter().take_while(|(s, _)| *s <= hi) {
             let mask = u32::from(*lmask) | (u32::from(*rmask) << left.len());
             if mask == 0 {
                 continue;
             }
-            let sum = lsum + rsum;
+            let sum = lsum.saturating_add(*rsum);
             let ids: Vec<String> = candidates
                 .iter()
                 .enumerate()
                 .filter(|(i, _)| mask & (1 << i) != 0)
                 .map(|(_, (id, _))| id.clone())
                 .collect();
-            solutions.push(((sum - target_c).abs(), ids.len(), mask, ids, sum));
+            let distance = sum.saturating_sub(target_c).saturating_abs();
+            solutions.push((distance, ids.len(), mask, ids, sum));
         }
     }
     solutions.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)));
@@ -67,7 +70,7 @@ pub fn subset_sum(
         .map(|(_, _, _, ids, sum)| SubsetSolution {
             ids,
             sum: Money::from_centavos(sum),
-            residual: Money::from_centavos(sum - target_c),
+            residual: Money::from_centavos(sum.saturating_sub(target_c)),
         })
         .collect()
 }
@@ -80,7 +83,7 @@ fn half_sums(values: &[i64]) -> Vec<(i64, u16)> {
         let sum: i64 = (0..n)
             .filter(|i| mask & (1 << i) != 0)
             .map(|i| values[i])
-            .sum();
+            .fold(0i64, i64::saturating_add);
         out.push((sum, mask));
     }
     out

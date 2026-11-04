@@ -63,10 +63,19 @@ impl Money {
         Money(Decimal::new(reais, 0).round_dp(2))
     }
 
-    /// The amount as an integer number of centavos.
+    /// The amount as an integer number of centavos, saturating at `i64::MIN`/`i64::MAX`
+    /// (an amount near `Decimal::MAX` cannot be scaled by 100; it never panics here).
     pub fn centavos(self) -> i64 {
-        let scaled = (self.0.round_dp(2) * Decimal::ONE_HUNDRED).trunc();
-        scaled.to_i64().unwrap_or(i64::MAX)
+        let saturated = if self.0.is_sign_negative() {
+            i64::MIN
+        } else {
+            i64::MAX
+        };
+        self.0
+            .round_dp(2)
+            .checked_mul(Decimal::ONE_HUNDRED)
+            .and_then(|scaled| scaled.trunc().to_i64())
+            .unwrap_or(saturated)
     }
 
     /// The underlying decimal with scale 2.
@@ -110,9 +119,25 @@ impl Money {
             .ok_or(CoreError::Overflow)
     }
 
-    /// Multiplies by a rate (`0.02` for 2%) and rounds half away from zero to centavos.
+    /// Saturating addition: clamps at the `Decimal` range instead of panicking.
+    pub fn saturating_add(self, other: Money) -> Money {
+        Money(self.0.saturating_add(other.0))
+    }
+
+    /// Sums with overflow detection ([`CoreError::Overflow`]): report totals and other
+    /// aggregates over untrusted inputs use this instead of [`Sum`], which saturates.
+    pub fn checked_sum<I: IntoIterator<Item = Money>>(iter: I) -> Result<Money, CoreError> {
+        iter.into_iter().try_fold(Money::ZERO, Money::checked_add)
+    }
+
+    /// Multiplies by a rate (`0.02` for 2%) and rounds half away from zero to centavos,
+    /// saturating at the `Decimal` range instead of panicking.
     pub fn mul_rate(self, rate: Decimal) -> Money {
-        Money::from_decimal(self.0 * rate)
+        match self.0.checked_mul(rate) {
+            Some(product) => Money::from_decimal(product),
+            None if self.0.is_sign_negative() != rate.is_sign_negative() => Money(Decimal::MIN),
+            None => Money(Decimal::MAX),
+        }
     }
 
     /// Takes a percentage (`2` for 2%) of the amount, rounded to centavos.
@@ -367,15 +392,18 @@ impl Neg for Money {
     }
 }
 
+/// Sums saturate at the `Decimal` range instead of panicking (`+` and `-` keep the `Decimal`
+/// semantics and panic on overflow, which needs amounts beyond 10^26 reais). Aggregates that
+/// must report overflow use [`Money::checked_sum`].
 impl Sum for Money {
     fn sum<I: Iterator<Item = Money>>(iter: I) -> Money {
-        iter.fold(Money::ZERO, |acc, m| acc + m)
+        iter.fold(Money::ZERO, Money::saturating_add)
     }
 }
 
 impl<'a> Sum<&'a Money> for Money {
     fn sum<I: Iterator<Item = &'a Money>>(iter: I) -> Money {
-        iter.fold(Money::ZERO, |acc, m| acc + *m)
+        iter.fold(Money::ZERO, |acc, m| acc.saturating_add(*m))
     }
 }
 
@@ -574,6 +602,28 @@ mod tests {
             assert_eq!(Money::parse_brl(&m(c).format_brl()).unwrap(), m(c));
             assert_eq!(Money::parse_brl(&m(c).format_plain()).unwrap(), m(c));
         }
+    }
+
+    #[test]
+    fn sums_saturate_and_checked_sum_reports_overflow() {
+        let huge = Money::from_decimal(Decimal::MAX);
+        // `Sum` never panics: it clamps at the Decimal range
+        let total: Money = [huge, huge, m(1)].iter().sum();
+        assert_eq!(total, huge);
+        assert_eq!((-huge).saturating_add(-huge), -huge);
+        // `checked_sum` reports what `Sum` hides (MAX + 0.01 is MAX in rust_decimal, which
+        // drops the centavo rather than overflow, so the overflow needs two huge terms)
+        assert_eq!(Money::checked_sum([m(1), m(2), m(3)]), Ok(m(6)));
+        assert_eq!(Money::checked_sum([]), Ok(Money::ZERO));
+        assert_eq!(Money::checked_sum([huge, huge]), Err(CoreError::Overflow));
+        assert_eq!(huge.checked_add(huge), Err(CoreError::Overflow));
+        assert_eq!((-huge).checked_sub(huge), Err(CoreError::Overflow));
+        // centavos and rates saturate instead of panicking on absurd amounts
+        assert_eq!(huge.centavos(), i64::MAX);
+        assert_eq!((-huge).centavos(), i64::MIN);
+        assert_eq!(huge.mul_rate(Decimal::new(2, 0)), huge);
+        assert_eq!(huge.mul_rate(Decimal::new(-2, 0)), -huge);
+        assert!(huge.mul_rate(Decimal::new(1, 2)).is_positive());
     }
 
     #[test]

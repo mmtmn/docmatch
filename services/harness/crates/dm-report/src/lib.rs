@@ -14,6 +14,22 @@ pub enum ReportError {
     /// XLSX writer failure.
     #[error("xlsx: {0}")]
     Xlsx(String),
+    /// A total overflowed the `Money` range (only absurd inputs get here, but a wrong total
+    /// must never be printed as if it were right).
+    #[error("estouro ao somar {0}")]
+    Overflow(&'static str),
+}
+
+/// Sum of the amounts at risk, with overflow reported.
+fn total_at_risk(findings: &[Finding]) -> Result<Money, ReportError> {
+    Money::checked_sum(findings.iter().map(|f| f.amount_at_risk))
+        .map_err(|_| ReportError::Overflow("valor em risco"))
+}
+
+/// Sum of the reconciled amounts, with overflow reported.
+fn total_reconciled(matches: &[MatchRecord]) -> Result<Money, ReportError> {
+    Money::checked_sum(matches.iter().map(|m| m.amount))
+        .map_err(|_| ReportError::Overflow("valor conciliado"))
 }
 
 /// A reconciled pair or group, as the report shows it.
@@ -46,11 +62,14 @@ pub fn escape_cell(cell: &str) -> String {
 }
 
 /// Markdown report in pt-BR: summary, findings (one section each with evidence) and matches.
-pub fn render_markdown_ptbr(findings: &[Finding], matches: &[MatchRecord]) -> String {
+pub fn render_markdown_ptbr(
+    findings: &[Finding],
+    matches: &[MatchRecord],
+) -> Result<String, ReportError> {
     let mut md = String::new();
     md.push_str("# Relatório de conciliação\n\n");
-    let at_risk: Money = findings.iter().map(|f| f.amount_at_risk).sum();
-    let reconciled: Money = matches.iter().map(|m| m.amount).sum();
+    let at_risk = total_at_risk(findings)?;
+    let reconciled = total_reconciled(matches)?;
     md.push_str(&format!(
         "- Achados: **{}** (valor em risco: {})\n",
         findings.len(),
@@ -118,7 +137,7 @@ pub fn render_markdown_ptbr(findings: &[Finding], matches: &[MatchRecord]) -> St
         }
         md.push('\n');
     }
-    md
+    Ok(md)
 }
 
 fn severity_badge(s: Severity) -> String {
@@ -130,17 +149,20 @@ fn md_escape(s: &str) -> String {
 }
 
 /// JSON document with both lists.
-pub fn to_json(findings: &[Finding], matches: &[MatchRecord]) -> serde_json::Value {
-    serde_json::json!({
+pub fn to_json(
+    findings: &[Finding],
+    matches: &[MatchRecord],
+) -> Result<serde_json::Value, ReportError> {
+    Ok(serde_json::json!({
         "findings": findings,
         "matches": matches,
         "summary": {
             "findings": findings.len(),
             "matches": matches.len(),
-            "amount_at_risk": findings.iter().map(|f| f.amount_at_risk).sum::<Money>(),
-            "amount_reconciled": matches.iter().map(|m| m.amount).sum::<Money>(),
+            "amount_at_risk": total_at_risk(findings)?,
+            "amount_reconciled": total_reconciled(matches)?,
         }
-    })
+    }))
 }
 
 /// CSV of the findings (`;` separated, pt-BR headers), every text cell escaped.
@@ -341,7 +363,7 @@ mod tests {
             amount: Money::from_centavos(50_000),
             explanation: "ok".into(),
         }];
-        let md = render_markdown_ptbr(&findings, &matches);
+        let md = render_markdown_ptbr(&findings, &matches).unwrap();
         assert!(md.starts_with("# Relatório de conciliação"));
         assert!(md.contains("Achados: **2** (valor em risco: R$ 18.451,00)"));
         assert!(
@@ -357,11 +379,43 @@ mod tests {
             md.find("TITLE_WITHOUT_PAYMENT").unwrap() < md.find("`LATE`").unwrap(),
             "higher severity first"
         );
-        let j = to_json(&findings, &matches);
+        let j = to_json(&findings, &matches).unwrap();
         assert_eq!(j["summary"]["findings"], 2);
         assert_eq!(j["summary"]["amount_at_risk"], 1_845_100);
         assert_eq!(j["findings"][0]["code"], "TITLE_WITHOUT_PAYMENT");
-        assert!(render_markdown_ptbr(&[], &[]).contains("Achados: **0**"));
+        assert!(render_markdown_ptbr(&[], &[])
+            .unwrap()
+            .contains("Achados: **0**"));
+    }
+
+    #[test]
+    fn totals_report_overflow_instead_of_a_wrong_number() {
+        let huge = Money::from_decimal(dm_core::Decimal::MAX);
+        let findings = vec![
+            finding("A", "a", 1, Severity::Info),
+            finding("B", "b", 1, Severity::Info),
+        ];
+        let mut absurd = findings.clone();
+        absurd[0].amount_at_risk = huge;
+        absurd[1].amount_at_risk = huge;
+        assert_eq!(
+            render_markdown_ptbr(&absurd, &[]),
+            Err(ReportError::Overflow("valor em risco"))
+        );
+        let matches = vec![
+            MatchRecord {
+                left_id: "a".into(),
+                right_id: "b".into(),
+                rule: "x".into(),
+                amount: huge,
+                explanation: String::new(),
+            };
+            2
+        ];
+        assert_eq!(
+            to_json(&findings, &matches),
+            Err(ReportError::Overflow("valor conciliado"))
+        );
     }
 
     #[test]
