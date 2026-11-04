@@ -247,18 +247,20 @@ func (m *Manager) Refresh(ctx context.Context, w http.ResponseWriter, r *http.Re
 	if !now.Before(s.ExpiresAt) {
 		return Session{}, ErrExpired
 	}
+	// On reuse or device mismatch the row is returned with the error so the
+	// caller can audit the revocation against the right user and tenant.
 	if !crypto.Equal(crypto.Digest(secret), s.RefreshHash) {
 		if _, err := m.store.RevokeFamily(ctx, s.FamilyID); err != nil {
 			return Session{}, err
 		}
-		return Session{}, ErrReuse
+		return s, ErrReuse
 	}
 	device := deviceID(r)
 	if device == "" || !crypto.Equal(crypto.Digest(device), s.DeviceHash) {
 		if _, err := m.store.RevokeFamily(ctx, s.FamilyID); err != nil {
 			return Session{}, err
 		}
-		return Session{}, ErrDeviceMismatch
+		return s, ErrDeviceMismatch
 	}
 	access := crypto.RandomToken(secretBytes)
 	refresh := crypto.RandomToken(secretBytes)
@@ -290,6 +292,9 @@ func (m *Manager) Logout(ctx context.Context, w http.ResponseWriter, r *http.Req
 	}
 	if !ok {
 		return Session{}, ErrInvalid
+	}
+	if s.RevokedAt != nil {
+		return Session{}, ErrRevoked
 	}
 	if _, err := m.store.Revoke(ctx, id); err != nil {
 		return Session{}, err
@@ -382,8 +387,10 @@ func remoteAddr(r *http.Request) netip.Addr {
 	return addr
 }
 
-// ipPrefix buckets the address like the rate limiter (/24 v4, /64 v6) so the
+// IPPrefix buckets the address like the rate limiter (/24 v4, /64 v6) so the
 // stored value is coarse enough not to be personal data on its own.
+func IPPrefix(ip netip.Addr) string { return ipPrefix(ip) }
+
 func ipPrefix(ip netip.Addr) string {
 	if !ip.IsValid() {
 		return ""
