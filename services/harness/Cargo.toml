@@ -84,7 +84,11 @@ hex = "0.4.3"
 rand = "0.10.3"
 
 # network, async
-reqwest = { version = "0.13.5", features = ["json"] }
+# TLS é sempre rustls com o provedor `ring` (puro Rust): o padrão do reqwest puxaria
+# aws-lc-sys (cmake + C), que custa minutos no build frio do CI. O provedor é instalado em
+# dm-llm antes de qualquer cliente.
+reqwest = { version = "0.13.5", default-features = false, features = ["json", "charset", "http2", "system-proxy", "rustls-no-provider"] }
+rustls = { version = "0.23.46", default-features = false, features = ["ring", "logging", "std", "tls12"] }
 tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "time", "sync", "fs"] }
 async-trait = "0.1.92"
 

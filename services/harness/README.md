@@ -67,6 +67,9 @@ arquivos ──► dm-ingest (sniff → Table/Item + menções) ──► dm-nor
   cruzar o limiar; o corpus em `crates/dm-guard/tests/data/injection` fixa os dois lados.
 - Somas de `Money` saturam no limite do `Decimal` em vez de entrar em pânico; totais de
   relatório usam `Money::checked_sum` e reportam estouro como erro.
+- TLS é sempre rustls com o provedor `ring` (puro Rust): o padrão do reqwest puxaria
+  `aws-lc-sys` (cmake + C), que custa minutos no build frio do CI. `dm-llm` instala o
+  provedor antes de criar qualquer cliente HTTP.
 - Um código de barras de 44 dígitos começando com `8` é ambíguo entre boleto bancário (bancos
   `8xx`) e arrecadação: os DVs de bloco da arrecadação são recalculados a partir do próprio
   código, então só o DV geral discrimina. `parse_boleto_with_reference` prefere a leitura de

@@ -1,7 +1,7 @@
 //! The `LlmClient` trait and its three implementations: OpenRouter, OpenAI-compatible local
 //! endpoint and off.
 
-use std::sync::Mutex;
+use std::sync::{Mutex, Once};
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
@@ -254,6 +254,16 @@ impl HttpLlmClient {
         Self::build(LlmMode::Local, base_url.into(), None, models, cache, retry)
     }
 
+    /// Installs `ring` as the process-level rustls crypto provider, once. reqwest is built
+    /// with `rustls-no-provider` (no aws-lc-sys, no cmake), so the provider must exist before
+    /// the first TLS handshake; a provider installed earlier by the host process is kept.
+    fn ensure_crypto_provider() {
+        static ONCE: Once = Once::new();
+        ONCE.call_once(|| {
+            let _ = rustls::crypto::ring::default_provider().install_default();
+        });
+    }
+
     fn build(
         mode: LlmMode,
         base_url: String,
@@ -265,6 +275,7 @@ impl HttpLlmClient {
         if base_url.trim().is_empty() {
             return Err(LlmError::Config("URL base do modelo vazia".to_string()));
         }
+        Self::ensure_crypto_provider();
         let http = reqwest::Client::builder()
             .build()
             .map_err(|e| LlmError::Config(e.to_string()))?;
@@ -283,6 +294,12 @@ impl HttpLlmClient {
             app_referer: None,
             app_title: None,
         })
+    }
+
+    /// True when a process-level rustls crypto provider is installed (always, after any
+    /// client was built).
+    pub fn crypto_provider_installed() -> bool {
+        rustls::crypto::CryptoProvider::get_default().is_some()
     }
 
     /// Sets the `HTTP-Referer` and `X-Title` headers OpenRouter uses for attribution.

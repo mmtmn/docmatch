@@ -317,3 +317,13 @@ async fn unknown_role_and_bad_response() {
         Err(LlmError::Config(_))
     ));
 }
+
+#[test]
+fn building_a_client_installs_the_ring_crypto_provider() {
+    // reqwest is built with `rustls-no-provider`: the client constructor installs `ring`
+    // before the first TLS handshake, so HTTPS endpoints work without aws-lc-sys.
+    let client =
+        HttpLlmClient::local("http://localhost:1/v1", models(), None, fast_retry()).unwrap();
+    drop(client);
+    assert!(HttpLlmClient::crypto_provider_installed());
+}
