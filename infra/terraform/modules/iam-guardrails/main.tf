@@ -217,3 +217,63 @@ resource "aws_iam_group_policy_attachment" "operators" {
   group      = aws_iam_group.operators[0].name
   policy_arn = each.value
 }
+
+# Operators without a fresh MFA can only manage their own password and MFA device.
+data "aws_iam_policy_document" "require_mfa" {
+  statement {
+    sid    = "AllowViewAccountInfo"
+    effect = "Allow"
+    actions = [
+      "iam:GetAccountPasswordPolicy",
+      "iam:ListVirtualMFADevices",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "AllowManageOwnPasswordAndMfa"
+    effect = "Allow"
+    actions = [
+      "iam:ChangePassword",
+      "iam:GetUser",
+      "iam:CreateVirtualMFADevice",
+      "iam:EnableMFADevice",
+      "iam:ListMFADevices",
+      "iam:ResyncMFADevice",
+    ]
+    resources = [
+      "arn:aws:iam::*:user/$${aws:username}",
+      "arn:aws:iam::*:mfa/$${aws:username}",
+    ]
+  }
+
+  statement {
+    sid    = "DenyEverythingElseWithoutMfa"
+    effect = "Deny"
+    not_actions = [
+      "iam:ChangePassword",
+      "iam:GetUser",
+      "iam:CreateVirtualMFADevice",
+      "iam:EnableMFADevice",
+      "iam:ListMFADevices",
+      "iam:ListVirtualMFADevices",
+      "iam:ResyncMFADevice",
+      "iam:GetAccountPasswordPolicy",
+      "sts:GetSessionToken",
+    ]
+    resources = ["*"]
+    condition {
+      test     = "BoolIfExists"
+      variable = "aws:MultiFactorAuthPresent"
+      values   = ["false"]
+    }
+  }
+}
+
+resource "aws_iam_group_policy" "require_mfa" {
+  count = var.create_operators_group ? 1 : 0
+
+  name   = "require-mfa"
+  group  = aws_iam_group.operators[0].name
+  policy = data.aws_iam_policy_document.require_mfa.json
+}

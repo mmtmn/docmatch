@@ -1,0 +1,32 @@
+# Copie para terraform.tfvars (nunca commitado) e preencha. Tudo que é específico da conta, do
+# domínio ou de e-mail vive aqui; o código não tem nenhum valor desses.
+
+account_id             = "123456789012"
+region                 = "us-east-1"
+domain                 = "docmatch.com.br"
+mrr_usd                = 0
+alert_email            = "alertas@example.com"
+email_from             = "docmatch <no-reply@example.com>"
+security_contact_email = "security@example.com"
+dmarc_rua_email        = "dmarc@example.com"
+
+# Id da conta Cloudflare (32 hexadecimais). Vazio pula o módulo r2 até o token existir.
+cloudflare_account_id = ""
+
+# Preenchidos depois: AMI do packer build e tag das imagens do sandbox no ECR.
+ami_id           = ""
+lambda_image_tag = ""
+
+# No primeiro apply, antes de apontar os NS no registrador, use false; depois volte para true.
+wait_for_certificate_validation = true
+dnssec_enabled                  = true
+
+worker_desired_capacity = 0
+enable_flow_logs        = false
+llm_mode                = "openrouter"
+
+# Registros extras (DKIM do Resend, verificações, delegação do ambiente dev).
+extra_dns_records = [
+  # { name = "resend._domainkey", type = "TXT", ttl = 3600, records = ["p=..."] },
+  # { name = "dev", type = "NS", ttl = 3600, records = ["ns-1.awsdns-00.org.", "ns-2.awsdns-00.com."] },
+]

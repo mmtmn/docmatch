@@ -1,0 +1,26 @@
+# Copie para terraform.tfvars (nunca commitado) e preencha. O ambiente dev tem a própria zona
+# (dev.<domínio>), delegada por um registro NS em extra_dns_records do ambiente prod.
+
+account_id             = "123456789012"
+region                 = "us-east-1"
+domain                 = "dev.docmatch.com.br"
+mrr_usd                = 0
+alert_email            = "alertas@example.com"
+email_from             = "docmatch dev <no-reply@example.com>"
+security_contact_email = "security@example.com"
+dmarc_rua_email        = ""
+
+# Id da conta Cloudflare (32 hexadecimais). Vazio pula o módulo r2 até o token existir.
+cloudflare_account_id = ""
+
+# Preenchidos depois: AMI do packer build e tag das imagens do sandbox no ECR.
+ami_id           = ""
+lambda_image_tag = ""
+
+# No primeiro apply, antes de delegar dev.<domínio> na zona prod, use false; depois volte para true.
+wait_for_certificate_validation = false
+dnssec_enabled                  = false
+
+worker_desired_capacity = 0
+enable_flow_logs        = false
+llm_mode                = "off"

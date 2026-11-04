@@ -1,0 +1,57 @@
+# Linha de base do trivy config para infra/terraform. Cada entrada é um achado aceito de forma
+# consciente na fase tiny (uma t4g.small, ~US$ 15-20/mês). Remover a entrada quando a decisão mudar.
+misconfigurations:
+  - id: AVD-AWS-0104
+    statement: >-
+      Saída irrestrita em 80/443 no security group da instância: o filtro real de saída é o
+      nftables da AMI (deny por padrão; só proxy de saída, endpoints AWS e NTP). Um SG não sabe
+      filtrar por domínio e os endpoints da AWS mudam de IP.
+  - id: AVD-AWS-0164
+    statement: >-
+      A sub-rede pública atribui IP público: não há NAT gateway (US$ 32/mês) na fase tiny; a
+      instância fica atrás do CloudFront com 443 aberto só ao prefix list de origem.
+  - id: AVD-AWS-0178
+    statement: >-
+      VPC Flow Logs ficam desligados por padrão (variável enable_flow_logs) para caber no orçamento;
+      o módulo network já os entrega no bucket de logs quando ligados.
+  - id: AVD-AWS-0011
+    statement: >-
+      Sem AWS WAF na fase tiny (US$ 5/mês por web ACL mais regras); a função de borda derruba
+      scanners e caminhos de sondagem, CrowdSec e fail2ban cobrem o resto. Reavaliar com receita.
+  - id: AVD-AWS-0132
+    statement: >-
+      SSE-S3 em vez de chave KMS gerenciada pelo cliente (US$ 1/mês por chave mais chamadas) em todos
+      os buckets; o exigido pelo plano é SSE-S3 com acesso público bloqueado e TLS obrigatório.
+  - id: AVD-AWS-0090
+    statement: >-
+      Versionamento só no bucket de backups. uploads, site, assinaturas e logs são regeneráveis ou
+      expiram por ciclo de vida; versioná-los dobraria o custo de armazenamento sem ganho.
+  - id: AVD-AWS-0015
+    statement: >-
+      CloudTrail grava com SSE-S3 (bucket privado, TLS obrigatório, validação de integridade ligada);
+      uma chave KMS própria custaria US$ 1/mês mais o custo por evento.
+  - id: AVD-AWS-0162
+    statement: >-
+      CloudTrail só em S3: a ingestão em CloudWatch Logs cobra por GB e os alarmes de eventos de
+      API ficam para a fase seguinte.
+  - id: AVD-AWS-0163
+    statement: >-
+      O bucket de logs (destino do CloudTrail) não registra acessos a si mesmo: um segundo bucket
+      só para isso dobraria objetos sem valor investigativo; os outros quatro buckets registram
+      acessos nele.
+  - id: AVD-AWS-0095
+    statement: >-
+      O tópico SNS de alertas não é cifrado: alarmes do CloudWatch não publicam em tópicos cifrados
+      com a chave gerenciada pela AWS e as notificações não carregam segredo algum.
+  - id: AVD-AWS-0017
+    statement: >-
+      Grupos de log sem chave KMS própria: logs de Lambda e da aplicação não contêm segredos e a
+      chave custaria US$ 1/mês por ambiente.
+  - id: AVD-AWS-0033
+    statement: >-
+      Repositórios ECR com AES256 (chave gerenciada pela AWS); as imagens do sandbox são públicas
+      por construção (código aberto) e o scan-on-push está ligado.
+  - id: AVD-AWS-0027
+    statement: >-
+      Volume EBS cifrado com a chave padrão da conta (aws/ebs); uma chave própria não muda o
+      modelo de ameaça de uma única instância e custaria US$ 1/mês.

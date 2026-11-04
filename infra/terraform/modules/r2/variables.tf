@@ -34,9 +34,3 @@ variable "media_retention_days" {
   type        = number
   default     = 30
 }
-
-variable "tags" {
-  description = "Unused by the Cloudflare provider; kept for interface symmetry with the AWS modules."
-  type        = map(string)
-  default     = {}
-}

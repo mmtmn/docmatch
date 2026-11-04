@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# docmatch ${role} bootstrap. Rendered by Terraform, executed by cloud-init on the first boot of
+# every new instance. Everything it touches is idempotent, so re-running it is harmless.
+# The AMI (infra/packer + infra/ansible) ships the units, scripts and packages used here.
+set -euo pipefail
+umask 027
+
+ROLE="${role}"
+NAME="${name}"
+ENV_NAME="${env}"
+REGION="${region}"
+SSM_PATH="${ssm_path_prefix}"
+DATA_VOLUME_ID="${data_volume_id}"
+EIP_ALLOCATION_ID="${eip_allocation_id}"
+DATA_MOUNT="${data_mount_point}"
+
+LOG=/var/log/docmatch-userdata.log
+touch "$LOG" && chmod 0640 "$LOG"
+exec > >(tee -a "$LOG" | logger -t docmatch-userdata) 2>&1
+echo "== docmatch $ROLE bootstrap: $(date -u +%FT%TZ)"
+
+export AWS_REGION="$REGION" AWS_DEFAULT_REGION="$REGION" AWS_PAGER=""
+AWS=/usr/local/bin/aws
+
+imds_token() { curl -fsS -m 5 -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 600"; }
+imds() { curl -fsS -m 5 -H "X-aws-ec2-metadata-token: $TOKEN" "http://169.254.169.254/latest/meta-data/$1"; }
+TOKEN="$(imds_token)"
+INSTANCE_ID="$(imds instance-id)"
+AZ="$(imds placement/availability-zone)"
+
+# retry <attempts> <sleep seconds> <command...>
+retry() {
+  local attempts=$1 pause=$2 i
+  shift 2
+  for ((i = 1; i <= attempts; i++)); do
+    if "$@"; then return 0; fi
+    echo "tentativa $i/$attempts falhou ($1); aguardando $${pause}s"
+    sleep "$pause"
+  done
+  return 1
+}
+
+# 1. Identity of this instance, read by docmatch-env.service and the systemd units.
+install -d -m 0750 -o root -g docmatch /etc/docmatch
+cat > /etc/docmatch/instance.env <<EOF
+DM_ROLE=$ROLE
+DM_ENV=$ENV_NAME
+AWS_REGION=$REGION
+DM_SSM_PATH=$SSM_PATH
+DM_INSTANCE_ID=$INSTANCE_ID
+DM_AVAILABILITY_ZONE=$AZ
+EOF
+chmod 0640 /etc/docmatch/instance.env
+chown root:docmatch /etc/docmatch/instance.env
+hostnamectl set-hostname "$NAME-$ROLE-$${INSTANCE_ID#i-}"
+
+if [[ "$ROLE" == "app" ]]; then
+  # 2. Elastic IP: the CloudFront origin record points at it.
+  associate_eip() { "$AWS" ec2 associate-address --allocation-id "$EIP_ALLOCATION_ID" --instance-id "$INSTANCE_ID" --allow-reassociation >/dev/null; }
+  retry 12 5 associate_eip
+
+  # 3. Persistent data volume. During an AMI roll the previous instance is still releasing it,
+  #    hence the long retry. A brand-new volume is formatted once and seeded with the cluster
+  #    the AMI initialised (hardened postgresql.conf included).
+  attach_volume() { "$AWS" ec2 attach-volume --volume-id "$DATA_VOLUME_ID" --instance-id "$INSTANCE_ID" --device /dev/sdf >/dev/null; }
+  retry 60 5 attach_volume
+  DEV="/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_$${DATA_VOLUME_ID//-/}"
+  wait_for_device() { test -e "$DEV"; }
+  retry 60 2 wait_for_device
+  if [[ -z "$(blkid -o value -s TYPE "$DEV" || true)" ]]; then
+    echo "volume novo: formatando e semeando o cluster PostgreSQL da AMI"
+    mkfs.ext4 -q -L docmatch-data -m 1 "$DEV"
+    mkdir -p /mnt/docmatch-seed
+    mount -o nodev,nosuid,noexec "$DEV" /mnt/docmatch-seed
+    rsync -a --numeric-ids "$DATA_MOUNT/" /mnt/docmatch-seed/
+    umount /mnt/docmatch-seed
+    rmdir /mnt/docmatch-seed
+  fi
+  systemctl daemon-reload
+  systemctl enable --now var-lib-postgresql.mount
+fi
+
+# 4. Secrets and configuration: SSM Parameter Store -> /run/docmatch/env (tmpfs, 0400, docmatch).
+#    The unit refuses to finish while a secret still holds the Terraform placeholder.
+systemctl start docmatch-env.service
+
+# 5. Services of this role. Security services (nftables, auditd, CrowdSec, Falco...) are enabled
+#    in the AMI and already running.
+if [[ "$ROLE" == "app" ]]; then
+  systemctl enable --now postgresql@18-main.service
+  systemctl enable --now docmatch-pg-init.service
+  systemctl enable --now docmatch-harness.service docmatch-api.service docmatch-worker.service
+  systemctl enable --now caddy.service
+  systemctl enable --now pgbackrest-backup.timer
+else
+  systemctl enable --now docmatch-harness.service docmatch-worker.service
+fi
+
+install -d -m 0750 -o docmatch -g docmatch /var/lib/docmatch
+touch /var/lib/docmatch/.bootstrapped
+echo "== bootstrap concluído: $(date -u +%FT%TZ)"

@@ -1,0 +1,7 @@
+# Gerado por infra/scripts/bootstrap-state.sh como backend.hcl (nunca commitado: carrega o id da
+# conta). Uso manual: terraform init -backend-config=backend.hcl
+bucket       = "docmatch-tfstate-123456789012"
+key          = "dev/terraform.tfstate"
+region       = "us-east-1"
+encrypt      = true
+use_lockfile = true
