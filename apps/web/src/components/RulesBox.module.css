@@ -1,0 +1,87 @@
+.box {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-height: 0;
+}
+
+.labelRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--space-3);
+}
+
+.label {
+  font-weight: 600;
+  margin-right: auto;
+  min-height: var(--tap);
+  display: inline-flex;
+  align-items: center;
+}
+
+.picker {
+  display: inline-flex;
+}
+
+.switches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--space-2);
+}
+
+.textarea {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-2);
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-size: var(--fs-base);
+  line-height: 1.5;
+  resize: none;
+  overflow-y: hidden;
+}
+
+.textarea:focus-visible {
+  outline-offset: 0;
+  border-color: var(--color-focus);
+}
+
+.textarea::placeholder {
+  color: var(--color-muted);
+  opacity: 1;
+}
+
+.box[data-rules-off='true'] .textarea {
+  background: var(--color-surface);
+  color: var(--color-muted);
+}
+
+/* Keyboard open on a phone (set by HeroForm): keep the label and the textarea only. */
+.box[data-compact='true'] .switches,
+.box[data-compact='true'] .picker {
+  display: none;
+}
+
+.box[data-compact='true'] .label {
+  min-height: 0;
+}
+
+@media (max-width: 30em) {
+  .labelRow {
+    row-gap: 0;
+  }
+
+  .label {
+    margin-right: var(--space-2);
+  }
+
+  .switches {
+    width: 100%;
+    justify-content: space-between;
+  }
+}

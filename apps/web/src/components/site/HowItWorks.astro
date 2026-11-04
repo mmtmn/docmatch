@@ -1,0 +1,39 @@
+---
+import { t, tf } from '../../lib/i18n';
+
+const steps = tf('how.steps');
+---
+
+<section class="section" id="como-funciona" aria-labelledby="como-funciona-titulo">
+  <div class="container">
+    <h2 class="section__heading" id="como-funciona-titulo">
+      {t('how.heading')}
+    </h2>
+    <p class="section__lead">{t('how.lead')}</p>
+    <ol class="steps">
+      {steps.map((step) => (
+        <li class="card steps__item">
+          <h3>{step.title}</h3>
+          <p class="muted">{step.text}</p>
+        </li>
+      ))}
+    </ol>
+  </div>
+</section>
+
+<style>
+  .steps {
+    display: grid;
+    gap: var(--space-4);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: step;
+  }
+
+  .steps__item {
+    display: grid;
+    gap: var(--space-2);
+  }
+</style>

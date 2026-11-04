@@ -1,0 +1,11 @@
+{
+  "name": "docmatch",
+  "private": true,
+  "description": "Monorepo da docmatch. Este package.json só declara o workspace; cada app tem o próprio.",
+  "type": "module",
+  "packageManager": "pnpm@11.5.3",
+  "engines": {
+    "node": ">=22.23.4",
+    "pnpm": ">=11.0.0"
+  }
+}

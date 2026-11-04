@@ -1,0 +1,219 @@
+---
+import pricing from 'virtual:pricing';
+import { PLAN_IDS, type LaneId, type Plan, type PlanId } from '../../../vite/pricing-schema';
+import { t, type MessageKey } from '../../lib/i18n';
+
+// Every number comes from config/pricing.yaml (virtual:pricing); only labels live here.
+const PLAN_NAME: Record<PlanId, MessageKey> = {
+  starter: 'plans.starter_name',
+  pro: 'plans.pro_name',
+  business: 'plans.business_name',
+};
+const PLAN_TAGLINE: Record<PlanId, MessageKey> = {
+  starter: 'plans.starter_tagline',
+  pro: 'plans.pro_tagline',
+  business: 'plans.business_tagline',
+};
+const LANE_NAME: Record<LaneId, MessageKey> = {
+  app: 'plans.lane_api_batch',
+  api_batch: 'plans.lane_api_batch',
+  api_standard: 'plans.lane_api_standard',
+  api_priority: 'plans.lane_api_priority',
+};
+
+type Row = { label: MessageKey; value: (plan: Plan) => string };
+
+const yesNo = (value: boolean): string => (value ? t('plans.value_yes') : t('plans.value_no'));
+
+const rows: Row[] = [
+  {
+    label: 'plans.feature_document_files_per_run',
+    value: (plan) => t('plans.value_files', { n: plan.document_files_per_run }),
+  },
+  {
+    label: 'plans.feature_document_file_mb',
+    value: (plan) => t('plans.value_mb', { n: plan.document_file_mb }),
+  },
+  {
+    label: 'plans.feature_document_run_mb',
+    value: (plan) => t('plans.value_mb', { n: plan.document_run_mb }),
+  },
+  {
+    label: 'plans.feature_media_files_per_run',
+    value: (plan) => t('plans.value_files', { n: plan.media_files_per_run }),
+  },
+  {
+    label: 'plans.feature_media_run_gb',
+    value: (plan) => t('plans.value_gb', { n: plan.media_run_gb }),
+  },
+  {
+    label: 'plans.feature_media_run_hours',
+    value: (plan) => t('plans.value_hours', { n: plan.media_run_hours }),
+  },
+  {
+    label: 'plans.feature_concurrent_runs',
+    value: (plan) => t('plans.value_count', { n: plan.concurrent_runs }),
+  },
+  {
+    label: 'plans.feature_api_keys',
+    value: (plan) => t('plans.value_count', { n: plan.api_keys }),
+  },
+  {
+    label: 'plans.feature_api_lanes',
+    value: (plan) => plan.api_lanes.map((lane) => t(LANE_NAME[lane])).join(', '),
+  },
+  { label: 'plans.feature_auto_rule_learning', value: (plan) => yesNo(plan.auto_rule_learning) },
+  {
+    label: 'plans.feature_ui_customizations_per_month',
+    value: (plan) =>
+      plan.ui_customizations_per_month < 0
+        ? t('plans.value_unlimited')
+        : t('plans.value_count', { n: plan.ui_customizations_per_month }),
+  },
+  { label: 'plans.feature_escalation_model', value: (plan) => yesNo(plan.escalation_model) },
+  {
+    label: 'plans.feature_retention_days',
+    value: (plan) => t('plans.value_days', { n: plan.retention_days }),
+  },
+];
+
+const plans = PLAN_IDS.map((id) => ({ id, plan: pricing.plans[id] }));
+---
+
+<section class="section" id="planos" aria-labelledby="planos-titulo">
+  <div class="container">
+    <h2 class="section__heading" id="planos-titulo">
+      {t('plans.heading')}
+    </h2>
+    <p class="section__lead">{t('plans.lead')}</p>
+
+    <ul class="plans">
+      {plans.map(({ id, plan }) => (
+        <li class="card plan" data-plan={id}>
+          {id === 'pro' && <p class="plan__badge">{t('plans.most_popular')}</p>}
+          <h3 class="plan__name">{t(PLAN_NAME[id])}</h3>
+          <p class="plan__price">{t('plans.price', { price: plan.price_usd })}</p>
+          <p class="plan__tokens">{t('plans.tokens', { tokens: plan.tokens })}</p>
+          <p class="plan__tagline muted">{t(PLAN_TAGLINE[id])}</p>
+          <a class="btn btn--primary plan__cta" href="/app">
+            {t('plans.cta', { plan: t(PLAN_NAME[id]) })}
+          </a>
+        </li>
+      ))}
+    </ul>
+
+    <div class="table-wrap">
+      <table class="table">
+        <caption class="visually-hidden">{t('plans.feature_heading')}</caption>
+        <thead>
+          <tr>
+            <th scope="col">{t('plans.feature_heading')}</th>
+            {plans.map(({ id }) => (
+              <th scope="col">{t(PLAN_NAME[id])}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr>
+              <th scope="row">{t(row.label)}</th>
+              {plans.map(({ plan }) => (
+                <td>{row.value(plan)}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+    <p class="small muted plans__footnote">
+      {t('plans.footnote', { months: pricing.rollover.topup_tokens_months })}
+    </p>
+  </div>
+</section>
+
+<style>
+  .plans {
+    display: grid;
+    gap: var(--space-4);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+    margin: 0 0 var(--space-6);
+    padding: 0;
+    list-style: none;
+  }
+
+  .plan {
+    position: relative;
+    display: grid;
+    gap: var(--space-2);
+    align-content: start;
+  }
+
+  .plan[data-plan='pro'] {
+    border-color: var(--color-accent);
+  }
+
+  .plan__badge {
+    position: absolute;
+    top: calc(var(--space-3) * -1);
+    right: var(--space-4);
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-pill);
+    background: var(--color-accent);
+    color: var(--color-accent-fg);
+    font-size: var(--fs-xs);
+    font-weight: 700;
+  }
+
+  .plan__price {
+    font-size: var(--fs-2xl);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+
+  .plan__tokens {
+    font-weight: 600;
+  }
+
+  .plan__cta {
+    margin-top: var(--space-2);
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-2);
+  }
+
+  .table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--fs-sm);
+  }
+
+  .table th,
+  .table td {
+    padding: var(--space-2) var(--space-3);
+    text-align: left;
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: top;
+  }
+
+  .table thead th {
+    background: var(--color-surface);
+    font-weight: 700;
+  }
+
+  .table tbody th {
+    font-weight: 500;
+    color: var(--color-muted);
+  }
+
+  .table tbody tr:last-child th,
+  .table tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  .plans__footnote {
+    margin-top: var(--space-3);
+  }
+</style>

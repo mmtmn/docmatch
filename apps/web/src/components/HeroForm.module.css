@@ -1,0 +1,102 @@
+/* The first screen. Rows: title, subtitle, drop zone (flexible, shrinks first), rules, button.
+   The form never grows past its container: the container is one viewport tall (see .first-screen
+   in global.css), so the page never scrolls because of this block. */
+.hero {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  gap: clamp(0.5rem, 1.4vh, 1.25rem);
+  width: 100%;
+  max-width: var(--content-width);
+  height: 100%;
+  min-height: 0;
+  margin-inline: auto;
+  padding: clamp(0.5rem, 1.5vh, 1.5rem) var(--gutter) clamp(0.75rem, 2vh, 1.5rem);
+  overflow: hidden;
+}
+
+.title {
+  font-size: var(--fs-hero);
+  line-height: var(--lh-tight);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.subtitle {
+  font-size: var(--fs-hero-sub);
+  color: var(--color-muted);
+  max-width: 62ch;
+  text-wrap: pretty;
+}
+
+.drop {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-height: 0;
+}
+
+.rules {
+  min-height: 0;
+}
+
+.action {
+  min-height: 0;
+}
+
+.notice {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-1) 0 var(--space-3);
+  border: 1px solid var(--color-info);
+  border-radius: var(--radius-2);
+  background: var(--color-info-soft);
+  font-size: var(--fs-sm);
+}
+
+.noticeText {
+  flex: 1 1 auto;
+  padding-block: var(--space-2);
+}
+
+.noticeAction {
+  min-height: var(--tap);
+  padding: 0 var(--space-2);
+  border: 0;
+  background: transparent;
+  color: var(--color-accent);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.noticeClose {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--tap);
+  height: var(--tap);
+  border: 0;
+  border-radius: var(--radius-1);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* Keyboard open on a phone: drop the subtitle, let the drop zone collapse to a line. */
+.hero[data-compact='true'] {
+  gap: var(--space-2);
+  padding-block: var(--space-2);
+}
+
+.hero[data-compact='true'] .title {
+  font-size: var(--fs-xl);
+}
+
+.hero[data-compact='true'] .subtitle,
+.hero[data-compact='true'] .notice {
+  display: none;
+}

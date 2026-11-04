@@ -1,0 +1,35 @@
+---
+import { getCollection, render } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import { formatDate } from '../../lib/format';
+import { t } from '../../lib/i18n';
+
+export async function getStaticPaths() {
+  const posts = await getCollection('blog', ({ data }) => !data.draft);
+  return posts.map((post) => ({ params: { id: post.id }, props: { post } }));
+}
+
+const { post } = Astro.props;
+const { Content } = await render(post);
+---
+
+<Base title={post.data.title} description={post.data.description}>
+  <main id="conteudo" class="container section">
+    <article class="prose">
+      <p class="small muted">
+        <a href="/blog">{t('blog.back_to_list')}</a>
+      </p>
+      <h1>{post.data.title}</h1>
+      <p class="small muted">
+        <time datetime={post.data.pubDate.toISOString()}>
+          {t('blog.published_on', { date: formatDate(post.data.pubDate) })}
+        </time>
+        <span> · {t('blog.by', { author: post.data.author })}</span>
+        {post.data.readingMinutes && (
+          <span> · {t('blog.reading_time', { minutes: post.data.readingMinutes })}</span>
+        )}
+      </p>
+      <Content />
+    </article>
+  </main>
+</Base>

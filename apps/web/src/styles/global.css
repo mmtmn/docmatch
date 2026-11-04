@@ -1,0 +1,343 @@
+/* Base styles shared by every page. Component-specific rules live in CSS modules. */
+@import './tokens.css';
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-family: var(--font-sans);
+  font-size: 100%;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  font-size: var(--fs-base);
+  line-height: var(--lh-base);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The app route is a single fixed screen: the document itself never scrolls. */
+html.app,
+html.app body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+h1,
+h2,
+h3,
+h4,
+p,
+ul,
+ol,
+figure {
+  margin: 0;
+}
+
+h1 {
+  font-size: var(--fs-2xl);
+  line-height: var(--lh-tight);
+  letter-spacing: -0.01em;
+}
+
+h2 {
+  font-size: var(--fs-xl);
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+h3 {
+  font-size: var(--fs-lg);
+  line-height: 1.3;
+}
+
+a {
+  color: var(--color-accent);
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.15em;
+}
+
+a:hover {
+  color: var(--color-accent-hover);
+}
+
+img,
+video,
+svg {
+  max-width: 100%;
+  height: auto;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--color-accent-soft);
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: 100;
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-accent);
+  color: var(--color-accent-fg);
+  border-radius: var(--radius-1);
+  transform: translateY(-200%);
+  transition: transform var(--duration) var(--ease);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+/* First screen: slim header + the hero grid, exactly one viewport tall. */
+.first-screen {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100vh;
+  height: 100svh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* When the on-screen keyboard is open the island measures the visual viewport and pins the
+   screen to it (see useVisualViewport). The attribute guards the var() so unsupported browsers
+   keep the dvh fallback above. */
+html[data-vv] .first-screen {
+  position: relative;
+  top: var(--vv-top, 0px);
+  height: var(--vv-height);
+}
+
+/* While typing with the keyboard open, the header is a luxury the viewport cannot afford. */
+html[data-vv] .first-screen > header {
+  display: none;
+}
+
+.container {
+  width: 100%;
+  max-width: var(--content-width);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+
+.section {
+  padding-block: clamp(2.5rem, 7vh, 5rem);
+  scroll-margin-top: var(--space-4);
+}
+
+.section + .section {
+  border-top: 1px solid var(--color-border);
+}
+
+.section__heading {
+  margin-bottom: var(--space-2);
+}
+
+.section__lead {
+  color: var(--color-muted);
+  max-width: var(--text-width);
+  margin-bottom: var(--space-6);
+}
+
+.prose {
+  max-width: var(--text-width);
+}
+
+.prose > * + * {
+  margin-top: var(--space-4);
+}
+
+.prose h2 {
+  margin-top: var(--space-6);
+}
+
+.prose ul,
+.prose ol {
+  padding-left: 1.25rem;
+}
+
+.prose pre {
+  overflow-x: auto;
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border-radius: var(--radius-1);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+}
+
+.prose code {
+  font-family: var(--font-mono);
+  font-size: 0.95em;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--tap);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-2);
+  background: var(--color-surface-2);
+  color: var(--color-fg);
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color var(--duration) var(--ease),
+    color var(--duration) var(--ease),
+    border-color var(--duration) var(--ease);
+}
+
+.btn:hover {
+  background: var(--color-border);
+  color: var(--color-fg);
+}
+
+.btn--primary {
+  background: var(--color-accent);
+  color: var(--color-accent-fg);
+}
+
+.btn--primary:hover {
+  background: var(--color-accent-hover);
+  color: var(--color-accent-fg);
+}
+
+.btn--ghost {
+  background: transparent;
+  border-color: var(--color-border);
+}
+
+.btn--ghost:hover {
+  background: var(--color-surface);
+}
+
+.btn[aria-disabled='true'],
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.field {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.field__label {
+  font-weight: 600;
+}
+
+.field__help {
+  font-size: var(--fs-sm);
+  color: var(--color-muted);
+}
+
+.input,
+.textarea {
+  width: 100%;
+  min-height: var(--tap);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-1);
+  background: var(--color-bg);
+  color: var(--color-fg);
+}
+
+.input:focus-visible,
+.textarea:focus-visible {
+  outline-offset: 0;
+  border-color: var(--color-focus);
+}
+
+.input[aria-invalid='true'],
+.textarea[aria-invalid='true'] {
+  border-color: var(--color-danger);
+}
+
+.notice {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-2);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.notice--success {
+  border-color: var(--color-success);
+  background: var(--color-success-soft);
+}
+
+.notice--danger {
+  border-color: var(--color-danger);
+  background: var(--color-danger-soft);
+}
+
+.notice--info {
+  border-color: var(--color-info);
+  background: var(--color-info-soft);
+}
+
+.card {
+  padding: var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-3);
+  background: var(--color-surface);
+}
+
+.grid-3 {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+}
+
+.muted {
+  color: var(--color-muted);
+}
+
+.small {
+  font-size: var(--fs-sm);
+}

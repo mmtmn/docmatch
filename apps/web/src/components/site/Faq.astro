@@ -1,0 +1,45 @@
+---
+import { t, tf } from '../../lib/i18n';
+
+const items = tf('faq.items');
+---
+
+<section class="section" id="faq" aria-labelledby="faq-titulo">
+  <div class="container">
+    <h2 class="section__heading" id="faq-titulo">
+      {t('faq.heading')}
+    </h2>
+    <div class="faq">
+      {items.map((item) => (
+        <details class="faq__item">
+          <summary class="faq__question">{item.q}</summary>
+          <p class="faq__answer muted">{item.a}</p>
+        </details>
+      ))}
+    </div>
+  </div>
+</section>
+
+<style>
+  .faq {
+    max-width: var(--text-width);
+    border-top: 1px solid var(--color-border);
+  }
+
+  .faq__item {
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .faq__question {
+    display: flex;
+    align-items: center;
+    min-height: var(--tap);
+    padding: var(--space-2) 0;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .faq__answer {
+    padding: 0 0 var(--space-4);
+  }
+</style>

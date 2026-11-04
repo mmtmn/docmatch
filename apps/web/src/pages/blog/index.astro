@@ -1,0 +1,55 @@
+---
+import { getCollection } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import { formatDate } from '../../lib/format';
+import { t } from '../../lib/i18n';
+
+const posts = (await getCollection('blog', ({ data }) => !data.draft)).sort(
+  (a, b) => b.data.pubDate.getTime() - a.data.pubDate.getTime(),
+);
+---
+
+<Base title={t('blog.index_title')} description={t('blog.index_description')}>
+  <main id="conteudo" class="container section">
+    <h1>{t('blog.index_title')}</h1>
+    <p class="section__lead">{t('blog.lead')}</p>
+    {posts.length === 0 ? (
+      <p class="muted">{t('blog.empty')}</p>
+    ) : (
+      <ul class="posts">
+        {posts.map((post) => (
+          <li class="post">
+            <p class="small muted">
+              <time datetime={post.data.pubDate.toISOString()}>
+                {t('blog.published_on', { date: formatDate(post.data.pubDate) })}
+              </time>
+              {post.data.readingMinutes && (
+                <span> · {t('blog.reading_time', { minutes: post.data.readingMinutes })}</span>
+              )}
+            </p>
+            <h2>
+              <a href={`/blog/${post.id}`}>{post.data.title}</a>
+            </h2>
+            <p class="muted">{post.data.description}</p>
+          </li>
+        ))}
+      </ul>
+    )}
+  </main>
+</Base>
+
+<style>
+  .posts {
+    display: grid;
+    gap: var(--space-5);
+    max-width: var(--text-width);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .post {
+    display: grid;
+    gap: var(--space-1);
+  }
+</style>

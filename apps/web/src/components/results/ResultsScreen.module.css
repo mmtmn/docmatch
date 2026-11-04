@@ -1,0 +1,154 @@
+.screen {
+  display: grid;
+  gap: var(--space-6);
+  padding-block: var(--space-6);
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.title {
+  font-size: var(--fs-2xl);
+}
+
+.subtitle {
+  margin-top: var(--space-1);
+  color: var(--color-muted);
+}
+
+.section {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.sectionHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.sectionTitle {
+  font-size: var(--fs-xl);
+}
+
+.tableWrap {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+}
+
+.table thead th {
+  background: var(--color-surface);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--color-muted);
+}
+
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.table tbody tr[data-status='accepted'] {
+  background: var(--color-success-soft);
+}
+
+.table tbody tr[data-status='rejected'] {
+  opacity: 0.7;
+}
+
+.rowButton {
+  display: grid;
+  width: 100%;
+  min-height: var(--tap);
+  padding: var(--space-1) 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-fg);
+  text-align: left;
+  cursor: pointer;
+}
+
+.rowButton:hover .rowTitle {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
+.rowTitle {
+  font-weight: 600;
+}
+
+.rowKicker {
+  font-size: var(--fs-xs);
+  color: var(--color-muted);
+}
+
+.amountHead,
+.amount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.status {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.status[data-status='accepted'] {
+  color: var(--color-success);
+}
+
+.status[data-status='rejected'] {
+  color: var(--color-danger);
+}
+
+.status[data-status='edited'] {
+  color: var(--color-info);
+}
+
+.cleanRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-success);
+  border-radius: var(--radius-2);
+  background: var(--color-success-soft);
+}
+
+.cleanTitle {
+  font-size: var(--fs-base);
+  font-weight: 600;
+}
+
+.cleanTotal {
+  font-weight: 400;
+  color: var(--color-muted);
+}
+
+.sources {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+}

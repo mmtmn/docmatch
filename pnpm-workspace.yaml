@@ -1,0 +1,12 @@
+# Workspaces pnpm do monorepo. Pastas sem package.json são ignoradas.
+packages:
+  - apps/*
+  - packages/*
+  - tools/codegen
+  - sdks/typescript
+
+# Scripts de instalação permitidos (o pnpm bloqueia os demais). esbuild e sharp só
+# validam o binário nativo que já chega como dependência opcional.
+onlyBuiltDependencies:
+  - esbuild
+  - sharp

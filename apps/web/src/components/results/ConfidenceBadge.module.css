@@ -1,0 +1,25 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0.125rem var(--space-2);
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge[data-level='high'] {
+  color: var(--color-success);
+  background: var(--color-success-soft);
+}
+
+.badge[data-level='medium'] {
+  color: var(--color-warning);
+  background: var(--color-warning-soft);
+}
+
+.badge[data-level='low'] {
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
+}

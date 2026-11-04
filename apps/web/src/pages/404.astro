@@ -1,0 +1,16 @@
+---
+import Base from '../layouts/Base.astro';
+import { t } from '../lib/i18n';
+---
+
+<Base title={t('errors.not_found_title')} noindex>
+  <main id="conteudo" class="container section prose">
+    <h1>{t('errors.not_found_title')}</h1>
+    <p class="muted">{t('errors.not_found_text')}</p>
+    <p>
+      <a class="btn btn--primary" href="/">
+        {t('errors.back_home')}
+      </a>
+    </p>
+  </main>
+</Base>
