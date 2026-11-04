@@ -505,3 +505,34 @@ func TestKillFlagsAndMaintenance(t *testing.T) {
 		}
 	}
 }
+
+func TestSMTPAddr(t *testing.T) {
+	t.Parallel()
+	env := validEnv()
+	env[VarSMTPAddr] = "localhost:1025"
+	if cfg := mustLoad(t, env); cfg.Email.SMTPAddr != "localhost:1025" || !strings.Contains(cfg.String(), VarSMTPAddr+"=localhost:1025") {
+		t.Fatalf("carregou errado: %q", cfg.Email.SMTPAddr)
+	}
+	if cfg := mustLoad(t, validEnv()); cfg.Email.SMTPAddr != "" {
+		t.Fatal("padrão vazio")
+	}
+	for _, v := range []string{"semporta", ":1025", "localhost:99999", "localhost:x"} {
+		env := validEnv()
+		env[VarSMTPAddr] = v
+		_, err := LoadFrom(lookupFrom(env))
+		if vars := validationVars(t, err); !slices.Contains(vars, VarSMTPAddr) {
+			t.Fatalf("%s=%q: problemas %v", VarSMTPAddr, v, vars)
+		}
+	}
+	prod := validEnv()
+	prod[VarEnv] = "prod"
+	prod[VarPublicBaseURL] = "https://app.example.com"
+	prod[VarAPIBaseURL] = "https://api.example.com"
+	prod[VarOriginSecret] = "segredo-real-da-origem"
+	delete(prod, VarS3Endpoint)
+	prod[VarSMTPAddr] = "localhost:1025"
+	_, err := LoadFrom(lookupFrom(prod))
+	if vars := validationVars(t, err); !slices.Contains(vars, VarSMTPAddr) {
+		t.Fatalf("SMTP em prod: %v", vars)
+	}
+}

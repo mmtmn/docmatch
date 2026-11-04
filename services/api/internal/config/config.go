@@ -85,6 +85,7 @@ const (
 	VarResendAPIKey    = "RESEND_API_KEY"
 	VarEmailFrom       = "DM_EMAIL_FROM"
 	VarSecurityContact = "DM_SECURITY_CONTACT"
+	VarSMTPAddr        = "DM_SMTP_ADDR"
 
 	VarQuoteHMACKey      = "DM_QUOTE_HMAC_KEY"
 	VarAPIKeyPepper      = "DM_APIKEY_PEPPER"
@@ -194,6 +195,9 @@ type Email struct {
 	ResendAPIKey    Secret
 	From            *mail.Address
 	SecurityContact *mail.Address
+	// SMTPAddr is the host:port of the unauthenticated dev relay (Mailpit);
+	// empty outside dev, where Resend is used.
+	SMTPAddr string
 }
 
 // Signing holds the keys that sign quotes, API keys and outgoing webhooks.
@@ -278,6 +282,10 @@ func LoadFrom(lookup Lookup) (*Config, error) {
 	cfg.Email.ResendAPIKey = r.secret(VarResendAPIKey, false)
 	cfg.Email.From = r.address(VarEmailFrom)
 	cfg.Email.SecurityContact = r.address(VarSecurityContact)
+	cfg.Email.SMTPAddr = r.hostPort(VarSMTPAddr)
+	if prod && cfg.Email.SMTPAddr != "" {
+		r.problem(VarSMTPAddr, "precisa ficar vazia em produção (só o Mailpit local usa SMTP)")
+	}
 
 	cfg.Signing.QuoteHMACKey = r.key(VarQuoteHMACKey)
 	cfg.Signing.APIKeyPepper = r.key(VarAPIKeyPepper)
@@ -412,6 +420,7 @@ func (c *Config) redacted() [][2]string {
 		{VarResendAPIKey, presence(c.Email.ResendAPIKey)},
 		{VarEmailFrom, addrString(c.Email.From)},
 		{VarSecurityContact, addrString(c.Email.SecurityContact)},
+		{VarSMTPAddr, c.Email.SMTPAddr},
 		{VarQuoteHMACKey, presence(c.Signing.QuoteHMACKey)},
 		{VarAPIKeyPepper, presence(c.Signing.APIKeyPepper)},
 		{VarWebhookSigningKey, presence(c.Signing.WebhookSigningKey)},
@@ -660,6 +669,24 @@ func (r *reader) listen(name string) string {
 	return v
 }
 
+// hostPort reads an optional host:port value (SMTP relay).
+func (r *reader) hostPort(name string) string {
+	v, ok := r.get(name)
+	if !ok {
+		return ""
+	}
+	host, port, err := net.SplitHostPort(v)
+	if err != nil || host == "" {
+		r.problem(name, "precisa ter o formato host:porta")
+		return ""
+	}
+	if p, err := strconv.Atoi(port); err != nil || p < 1 || p > 65535 {
+		r.problem(name, "porta inválida")
+		return ""
+	}
+	return v
+}
+
 // identifier reads a value that is used as an SQL identifier (role name).
 func (r *reader) identifier(name, def string) string {
 	v := r.optional(name, def)
@@ -717,7 +744,7 @@ func KnownVars() []string {
 		VarGoogleClientID, VarGoogleClientSecret, VarAppleTeamID, VarAppleClientID, VarAppleKeyID, VarApplePrivateKey, VarSessionSecret,
 		VarStripeSecretKey, VarStripeWebhookSecret, VarStripePublishableKey,
 		VarTargetMargin, VarIncomeTaxRate, VarPaymentRate, VarInfraRate, VarOpenRouterFee, VarPricingFile,
-		VarResendAPIKey, VarEmailFrom, VarSecurityContact,
+		VarResendAPIKey, VarEmailFrom, VarSecurityContact, VarSMTPAddr,
 		VarQuoteHMACKey, VarAPIKeyPepper, VarWebhookSigningKey,
 	}
 }
