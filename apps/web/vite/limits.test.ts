@@ -82,6 +82,20 @@ describe('virtual:pricing', () => {
     expect(() => validatePricing(pricing, 'pricing.yaml')).toThrow(/plans\.pro\.api_lanes/);
   });
 
+  it('exposes only the public subset (rates and estimates never reach the browser)', () => {
+    const input = structuredClone(loadPricing()) as unknown as Record<string, unknown>;
+    input['rates'] = { target_margin: 0.3 };
+    input['estimates'] = { new_tool_usd: 1 };
+    (input['plans'] as Record<string, Record<string, unknown>>)['pro']!['internal_note'] = 'x';
+    const pricing = validatePricing(input, 'pricing.yaml') as unknown as Record<string, unknown>;
+    expect(Object.keys(pricing).sort()).toEqual(
+      ['lanes', 'min_tokens_per_run', 'plans', 'quote_ttl_minutes', 'rollover', 'token_usd'].sort(),
+    );
+    expect(pricing['plans']).not.toHaveProperty('pro.internal_note');
+    expect(loadPricing()).not.toHaveProperty('rates');
+    expect(loadPricing()).not.toHaveProperty('estimates');
+  });
+
   it('resolves the virtual id', () => {
     const plugin = pricingPlugin();
     expect(hook(plugin, 'resolveId').call({ addWatchFile: vi.fn() }, 'virtual:pricing')).toBe(

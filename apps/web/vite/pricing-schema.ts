@@ -1,5 +1,6 @@
-// Shape of config/pricing.yaml as consumed by the plans table. Only the fields the site renders are
-// validated; the rest of the file is passed through untouched.
+// Public subset of config/pricing.yaml as consumed by the plans table and the demo quote. Only
+// these fields are validated and exported: `virtual:pricing` ends up in client bundles, so the
+// internal rates (margin, taxes, fees) and cost estimates in the same file are stripped here.
 export const PLAN_IDS = ['starter', 'pro', 'business'] as const;
 export type PlanId = (typeof PLAN_IDS)[number];
 
@@ -93,5 +94,31 @@ export function validatePricing(data: unknown, source: string): Pricing {
   if (problems.length > 0) {
     throw new Error(`${source}: preços ausentes ou inválidos: ${problems.join(', ')}`);
   }
-  return data as unknown as Pricing;
+  return publicSubset(data as unknown as Pricing);
+}
+
+/** Copies only the public fields, so unknown keys in the YAML never reach the browser. */
+function publicSubset(data: Pricing): Pricing {
+  const plans = {} as { [K in PlanId]: Plan };
+  for (const id of PLAN_IDS) {
+    const plan = data.plans[id];
+    // Built field by field from the validated lists above, so the final cast is sound.
+    const copy: Record<string, unknown> = { api_lanes: [...plan.api_lanes] };
+    for (const field of PLAN_NUMBER_FIELDS) copy[field] = plan[field];
+    for (const field of PLAN_BOOLEAN_FIELDS) copy[field] = plan[field];
+    plans[id] = copy as unknown as Plan;
+  }
+  const lanes = {} as { [K in LaneId]: number };
+  for (const lane of LANE_IDS) lanes[lane] = data.lanes[lane];
+  return {
+    token_usd: data.token_usd,
+    min_tokens_per_run: data.min_tokens_per_run,
+    quote_ttl_minutes: data.quote_ttl_minutes,
+    lanes,
+    plans,
+    rollover: {
+      plan_tokens_cycles: data.rollover.plan_tokens_cycles,
+      topup_tokens_months: data.rollover.topup_tokens_months,
+    },
+  };
 }
