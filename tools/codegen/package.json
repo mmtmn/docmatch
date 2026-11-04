@@ -10,13 +10,13 @@
     "node": ">=22.12.0"
   },
   "bin": {
-    "docmatch-codegen": "./bin/codegen.mjs"
+    "docmatch-codegen": "./codegen.mjs"
   },
   "scripts": {
-    "gen": "node bin/codegen.mjs gen",
-    "check": "node bin/codegen.mjs check",
-    "validate": "node bin/codegen.mjs validate",
-    "smoke": "node bin/codegen.mjs smoke",
+    "gen": "node codegen.mjs gen",
+    "check": "node codegen.mjs check",
+    "validate": "node codegen.mjs validate",
+    "smoke": "node codegen.mjs smoke",
     "test": "node --test test/"
   },
   "dependencies": {
