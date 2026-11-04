@@ -2,6 +2,7 @@
 import '../styles/global.css';
 import Footer from '../components/site/Footer.astro';
 import Header from '../components/site/Header.astro';
+import { canonicalPath } from '../lib/canonical';
 import { t } from '../lib/i18n';
 
 interface Props {
@@ -27,7 +28,8 @@ const {
 } = Astro.props;
 
 const fullTitle = title ? t('meta.title_template', { title }) : t('meta.default_title');
-const canonical = new URL(Astro.url.pathname, Astro.site).href;
+// Clean URL (no `.html`): the one the sitemap lists and CloudFront rewrites (docs/headers.md).
+const canonical = new URL(canonicalPath(Astro.url.pathname), Astro.site).href;
 ---
 
 <!doctype html>
