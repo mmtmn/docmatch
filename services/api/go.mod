@@ -17,4 +17,5 @@ require (
 	github.com/jackc/puddle/v2 v2.2.3 // indirect
 	github.com/stretchr/testify v1.12.1 // indirect
 	golang.org/x/sync v0.24.0 // indirect
+	pgregory.net/rapid v1.3.0 // indirect
 )
