@@ -1,0 +1,13 @@
+cliente;cnpj;unidade;documento;nosso_numero;tipo;emissao;vencimento;valor;status
+Pao & Arte Panificadora Ltda;21.456.789/0001-23;SP-Capital;NF 200311;000098765001;Produto;01/07/2026;10/07/2026;24.300,00;Aberto
+Pao & Arte Panificadora Ltda;21.456.789/0001-23;SP-Capital;NF 200312;000098765002;Royalty;01/07/2026;10/07/2026;2.700,00;Aberto
+Confeitaria Lua Cheia Comercio de Alimentos;34.567.890/0001-45;SP-Interior;NF 200320;000098765003;Produto;02/07/2026;12/07/2026;38.640,50;Aberto
+Forno da Serra Franqueado ME;56.789.012/0001-67;MG;NF 200328;000098765004;Produto;03/07/2026;13/07/2026;8.450,00;Aberto
+Rede Trigo Dourado Ltda;67.890.123/0001-89;RJ;NF 200335;000098765005;Produto;05/07/2026;15/07/2026;71.900,00;Aberto
+Rede Trigo Dourado Ltda;67.890.123/0001-89;RJ;NF 200336;000098765006;Royalty;05/07/2026;15/07/2026;6.300,00;Aberto
+Mercearia Colina Verde Alimentos SA;78.901.234/0001-01;SP-Capital;NF 200340;000098765007;Produto;06/07/2026;16/07/2026;98.000,00;Aberto
+Sabor da Roca Franquias Ltda;89.012.345/0001-12;MG;NF 200351;000098765008;Servico;07/07/2026;17/07/2026;12.400,00;Aberto
+Moinho Azul Comercio Ltda;90.123.456/0001-34;SUL;NF 200360;000098765009;Produto;08/07/2026;20/07/2026;27.850,00;Aberto
+Confeitaria Lua Cheia Comercio de Alimentos;34.567.890/0001-45;SP-Interior;NF 200372;000098765010;Royalty;08/07/2026;20/07/2026;5.120,00;Aberto
+Trigo Express Delivery ME;13.579.246/0001-56;SP-Capital;NF 200377;000098765011;Produto;09/07/2026;21/07/2026;6.210,00;Aberto
+Padaria Beira Rio Ltda;24.680.135/0001-78;SP-Interior;NF 200383;000098765012;Produto;10/07/2026;22/07/2026;19.500,00;Aberto
