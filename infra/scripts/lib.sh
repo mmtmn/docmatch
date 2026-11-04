@@ -50,8 +50,11 @@ dm_account_id() {
   dm_die "não foi possível descobrir o id da conta; exporte ACCOUNT_ID=<12 dígitos>"
 }
 
+# Repository root: from git when available, otherwise two levels above infra/scripts. The
+# fallback runs in a subshell so neither branch changes the caller's directory, and the grouping
+# keeps `pwd` out of the git branch (`a || b && c` would print both).
 dm_repo_root() {
   local here
   here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  git -C "$here" rev-parse --show-toplevel 2>/dev/null || cd "$here/../.." && pwd
+  git -C "$here" rev-parse --show-toplevel 2>/dev/null || (cd "$here/../.." && pwd)
 }
