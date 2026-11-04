@@ -1,0 +1,17 @@
+# Configuração do buf para packages/contracts (só lint; a geração de stubs gRPC fica com
+# services/api e services/harness, que apontam para este arquivo).
+version: v2
+modules:
+  - path: .
+lint:
+  use:
+    - STANDARD
+  except:
+    # O arquivo fica na raiz do pacote (packages/contracts/harness.proto) em vez de
+    # docmatch/harness/v1/harness.proto; o pacote proto continua versionado.
+    - PACKAGE_DIRECTORY_MATCH
+    # O serviço se chama `Harness` e as RPCs devolvem Quote e `stream RunEvent` por
+    # contrato; os nomes padrão (*Request/*Response, HarnessService) não se aplicam.
+    - SERVICE_SUFFIX
+    - RPC_RESPONSE_STANDARD_NAME
+    - RPC_REQUEST_RESPONSE_UNIQUE

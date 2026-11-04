@@ -1,0 +1,44 @@
+# Configuração do Redocly CLI para os dois contratos OpenAPI (público e admin).
+# `tools/codegen validate` roda `redocly lint` com este arquivo; qualquer regra abaixo em
+# `error` falha o CI. Regras de exemplo (`no-invalid-*-examples`) garantem que todo exemplo
+# nos contratos valida contra o próprio esquema.
+apis:
+  public@v1:
+    root: openapi.yaml
+  admin@v1:
+    root: openapi-admin.yaml
+
+extends:
+  - recommended
+
+rules:
+  info-license: error
+  info-contact: off
+  no-server-example.com: error
+  no-ambiguous-paths: error
+  no-identical-paths: error
+  no-path-trailing-slash: error
+  no-unresolved-refs: error
+  no-unused-components: error
+  no-invalid-schema-examples: error
+  no-invalid-media-type-examples: error
+  no-enum-type-mismatch: error
+  no-example-value-and-externalValue: error
+  no-empty-servers: error
+  operation-operationId: error
+  operation-operationId-unique: error
+  operation-operationId-url-safe: error
+  operation-summary: error
+  operation-description: error
+  operation-2xx-response: error
+  operation-4xx-response: error
+  operation-parameters-unique: error
+  operation-tag-defined: error
+  path-params-defined: error
+  path-declaration-must-exist: error
+  path-not-include-query: error
+  security-defined: error
+  tag-description: error
+  tags-alphabetical: off
+  spec-strict-refs: off
+  struct: error

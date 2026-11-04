@@ -1,0 +1,5 @@
+{
+  "name": "Papel com maiúsculas e chave desconhecida",
+  "sources": [{ "role": "Extrato Bancário", "kind": "table" }],
+  "matching": { "keys": ["amount", "color"] }
+}

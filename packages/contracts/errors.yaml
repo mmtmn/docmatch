@@ -1,0 +1,457 @@
+# Catálogo de erros da API docmatch. Fonte única: gera errors.ts, errors.go e errors.rs
+# (tools/codegen). Nenhum código de erro ou mensagem é digitado em outro lugar.
+#
+# Cada entrada: código estável em snake_case -> status HTTP, categoria, mensagem em pt-BR e,
+# quando o cliente pode repetir a chamada sem mudar nada, `retryable: true`.
+#
+# Regras:
+# - Códigos nunca mudam de significado; um código aposentado é mantido com `deprecated: true`.
+# - A mensagem é a que o usuário final vê. Detalhes técnicos vão em `details` no envelope.
+# - O envelope é sempre {code, message, request_id, details?} (ver openapi.yaml, schema Error).
+# - O status de cada código é verificado contra `x-error-codes` nas respostas do openapi.yaml
+#   (tools/codegen validate falha se discordarem).
+version: 1
+
+categories:
+  auth: Autenticação e autorização
+  validation: Entrada inválida
+  limits: Limites de entrada e de plano
+  credits: Créditos e orçamentos
+  rate_limit: Limite de requisições
+  upload: Envio e verificação de arquivos
+  run: Estados de execução
+  rules: Regras e fluxos de trabalho
+  billing: Cobrança
+  customization: Personalização da interface
+  tools: Biblioteca de ferramentas
+  internal: Falhas do nosso lado
+
+errors:
+  # ------------------------------------------------------------------ auth
+  unauthenticated:
+    status: 401
+    category: auth
+    message: Faça login para continuar.
+  session_expired:
+    status: 401
+    category: auth
+    message: Sua sessão expirou. Entre de novo.
+  invalid_api_key:
+    status: 401
+    category: auth
+    message: Chave de API inválida ou revogada.
+  api_key_scope_denied:
+    status: 403
+    category: auth
+    message: Esta chave de API não tem permissão para esta operação.
+  forbidden:
+    status: 403
+    category: auth
+    message: Você não tem permissão para isso.
+  admin_required:
+    status: 403
+    category: auth
+    message: Esta operação exige um administrador.
+  account_suspended:
+    status: 403
+    category: auth
+    message: Esta conta está suspensa. Fale com o suporte.
+  account_deletion_pending:
+    status: 403
+    category: auth
+    message: Esta conta está em processo de exclusão.
+  oauth_state_mismatch:
+    status: 400
+    category: auth
+    message: Não foi possível concluir o login. Tente de novo.
+  oauth_provider_error:
+    status: 502
+    category: auth
+    message: O provedor de login não respondeu. Tente de novo em instantes.
+    retryable: true
+  oauth_email_unverified:
+    status: 403
+    category: auth
+    message: O e-mail da sua conta no provedor ainda não foi verificado.
+  email_challenge_not_found:
+    status: 404
+    category: auth
+    message: Pedido de login não encontrado. Peça um novo código.
+  email_code_invalid:
+    status: 400
+    category: auth
+    message: Código inválido.
+  email_code_expired:
+    status: 410
+    category: auth
+    message: O código expirou. Peça um novo.
+  too_many_attempts:
+    status: 429
+    category: auth
+    message: Muitas tentativas. Aguarde antes de tentar de novo.
+    retryable: true
+
+  # ------------------------------------------------------------ validation
+  validation_failed:
+    status: 400
+    category: validation
+    message: Alguns campos estão inválidos. Confira os detalhes.
+  invalid_json:
+    status: 400
+    category: validation
+    message: O corpo da requisição não é um JSON válido.
+  body_too_large:
+    status: 413
+    category: validation
+    message: O corpo da requisição excede o tamanho permitido.
+  unsupported_media_type:
+    status: 415
+    category: validation
+    message: Formato de requisição não suportado.
+  control_characters:
+    status: 400
+    category: validation
+    message: O texto contém caracteres de controle não permitidos.
+  missing_idempotency_key:
+    status: 400
+    category: validation
+    message: O header Idempotency-Key é obrigatório nesta operação.
+  idempotency_key_reused:
+    status: 409
+    category: validation
+    message: Esta Idempotency-Key já foi usada com outro conteúdo.
+  idempotency_in_progress:
+    status: 409
+    category: validation
+    message: Uma requisição idêntica ainda está em andamento.
+  not_found:
+    status: 404
+    category: validation
+    message: Não encontrado.
+  conflict:
+    status: 409
+    category: validation
+    message: A operação conflita com o estado atual. Recarregue e tente de novo.
+  method_not_allowed:
+    status: 405
+    category: validation
+    message: Método não permitido.
+
+  # ---------------------------------------------------------------- limits
+  text_too_long:
+    status: 422
+    category: limits
+    message: O texto excede o limite de caracteres.
+  too_many_files:
+    status: 422
+    category: limits
+    message: Esta execução excede o número de arquivos permitido pelo seu plano.
+  file_too_large:
+    status: 413
+    category: limits
+    message: O arquivo excede o tamanho permitido pelo seu plano.
+  run_too_large:
+    status: 413
+    category: limits
+    message: Esta execução excede o tamanho total permitido pelo seu plano.
+  media_too_long:
+    status: 422
+    category: limits
+    message: A mídia excede a duração permitida pelo seu plano.
+  plan_limit_reached:
+    status: 403
+    category: limits
+    message: Seu plano atingiu o limite para esta operação.
+  concurrent_runs_exceeded:
+    status: 429
+    category: limits
+    message: Você já tem o máximo de execuções simultâneas do seu plano.
+    retryable: true
+  api_keys_limit_reached:
+    status: 403
+    category: limits
+    message: Seu plano atingiu o número máximo de chaves de API.
+  customizations_limit_reached:
+    status: 403
+    category: limits
+    message: Seu plano atingiu o limite mensal de personalizações.
+  lane_not_allowed:
+    status: 403
+    category: limits
+    message: Esta faixa de prioridade não está disponível no seu plano.
+
+  # --------------------------------------------------------------- credits
+  insufficient_credits:
+    status: 402
+    category: credits
+    message: Créditos insuficientes para esta execução. Faça uma recarga ou reduza o escopo.
+  quote_expired:
+    status: 410
+    category: credits
+    message: O orçamento expirou. Peça uma nova estimativa.
+  quote_invalid_signature:
+    status: 400
+    category: credits
+    message: Orçamento inválido.
+  quote_mismatch:
+    status: 409
+    category: credits
+    message: O orçamento não corresponde aos arquivos e opções enviados.
+  quote_not_found:
+    status: 404
+    category: credits
+    message: Orçamento não encontrado.
+  budget_below_minimum:
+    status: 422
+    category: credits
+    message: O orçamento informado é menor que o mínimo para esta execução.
+
+  # ------------------------------------------------------------ rate_limit
+  rate_limited:
+    status: 429
+    category: rate_limit
+    message: Muitas requisições. Tente de novo em instantes.
+    retryable: true
+
+  # ---------------------------------------------------------------- upload
+  upload_not_found:
+    status: 404
+    category: upload
+    message: Arquivo não encontrado.
+  upload_not_ready:
+    status: 409
+    category: upload
+    message: O arquivo ainda está sendo verificado.
+  upload_incomplete:
+    status: 409
+    category: upload
+    message: O envio do arquivo não foi concluído.
+  upload_expired:
+    status: 410
+    category: upload
+    message: O prazo para enviar este arquivo expirou. Comece de novo.
+  upload_checksum_mismatch:
+    status: 422
+    category: upload
+    message: O conteúdo enviado não confere com o hash informado.
+  upload_rejected_name:
+    status: 400
+    category: upload
+    message: O nome do arquivo é inválido.
+  upload_rejected_type:
+    status: 415
+    category: upload
+    message: Tipo de arquivo não suportado.
+  upload_rejected_size:
+    status: 413
+    category: upload
+    message: O arquivo é maior que o permitido.
+  upload_rejected_malware:
+    status: 422
+    category: upload
+    message: O arquivo foi bloqueado pela verificação de segurança.
+  upload_rejected_bomb:
+    status: 422
+    category: upload
+    message: O arquivo compactado excede os limites de descompactação.
+  upload_rejected_playlist:
+    status: 422
+    category: upload
+    message: Listas de reprodução e links externos não são aceitos. Envie o arquivo de mídia.
+
+  # ------------------------------------------------------------------- run
+  run_not_found:
+    status: 404
+    category: run
+    message: Execução não encontrada.
+  run_not_completed:
+    status: 409
+    category: run
+    message: A execução ainda não terminou.
+  run_already_finished:
+    status: 409
+    category: run
+    message: A execução já terminou.
+  run_needs_approval:
+    status: 409
+    category: run
+    message: A execução aguarda a sua aprovação do orçamento.
+  run_not_awaiting_approval:
+    status: 409
+    category: run
+    message: A execução não está aguardando aprovação.
+  run_cancelled:
+    status: 409
+    category: run
+    message: A execução foi cancelada.
+  run_timeout:
+    status: 504
+    category: run
+    message: A execução excedeu o prazo. Os créditos não usados foram devolvidos.
+    retryable: true
+  run_source_unreadable:
+    status: 422
+    category: run
+    message: Não conseguimos ler um dos arquivos. Veja os detalhes.
+  finding_not_found:
+    status: 404
+    category: run
+    message: Achado não encontrado.
+  export_format_unsupported:
+    status: 400
+    category: run
+    message: Formato de exportação não suportado.
+  export_not_ready:
+    status: 409
+    category: run
+    message: A exportação ainda está sendo gerada.
+
+  # ----------------------------------------------------------------- rules
+  workflow_not_found:
+    status: 404
+    category: rules
+    message: Fluxo de trabalho não encontrado.
+  rule_not_found:
+    status: 404
+    category: rules
+    message: Regra não encontrada.
+  rule_compile_failed:
+    status: 422
+    category: rules
+    message: A regra não pôde ser compilada. Reescreva de forma mais específica.
+  rule_not_promotable:
+    status: 409
+    category: rules
+    message: Esta regra ainda não tem histórico suficiente para ser promovida.
+  rule_read_only:
+    status: 403
+    category: rules
+    message: Regras globais só podem ser alteradas pelos administradores.
+
+  # --------------------------------------------------------------- billing
+  billing_unavailable:
+    status: 503
+    category: billing
+    message: O sistema de cobrança está indisponível. Tente de novo em instantes.
+    retryable: true
+  plan_unknown:
+    status: 400
+    category: billing
+    message: Plano desconhecido.
+  coupon_invalid:
+    status: 400
+    category: billing
+    message: Cupom inválido ou expirado.
+  subscription_required:
+    status: 402
+    category: billing
+    message: Esta operação exige uma assinatura ativa.
+  subscription_inactive:
+    status: 402
+    category: billing
+    message: Sua assinatura está inativa. Atualize o pagamento para continuar.
+  topup_below_minimum:
+    status: 400
+    category: billing
+    message: O valor da recarga é menor que o mínimo.
+  checkout_failed:
+    status: 502
+    category: billing
+    message: Não foi possível iniciar o pagamento. Tente de novo.
+    retryable: true
+  webhook_signature_invalid:
+    status: 400
+    category: billing
+    message: Assinatura do webhook inválida.
+  webhook_replayed:
+    status: 409
+    category: billing
+    message: Este evento já foi processado.
+
+  # --------------------------------------------------------- customization
+  customization_not_found:
+    status: 404
+    category: customization
+    message: Personalização não encontrada.
+  customization_refused:
+    status: 422
+    category: customization
+    message: Este pedido de personalização foi recusado. Veja o motivo nos detalhes.
+  customization_not_approvable:
+    status: 409
+    category: customization
+    message: Esta personalização não está pronta para aprovação.
+  customization_nothing_to_rollback:
+    status: 409
+    category: customization
+    message: Não há versão anterior para restaurar.
+
+  # ----------------------------------------------------------------- tools
+  tool_not_found:
+    status: 404
+    category: tools
+    message: Ferramenta não encontrada.
+  tool_build_failed:
+    status: 500
+    category: tools
+    message: Não conseguimos construir uma ferramenta para este formato. Nenhum crédito foi cobrado por ela.
+  tool_review_rejected:
+    status: 422
+    category: tools
+    message: A ferramenta gerada foi reprovada na revisão e não será usada.
+  tool_sandbox_violation:
+    status: 422
+    category: tools
+    message: A ferramenta tentou sair do ambiente isolado e foi descartada.
+  tool_not_trusted:
+    status: 403
+    category: tools
+    message: Esta ferramenta ainda não é confiável o bastante para esta operação.
+  tool_quarantined:
+    status: 409
+    category: tools
+    message: Esta ferramenta está em quarentena.
+  library_request_pending:
+    status: 409
+    category: tools
+    message: O pedido de biblioteca ainda está em análise.
+  library_request_rejected:
+    status: 422
+    category: tools
+    message: O pedido de biblioteca foi recusado por segurança.
+
+  # -------------------------------------------------------------- internal
+  internal_error:
+    status: 500
+    category: internal
+    message: Algo deu errado do nosso lado. Já fomos avisados.
+  service_unavailable:
+    status: 503
+    category: internal
+    message: Serviço temporariamente indisponível. Tente de novo em instantes.
+    retryable: true
+  harness_unavailable:
+    status: 503
+    category: internal
+    message: O motor de conciliação está indisponível. Tente de novo em instantes.
+    retryable: true
+  model_unavailable:
+    status: 503
+    category: internal
+    message: O modelo de linguagem está indisponível. Tente de novo em instantes.
+    retryable: true
+  storage_unavailable:
+    status: 503
+    category: internal
+    message: O armazenamento está indisponível. Tente de novo em instantes.
+    retryable: true
+  kill_switch_enabled:
+    status: 503
+    category: internal
+    message: Esta função está temporariamente desativada.
+    retryable: true
+  maintenance:
+    status: 503
+    category: internal
+    message: Estamos em manutenção. Voltamos em instantes.
+    retryable: true

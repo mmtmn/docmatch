@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "theme": { "mode": "dark" },
+  "labels": { "Results.Title": "Divergências" },
+  "results": { "layout": "cards", "columns": ["title"] },
+  "defaults": {},
+  "composition": { "components": [{ "type": "text", "props": { "style": { "color": "red" } } }] }
+}

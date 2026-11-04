@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "theme": { "mode": "system" },
+  "labels": {},
+  "results": {
+    "layout": "table",
+    "group_by": "none",
+    "sort": { "by": "amount_at_risk", "direction": "desc" },
+    "columns": ["title", "severity", "amount_at_risk", "confidence", "sources", "status"],
+    "show_evidence_inline": true
+  },
+  "defaults": { "lane": "app", "export_format": "xlsx" },
+  "composition": {
+    "components": [
+      { "type": "upload_dropzone", "id": "upload" },
+      { "type": "rules_panel" },
+      { "type": "quote_card" },
+      { "type": "run_progress" },
+      { "type": "summary_cards" },
+      { "type": "findings_table", "id": "findings" },
+      { "type": "export_bar" }
+    ]
+  }
+}

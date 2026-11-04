@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "theme": { "mode": "light", "tokens": { "light": { "color.brand.primary": "url(javascript:alert(1))" } } },
+  "labels": {},
+  "results": { "layout": "table", "columns": ["title"] },
+  "defaults": {},
+  "composition": { "components": [{ "type": "findings_table" }] }
+}

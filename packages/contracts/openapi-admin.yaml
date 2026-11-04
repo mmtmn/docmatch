@@ -1,0 +1,2558 @@
+openapi: 3.1.0
+info:
+  title: docmatch Admin API
+  version: 1.0.0
+  summary: Painel administrativo da docmatch, servido só no listener interno.
+  description: |
+    API do painel administrativo (prefixo `/admin/v1`). Roda em um servidor separado
+    (`DM_ADMIN_LISTEN`), nunca exposto à internet: só pela rede interna ou por túnel. As
+    convenções (envelope de erro, dinheiro em centavos, créditos inteiros, paginação por cursor,
+    limites de texto de `limits.yaml`) são as mesmas da API pública, cujos componentes são
+    referenciados aqui em vez de repetidos.
+
+    Toda escrita gera uma entrada em `/audit` com quem fez, o quê, antes e depois. Notas
+    administrativas são limitadas por `text.admin_note`.
+  license:
+    name: AGPL-3.0-only
+    identifier: AGPL-3.0-only
+
+servers:
+  - url: "{baseUrl}/admin/v1"
+    description: Listener interno (DM_ADMIN_LISTEN) + prefixo do painel.
+    variables:
+      baseUrl:
+        default: "http://localhost:8443"
+        description: Esquema, host e porta de DM_ADMIN_LISTEN.
+
+security:
+  - adminSession: []
+
+tags:
+  - name: overview
+    description: Indicadores do dia e da fila.
+  - name: orgs
+    description: Organizações, planos, créditos e suspensão.
+  - name: users
+    description: Usuários e papéis.
+  - name: runs
+    description: Execuções de qualquer organização, custo real por modelo, cancelamento e replay.
+  - name: pricing
+    description: Tabela de preços dos créditos (aplicada só a orçamentos novos).
+  - name: models
+    description: Roteamento de modelos por papel e preços lidos da OpenRouter.
+  - name: blog
+    description: Posts do blog, escritos à mão ou gerados e julgados por modelos.
+  - name: customizations
+    description: Personalizações de interface propostas pelos modelos, para revisão.
+  - name: security
+    description: Eventos de segurança e bloqueios.
+  - name: bounty
+    description: Relatórios do programa de recompensas.
+  - name: audit
+    description: Trilha de auditoria de toda ação administrativa.
+  - name: tools
+    description: Biblioteca de ferramentas geradas, promoção e aposentadoria.
+  - name: kill-switches
+    description: Desligar funções inteiras em segundos.
+
+paths:
+  # -------------------------------------------------------------- overview
+  /overview:
+    get:
+      operationId: adminOverview
+      summary: Indicadores do painel
+      description: Cadastros, execuções, créditos e receita das últimas 24 h e do mês; estado da fila e kill switches ativos.
+      tags: [overview]
+      responses:
+        "200":
+          description: Indicadores.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Overview"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+
+  # ------------------------------------------------------------------ orgs
+  /orgs:
+    get:
+      operationId: adminListOrgs
+      summary: Lista organizações
+      description: Busca por nome ou e-mail do dono; filtra por plano e estado.
+      tags: [orgs]
+      parameters:
+        - $ref: "#/components/parameters/Query"
+        - name: plan
+          in: query
+          schema:
+            $ref: "./openapi.yaml#/components/schemas/PlanCode"
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, suspended, deletion_pending]
+        - $ref: "./openapi.yaml#/components/parameters/Cursor"
+        - $ref: "./openapi.yaml#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Página de organizações.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminOrgList"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "422":
+          $ref: "./openapi.yaml#/components/responses/Unprocessable"
+
+  /orgs/{id}:
+    get:
+      operationId: adminGetOrg
+      summary: Detalhe de uma organização
+      description: Dono, plano, créditos, limites efetivos, notas e eventos recentes.
+      tags: [orgs]
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+      responses:
+        "200":
+          description: A organização.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminOrg"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "404":
+          $ref: "./openapi.yaml#/components/responses/NotFound"
+    patch:
+      operationId: adminUpdateOrg
+      summary: Suspende, reativa ou sobrescreve limites
+      description: Toda mudança exige uma nota e vai para a auditoria. Sobrescritas de limite valem até serem removidas.
+      tags: [orgs]
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminOrgPatch"
+      responses:
+        "200":
+          description: Organização atualizada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminOrg"
+        "400":
+          $ref: "./openapi.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "404":
+          $ref: "./openapi.yaml#/components/responses/NotFound"
+        "422":
+          $ref: "./openapi.yaml#/components/responses/Unprocessable"
+
+  /orgs/{id}/credits:
+    post:
+      operationId: adminAdjustCredits
+      summary: Ajusta o saldo de créditos
+      description: Lançamento manual (positivo ou negativo) no ledger, com motivo e nota. Exige `Idempotency-Key`.
+      tags: [orgs]
+      parameters:
+        - $ref: "#/components/parameters/OrgId"
+        - $ref: "./openapi.yaml#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreditAdjustmentRequest"
+      responses:
+        "201":
+          description: Lançamento criado.
+          content:
+            application/json:
+              schema:
+                $ref: "./openapi.yaml#/components/schemas/LedgerEntry"
+        "400":
+          $ref: "./openapi.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "404":
+          $ref: "./openapi.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./openapi.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./openapi.yaml#/components/responses/Unprocessable"
+
+  # ----------------------------------------------------------------- users
+  /users:
+    get:
+      operationId: adminListUsers
+      summary: Lista usuários
+      description: Busca por e-mail ou nome.
+      tags: [users]
+      parameters:
+        - $ref: "#/components/parameters/Query"
+        - name: org_id
+          in: query
+          schema:
+            $ref: "./openapi.yaml#/components/schemas/OrgId"
+        - $ref: "./openapi.yaml#/components/parameters/Cursor"
+        - $ref: "./openapi.yaml#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Página de usuários.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserList"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "422":
+          $ref: "./openapi.yaml#/components/responses/Unprocessable"
+
+  /users/{id}:
+    get:
+      operationId: adminGetUser
+      summary: Detalhe de um usuário
+      description: Perfil, organização, provedores de login e últimos acessos (sem IPs em claro).
+      tags: [users]
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: O usuário.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "404":
+          $ref: "./openapi.yaml#/components/responses/NotFound"
+    patch:
+      operationId: adminUpdateUser
+      summary: Altera papel, suspende ou cancela exclusão
+      description: Exige nota. Suspender encerra as sessões do usuário na hora.
+      tags: [users]
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUserPatch"
+      responses:
+        "200":
+          description: Usuário atualizado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+        "400":
+          $ref: "./openapi.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "404":
+          $ref: "./openapi.yaml#/components/responses/NotFound"
+        "422":
+          $ref: "./openapi.yaml#/components/responses/Unprocessable"
+
+  # ------------------------------------------------------------------ runs
+  /runs:
+    get:
+      operationId: adminListRuns
+      summary: Lista execuções de qualquer organização
+      description: Filtra por organização, estado e período.
+      tags: [runs]
+      parameters:
+        - name: org_id
+          in: query
+          schema:
+            $ref: "./openapi.yaml#/components/schemas/OrgId"
+        - name: status
+          in: query
+          schema:
+            $ref: "./openapi.yaml#/components/schemas/RunStatus"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - $ref: "./openapi.yaml#/components/parameters/Cursor"
+        - $ref: "./openapi.yaml#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Página de execuções.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminRunList"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+
+  /runs/{id}:
+    get:
+      operationId: adminGetRun
+      summary: Detalhe de uma execução
+      description: A execução, o uso de tokens por papel e modelo, o custo real em USD e a margem.
+      tags: [runs]
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "200":
+          description: A execução com custos.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminRun"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "404":
+          description: Execução não encontrada.
+          x-error-codes: [run_not_found]
+          content:
+            application/json:
+              schema:
+                $ref: "./openapi.yaml#/components/schemas/Error"
+
+  /runs/{id}/cancel:
+    post:
+      operationId: adminCancelRun
+      summary: Cancela uma execução
+      description: Devolve os créditos não gastos à organização. Exige nota.
+      tags: [runs]
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NoteRequest"
+      responses:
+        "200":
+          description: Execução cancelada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminRun"
+        "400":
+          $ref: "./openapi.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "404":
+          description: Execução não encontrada.
+          x-error-codes: [run_not_found]
+          content:
+            application/json:
+              schema:
+                $ref: "./openapi.yaml#/components/schemas/Error"
+        "409":
+          description: A execução já terminou.
+          x-error-codes: [run_already_finished]
+          content:
+            application/json:
+              schema:
+                $ref: "./openapi.yaml#/components/schemas/Error"
+
+  /runs/{id}/replay:
+    post:
+      operationId: adminReplayRun
+      summary: Reexecuta com as respostas de modelo em cache
+      description: Cria uma execução nova, invisível ao cliente, usando o cache de respostas (DM_LLM_CACHE_DIR). Não gasta créditos; serve para depurar e para regressão de regras.
+      tags: [runs]
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReplayRequest"
+      responses:
+        "202":
+          description: Replay enfileirado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminRun"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "404":
+          description: Execução não encontrada.
+          x-error-codes: [run_not_found]
+          content:
+            application/json:
+              schema:
+                $ref: "./openapi.yaml#/components/schemas/Error"
+        "503":
+          $ref: "./openapi.yaml#/components/responses/ServiceUnavailable"
+
+  # --------------------------------------------------------------- pricing
+  /pricing:
+    get:
+      operationId: adminGetPricing
+      summary: Tabela de preços vigente
+      description: A tabela em uso (config/pricing.yaml sobrescrito pelo banco), com versão e autor.
+      tags: [pricing]
+      responses:
+        "200":
+          description: Tabela vigente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PricingTable"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+    put:
+      operationId: adminUpdatePricing
+      summary: Publica uma nova tabela de preços
+      description: Vale só para orçamentos novos; execuções e orçamentos já emitidos mantêm o preço. Exige nota.
+      tags: [pricing]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PricingTableUpdate"
+      responses:
+        "200":
+          description: Tabela publicada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PricingTable"
+        "400":
+          $ref: "./openapi.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "422":
+          $ref: "./openapi.yaml#/components/responses/Unprocessable"
+
+  /pricing/history:
+    get:
+      operationId: adminPricingHistory
+      summary: Histórico de tabelas
+      description: Toda versão publicada, mais recente primeiro.
+      tags: [pricing]
+      parameters:
+        - $ref: "./openapi.yaml#/components/parameters/Cursor"
+        - $ref: "./openapi.yaml#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Versões.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PricingHistory"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+
+  # ---------------------------------------------------------------- models
+  /models:
+    get:
+      operationId: adminGetModels
+      summary: Roteamento de modelos por papel
+      description: Os papéis de config/models.yaml com as sobrescritas aplicadas por ambiente e pelo painel.
+      tags: [models]
+      responses:
+        "200":
+          description: Roteamento vigente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelRouting"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+
+  /models/prices:
+    get:
+      operationId: adminListModelPrices
+      summary: Preços dos modelos
+      description: Preços por milhão de tokens lidos diariamente da OpenRouter, usados pelo estimador.
+      tags: [models]
+      responses:
+        "200":
+          description: Preços.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelPriceList"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+
+  /models/{role}:
+    put:
+      operationId: adminUpdateModelRole
+      summary: Sobrescreve o roteamento de um papel
+      description: A regra de famílias diferentes (adjudicator × verifier, toolsmith × tool_reviewer) é validada e recusada com `validation_failed`. Exige nota.
+      tags: [models]
+      parameters:
+        - name: role
+          in: path
+          required: true
+          description: "Papel de config/models.yaml (ex.: `discovery`)."
+          schema:
+            type: string
+            pattern: "^[a-z][a-z0-9_]*$"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ModelRoleUpdate"
+      responses:
+        "200":
+          description: Roteamento atualizado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelRouting"
+        "400":
+          $ref: "./openapi.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "404":
+          $ref: "./openapi.yaml#/components/responses/NotFound"
+        "422":
+          $ref: "./openapi.yaml#/components/responses/Unprocessable"
+
+  # ------------------------------------------------------------------ blog
+  /blog/posts:
+    get:
+      operationId: adminListBlogPosts
+      summary: Lista posts
+      description: Rascunhos, publicados e gerados aguardando revisão.
+      tags: [blog]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/BlogPostStatus"
+        - $ref: "./openapi.yaml#/components/parameters/Cursor"
+        - $ref: "./openapi.yaml#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Página de posts.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlogPostList"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+    post:
+      operationId: adminCreateBlogPost
+      summary: Cria um post
+      description: Markdown em pt-BR. Nasce como rascunho.
+      tags: [blog]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BlogPostCreate"
+      responses:
+        "201":
+          description: Post criado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlogPost"
+        "400":
+          $ref: "./openapi.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "409":
+          $ref: "./openapi.yaml#/components/responses/Conflict"
+
+  /blog/posts/{id}:
+    get:
+      operationId: adminGetBlogPost
+      summary: Consulta um post
+      description: Conteúdo, estado e, quando gerado, a avaliação do modelo juiz.
+      tags: [blog]
+      parameters:
+        - $ref: "#/components/parameters/BlogPostId"
+      responses:
+        "200":
+          description: O post.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlogPost"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "404":
+          $ref: "./openapi.yaml#/components/responses/NotFound"
+    patch:
+      operationId: adminUpdateBlogPost
+      summary: Edita um post
+      description: Campos ausentes não mudam.
+      tags: [blog]
+      parameters:
+        - $ref: "#/components/parameters/BlogPostId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BlogPostPatch"
+      responses:
+        "200":
+          description: Post atualizado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlogPost"
+        "400":
+          $ref: "./openapi.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "404":
+          $ref: "./openapi.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./openapi.yaml#/components/responses/Conflict"
+    delete:
+      operationId: adminDeleteBlogPost
+      summary: Apaga um post
+      description: Posts publicados viram 410 no site.
+      tags: [blog]
+      parameters:
+        - $ref: "#/components/parameters/BlogPostId"
+      responses:
+        "204":
+          description: Post apagado.
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "404":
+          $ref: "./openapi.yaml#/components/responses/NotFound"
+
+  /blog/posts/{id}/publish:
+    post:
+      operationId: adminPublishBlogPost
+      summary: Publica um post
+      description: Gera a página estática e invalida o cache do CDN.
+      tags: [blog]
+      parameters:
+        - $ref: "#/components/parameters/BlogPostId"
+      responses:
+        "200":
+          description: Post publicado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlogPost"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "404":
+          $ref: "./openapi.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./openapi.yaml#/components/responses/Conflict"
+
+  /blog/generate:
+    post:
+      operationId: adminGenerateBlogPosts
+      summary: Pede rascunhos gerados por modelo
+      description: O papel `blog_writer` escreve e o `blog_judge` (outra família) pontua; só rascunhos acima da nota mínima entram na fila de revisão.
+      tags: [blog]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BlogGenerateRequest"
+      responses:
+        "202":
+          description: Geração enfileirada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlogGenerateJob"
+        "400":
+          $ref: "./openapi.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "503":
+          $ref: "./openapi.yaml#/components/responses/ServiceUnavailable"
+
+  # -------------------------------------------------------- customizations
+  /customizations:
+    get:
+      operationId: adminListCustomizations
+      summary: Lista personalizações
+      description: Todas as organizações; útil para revisar o que o planejador anda propondo.
+      tags: [customizations]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: "./openapi.yaml#/components/schemas/CustomizationStatus"
+        - name: org_id
+          in: query
+          schema:
+            $ref: "./openapi.yaml#/components/schemas/OrgId"
+        - $ref: "./openapi.yaml#/components/parameters/Cursor"
+        - $ref: "./openapi.yaml#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Página de personalizações.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminCustomizationList"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+
+  /customizations/{id}:
+    get:
+      operationId: adminGetCustomization
+      summary: Consulta uma personalização
+      description: Pedido, manifesto proposto e resultado das validações (esquema, componentes, contraste).
+      tags: [customizations]
+      parameters:
+        - $ref: "#/components/parameters/CustomizationId"
+      responses:
+        "200":
+          description: A personalização.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminCustomization"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "404":
+          description: Personalização não encontrada.
+          x-error-codes: [customization_not_found]
+          content:
+            application/json:
+              schema:
+                $ref: "./openapi.yaml#/components/schemas/Error"
+
+  /customizations/{id}/approve:
+    post:
+      operationId: adminApproveCustomization
+      summary: Aprova em nome da organização
+      description: Para casos de suporte; o cliente ainda pode fazer rollback.
+      tags: [customizations]
+      parameters:
+        - $ref: "#/components/parameters/CustomizationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NoteRequest"
+      responses:
+        "200":
+          description: Personalização aplicada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminCustomization"
+        "400":
+          $ref: "./openapi.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "404":
+          description: Personalização não encontrada.
+          x-error-codes: [customization_not_found]
+          content:
+            application/json:
+              schema:
+                $ref: "./openapi.yaml#/components/schemas/Error"
+        "409":
+          description: Não está em `proposed`.
+          x-error-codes: [customization_not_approvable]
+          content:
+            application/json:
+              schema:
+                $ref: "./openapi.yaml#/components/schemas/Error"
+
+  /customizations/{id}/reject:
+    post:
+      operationId: adminRejectCustomization
+      summary: Rejeita uma personalização
+      description: Marca como `rejected` com motivo; o cliente vê a mensagem.
+      tags: [customizations]
+      parameters:
+        - $ref: "#/components/parameters/CustomizationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RejectRequest"
+      responses:
+        "200":
+          description: Personalização rejeitada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminCustomization"
+        "400":
+          $ref: "./openapi.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "404":
+          description: Personalização não encontrada.
+          x-error-codes: [customization_not_found]
+          content:
+            application/json:
+              schema:
+                $ref: "./openapi.yaml#/components/schemas/Error"
+        "409":
+          $ref: "./openapi.yaml#/components/responses/Conflict"
+
+  # -------------------------------------------------------------- security
+  /security/events:
+    get:
+      operationId: adminListSecurityEvents
+      summary: Eventos de segurança
+      description: Logins falhos, abuso de chave, malware em uploads, bloqueios do WAF, violações de sandbox e saídas negadas pelo proxy.
+      tags: [security]
+      parameters:
+        - name: kind
+          in: query
+          schema:
+            $ref: "#/components/schemas/SecurityEventKind"
+        - name: org_id
+          in: query
+          schema:
+            $ref: "./openapi.yaml#/components/schemas/OrgId"
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - $ref: "./openapi.yaml#/components/parameters/Cursor"
+        - $ref: "./openapi.yaml#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Página de eventos.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecurityEventList"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+
+  /security/blocks:
+    get:
+      operationId: adminListBlocks
+      summary: Bloqueios ativos
+      description: Por hash de IP, organização ou chave de API.
+      tags: [security]
+      parameters:
+        - $ref: "./openapi.yaml#/components/parameters/Cursor"
+        - $ref: "./openapi.yaml#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Bloqueios.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlockList"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+    post:
+      operationId: adminCreateBlock
+      summary: Cria um bloqueio
+      description: Efeito imediato em todas as instâncias. Exige motivo.
+      tags: [security]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BlockCreate"
+      responses:
+        "201":
+          description: Bloqueio criado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Block"
+        "400":
+          $ref: "./openapi.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "409":
+          $ref: "./openapi.yaml#/components/responses/Conflict"
+
+  /security/blocks/{id}:
+    delete:
+      operationId: adminDeleteBlock
+      summary: Remove um bloqueio
+      description: Registrado na auditoria.
+      tags: [security]
+      parameters:
+        - $ref: "#/components/parameters/BlockId"
+      responses:
+        "204":
+          description: Bloqueio removido.
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "404":
+          $ref: "./openapi.yaml#/components/responses/NotFound"
+
+  # ---------------------------------------------------------------- bounty
+  /bounty/reports:
+    get:
+      operationId: adminListBountyReports
+      summary: Relatórios de vulnerabilidade
+      description: Recebidos pelo canal do SECURITY.md.
+      tags: [bounty]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/BountyStatus"
+        - $ref: "./openapi.yaml#/components/parameters/Cursor"
+        - $ref: "./openapi.yaml#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Página de relatórios.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BountyReportList"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+
+  /bounty/reports/{id}:
+    get:
+      operationId: adminGetBountyReport
+      summary: Consulta um relatório
+      description: Conteúdo, severidade atribuída e decisão.
+      tags: [bounty]
+      parameters:
+        - $ref: "#/components/parameters/BountyReportId"
+      responses:
+        "200":
+          description: O relatório.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BountyReport"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "404":
+          $ref: "./openapi.yaml#/components/responses/NotFound"
+
+  /bounty/reports/{id}/decision:
+    post:
+      operationId: adminDecideBountyReport
+      summary: Decide um relatório
+      description: Válido (com recompensa em USD, dentro do teto do programa), inválido ou duplicado. Dispara o e-mail ao pesquisador.
+      tags: [bounty]
+      parameters:
+        - $ref: "#/components/parameters/BountyReportId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BountyDecision"
+      responses:
+        "200":
+          description: Relatório decidido.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BountyReport"
+        "400":
+          $ref: "./openapi.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "404":
+          $ref: "./openapi.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./openapi.yaml#/components/responses/Conflict"
+
+  # ----------------------------------------------------------------- audit
+  /audit:
+    get:
+      operationId: adminListAudit
+      summary: Trilha de auditoria
+      description: Toda ação administrativa e de sistema relevante, com antes e depois.
+      tags: [audit]
+      parameters:
+        - name: actor_id
+          in: query
+          schema:
+            type: string
+        - name: action
+          in: query
+          description: "Ex.: `org.suspend`, `pricing.publish`, `kill_switch.enable`."
+          schema:
+            type: string
+            pattern: "^[a-z_]+\\.[a-z_]+$"
+        - name: target_type
+          in: query
+          schema:
+            $ref: "#/components/schemas/AuditTargetType"
+        - name: target_id
+          in: query
+          schema:
+            type: string
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - $ref: "./openapi.yaml#/components/parameters/Cursor"
+        - $ref: "./openapi.yaml#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Página de auditoria.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditList"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+
+  # ----------------------------------------------------------------- tools
+  /tools:
+    get:
+      operationId: adminListTools
+      summary: Biblioteca de ferramentas
+      description: Filtra por estado, escopo e tipo; inclui estatísticas de uso e falhas.
+      tags: [tools]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/ToolStatus"
+        - name: scope
+          in: query
+          schema:
+            $ref: "#/components/schemas/ToolScope"
+        - name: kind
+          in: query
+          schema:
+            $ref: "#/components/schemas/ToolKind"
+        - $ref: "./openapi.yaml#/components/parameters/Cursor"
+        - $ref: "./openapi.yaml#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Página de ferramentas.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ToolList"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+
+  /tools/{id}:
+    get:
+      operationId: adminGetTool
+      summary: Manifesto de uma ferramenta
+      description: O manifesto completo (schemas/tool-manifest.json), o resultado dos testes e a revisão cruzada.
+      tags: [tools]
+      parameters:
+        - $ref: "#/components/parameters/ToolId"
+      responses:
+        "200":
+          description: A ferramenta.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminTool"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "404":
+          description: Ferramenta não encontrada.
+          x-error-codes: [tool_not_found]
+          content:
+            application/json:
+              schema:
+                $ref: "./openapi.yaml#/components/schemas/Error"
+
+  /tools/{id}/promote:
+    post:
+      operationId: adminPromoteTool
+      summary: Promove uma ferramenta
+      description: "`candidate` → `verified` → `trusted`, opcionalmente mudando o escopo para `global`. Exige nota."
+      tags: [tools]
+      parameters:
+        - $ref: "#/components/parameters/ToolId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ToolPromoteRequest"
+      responses:
+        "200":
+          description: Ferramenta promovida.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminTool"
+        "400":
+          $ref: "./openapi.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "404":
+          description: Ferramenta não encontrada.
+          x-error-codes: [tool_not_found]
+          content:
+            application/json:
+              schema:
+                $ref: "./openapi.yaml#/components/schemas/Error"
+        "409":
+          description: Ferramenta em quarentena ou já no estado pedido.
+          x-error-codes: [tool_quarantined, conflict]
+          content:
+            application/json:
+              schema:
+                $ref: "./openapi.yaml#/components/schemas/Error"
+
+  /tools/{id}/retire:
+    post:
+      operationId: adminRetireTool
+      summary: Aposenta uma ferramenta
+      description: Deixa de ser usada em execuções novas; execuções em andamento terminam. Exige nota.
+      tags: [tools]
+      parameters:
+        - $ref: "#/components/parameters/ToolId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NoteRequest"
+      responses:
+        "200":
+          description: Ferramenta aposentada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminTool"
+        "400":
+          $ref: "./openapi.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "404":
+          description: Ferramenta não encontrada.
+          x-error-codes: [tool_not_found]
+          content:
+            application/json:
+              schema:
+                $ref: "./openapi.yaml#/components/schemas/Error"
+
+  # --------------------------------------------------------- kill-switches
+  /kill-switches:
+    get:
+      operationId: adminListKillSwitches
+      summary: Estado dos kill switches
+      description: Cada função que pode ser desligada, com quem desligou e por quê.
+      tags: [kill-switches]
+      responses:
+        "200":
+          description: Kill switches.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KillSwitchList"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+
+  /kill-switches/{name}:
+    put:
+      operationId: adminSetKillSwitch
+      summary: Liga ou desliga uma função
+      description: Propaga em segundos a todas as instâncias; a API pública responde `503 kill_switch_enabled` nas rotas afetadas. Exige motivo.
+      tags: [kill-switches]
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/KillSwitchName"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KillSwitchUpdate"
+      responses:
+        "200":
+          description: Estado atualizado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KillSwitch"
+        "400":
+          $ref: "./openapi.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/AdminRequired"
+        "404":
+          $ref: "./openapi.yaml#/components/responses/NotFound"
+
+# ================================================================ components
+components:
+  securitySchemes:
+    adminSession:
+      type: apiKey
+      in: cookie
+      name: dm_admin_session
+      description: Sessão de administrador (login com Google restrito à lista de administradores, MFA obrigatório). Só no listener interno.
+
+  parameters:
+    Query:
+      name: q
+      in: query
+      description: Texto de busca.
+      schema:
+        type: string
+        maxLength: 100
+        x-limit: text.rule_picker_search
+    From:
+      name: from
+      in: query
+      description: Início do período (inclusivo).
+      schema:
+        $ref: "./openapi.yaml#/components/schemas/Timestamp"
+    To:
+      name: to
+      in: query
+      description: Fim do período (exclusivo).
+      schema:
+        $ref: "./openapi.yaml#/components/schemas/Timestamp"
+    OrgId:
+      name: id
+      in: path
+      required: true
+      schema:
+        $ref: "./openapi.yaml#/components/schemas/OrgId"
+    UserId:
+      name: id
+      in: path
+      required: true
+      schema:
+        $ref: "./openapi.yaml#/components/schemas/UserId"
+    RunId:
+      name: id
+      in: path
+      required: true
+      schema:
+        $ref: "./openapi.yaml#/components/schemas/RunId"
+    CustomizationId:
+      name: id
+      in: path
+      required: true
+      schema:
+        $ref: "./openapi.yaml#/components/schemas/CustomizationId"
+    BlogPostId:
+      name: id
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/BlogPostId"
+    BlockId:
+      name: id
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/BlockId"
+    BountyReportId:
+      name: id
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/BountyReportId"
+    ToolId:
+      name: id
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/ToolId"
+
+  responses:
+    AdminRequired:
+      description: Sessão sem papel de administrador ou administrador sem permissão para esta área.
+      x-status: 403
+      x-error-codes: [admin_required, forbidden]
+      content:
+        application/json:
+          schema:
+            $ref: "./openapi.yaml#/components/schemas/Error"
+
+  schemas:
+    # ------------------------------------------------------------ primitives
+    BlogPostId:
+      type: string
+      pattern: "^pst_[0-9A-HJKMNP-TV-Z]{26}$"
+    BlockId:
+      type: string
+      pattern: "^blk_[0-9A-HJKMNP-TV-Z]{26}$"
+    BountyReportId:
+      type: string
+      pattern: "^bty_[0-9A-HJKMNP-TV-Z]{26}$"
+    ToolId:
+      type: string
+      pattern: "^tool_[0-9A-HJKMNP-TV-Z]{26}$"
+    AuditEntryId:
+      type: string
+      pattern: "^aud_[0-9A-HJKMNP-TV-Z]{26}$"
+    SecurityEventId:
+      type: string
+      pattern: "^sec_[0-9A-HJKMNP-TV-Z]{26}$"
+    AdminNote:
+      type: string
+      minLength: 1
+      maxLength: 1000
+      x-limit: text.admin_note
+      description: Justificativa registrada na auditoria.
+    NoteRequest:
+      type: object
+      required: [note]
+      properties:
+        note:
+          $ref: "#/components/schemas/AdminNote"
+      additionalProperties: false
+    Actor:
+      type: object
+      required: [type, id]
+      properties:
+        type:
+          type: string
+          enum: [admin, user, system]
+        id:
+          type: string
+        label:
+          type: string
+          description: E-mail do administrador ou nome do job.
+      additionalProperties: false
+
+    # -------------------------------------------------------------- overview
+    Overview:
+      type: object
+      required: [generated_at, signups_24h, active_orgs, runs_24h, runs_failed_24h, credits_spent_24h, revenue_mtd, model_cost_mtd, margin_mtd, queue, kill_switches_active]
+      properties:
+        generated_at:
+          $ref: "./openapi.yaml#/components/schemas/Timestamp"
+        signups_24h:
+          type: integer
+          minimum: 0
+        active_orgs:
+          type: integer
+          minimum: 0
+          description: Organizações com execução nos últimos 30 dias.
+        runs_24h:
+          type: integer
+          minimum: 0
+        runs_failed_24h:
+          type: integer
+          minimum: 0
+        credits_spent_24h:
+          type: integer
+          minimum: 0
+        revenue_mtd:
+          $ref: "./openapi.yaml#/components/schemas/Money"
+        model_cost_mtd:
+          $ref: "./openapi.yaml#/components/schemas/Money"
+        margin_mtd:
+          type: number
+          description: Margem do mês após modelos, infra, taxas e imposto (0 a 1; pode ser negativa).
+        queue:
+          type: object
+          required: [queued, running, needs_approval, oldest_queued_s]
+          properties:
+            queued:
+              type: integer
+              minimum: 0
+            running:
+              type: integer
+              minimum: 0
+            needs_approval:
+              type: integer
+              minimum: 0
+            oldest_queued_s:
+              type: integer
+              minimum: 0
+          additionalProperties: false
+        kill_switches_active:
+          type: array
+          items:
+            $ref: "#/components/schemas/KillSwitchName"
+      additionalProperties: false
+
+    # ------------------------------------------------------------------ orgs
+    AdminOrg:
+      type: object
+      required: [org, owner, credits, entitlements, suspended, notes, created_at]
+      properties:
+        org:
+          $ref: "./openapi.yaml#/components/schemas/Org"
+        owner:
+          $ref: "./openapi.yaml#/components/schemas/User"
+        credits:
+          $ref: "./openapi.yaml#/components/schemas/CreditSummary"
+        entitlements:
+          $ref: "./openapi.yaml#/components/schemas/Entitlements"
+        limits_override:
+          $ref: "#/components/schemas/EntitlementsOverride"
+        suspended:
+          type: boolean
+        suspended_reason:
+          type: string
+        deletion_scheduled_for:
+          oneOf:
+            - $ref: "./openapi.yaml#/components/schemas/Timestamp"
+            - type: "null"
+        stripe_customer_id:
+          type: string
+        runs_30d:
+          type: integer
+          minimum: 0
+        notes:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminNoteEntry"
+        created_at:
+          $ref: "./openapi.yaml#/components/schemas/Timestamp"
+      additionalProperties: false
+    AdminNoteEntry:
+      type: object
+      required: [note, by, at]
+      properties:
+        note:
+          $ref: "#/components/schemas/AdminNote"
+        by:
+          $ref: "#/components/schemas/Actor"
+        at:
+          $ref: "./openapi.yaml#/components/schemas/Timestamp"
+      additionalProperties: false
+    EntitlementsOverride:
+      type: object
+      description: Subconjunto de `Entitlements`; campos presentes substituem os do plano.
+      minProperties: 1
+      properties:
+        document_files_per_run:
+          type: integer
+          minimum: 0
+        document_file_mb:
+          type: integer
+          minimum: 0
+        document_run_mb:
+          type: integer
+          minimum: 0
+        media_files_per_run:
+          type: integer
+          minimum: 0
+        media_run_gb:
+          type: integer
+          minimum: 0
+        media_run_hours:
+          type: integer
+          minimum: 0
+        concurrent_runs:
+          type: integer
+          minimum: 0
+        api_keys:
+          type: integer
+          minimum: 0
+        api_lanes:
+          type: array
+          items:
+            $ref: "./openapi.yaml#/components/schemas/Lane"
+        auto_rule_learning:
+          type: boolean
+        ui_customizations_per_month:
+          type: integer
+          minimum: -1
+        escalation_model:
+          type: boolean
+        retention_days:
+          type: integer
+          minimum: 1
+      additionalProperties: false
+    AdminOrgPatch:
+      type: object
+      required: [note]
+      properties:
+        suspended:
+          type: boolean
+        suspended_reason:
+          type: string
+        limits_override:
+          oneOf:
+            - $ref: "#/components/schemas/EntitlementsOverride"
+            - type: "null"
+          description: Nulo remove a sobrescrita.
+        cancel_deletion:
+          type: boolean
+        note:
+          $ref: "#/components/schemas/AdminNote"
+      additionalProperties: false
+    AdminOrgList:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminOrg"
+        next_cursor:
+          type: ["string", "null"]
+      additionalProperties: false
+    CreditAdjustmentRequest:
+      type: object
+      required: [credits, reason, note]
+      properties:
+        credits:
+          type: integer
+          description: Diferente de zero; negativo retira.
+        reason:
+          type: string
+          enum: [refund, goodwill, bounty, correction, chargeback]
+        note:
+          $ref: "#/components/schemas/AdminNote"
+        expires_at:
+          $ref: "./openapi.yaml#/components/schemas/Timestamp"
+          description: Validade dos créditos concedidos (padrão 12 meses).
+      additionalProperties: false
+
+    # ----------------------------------------------------------------- users
+    AdminUser:
+      type: object
+      required: [user, org_id, providers, suspended, last_seen_at]
+      properties:
+        user:
+          $ref: "./openapi.yaml#/components/schemas/User"
+        org_id:
+          $ref: "./openapi.yaml#/components/schemas/OrgId"
+        providers:
+          type: array
+          items:
+            type: string
+            enum: [google, apple, email]
+        suspended:
+          type: boolean
+        last_seen_at:
+          oneOf:
+            - $ref: "./openapi.yaml#/components/schemas/Timestamp"
+            - type: "null"
+        last_ip_hash:
+          type: string
+          description: HMAC do último IP; nunca o IP em claro.
+      additionalProperties: false
+    AdminUserPatch:
+      type: object
+      required: [note]
+      properties:
+        role:
+          type: string
+          enum: [owner, member]
+        suspended:
+          type: boolean
+        note:
+          $ref: "#/components/schemas/AdminNote"
+      additionalProperties: false
+    AdminUserList:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminUser"
+        next_cursor:
+          type: ["string", "null"]
+      additionalProperties: false
+
+    # ------------------------------------------------------------------ runs
+    AdminRun:
+      type: object
+      required: [run, org_id, usage, cost, margin]
+      properties:
+        run:
+          $ref: "./openapi.yaml#/components/schemas/Run"
+        org_id:
+          $ref: "./openapi.yaml#/components/schemas/OrgId"
+        replay_of_run_id:
+          oneOf:
+            - $ref: "./openapi.yaml#/components/schemas/RunId"
+            - type: "null"
+        usage:
+          type: array
+          items:
+            $ref: "#/components/schemas/ModelUsage"
+        cost:
+          $ref: "./openapi.yaml#/components/schemas/Money"
+          description: Custo real (modelos + computação), em centavos de dólar.
+        margin:
+          type: number
+          description: Margem desta execução (0 a 1; negativa quando o custo passou dos créditos cobrados).
+        timeline:
+          type: array
+          items:
+            type: object
+            required: [stage, started_at]
+            properties:
+              stage:
+                $ref: "./openapi.yaml#/components/schemas/RunStage"
+              started_at:
+                $ref: "./openapi.yaml#/components/schemas/Timestamp"
+              finished_at:
+                $ref: "./openapi.yaml#/components/schemas/Timestamp"
+            additionalProperties: false
+      additionalProperties: false
+    ModelUsage:
+      type: object
+      required: [role, model, calls, prompt_tokens, completion_tokens, cost]
+      properties:
+        role:
+          type: string
+        model:
+          type: string
+        calls:
+          type: integer
+          minimum: 0
+        prompt_tokens:
+          type: integer
+          minimum: 0
+        completion_tokens:
+          type: integer
+          minimum: 0
+        cached_tokens:
+          type: integer
+          minimum: 0
+        cost:
+          $ref: "./openapi.yaml#/components/schemas/Money"
+      additionalProperties: false
+    AdminRunList:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminRun"
+        next_cursor:
+          type: ["string", "null"]
+      additionalProperties: false
+    ReplayRequest:
+      type: object
+      properties:
+        strict:
+          type: boolean
+          default: true
+          description: Falha em vez de chamar um modelo quando a resposta não está no cache.
+        rule_ids:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: "./openapi.yaml#/components/schemas/RuleId"
+          description: Regras a aplicar no replay (padrão as da execução original).
+        note:
+          $ref: "#/components/schemas/AdminNote"
+      additionalProperties: false
+
+    # --------------------------------------------------------------- pricing
+    PricingRates:
+      type: object
+      required: [target_margin, income_tax, payment, infra, openrouter_fee]
+      properties:
+        target_margin:
+          type: number
+          minimum: 0
+          maximum: 1
+        income_tax:
+          type: number
+          minimum: 0
+          maximum: 1
+        payment:
+          type: number
+          minimum: 0
+          maximum: 1
+        infra:
+          type: number
+          minimum: 0
+          maximum: 1
+        openrouter_fee:
+          type: number
+          minimum: 0
+          maximum: 1
+      additionalProperties: false
+    PlanPricing:
+      type: object
+      required: [price, tokens, document_files_per_run, document_file_mb, document_run_mb, media_files_per_run, media_run_gb, media_run_hours, concurrent_runs, api_keys, api_lanes, auto_rule_learning, ui_customizations_per_month, escalation_model, retention_days]
+      properties:
+        price:
+          $ref: "./openapi.yaml#/components/schemas/Money"
+        tokens:
+          type: integer
+          minimum: 0
+        document_files_per_run:
+          type: integer
+          minimum: 0
+        document_file_mb:
+          type: integer
+          minimum: 0
+        document_run_mb:
+          type: integer
+          minimum: 0
+        media_files_per_run:
+          type: integer
+          minimum: 0
+        media_run_gb:
+          type: integer
+          minimum: 0
+        media_run_hours:
+          type: integer
+          minimum: 0
+        concurrent_runs:
+          type: integer
+          minimum: 0
+        api_keys:
+          type: integer
+          minimum: 0
+        api_lanes:
+          type: array
+          items:
+            $ref: "./openapi.yaml#/components/schemas/Lane"
+        auto_rule_learning:
+          type: boolean
+        ui_customizations_per_month:
+          type: integer
+          minimum: -1
+        escalation_model:
+          type: boolean
+        retention_days:
+          type: integer
+          minimum: 1
+      additionalProperties: false
+    PricingEstimates:
+      type: object
+      description: Custos unitários em USD usados pelo estimador antes das calibrações semanais.
+      required: [audio_minute_usd, audio_minute_batch_usd, video_minute_usd, frame_usd, new_tool_usd, scan_file_usd, web_search_request_usd]
+      properties:
+        audio_minute_usd:
+          type: number
+          minimum: 0
+        audio_minute_batch_usd:
+          type: number
+          minimum: 0
+        video_minute_usd:
+          type: number
+          minimum: 0
+        frame_usd:
+          type: number
+          minimum: 0
+        new_tool_usd:
+          type: number
+          minimum: 0
+        scan_file_usd:
+          type: number
+          minimum: 0
+        web_search_request_usd:
+          type: number
+          minimum: 0
+      additionalProperties: false
+    PricingTableBody:
+      type: object
+      description: Espelho de config/pricing.yaml.
+      required: [token_usd, rates, min_tokens_per_run, quote_ttl_minutes, quote_cap_percentile, lanes, plans, rollover, estimates]
+      properties:
+        token_usd:
+          type: number
+          exclusiveMinimum: 0
+        rates:
+          $ref: "#/components/schemas/PricingRates"
+        min_tokens_per_run:
+          type: integer
+          minimum: 0
+        quote_ttl_minutes:
+          type: integer
+          minimum: 1
+        quote_cap_percentile:
+          type: number
+          minimum: 0.5
+          maximum: 1
+        lanes:
+          type: object
+          required: [app, api_batch, api_standard, api_priority]
+          properties:
+            app:
+              type: number
+              minimum: 1
+            api_batch:
+              type: number
+              minimum: 1
+            api_standard:
+              type: number
+              minimum: 1
+            api_priority:
+              type: number
+              minimum: 1
+          additionalProperties: false
+        plans:
+          type: object
+          required: [starter, pro, business]
+          properties:
+            starter:
+              $ref: "#/components/schemas/PlanPricing"
+            pro:
+              $ref: "#/components/schemas/PlanPricing"
+            business:
+              $ref: "#/components/schemas/PlanPricing"
+          additionalProperties: false
+        rollover:
+          type: object
+          required: [plan_tokens_cycles, topup_tokens_months]
+          properties:
+            plan_tokens_cycles:
+              type: integer
+              minimum: 0
+            topup_tokens_months:
+              type: integer
+              minimum: 0
+          additionalProperties: false
+        estimates:
+          $ref: "#/components/schemas/PricingEstimates"
+      additionalProperties: false
+    PricingTable:
+      allOf:
+        - $ref: "#/components/schemas/PricingTableBody"
+        - type: object
+          required: [version, published_at, published_by]
+          properties:
+            version:
+              type: string
+              description: Identificador da versão (também `pricing_version` nos orçamentos).
+            published_at:
+              $ref: "./openapi.yaml#/components/schemas/Timestamp"
+            published_by:
+              $ref: "#/components/schemas/Actor"
+            note:
+              $ref: "#/components/schemas/AdminNote"
+    PricingTableUpdate:
+      allOf:
+        - $ref: "#/components/schemas/PricingTableBody"
+        - type: object
+          required: [note]
+          properties:
+            note:
+              $ref: "#/components/schemas/AdminNote"
+    PricingHistory:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PricingTable"
+        next_cursor:
+          type: ["string", "null"]
+      additionalProperties: false
+
+    # ---------------------------------------------------------------- models
+    ModelRole:
+      type: object
+      required: [primary, fallback, local]
+      properties:
+        primary:
+          type: string
+        fallback:
+          type: string
+        local:
+          type: string
+          description: Modelo usado com DM_LLM_MODE=local; vazio desativa o papel nesse modo.
+        structured_output:
+          type: boolean
+        reasoning:
+          type: boolean
+        max_output_tokens:
+          type: integer
+          minimum: 1
+        timeout_s:
+          type: integer
+          minimum: 1
+        min_prompt_tokens:
+          type: integer
+          minimum: 0
+        batch_variant:
+          type: string
+        plans:
+          type: array
+          items:
+            $ref: "./openapi.yaml#/components/schemas/PlanCode"
+        source:
+          type: string
+          enum: [file, env, admin]
+          description: De onde veio o valor efetivo.
+      additionalProperties: false
+    ModelRouting:
+      type: object
+      required: [roles, llm_mode, updated_at]
+      properties:
+        llm_mode:
+          $ref: "./openapi.yaml#/components/schemas/LlmMode"
+        roles:
+          type: object
+          propertyNames:
+            pattern: "^[a-z][a-z0-9_]*$"
+          additionalProperties:
+            $ref: "#/components/schemas/ModelRole"
+        updated_at:
+          $ref: "./openapi.yaml#/components/schemas/Timestamp"
+      additionalProperties: false
+    ModelRoleUpdate:
+      type: object
+      required: [note]
+      properties:
+        primary:
+          type: string
+        fallback:
+          type: string
+        local:
+          type: string
+        max_output_tokens:
+          type: integer
+          minimum: 1
+        timeout_s:
+          type: integer
+          minimum: 1
+        reset:
+          type: boolean
+          description: Remove as sobrescritas do painel para este papel.
+        note:
+          $ref: "#/components/schemas/AdminNote"
+      additionalProperties: false
+    ModelPrice:
+      type: object
+      required: [model, prompt_usd_per_million, completion_usd_per_million, fetched_at]
+      properties:
+        model:
+          type: string
+        prompt_usd_per_million:
+          type: number
+          minimum: 0
+        completion_usd_per_million:
+          type: number
+          minimum: 0
+        cached_prompt_usd_per_million:
+          type: number
+          minimum: 0
+        context_length:
+          type: integer
+          minimum: 0
+        fetched_at:
+          $ref: "./openapi.yaml#/components/schemas/Timestamp"
+      additionalProperties: false
+    ModelPriceList:
+      type: object
+      required: [items, fetched_at]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ModelPrice"
+        fetched_at:
+          $ref: "./openapi.yaml#/components/schemas/Timestamp"
+      additionalProperties: false
+
+    # ------------------------------------------------------------------ blog
+    BlogPostStatus:
+      type: string
+      enum: [draft, generated, review, published, archived]
+    BlogPost:
+      type: object
+      required: [id, slug, title, status, body_md, author, created_at, updated_at]
+      properties:
+        id:
+          $ref: "#/components/schemas/BlogPostId"
+        slug:
+          type: string
+          pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"
+        title:
+          type: string
+          minLength: 1
+        summary:
+          type: string
+        status:
+          $ref: "#/components/schemas/BlogPostStatus"
+        body_md:
+          type: string
+          description: Markdown em pt-BR.
+        tags:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            pattern: "^[a-z0-9-]{1,32}$"
+        author:
+          $ref: "#/components/schemas/Actor"
+        generation:
+          type: object
+          description: Presente quando o post foi gerado por modelo.
+          required: [writer_model, judge_model, score]
+          properties:
+            writer_model:
+              type: string
+            judge_model:
+              type: string
+            score:
+              type: number
+              minimum: 0
+              maximum: 1
+            judge_notes:
+              type: string
+          additionalProperties: false
+        published_at:
+          oneOf:
+            - $ref: "./openapi.yaml#/components/schemas/Timestamp"
+            - type: "null"
+        created_at:
+          $ref: "./openapi.yaml#/components/schemas/Timestamp"
+        updated_at:
+          $ref: "./openapi.yaml#/components/schemas/Timestamp"
+      additionalProperties: false
+    BlogPostCreate:
+      type: object
+      required: [slug, title, body_md]
+      properties:
+        slug:
+          type: string
+          pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"
+        title:
+          type: string
+          minLength: 1
+        summary:
+          type: string
+        body_md:
+          type: string
+          minLength: 1
+        tags:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            pattern: "^[a-z0-9-]{1,32}$"
+      additionalProperties: false
+    BlogPostPatch:
+      type: object
+      minProperties: 1
+      properties:
+        slug:
+          type: string
+          pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"
+        title:
+          type: string
+          minLength: 1
+        summary:
+          type: string
+        body_md:
+          type: string
+          minLength: 1
+        tags:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            pattern: "^[a-z0-9-]{1,32}$"
+        status:
+          type: string
+          enum: [draft, review, archived]
+      additionalProperties: false
+    BlogPostList:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/BlogPost"
+        next_cursor:
+          type: ["string", "null"]
+      additionalProperties: false
+    BlogGenerateRequest:
+      type: object
+      required: [topics]
+      properties:
+        topics:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items:
+            type: string
+            minLength: 3
+        min_score:
+          type: number
+          minimum: 0
+          maximum: 1
+          default: 0.8
+        note:
+          $ref: "#/components/schemas/AdminNote"
+      additionalProperties: false
+    BlogGenerateJob:
+      type: object
+      required: [id, status, topics, created_at]
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [queued, running, done, failed]
+        topics:
+          type: array
+          items:
+            type: string
+        post_ids:
+          type: array
+          items:
+            $ref: "#/components/schemas/BlogPostId"
+        created_at:
+          $ref: "./openapi.yaml#/components/schemas/Timestamp"
+      additionalProperties: false
+
+    # -------------------------------------------------------- customizations
+    AdminCustomization:
+      type: object
+      required: [customization, org_id, validation]
+      properties:
+        customization:
+          $ref: "./openapi.yaml#/components/schemas/Customization"
+        org_id:
+          $ref: "./openapi.yaml#/components/schemas/OrgId"
+        planner_model:
+          type: string
+        validation:
+          type: object
+          required: [schema_ok, components_ok, contrast_ok]
+          properties:
+            schema_ok:
+              type: boolean
+            components_ok:
+              type: boolean
+            contrast_ok:
+              type: boolean
+            issues:
+              type: array
+              items:
+                type: string
+          additionalProperties: false
+      additionalProperties: false
+    AdminCustomizationList:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminCustomization"
+        next_cursor:
+          type: ["string", "null"]
+      additionalProperties: false
+    RejectRequest:
+      type: object
+      required: [reason, note]
+      properties:
+        reason:
+          type: string
+          enum: [unsafe, out_of_scope, component_not_allowed, contrast_failed, budget]
+        note:
+          $ref: "#/components/schemas/AdminNote"
+      additionalProperties: false
+
+    # -------------------------------------------------------------- security
+    SecurityEventKind:
+      type: string
+      enum: [login_failed, api_key_abuse, upload_malware, upload_bomb, rate_limited, waf_block, sandbox_violation, egress_denied, admin_login, kill_switch]
+    SecurityEvent:
+      type: object
+      required: [id, kind, at]
+      properties:
+        id:
+          $ref: "#/components/schemas/SecurityEventId"
+        kind:
+          $ref: "#/components/schemas/SecurityEventKind"
+        org_id:
+          oneOf:
+            - $ref: "./openapi.yaml#/components/schemas/OrgId"
+            - type: "null"
+        user_id:
+          oneOf:
+            - $ref: "./openapi.yaml#/components/schemas/UserId"
+            - type: "null"
+        ip_hash:
+          type: string
+        request_id:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+        at:
+          $ref: "./openapi.yaml#/components/schemas/Timestamp"
+      additionalProperties: false
+    SecurityEventList:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SecurityEvent"
+        next_cursor:
+          type: ["string", "null"]
+      additionalProperties: false
+    BlockKind:
+      type: string
+      enum: [ip_hash, org, api_key, email_domain]
+    Block:
+      type: object
+      required: [id, kind, value, reason, created_by, created_at]
+      properties:
+        id:
+          $ref: "#/components/schemas/BlockId"
+        kind:
+          $ref: "#/components/schemas/BlockKind"
+        value:
+          type: string
+          description: Hash do IP, id da organização, prefixo da chave ou domínio.
+        reason:
+          $ref: "#/components/schemas/AdminNote"
+        expires_at:
+          oneOf:
+            - $ref: "./openapi.yaml#/components/schemas/Timestamp"
+            - type: "null"
+        created_by:
+          $ref: "#/components/schemas/Actor"
+        created_at:
+          $ref: "./openapi.yaml#/components/schemas/Timestamp"
+      additionalProperties: false
+    BlockCreate:
+      type: object
+      required: [kind, value, reason]
+      properties:
+        kind:
+          $ref: "#/components/schemas/BlockKind"
+        value:
+          type: string
+          minLength: 1
+        reason:
+          $ref: "#/components/schemas/AdminNote"
+        expires_at:
+          $ref: "./openapi.yaml#/components/schemas/Timestamp"
+      additionalProperties: false
+    BlockList:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Block"
+        next_cursor:
+          type: ["string", "null"]
+      additionalProperties: false
+
+    # ---------------------------------------------------------------- bounty
+    BountyStatus:
+      type: string
+      enum: [new, triaging, valid, invalid, duplicate, paid]
+    BountyReport:
+      type: object
+      required: [id, status, title, severity, reporter_email, received_at]
+      properties:
+        id:
+          $ref: "#/components/schemas/BountyReportId"
+        status:
+          $ref: "#/components/schemas/BountyStatus"
+        title:
+          type: string
+        severity:
+          type: string
+          enum: [none, low, medium, high, critical]
+        reporter_email:
+          type: string
+          format: email
+        body:
+          type: string
+        reward:
+          $ref: "./openapi.yaml#/components/schemas/Money"
+        decision:
+          type: object
+          required: [by, at, note]
+          properties:
+            by:
+              $ref: "#/components/schemas/Actor"
+            at:
+              $ref: "./openapi.yaml#/components/schemas/Timestamp"
+            note:
+              $ref: "#/components/schemas/AdminNote"
+          additionalProperties: false
+        received_at:
+          $ref: "./openapi.yaml#/components/schemas/Timestamp"
+      additionalProperties: false
+    BountyReportList:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/BountyReport"
+        next_cursor:
+          type: ["string", "null"]
+      additionalProperties: false
+    BountyDecision:
+      type: object
+      required: [decision, note]
+      properties:
+        decision:
+          type: string
+          enum: [valid, invalid, duplicate]
+        severity:
+          type: string
+          enum: [none, low, medium, high, critical]
+        reward:
+          $ref: "./openapi.yaml#/components/schemas/Money"
+          description: Só com `valid`; limitado ao teto do programa (SECURITY.md).
+        note:
+          $ref: "#/components/schemas/AdminNote"
+      additionalProperties: false
+
+    # ----------------------------------------------------------------- audit
+    AuditTargetType:
+      type: string
+      enum: [org, user, run, pricing, model_role, blog_post, customization, block, bounty_report, tool, kill_switch, api_key, rule]
+    AuditEntry:
+      type: object
+      required: [id, actor, action, target, at]
+      properties:
+        id:
+          $ref: "#/components/schemas/AuditEntryId"
+        actor:
+          $ref: "#/components/schemas/Actor"
+        action:
+          type: string
+          pattern: "^[a-z_]+\\.[a-z_]+$"
+        target:
+          type: object
+          required: [type, id]
+          properties:
+            type:
+              $ref: "#/components/schemas/AuditTargetType"
+            id:
+              type: string
+          additionalProperties: false
+        before:
+          type: object
+          additionalProperties: true
+        after:
+          type: object
+          additionalProperties: true
+        note:
+          type: string
+        request_id:
+          type: string
+        at:
+          $ref: "./openapi.yaml#/components/schemas/Timestamp"
+      additionalProperties: false
+    AuditList:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditEntry"
+        next_cursor:
+          type: ["string", "null"]
+      additionalProperties: false
+
+    # ----------------------------------------------------------------- tools
+    ToolStatus:
+      type: string
+      enum: [candidate, verified, trusted, retired]
+    ToolScope:
+      type: string
+      enum: [tenant, global]
+    ToolKind:
+      type: string
+      enum: [parser, media, extractor, normalizer, validator, matcher, probe, plan]
+    ToolManifest:
+      $ref: "./schemas/tool-manifest.json"
+    AdminTool:
+      type: object
+      required: [manifest, tests, quarantined]
+      properties:
+        manifest:
+          $ref: "#/components/schemas/ToolManifest"
+        tests:
+          type: object
+          required: [passed, total, last_run_at]
+          properties:
+            passed:
+              type: integer
+              minimum: 0
+            total:
+              type: integer
+              minimum: 0
+            last_run_at:
+              oneOf:
+                - $ref: "./openapi.yaml#/components/schemas/Timestamp"
+                - type: "null"
+          additionalProperties: false
+        review:
+          type: object
+          properties:
+            reviewer_model:
+              type: string
+            verdict:
+              type: string
+              enum: [approved, rejected]
+            notes:
+              type: string
+          additionalProperties: false
+        quarantined:
+          type: boolean
+          description: Verdadeiro após uma violação de sandbox; não pode ser promovida.
+      additionalProperties: false
+    ToolList:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminTool"
+        next_cursor:
+          type: ["string", "null"]
+      additionalProperties: false
+    ToolPromoteRequest:
+      type: object
+      required: [to, note]
+      properties:
+        to:
+          type: string
+          enum: [verified, trusted]
+        scope:
+          $ref: "#/components/schemas/ToolScope"
+        note:
+          $ref: "#/components/schemas/AdminNote"
+      additionalProperties: false
+
+    # --------------------------------------------------------- kill-switches
+    KillSwitchName:
+      type: string
+      enum: [signups, runs, media, llm, web_search, toolsmith, customizations, billing_checkout, api_keys, blog_generation, webhooks]
+    KillSwitch:
+      type: object
+      required: [name, enabled]
+      properties:
+        name:
+          $ref: "#/components/schemas/KillSwitchName"
+        enabled:
+          type: boolean
+          description: Verdadeiro quando a função está DESLIGADA.
+        reason:
+          type: string
+        changed_by:
+          $ref: "#/components/schemas/Actor"
+        changed_at:
+          $ref: "./openapi.yaml#/components/schemas/Timestamp"
+      additionalProperties: false
+    KillSwitchList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/KillSwitch"
+      additionalProperties: false
+    KillSwitchUpdate:
+      type: object
+      required: [enabled, reason]
+      properties:
+        enabled:
+          type: boolean
+        reason:
+          $ref: "#/components/schemas/AdminNote"
+      additionalProperties: false

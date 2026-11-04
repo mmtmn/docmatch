@@ -1,0 +1,28 @@
+{
+  "id": "fnd_01JBXK4A7D3E8F9G0H1J2K3M4N",
+  "run_id": "run_01JBXK3M9Q2V7R8S4T6W0YZ1AB",
+  "code": "bank.missing_title",
+  "kind": "missing",
+  "severity": "high",
+  "amount_at_risk": 125000,
+  "currency": "BRL",
+  "title": "Débito de R$ 1.250,00 sem título correspondente",
+  "explanation": "O extrato mostra um débito de R$ 1.250,00 em 12/09/2026 (linha 14) para FORNECEDOR ALFA, mas não há título em aberto ou liquidado com esse valor em até 3 dias no razão.",
+  "confidence": 0.97,
+  "confidence_label": "Confirmado",
+  "evidence": [
+    {
+      "source_id": "upl_01JBXK5B8E4F9G0H1J2K3M4N5P",
+      "locator": { "type": "row", "sheet": "Extrato", "row": 14, "column": "valor" },
+      "excerpt": "12/09/2026;PIX ENVIADO FORNECEDOR ALFA;-1250,00",
+      "label": "linha do extrato",
+      "values": { "amount": -125000, "date": "2026-09-12", "counterparty": "FORNECEDOR ALFA" }
+    }
+  ],
+  "status": "open",
+  "rule_id": null,
+  "match_id": null,
+  "source_ids": ["upl_01JBXK5B8E4F9G0H1J2K3M4N5P", "upl_01JBXK5C9F5G0H1J2K3M4N5P6Q"],
+  "details": { "searched_window_days": 3, "expected": 125000, "observed": 0 },
+  "created_at": "2026-11-04T12:00:00Z"
+}

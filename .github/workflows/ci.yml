@@ -36,13 +36,19 @@ jobs:
           workspaces: services/harness
         if: hashFiles('services/harness/Cargo.toml') != ''
 
+      # pnpm precisa existir antes do setup-node com cache: pnpm; sem lockfile, Node sem cache.
       - uses: pnpm/action-setup@v4
         if: hashFiles('pnpm-lock.yaml') != ''
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
           cache: pnpm
-        if: hashFiles('.nvmrc') != ''
+          cache-dependency-path: pnpm-lock.yaml
+        if: hashFiles('pnpm-lock.yaml') != ''
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+        if: hashFiles('pnpm-lock.yaml') == '' && hashFiles('.nvmrc') != ''
 
       - uses: hashicorp/setup-terraform@v3
         if: hashFiles('infra/terraform/**/*.tf') != ''

@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Finding",
+  "description": "Um achado: uma ausência, duplicidade, divergência ou observação encontrada entre as fontes de uma execução. Todo achado carrega o valor em risco em centavos, um grau de confiança e ao menos uma evidência localizável. Achado sem evidência é descartado pelo harness antes de chegar aqui.",
+  "type": "object",
+  "required": [
+    "id",
+    "run_id",
+    "code",
+    "kind",
+    "severity",
+    "amount_at_risk",
+    "currency",
+    "title",
+    "explanation",
+    "confidence",
+    "confidence_label",
+    "evidence",
+    "status",
+    "created_at"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^fnd_[0-9A-HJKMNP-TV-Z]{26}$",
+      "description": "Identificador do achado (prefixo `fnd_` + ULID)."
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "code": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$",
+      "description": "Código estável do verificador ou da regra que produziu o achado (ex.: `bank.missing_title`, `payroll.net_mismatch`). Serve para agrupar, filtrar e aprender."
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["missing", "duplicate", "mismatch", "partial", "contradiction", "anomaly", "unreadable", "note"],
+      "description": "Taxonomia grossa: `missing` (sem contrapartida), `duplicate`, `mismatch` (valores ou datas divergem), `partial` (pagamento parcial ou parcelado), `contradiction` (fontes se contradizem), `anomaly` (fora do padrão histórico), `unreadable` (fonte não pôde ser lida), `note` (informativo)."
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["info", "low", "medium", "high", "critical"]
+    },
+    "amount_at_risk": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Valor em risco, em centavos (inteiro, sem casas decimais). Zero quando o achado não envolve dinheiro."
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$",
+      "default": "BRL",
+      "description": "Moeda ISO 4217 de `amount_at_risk`."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Título curto em pt-BR, pronto para exibir."
+    },
+    "explanation": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Explicação em pt-BR, citando os valores e as fontes. Nunca contém HTML."
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Confiança calibrada de 0 a 1."
+    },
+    "confidence_label": {
+      "type": "string",
+      "enum": ["Confirmado", "Provável", "Precisa de você"],
+      "description": "Rótulo exibido: `Confirmado` (>= 0,9 e recalculado pelo código), `Provável` (>= 0,6), `Precisa de você` (abaixo de 0,6 ou verificação cruzada discordou)."
+    },
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/Evidence" }
+    },
+    "status": {
+      "type": "string",
+      "enum": ["open", "confirmed", "dismissed", "resolved"],
+      "description": "`open` até o usuário dar feedback; `confirmed` (é um problema real), `dismissed` (falso positivo), `resolved` (já tratado)."
+    },
+    "rule_id": {
+      "type": ["string", "null"],
+      "pattern": "^rul_[0-9A-HJKMNP-TV-Z]{26}$",
+      "description": "Regra que produziu o achado, quando houver."
+    },
+    "match_id": {
+      "type": ["string", "null"],
+      "pattern": "^mtc_[0-9A-HJKMNP-TV-Z]{26}$",
+      "description": "Casamento relacionado (ex.: divergência de valor entre duas linhas casadas)."
+    },
+    "source_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^upl_[0-9A-HJKMNP-TV-Z]{26}$" },
+      "description": "Fontes envolvidas no achado."
+    },
+    "details": {
+      "type": "object",
+      "description": "Dados específicos do verificador (ex.: `expected`, `observed`, `delta`, em centavos). Chaves em snake_case; valores primitivos.",
+      "additionalProperties": { "type": ["string", "number", "integer", "boolean", "null"] }
+    },
+    "feedback": { "$ref": "#/$defs/Feedback" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "Evidence": {
+      "title": "Evidence",
+      "description": "Uma citação verificável: a fonte, o localizador dentro dela e o trecho exibido.",
+      "type": "object",
+      "required": ["source_id", "locator"],
+      "properties": {
+        "source_id": { "type": "string", "pattern": "^upl_[0-9A-HJKMNP-TV-Z]{26}$" },
+        "locator": { "$ref": "evidence-locator.json" },
+        "excerpt": {
+          "type": "string",
+          "description": "Trecho literal da fonte, já decodificado, para exibir sem abrir o arquivo. Nunca contém HTML."
+        },
+        "label": {
+          "type": "string",
+          "description": "Rótulo curto em pt-BR (ex.: `linha do extrato`, `título em aberto`)."
+        },
+        "values": {
+          "type": "object",
+          "description": "Valores extraídos neste ponto (ex.: `amount`, `date`, `document`), para o recálculo pelo código.",
+          "additionalProperties": { "type": ["string", "number", "integer", "boolean", "null"] }
+        }
+      },
+      "additionalProperties": false
+    },
+    "Feedback": {
+      "title": "FindingFeedback",
+      "description": "Feedback do usuário sobre o achado. Alimenta a descoberta de regras e a calibração da confiança.",
+      "type": "object",
+      "required": ["status", "at"],
+      "properties": {
+        "status": { "type": "string", "enum": ["confirmed", "dismissed", "resolved"] },
+        "reason": {
+          "type": "string",
+          "enum": ["false_positive", "already_known", "wrong_amount", "duplicate", "other"]
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 500,
+          "x-limit": "text.finding_feedback_note"
+        },
+        "by": { "type": "string", "pattern": "^usr_[0-9A-HJKMNP-TV-Z]{26}$" },
+        "at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "Folha × arquivo bancário",
+  "sources": [
+    { "role": "payroll", "kind": "table" },
+    { "role": "bank_file", "kind": "table" }
+  ],
+  "matching": { "keys": ["tax_id", "amount"] }
+}

@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "theme": { "mode": "system" },
+  "labels": {},
+  "results": { "layout": "table", "columns": ["title"] },
+  "defaults": {},
+  "composition": {
+    "components": [{ "type": "findings_table", "children": [{ "type": "text", "props": { "text": "x" } }] }]
+  }
+}

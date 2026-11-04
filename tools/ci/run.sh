@@ -41,10 +41,33 @@ run_step() {
 
 run_step "lint/hardcode" tools/lint/hardcode.sh
 run_step "lint/commits" tools/ci/check-commits.sh
+run_step "lint/links" python3 -I docs/scripts/check-links.py
+
+# Escopo: só roda os subsistemas tocados desde a base (CI_BASE_REF, senão origin/main). Mudanças em
+# arquivos compartilhados (raiz, tools/, config/, packages/, .github/) rodam tudo; `ci-full` e
+# DM_CI_ALL=1 também. Sem base resolvível, roda tudo.
+base="${CI_BASE_REF:-origin/main}"
+all="${DM_CI_ALL:-0}"
+[[ "$target" == "ci-full" ]] && all=1
+changed=""
+if [[ "$all" != "1" ]]; then
+  if mb="$(git merge-base "$base" HEAD 2>/dev/null)"; then
+    changed="$( { git diff --name-only "$mb" HEAD; git status --porcelain --untracked-files=all | cut -c4- | sed 's/^.* -> //'; } 2>/dev/null )"
+    if grep -qE '^(Makefile|package\.json|pnpm-workspace\.yaml|pnpm-lock\.yaml|\.nvmrc|tools/|config/|packages/|\.github/)' <<<"$changed"; then
+      all=1
+    fi
+  else
+    all=1
+  fi
+fi
 
 for s in "${subsystems[@]}"; do
   if [[ -f "$s/Makefile" ]] && make -C "$s" -n "$target" >/dev/null 2>&1; then
-    run_step "$s" make -C "$s" "$target"
+    if [[ "$all" == "1" ]] || grep -q "^$s/" <<<"$changed"; then
+      run_step "$s" make -C "$s" "$target"
+    else
+      names+=("$s"); statuses+=("pulado (sem mudanças)"); times+=("0s")
+    fi
   fi
 done
 

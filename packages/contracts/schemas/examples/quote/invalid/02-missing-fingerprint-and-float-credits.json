@@ -1,0 +1,18 @@
+{
+  "id": "qte_01JBXKAH4M0N5P6Q7R8S9T0V1W",
+  "expected_credits": 10.5,
+  "cap_credits": 14,
+  "breakdown": {
+    "lane": "app",
+    "lane_multiplier": 1.0,
+    "items": [],
+    "subtotal_credits": 0,
+    "minimum_credits": 10,
+    "total_credits": 10,
+    "pricing_version": "2026-11-01-a3f9"
+  },
+  "expires_at": "2026-11-04T12:15:00Z",
+  "signature": "v1=3b7c1f2e9a4d5c6b8e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d",
+  "requires_approval": false,
+  "created_at": "2026-11-04T12:00:00Z"
+}

@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Quote",
+  "description": "Orçamento assinado de uma execução. `expected_credits` é o custo esperado; `cap_credits` é o teto reservado no ledger (percentil 99 das execuções recentes) e nunca é ultrapassado: se a execução precisar de mais, ela para em `needs_approval`. A assinatura (HMAC-SHA256 com DM_QUOTE_HMAC_KEY sobre os campos canônicos) impede que o cliente altere o valor; um orçamento expirado ou alterado é recusado com `quote_expired` ou `quote_invalid_signature`.",
+  "type": "object",
+  "required": [
+    "id",
+    "expected_credits",
+    "cap_credits",
+    "breakdown",
+    "expires_at",
+    "signature",
+    "fingerprint",
+    "requires_approval",
+    "created_at"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^qte_[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "run_id": {
+      "type": ["string", "null"],
+      "pattern": "^run_[0-9A-HJKMNP-TV-Z]{26}$",
+      "description": "Execução à qual o orçamento foi vinculado; nulo enquanto é só uma estimativa."
+    },
+    "expected_credits": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Custo esperado em créditos (tokens docmatch, inteiros)."
+    },
+    "cap_credits": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Teto reservado. Igual ou maior que `expected_credits`; o que não for gasto é devolvido ao terminar."
+    },
+    "breakdown": { "$ref": "estimate-breakdown.json" },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Validade (quote_ttl_minutes em config/pricing.yaml)."
+    },
+    "signature": {
+      "type": "string",
+      "pattern": "^v1=[0-9a-f]{64}$",
+      "description": "`v1=` + HMAC-SHA256 em hexadecimal sobre `id|fingerprint|expected_credits|cap_credits|expires_at`."
+    },
+    "fingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 canônico das fontes (ids e hashes) e opções que originaram o orçamento. Uma execução criada com fontes diferentes recebe `quote_mismatch`."
+    },
+    "requires_approval": {
+      "type": "boolean",
+      "description": "Verdadeiro quando a execução não pode começar sem um clique explícito (ferramentas novas, orçamento acima do padrão do usuário, mídia pesada)."
+    },
+    "approval_reasons": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": ["new_tools", "over_default_budget", "media_heavy", "web_search", "escalation_model"]
+      }
+    },
+    "created_at": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}
