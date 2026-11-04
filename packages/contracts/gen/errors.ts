@@ -42,6 +42,8 @@ export const ERRORS = {
   email_code_invalid: { status: 400, category: 'auth', message: 'Código inválido.', retryable: false },
   email_code_expired: { status: 410, category: 'auth', message: 'O código expirou. Peça um novo.', retryable: false },
   too_many_attempts: { status: 429, category: 'auth', message: 'Muitas tentativas. Aguarde antes de tentar de novo.', retryable: true },
+  invalid_credentials: { status: 401, category: 'auth', message: 'E-mail ou senha incorretos.', retryable: false },
+  recent_login_required: { status: 403, category: 'auth', message: 'Por segurança, entre de novo antes de alterar a senha.', retryable: false },
   validation_failed: { status: 400, category: 'validation', message: 'Alguns campos estão inválidos. Confira os detalhes.', retryable: false },
   invalid_json: { status: 400, category: 'validation', message: 'O corpo da requisição não é um JSON válido.', retryable: false },
   body_too_large: { status: 413, category: 'validation', message: 'O corpo da requisição excede o tamanho permitido.', retryable: false },

@@ -306,6 +306,13 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: Conta suspensa ou em processo de exclusão.
+          x-error-codes: [account_suspended, account_deletion_pending]
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: Desafio não encontrado.
           x-error-codes: [email_challenge_not_found]
@@ -330,6 +337,52 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+
+  /auth/password/login:
+    post:
+      operationId: authPasswordLogin
+      summary: Entra com e-mail e senha
+      description: |
+        Senha opcional, definida em `PUT /me/password`. A resposta a e-mail desconhecido e a senha
+        errada é a mesma (`invalid_credentials`). Limite por IP e por e-mail com bloqueio
+        exponencial; `totp_code` é reservado para o segundo fator.
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordLoginRequest"
+      responses:
+        "200":
+          description: Sessão aberta.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: E-mail ou senha incorretos.
+          x-error-codes: [invalid_credentials]
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Conta suspensa ou em processo de exclusão.
+          x-error-codes: [account_suspended, account_deletion_pending]
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
 
   /auth/refresh:
     post:
@@ -453,6 +506,72 @@ paths:
                 $ref: "#/components/schemas/ExportStatus"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /me/export/download:
+    get:
+      operationId: downloadMeExport
+      summary: Baixa a exportação dos dados pessoais
+      description: |
+        Destino da `download_url` de `GET /me/export`: o `token` é assinado pelo servidor e vale
+        até `expires_at`. Não exige sessão; um token inválido, expirado ou de exportação ainda não
+        pronta responde `404` sem detalhes.
+      tags: [account]
+      security: []
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Arquivo zip com um JSON por conjunto de dados.
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /me/password:
+    put:
+      operationId: setMePassword
+      summary: Define ou troca a senha
+      description: |
+        Quem já tem senha informa `current_password`. Quem entrou por Google, Apple ou e-mail e
+        ainda não tem senha precisa de uma sessão recente (`recent_login_required` caso contrário).
+        Toda troca encerra as outras sessões do usuário.
+      tags: [account]
+      security:
+        - cookieSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordChangeRequest"
+      responses:
+        "204":
+          description: Senha definida.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: Sem sessão ou senha atual incorreta.
+          x-error-codes: [unauthenticated, session_expired, invalid_credentials]
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Sessão antiga demais para definir a primeira senha.
+          x-error-codes: [recent_login_required]
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "429":
           $ref: "#/components/responses/TooManyRequests"
 
@@ -2464,7 +2583,41 @@ components:
           type: string
         code:
           type: string
+          pattern: "^[0-9]{6}$|^[A-Za-z0-9_-]{43}$"
+          description: O código de 6 dígitos digitado pelo usuário ou o token do link mágico recebido no mesmo e-mail (32 bytes em base64url).
+      additionalProperties: false
+    PasswordLoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          x-limit: text.email
+        password:
+          type: string
+          maxLength: 128
+          x-limit: text.password_max
+        totp_code:
+          type: string
           pattern: "^[0-9]{6}$"
+          description: Reservado para o segundo fator (ainda não ativado).
+      additionalProperties: false
+    PasswordChangeRequest:
+      type: object
+      required: [new_password]
+      properties:
+        current_password:
+          type: string
+          maxLength: 128
+          x-limit: text.password_max
+        new_password:
+          type: string
+          minLength: 12
+          maxLength: 128
+          x-limit: text.password_max
+          description: Entre `text.password_min` e `text.password_max` caracteres de `limits.yaml`.
       additionalProperties: false
     Session:
       type: object

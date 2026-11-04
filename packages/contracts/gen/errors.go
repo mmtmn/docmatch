@@ -41,6 +41,8 @@ const (
 	ErrEmailCodeInvalid               ErrorCode = "email_code_invalid"
 	ErrEmailCodeExpired               ErrorCode = "email_code_expired"
 	ErrTooManyAttempts                ErrorCode = "too_many_attempts"
+	ErrInvalidCredentials             ErrorCode = "invalid_credentials"
+	ErrRecentLoginRequired            ErrorCode = "recent_login_required"
 	ErrValidationFailed               ErrorCode = "validation_failed"
 	ErrInvalidJSON                    ErrorCode = "invalid_json"
 	ErrBodyTooLarge                   ErrorCode = "body_too_large"
@@ -154,6 +156,8 @@ var ErrorCodes = []ErrorCode{
 	ErrEmailCodeInvalid,
 	ErrEmailCodeExpired,
 	ErrTooManyAttempts,
+	ErrInvalidCredentials,
+	ErrRecentLoginRequired,
 	ErrValidationFailed,
 	ErrInvalidJSON,
 	ErrBodyTooLarge,
@@ -256,6 +260,8 @@ var ErrorSpecs = map[ErrorCode]ErrorSpec{
 	ErrEmailCodeInvalid:               {Code: ErrEmailCodeInvalid, Status: 400, Category: ErrorCategoryAuth, Message: "Código inválido.", Retryable: false},
 	ErrEmailCodeExpired:               {Code: ErrEmailCodeExpired, Status: 410, Category: ErrorCategoryAuth, Message: "O código expirou. Peça um novo.", Retryable: false},
 	ErrTooManyAttempts:                {Code: ErrTooManyAttempts, Status: 429, Category: ErrorCategoryAuth, Message: "Muitas tentativas. Aguarde antes de tentar de novo.", Retryable: true},
+	ErrInvalidCredentials:             {Code: ErrInvalidCredentials, Status: 401, Category: ErrorCategoryAuth, Message: "E-mail ou senha incorretos.", Retryable: false},
+	ErrRecentLoginRequired:            {Code: ErrRecentLoginRequired, Status: 403, Category: ErrorCategoryAuth, Message: "Por segurança, entre de novo antes de alterar a senha.", Retryable: false},
 	ErrValidationFailed:               {Code: ErrValidationFailed, Status: 400, Category: ErrorCategoryValidation, Message: "Alguns campos estão inválidos. Confira os detalhes.", Retryable: false},
 	ErrInvalidJSON:                    {Code: ErrInvalidJSON, Status: 400, Category: ErrorCategoryValidation, Message: "O corpo da requisição não é um JSON válido.", Retryable: false},
 	ErrBodyTooLarge:                   {Code: ErrBodyTooLarge, Status: 413, Category: ErrorCategoryValidation, Message: "O corpo da requisição excede o tamanho permitido.", Retryable: false},
