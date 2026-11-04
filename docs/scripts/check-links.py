@@ -57,8 +57,11 @@ def collect_files(args: list[str], root: str) -> list[str]:
     return sorted(files)
 
 
-def strip_code(lines: list[str]) -> list[str]:
-    """Blank out fenced code blocks and inline code spans, keeping line numbers stable."""
+def strip_code(lines: list[str], inline: bool = True) -> list[str]:
+    """Blank out fenced code blocks (and, by default, inline code spans), keeping line numbers.
+
+    Headings keep their inline code because it is part of the slug ("### `maintenance`").
+    """
     result: list[str] = []
     in_fence = False
     for line in lines:
@@ -66,7 +69,10 @@ def strip_code(lines: list[str]) -> list[str]:
             in_fence = not in_fence
             result.append("")
             continue
-        result.append("" if in_fence else INLINE_CODE_RE.sub("", line))
+        if in_fence:
+            result.append("")
+        else:
+            result.append(INLINE_CODE_RE.sub("", line) if inline else line)
     return result
 
 
@@ -91,7 +97,7 @@ def heading_slugs(path: str, cache: dict[str, set[str]]) -> set[str]:
     except OSError:
         cache[path] = slugs
         return slugs
-    for line in strip_code(raw):
+    for line in strip_code(raw, inline=False):
         match = HEADING_RE.match(line)
         if match:
             base = slugify(match.group(2))
