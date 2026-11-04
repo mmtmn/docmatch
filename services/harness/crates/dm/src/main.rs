@@ -142,9 +142,9 @@ fn cmd_parse(file: &Path, json: bool, year: Option<i32>) -> Result<i32> {
 
 fn print_source_summary(src: &ParsedSource) {
     println!(
-        "{} ({:?}, {}): {} tabela(s), {} item(ns)",
+        "{} ({}, {}): {} tabela(s), {} item(ns)",
         src.name,
-        src.sniff.kind,
+        src.sniff.kind.label_ptbr(),
         src.sniff.encoding,
         src.tables.len(),
         src.items.len()
@@ -317,8 +317,15 @@ struct RunReport {
     sources: Vec<SourceReport>,
     matches: Vec<TableMatch>,
     findings: Vec<dm_core::Finding>,
+    /// Every row of every parsed table, with or without a document column.
+    table_rows: usize,
+    /// Rows that an exact match paired.
     explained_rows: usize,
+    /// `table_rows - explained_rows`.
     unexplained_rows: usize,
+    /// Text items (e-mails, chat lines); exact matching never explains them, so all of
+    /// them are unexplained at this stage.
+    text_items: usize,
     warnings: Vec<String>,
 }
 
@@ -367,8 +374,10 @@ fn cmd_run(dir: &Path, out: &Path, year: Option<i32>) -> Result<i32> {
         sources: Vec::new(),
         matches: Vec::new(),
         findings: Vec::new(),
+        table_rows: 0,
         explained_rows: 0,
         unexplained_rows: 0,
+        text_items: 0,
         warnings: Vec::new(),
     };
     let mut tables: Vec<Table> = Vec::new();
@@ -379,7 +388,7 @@ fn cmd_run(dir: &Path, out: &Path, year: Option<i32>) -> Result<i32> {
                 print_source_summary(&src);
                 report.sources.push(SourceReport {
                     name: src.name.clone(),
-                    kind: format!("{:?}", src.sniff.kind),
+                    kind: src.sniff.kind.id().to_string(),
                     tables: src.tables.iter().map(|t| t.name.clone()).collect(),
                     items: src.items.len(),
                     warnings: src.warnings.clone(),
@@ -414,7 +423,14 @@ fn cmd_run(dir: &Path, out: &Path, year: Option<i32>) -> Result<i32> {
                 .map(|i| t.columns[i].name.clone()),
         })
         .collect();
-    let mut explained: BTreeMap<String, bool> = BTreeMap::new();
+    // Every table row starts unexplained, including rows of tables without a document
+    // column: the tally below must say what the run could not explain, not only what it
+    // tried to.
+    let mut explained: BTreeMap<String, bool> = items_by_table
+        .iter()
+        .flat_map(|t| t.items.iter())
+        .map(|item| (item.id.clone(), false))
+        .collect();
     for (i, left) in items_by_table.iter().enumerate() {
         let (left_name, left_items, left_amount) = (&left.name, &left.items, &left.amount_col);
         let Some(left_doc) = &left.doc_col else {
@@ -429,9 +445,6 @@ fn cmd_run(dir: &Path, out: &Path, year: Option<i32>) -> Result<i32> {
             let left_spec = KeySpec::single(left_doc.clone(), KeyTransform::DocNumber);
             let right_spec = KeySpec::single(right_doc.clone(), KeyTransform::DocNumber);
             let m = exact_match(left_items, right_items, &left_spec, &right_spec);
-            for item in left_items.iter().chain(right_items.iter()) {
-                explained.entry(item.id.clone()).or_insert(false);
-            }
             let mut pairs = Vec::with_capacity(m.pairs.len());
             for p in &m.pairs {
                 explained.insert(p.left_id.clone(), true);
@@ -503,8 +516,10 @@ fn cmd_run(dir: &Path, out: &Path, year: Option<i32>) -> Result<i32> {
             });
         }
     }
+    report.table_rows = explained.len();
     report.explained_rows = explained.values().filter(|v| **v).count();
-    report.unexplained_rows = explained.values().filter(|v| !**v).count();
+    report.unexplained_rows = report.table_rows - report.explained_rows;
+    report.text_items = text_items.len();
     std::fs::write(out, serde_json::to_vec_pretty(&report)?)
         .with_context(|| format!("gravando {}", out.display()))?;
 
@@ -535,9 +550,11 @@ fn cmd_run(dir: &Path, out: &Path, year: Option<i32>) -> Result<i32> {
         println!("nenhum par de tabelas com número de documento para casar");
     }
     println!(
-        "explicados: {} | não explicados: {} | achados de injeção: {}",
+        "linhas de tabela: {} | explicadas: {} | não explicadas: {} | itens de texto ainda sem casamento: {} | achados de injeção: {}",
+        report.table_rows,
         report.explained_rows,
         report.unexplained_rows,
+        report.text_items,
         report.findings.len()
     );
     for w in &report.warnings {

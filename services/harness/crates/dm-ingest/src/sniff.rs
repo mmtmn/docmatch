@@ -42,6 +42,48 @@ pub enum SourceKind {
     Unknown,
 }
 
+impl SourceKind {
+    /// pt-BR label for CLI and report output.
+    pub fn label_ptbr(self) -> &'static str {
+        match self {
+            SourceKind::Csv => "texto delimitado (CSV)",
+            SourceKind::Spreadsheet => "planilha",
+            SourceKind::Ofx => "extrato OFX",
+            SourceKind::NfeXml => "XML de NF-e",
+            SourceKind::Xml => "XML",
+            SourceKind::Eml => "e-mail (.eml)",
+            SourceKind::Mbox => "caixa de correio (mbox)",
+            SourceKind::TxtInbox => "dump de inbox ou conversa",
+            SourceKind::Pdf => "PDF",
+            SourceKind::Cnab240 => "CNAB 240",
+            SourceKind::Cnab400 => "CNAB 400",
+            SourceKind::Json => "JSON",
+            SourceKind::Text => "texto simples",
+            SourceKind::Unknown => "desconhecido",
+        }
+    }
+
+    /// Stable snake_case id (the serde name), for JSON reports.
+    pub fn id(self) -> &'static str {
+        match self {
+            SourceKind::Csv => "csv",
+            SourceKind::Spreadsheet => "spreadsheet",
+            SourceKind::Ofx => "ofx",
+            SourceKind::NfeXml => "nfe_xml",
+            SourceKind::Xml => "xml",
+            SourceKind::Eml => "eml",
+            SourceKind::Mbox => "mbox",
+            SourceKind::TxtInbox => "txt_inbox",
+            SourceKind::Pdf => "pdf",
+            SourceKind::Cnab240 => "cnab240",
+            SourceKind::Cnab400 => "cnab400",
+            SourceKind::Json => "json",
+            SourceKind::Text => "text",
+            SourceKind::Unknown => "unknown",
+        }
+    }
+}
+
 /// Date style of the values.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
