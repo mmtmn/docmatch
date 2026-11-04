@@ -41,6 +41,7 @@ run_step() {
 
 run_step "lint/hardcode" tools/lint/hardcode.sh
 run_step "lint/commits" tools/ci/check-commits.sh
+run_step "lint/links" python3 -I docs/scripts/check-links.py
 
 for s in "${subsystems[@]}"; do
   if [[ -f "$s/Makefile" ]] && make -C "$s" -n "$target" >/dev/null 2>&1; then
