@@ -1,0 +1,48 @@
+---
+import pricing from 'virtual:pricing';
+import { interpolate, t, tf } from '../../lib/i18n';
+
+// Numbers from config/pricing.yaml are never typed in the copy: the answers interpolate them.
+const vars = { months: pricing.rollover.topup_tokens_months };
+const items = tf('faq.items').map((item) => ({ q: item.q, a: interpolate(item.a, vars) }));
+---
+
+<section class="section" id="faq" aria-labelledby="faq-titulo">
+  <div class="container">
+    <h2 class="section__heading" id="faq-titulo">
+      {t('faq.heading')}
+    </h2>
+    <div class="faq">
+      {items.map((item) => (
+        <details class="faq__item">
+          <summary class="faq__question">{item.q}</summary>
+          <p class="faq__answer muted">{item.a}</p>
+        </details>
+      ))}
+    </div>
+  </div>
+</section>
+
+<style>
+  .faq {
+    max-width: var(--text-width);
+    border-top: 1px solid var(--color-border);
+  }
+
+  .faq__item {
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .faq__question {
+    display: flex;
+    align-items: center;
+    min-height: var(--tap);
+    padding: var(--space-2) 0;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .faq__answer {
+    padding: 0 0 var(--space-4);
+  }
+</style>

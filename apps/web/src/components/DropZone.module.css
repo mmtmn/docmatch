@@ -1,0 +1,188 @@
+.zone {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  border: 2px dashed var(--color-border-strong);
+  border-radius: var(--radius-3);
+  background: var(--color-surface);
+  overflow: hidden;
+  transition:
+    border-color var(--duration) var(--ease),
+    background-color var(--duration) var(--ease);
+}
+
+.zone[data-dragging='true'] {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+
+.prompt {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-height: var(--tap);
+  width: 100%;
+  padding: var(--space-3);
+  border: 0;
+  background: transparent;
+  color: var(--color-fg);
+  cursor: pointer;
+  text-align: center;
+  overflow: hidden;
+}
+
+.prompt:hover {
+  color: var(--color-accent);
+}
+
+.promptIcon {
+  flex: none;
+  color: var(--color-accent);
+}
+
+.promptTitle {
+  font-size: var(--fs-lg);
+  font-weight: 600;
+}
+
+.promptHint,
+.promptAccepted {
+  font-size: var(--fs-sm);
+  color: var(--color-muted);
+}
+
+.promptShort {
+  display: none;
+  font-weight: 600;
+}
+
+.filled {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  padding: var(--space-2) var(--space-3);
+  gap: var(--space-2);
+}
+
+.toolbar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.summary {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--color-muted);
+}
+
+.addMore {
+  min-height: var(--tap);
+  padding-block: 0;
+  font-size: var(--fs-sm);
+}
+
+.list {
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+  align-content: start;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0 var(--space-1) var(--space-1) 0;
+  list-style: none;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.rejectedRegion {
+  flex: none;
+}
+
+.rejected {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  list-style: none;
+  border-top: 1px solid var(--color-danger);
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+  font-size: var(--fs-sm);
+  max-height: 8rem;
+  overflow: auto;
+}
+
+.rejectedItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: var(--tap);
+}
+
+.dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--tap);
+  height: var(--tap);
+  border: 0;
+  border-radius: var(--radius-1);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.dragHint {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
+  pointer-events: none;
+}
+
+.zone[data-dragging='true'] .dragHint {
+  display: flex;
+}
+
+/* Keyboard open on a phone: the zone collapses to one line so the button stays visible. */
+.zone[data-compact='true'] .promptIcon,
+.zone[data-compact='true'] .promptTitle,
+.zone[data-compact='true'] .promptHint,
+.zone[data-compact='true'] .promptAccepted,
+.zone[data-compact='true'] .list {
+  display: none;
+}
+
+.zone[data-compact='true'] .promptShort {
+  display: inline;
+}
+
+.zone[data-compact='true'] .prompt,
+.zone[data-compact='true'] .filled {
+  min-height: 2.25rem;
+  padding-block: 0;
+}
+
+.zone[data-compact='true'] {
+  border-width: 1px;
+}
+
+.zone[data-compact='true'] .addMore {
+  display: none;
+}

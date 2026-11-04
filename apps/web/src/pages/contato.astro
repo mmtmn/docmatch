@@ -1,0 +1,25 @@
+---
+import { ContactForm } from '../components/ContactForm';
+import Base from '../layouts/Base.astro';
+import { t } from '../lib/i18n';
+---
+
+<Base title={t('contact.title')} description={t('contact.description')}>
+  <main id="conteudo" class="container section">
+    <div class="prose">
+      <h1>{t('contact.title')}</h1>
+      <p class="muted">{t('contact.lead')}</p>
+      <p class="small muted">{t('contact.security_hint')}</p>
+    </div>
+    <div class="form">
+      <ContactForm client:load />
+    </div>
+  </main>
+</Base>
+
+<style>
+  .form {
+    max-width: var(--text-width);
+    margin-top: var(--space-6);
+  }
+</style>

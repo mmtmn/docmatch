@@ -1,0 +1,68 @@
+---
+import '../styles/global.css';
+import Footer from '../components/site/Footer.astro';
+import Header from '../components/site/Header.astro';
+import { canonicalPath } from '../lib/canonical';
+import { t } from '../lib/i18n';
+
+interface Props {
+  title?: string;
+  description?: string;
+  /** Single fixed screen (the app): html.app disables document scrolling. */
+  app?: boolean;
+  hideHeader?: boolean;
+  hideFooter?: boolean;
+  noindex?: boolean;
+  /** Fragment the skip link jumps to; the landing points it at the form, not past it. */
+  skipTarget?: string;
+}
+
+const {
+  title,
+  description = t('meta.default_description'),
+  app = false,
+  hideHeader = false,
+  hideFooter = false,
+  noindex = false,
+  skipTarget = '#conteudo',
+} = Astro.props;
+
+const fullTitle = title ? t('meta.title_template', { title }) : t('meta.default_title');
+// Clean URL (no `.html`): the one the sitemap lists and CloudFront rewrites (docs/headers.md).
+const canonical = new URL(canonicalPath(Astro.url.pathname), Astro.site).href;
+---
+
+<!doctype html>
+<html lang="pt-BR" class:list={{ app }}>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
+    />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="sitemap" href="/sitemap-index.xml" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0f1216" media="(prefers-color-scheme: dark)" />
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
+    <meta property="og:site_name" content={t('meta.site_name')} />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="pt_BR" />
+    <meta property="og:url" content={canonical} />
+    <meta name="generator" content={Astro.generator} />
+  </head>
+  <body>
+    <a class="skip-link" href={skipTarget}>
+      {t('nav.skip_to_content')}
+    </a>
+    {!hideHeader && <Header />}
+    <slot />
+    {!hideFooter && <Footer />}
+  </body>
+</html>
