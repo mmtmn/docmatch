@@ -87,8 +87,8 @@ func Decode(prefix, s string) (uuid.UUID, error) {
 	}
 	var id uuid.UUID
 	for i := 0; i < 8; i++ {
-		id[i] = byte(hi >> (56 - 8*i))
-		id[8+i] = byte(lo >> (56 - 8*i))
+		id[i] = byte(hi >> (56 - 8*i))   //nolint:gosec // byte extraction
+		id[8+i] = byte(lo >> (56 - 8*i)) //nolint:gosec // byte extraction
 	}
 	return id, nil
 }

@@ -74,11 +74,17 @@ func ParseJWKSet(data []byte) (map[string]stdcrypto.PublicKey, error) {
 			}
 			x, err1 := base64.RawURLEncoding.DecodeString(k.X)
 			y, err2 := base64.RawURLEncoding.DecodeString(k.Y)
-			if err1 != nil || err2 != nil {
+			if err1 != nil || err2 != nil || len(x) > 32 || len(y) > 32 {
 				continue
 			}
-			pub := &ecdsa.PublicKey{Curve: elliptic.P256(), X: new(big.Int).SetBytes(x), Y: new(big.Int).SetBytes(y)}
-			if !pub.Curve.IsOnCurve(pub.X, pub.Y) {
+			// Uncompressed point 0x04 ‖ X ‖ Y with the coordinates left-padded
+			// to 32 bytes; the parser rejects points off the curve.
+			point := make([]byte, 65)
+			point[0] = 4
+			copy(point[1+32-len(x):33], x)
+			copy(point[33+32-len(y):], y)
+			pub, err := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), point)
+			if err != nil {
 				continue
 			}
 			out[k.Kid] = pub

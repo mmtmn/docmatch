@@ -72,6 +72,10 @@ type Querier interface {
 	// consultas que as tocam rodam em WithOrgTx (ou em modo sistema no worker).
 	AuthSetUserNotifications(ctx context.Context, arg AuthSetUserNotificationsParams) error
 	AuthSetUserPassword(ctx context.Context, arg AuthSetUserPasswordParams) error
+	// Resumo de créditos para GET /me (internal/account): parcela do plano e
+	// parcela avulsa entre as concessões abertas, e a próxima expiração. Dentro
+	// de WithOrgTx; não trava linhas.
+	AuthSumOpenGrantsByKind(ctx context.Context, orgID uuid.UUID) ([]AuthSumOpenGrantsByKindRow, error)
 	AuthTenantKey(ctx context.Context, orgID uuid.UUID) (TenantKey, error)
 	AuthTouchSession(ctx context.Context, id uuid.UUID) error
 	AuthUpdateOrgName(ctx context.Context, arg AuthUpdateOrgNameParams) error

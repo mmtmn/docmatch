@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
 	contracts "github.com/mmtmn/docmatch/packages/contracts/gen"
 
 	"github.com/mmtmn/docmatch/services/api/internal/apierr"
@@ -127,7 +128,7 @@ func (s *Service) emailVerify(w http.ResponseWriter, r *http.Request) {
 	// Both comparisons always run so the timing does not say which form was sent.
 	codeOK := crypto.Equal(s.codeMAC(id, req.Code), ch.CodeHash)
 	tokenOK := crypto.Equal(crypto.Digest(req.Code), ch.TokenHash)
-	if !(isCode && codeOK) && !(isToken && tokenOK) {
+	if (!isCode || !codeOK) && (!isToken || !tokenOK) {
 		if _, err := s.d.Store.RecordChallengeAttempt(r.Context(), id); err != nil {
 			apierr.Internal(w, r, err)
 			return

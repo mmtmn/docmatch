@@ -7,10 +7,21 @@ security e partições mensais.
 ## Layout
 
 ```
-cmd/api            servidor HTTP público (GET /healthz, /readyz, /v1/version por enquanto)
-cmd/worker         jobs em background (River): batimento, partições mensais, expiração de tokens
+cmd/api            servidor HTTP público: saúde/versão, /v1/auth/*, /v1/me*
+cmd/worker         jobs em background (River): batimento, partições mensais, expiração de tokens,
+                   outbox de e-mail, exportações e exclusões LGPD
 cmd/migrate        aplica db/migrations (embarcadas) + esquema do River + grants ao papel da aplicação
 internal/config    Load() lê o ambiente (nomes exatos de .env.example); segredos nunca aparecem em logs
+internal/apierr    envelope de erro com os códigos e mensagens de packages/contracts/errors.yaml
+internal/publicid  ids públicos usr_/org_/chl_/exp_ (uuid em base32 Crockford, 26 caracteres)
+internal/crypto    keyring HKDF de DM_SESSION_SECRET, AES-GCM, Argon2id, tokens assinados, JWS/JWKS
+internal/session   cookies dm_session/dm_refresh/dm_device, rotação do refresh, middleware e WithOrgTx
+internal/session/sessionpg   store pgx das sessões
+internal/auth      login com Google, Apple, e-mail (código + link mágico) e senha; refresh e logout
+internal/account   /me (GET/PATCH/DELETE), /me/password, /me/export (+download assinado), jobs LGPD
+internal/account/accountpg   store pgx de usuários, organizações, desafios, chaves e exportações
+internal/email     Sender (Resend, SMTP/Mailpit), modelos pt-BR, args dos jobs do outbox
+internal/email/emailpg       outbox transacional + jobs do River que entregam os e-mails
 internal/limits    cópia embarcada de packages/contracts/limits.yaml (fonte única dos limites em Go)
 internal/httpx     servidor endurecido: timeouts do limits.yaml, request id, logs JSON, recover,
                    headers de segurança, CORS por lista, checagem de Origin, limite de corpo por
@@ -63,12 +74,73 @@ Alvos do Makefile: `setup`, `generate`, `lint`, `test`, `test-integration`, `vul
 
 Variáveis de ambiente: todas as de `.env.example`, mais `DM_DB_APP_ROLE` (opcional, padrão
 `docmatch_app`): nome do papel NOBYPASSRLS que o migrador cria e que a API e o worker assumem
-com `SET ROLE` ao conectar.
+com `SET ROLE` ao conectar. Sem `GOOGLE_OAUTH_*`, `APPLE_*` ou remetente de e-mail
+(`RESEND_API_KEY` em prod, `DM_SMTP_ADDR` em dev) o login correspondente responde `503
+service_unavailable` e o resto continua funcionando; `DM_SESSION_SECRET` é obrigatória e deriva,
+por HKDF, as chaves dos cookies de OAuth, dos códigos por e-mail, dos links assinados e a KEK
+das chaves por locatário.
 
 Ambiente local (`tools/dev/compose.yaml`): o S3 local é o RustFS (mesma API do MinIO, portas
 9000/9001), porque as imagens públicas do MinIO não estão mais disponíveis sem login;
 `DM_DEV_S3_IMAGE` troca a imagem. `tools/dev/env.sh` carrega o `.env` com aspas seguras
 (valores com espaços e `<>`), e é o que `make run-api`, `run-worker`, `migrate` e `dev` usam.
+
+## Autenticação, sessões e conta
+
+- **Sessões.** Login abre uma linha em `sessions` e três cookies `HttpOnly; Secure; SameSite=Lax`
+  (`Secure` só cai em `DM_ENV=dev` com `DM_API_BASE_URL` em http): `dm_session` ("id.segredo de
+  acesso", 10 min), `dm_refresh` ("id.segredo de refresh", 30 dias deslizantes, só enviado a
+  `/v1/auth/refresh`) e `dm_device` (id do navegador, 400 dias). O banco guarda só os SHA-256. A
+  rotação é no lugar: apresentar um refresh antigo para um id conhecido, ou o cookie de outro
+  dispositivo, revoga a família inteira e é auditado (`auth.session_reuse`). `401 session_expired`
+  diz ao cliente para renovar; qualquer outra falha é `401 unauthenticated`.
+- **Middleware.** `session.Manager.Middleware` está na pilha padrão da API: autentica o cookie,
+  põe o `session.Principal` no contexto (`session.FromContext`) e aplica a checagem de Origin em
+  requisições que mudam estado. Rotas protegidas usam `session.Require`/`session.RequireFunc`.
+  **Toda consulta a tabelas de locatário passa por `session.WithOrgTx(ctx, pool, fn)`**, que
+  faz `set_config('app.org_id', <org do principal>, true)` na transação (é `db.WithOrgTx` com a
+  organização do contexto); sem principal devolve `session.ErrNoTenant`. O worker usa
+  `db.WithSystemTx` só para manutenção entre locatários.
+- **Google e Apple.** OIDC com `state`, `nonce` e PKCE S256 (Google; a Apple não suporta PKCE),
+  guardados num cookie selado (AES-GCM) de 10 min restrito ao caminho do callback. O ID token
+  é verificado contra a JWKS do provedor (cache de 1 h, recarregada em `kid` desconhecido no
+  máximo uma vez por minuto): assinatura RS256, `iss`, `aud`, `exp`, `iat` e `nonce`; e-mail
+  não verificado é recusado (`403 oauth_email_unverified`). A Apple responde por `form_post`
+  (POST entre sites), por isso o callback é isento da checagem global de Origin
+  (`auth.OriginExempt`) e o cookie de estado usa `SameSite=None`; o `client_secret` é um JWT ES256
+  assinado com `APPLE_PRIVATE_KEY` a cada troca; o nome vem no campo `user` só no primeiro login.
+  Com `Accept: application/json` o callback devolve a sessão; senão redireciona para
+  `DM_PUBLIC_BASE_URL` + `redirect_to` (ou `/login?error=<código>`).
+- **E-mail.** `POST /v1/auth/email/start` sempre cria um desafio (`magic_links`) e enfileira o
+  e-mail, exista ou não a conta: código de 6 dígitos (HMAC com chave derivada) e link mágico
+  (`DM_PUBLIC_BASE_URL/login/email?challenge_id=chl_…&code=<token de 32 bytes>`, SHA-256) no
+  mesmo e-mail, 15 min, uso único, 5 tentativas, comparação em tempo constante. O app envia os
+  dois pelo mesmo `POST /v1/auth/email/verify` (`code` aceita o código ou o token).
+- **Senha.** Opcional: `PUT /v1/me/password` (Argon2id 64 MiB, t=3, p=1; tamanho de
+  `limits.yaml`; exige a senha atual ou um login recente de 15 min; revoga as outras sessões) e
+  `POST /v1/auth/password/login`. Conta inexistente, sem senha ou senha errada seguem o mesmo
+  caminho (hash fictício) e a mesma resposta `401 invalid_credentials`. `auth.SecondFactor` é o
+  gancho do TOTP (`totp_code` no corpo); `NoSecondFactor` é o padrão.
+- **Limites.** Rotas de autenticação usam `ratelimit.AuthGuard` (5/min por IP + e-mail ou
+  desafio, com bloqueio exponencial): `429 rate_limited` ao estourar, `429 too_many_attempts`
+  enquanto bloqueado.
+- **Cadastro.** O primeiro login cria o usuário, a organização pessoal (dono), e uma chave de
+  dados aleatória em `tenant_keys`, embrulhada com a KEK (HKDF de `DM_SESSION_SECRET`).
+  `crypto.UnwrapDataKey` entrega a chave para quem cifrar dados do locatário.
+- **LGPD.** `DELETE /v1/me` agenda a exclusão em 7 dias, revoga as sessões e manda o e-mail;
+  até lá o login responde `403 account_deletion_pending`. O job `account_erase` (e a manutenção
+  horária, caso o job se perca) destrói a chave do locatário primeiro (crypto-shredding) e só
+  então apaga organização, vínculos e usuário. `GET /v1/me/export` pede a exportação; o job
+  `account_export` monta um zip (perfil, organização, sessões, auditoria) guardado em
+  `account_exports` por 24 h e avisa por e-mail; o download é por link assinado
+  (`/v1/me/export/download?token=…`, sem sessão).
+- **E-mail transacional.** Nada é enviado inline: a aplicação grava no `outbox` na mesma
+  transação do dado e insere o job `email_send`; o worker entrega pelo `Sender` (Resend com
+  `Idempotency-Key`, ou SMTP sem autenticação para o Mailpit de `tools/dev` com `DM_SMTP_ADDR`),
+  com backoff e a varredura `email_outbox_sweep` para linhas órfãs.
+- **Auditoria.** Login, cadastro, vínculo de provedor, refresh, logout, reuso de refresh,
+  alteração de perfil, senha, pedido de exclusão, exclusão e exportação geram entradas na
+  cadeia da organização (ou do sistema, na exclusão).
 
 ## Decisões
 

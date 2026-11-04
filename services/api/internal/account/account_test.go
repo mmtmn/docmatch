@@ -653,10 +653,11 @@ func TestExportFlow(t *testing.T) {
 	}
 	h.store.FailOn = ""
 	// RunExport store failures.
-	id := h.enq.exports[len(h.enq.exports)-1]
 	h.now = h.now.Add(StalePendingAfter + time.Minute)
-	rec = h.do(http.MethodGet, "/v1/me/export", "", cs)
-	id = h.enq.exports[len(h.enq.exports)-1]
+	if rec := h.do(http.MethodGet, "/v1/me/export", "", cs); rec.Code != 200 {
+		t.Fatalf("nova exportação: %d", rec.Code)
+	}
+	id := h.enq.exports[len(h.enq.exports)-1]
 	for _, fail := range []string{"ExportByID", "CompleteExport", "EnqueueEmail"} {
 		h.store.FailOn = fail
 		if err := h.svc.RunExport(context.Background(), id); err == nil {

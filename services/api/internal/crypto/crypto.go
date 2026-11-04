@@ -16,6 +16,7 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
+	"encoding/binary"
 	"errors"
 	"io"
 	"sync"
@@ -112,7 +113,7 @@ func RandomDigits(n int) string {
 // randomBelow returns a uniform value in [0, n) for n ≤ 256 using rejection
 // sampling, so the digits of a code are unbiased.
 func randomBelow(n byte) byte {
-	limit := byte(256 - (256 % int(n)))
+	limit := byte(256 - (256 % int(n))) //nolint:gosec // n ≤ 10, the value is in [246, 256)
 	for {
 		var b [1]byte
 		if _, err := rand.Read(b[:]); err != nil {
@@ -137,7 +138,7 @@ func MAC(key []byte, parts ...[]byte) []byte {
 	m := hmac.New(sha256.New, key)
 	for _, p := range parts {
 		var n [4]byte
-		n[0], n[1], n[2], n[3] = byte(len(p)>>24), byte(len(p)>>16), byte(len(p)>>8), byte(len(p))
+		binary.BigEndian.PutUint32(n[:], uint32(len(p))) //nolint:gosec // inputs are far below 4 GiB
 		_, _ = m.Write(n[:])
 		_, _ = m.Write(p)
 	}

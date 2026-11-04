@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
 	contracts "github.com/mmtmn/docmatch/packages/contracts/gen"
 
 	"github.com/mmtmn/docmatch/services/api/internal/account"

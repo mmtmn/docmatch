@@ -120,7 +120,7 @@ func (s *Service) setStateCookie(w http.ResponseWriter, st oauthState) error {
 	if err != nil {
 		return err
 	}
-	c := &http.Cookie{
+	c := &http.Cookie{ //nolint:gosec // HttpOnly and SameSite are set; Secure follows DM_ENV (off only in dev over http)
 		Name: cookieName(st.Provider), Value: base64URL(sealed), Path: callbackPath(st.Provider),
 		MaxAge: int(OAuthStateTTL / time.Second), HttpOnly: true, Secure: s.d.Secure, SameSite: http.SameSiteLaxMode,
 	}
@@ -140,7 +140,9 @@ func callbackPath(provider string) string {
 
 // clearStateCookie expires the cookie so a state can never be replayed.
 func (s *Service) clearStateCookie(w http.ResponseWriter, provider string) {
-	http.SetCookie(w, &http.Cookie{Name: cookieName(provider), Value: "", Path: callbackPath(provider), MaxAge: -1, HttpOnly: true, Secure: s.d.Secure, SameSite: http.SameSiteLaxMode})
+	http.SetCookie(w, &http.Cookie{ //nolint:gosec // expiring cookie; Secure follows DM_ENV
+		Name: cookieName(provider), Value: "", Path: callbackPath(provider), MaxAge: -1, HttpOnly: true, Secure: s.d.Secure, SameSite: http.SameSiteLaxMode,
+	})
 }
 
 // openState reads and verifies the cookie against the state parameter.

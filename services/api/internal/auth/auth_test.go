@@ -74,7 +74,7 @@ func newFakeOIDC(t *testing.T, clientID string) *fakeOIDC {
 		f.mu.Lock()
 		defer f.mu.Unlock()
 		if err := r.ParseForm(); err != nil {
-			w.WriteHeader(400)
+			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 		if f.tokenFail != 0 {
@@ -89,7 +89,7 @@ func newFakeOIDC(t *testing.T, clientID string) *fakeOIDC {
 		f.gotSecret = r.PostFormValue("client_secret")
 		if f.appleKey != nil {
 			if _, _, err := crypto.VerifyJWT(r.Context(), f.gotSecret, func(context.Context, string, string) (stdPublicKey, error) { return f.appleKey, nil }); err != nil {
-				w.WriteHeader(401)
+				w.WriteHeader(http.StatusUnauthorized)
 				_, _ = w.Write([]byte(`{"error":"invalid_client"}`))
 				return
 			}
@@ -97,12 +97,12 @@ func newFakeOIDC(t *testing.T, clientID string) *fakeOIDC {
 		code := r.PostFormValue("code")
 		claims, ok := f.codes[code]
 		if !ok || r.PostFormValue("grant_type") != "authorization_code" || r.PostFormValue("client_id") != f.clientID {
-			w.WriteHeader(400)
+			w.WriteHeader(http.StatusBadRequest)
 			_, _ = w.Write([]byte(`{"error":"invalid_grant"}`))
 			return
 		}
 		if want, ok := f.verifiers[code]; ok && r.PostFormValue("code_verifier") != want {
-			w.WriteHeader(400)
+			w.WriteHeader(http.StatusBadRequest)
 			_, _ = w.Write([]byte(`{"error":"invalid_grant"}`))
 			return
 		}

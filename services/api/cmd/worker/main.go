@@ -14,14 +14,23 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/riverqueue/river"
 
+	"github.com/mmtmn/docmatch/services/api/internal/account"
+	"github.com/mmtmn/docmatch/services/api/internal/account/accountpg"
 	"github.com/mmtmn/docmatch/services/api/internal/audit"
 	"github.com/mmtmn/docmatch/services/api/internal/config"
 	"github.com/mmtmn/docmatch/services/api/internal/credits"
+	"github.com/mmtmn/docmatch/services/api/internal/crypto"
 	"github.com/mmtmn/docmatch/services/api/internal/db"
 	"github.com/mmtmn/docmatch/services/api/internal/db/pgstore"
+	"github.com/mmtmn/docmatch/services/api/internal/email"
+	"github.com/mmtmn/docmatch/services/api/internal/email/emailpg"
 	"github.com/mmtmn/docmatch/services/api/internal/jobs"
 	"github.com/mmtmn/docmatch/services/api/internal/logx"
+	"github.com/mmtmn/docmatch/services/api/internal/session"
+	"github.com/mmtmn/docmatch/services/api/internal/session/sessionpg"
 	"github.com/mmtmn/docmatch/services/api/internal/version"
 )
 
@@ -73,7 +82,12 @@ func run() error {
 		Audit:    audit.New(pgstore.NewAuditStore(pool)),
 		Hostname: host,
 	}
-	client, err := jobs.NewClient(pool, deps, jobs.ClientOptions{Periodic: true, ID: host})
+	// E-mail outbox and account jobs (exports, LGPD erasure).
+	register, periodic, err := accountJobs(cfg, log, pool, deps.Audit)
+	if err != nil {
+		return err
+	}
+	client, err := jobs.NewClient(pool, deps, jobs.ClientOptions{Periodic: true, ID: host, Register: register, ExtraPeriodic: periodic})
 	if err != nil {
 		return err
 	}
@@ -96,4 +110,41 @@ func run() error {
 	}
 	log.Info("worker encerrado")
 	return nil
+}
+
+// accountJobs wires the e-mail deliverer and the account service for the
+// worker (see internal/email/emailpg and internal/account/accountpg).
+func accountJobs(cfg *config.Config, log *slog.Logger, pool *pgxpool.Pool, auditSvc account.Recorder) ([]func(*river.Workers), []*river.PeriodicJob, error) {
+	sender, err := email.NewSender(cfg)
+	if err != nil {
+		log.Warn("envio de e-mail desativado: as mensagens ficam no outbox", slog.String("reason", err.Error()))
+	}
+	deliverer := emailpg.NewDeliverer(pool, sender, log)
+	keys, err := crypto.NewKeyring(cfg.Auth.SessionSecret.Reveal())
+	if err != nil {
+		return nil, nil, err
+	}
+	inserter, err := emailpg.NewInserter(pool)
+	if err != nil {
+		return nil, nil, err
+	}
+	entitlements, err := account.LoadEntitlements(cfg.Billing.PricingFile)
+	if err != nil {
+		return nil, nil, err
+	}
+	support := ""
+	if cfg.Email.SecurityContact != nil {
+		support = cfg.Email.SecurityContact.Address
+	}
+	sessions := session.NewManager(sessionpg.New(pool), session.Config{Secure: !cfg.IsDev(), AllowedOrigins: cfg.AllowedOrigins()})
+	accountSvc, err := account.New(account.Deps{
+		Store: accountpg.New(pool, inserter), Sessions: sessions, Keys: keys, Entitlements: entitlements, Audit: auditSvc,
+		Enqueue: accountpg.NewEnqueuer(inserter), APIBaseURL: cfg.APIBaseURL, SupportContact: support, Logger: log,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	register := []func(*river.Workers){emailpg.AddWorkers(deliverer), accountpg.AddWorkers(accountSvc)}
+	periodic := append(emailpg.PeriodicJobs(), accountpg.PeriodicJobs()...)
+	return register, periodic, nil
 }

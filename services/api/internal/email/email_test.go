@@ -73,7 +73,7 @@ func TestResend(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		headers = r.Header.Clone()
 		if r.URL.Path != "/emails" || r.Method != http.MethodPost {
-			w.WriteHeader(404)
+			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 		body, _ := io.ReadAll(r.Body)

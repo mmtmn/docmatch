@@ -455,7 +455,7 @@ func TestEmailLogin(t *testing.T) {
 	// Magic link token for an existing user (no new org, e-mail verified).
 	rec = h.post(EmailStartPath, `{"email":"ana@example.com"}`)
 	cid2 := decode(t, rec)["challenge_id"].(string)
-	lu2, _ := url.Parse(strings.Fields(h.store.Sent[1].Text[strings.Index(h.store.Sent[1].Text, "https://"):])[0])
+	lu2, _ := url.Parse(linkOf(t, h.store.Sent[1].Text))
 	rec = h.post(EmailVerifyPath, `{"challenge_id":"`+cid2+`","code":"`+lu2.Query().Get("code")+`"}`)
 	if rec.Code != 200 || len(h.store.Orgs) != 1 {
 		t.Fatalf("link mágico: %d %s", rec.Code, rec.Body.String())
@@ -529,7 +529,7 @@ func TestEmailLogin(t *testing.T) {
 	tok5 := ""
 	for _, c := range []Challenge{ch5} {
 		_ = c
-		lu, _ := url.Parse(strings.Fields(h.store.Sent[len(h.store.Sent)-1].Text[strings.Index(h.store.Sent[len(h.store.Sent)-1].Text, "https://"):])[0])
+		lu, _ := url.Parse(linkOf(t, h.store.Sent[len(h.store.Sent)-1].Text))
 		tok5 = lu.Query().Get("code")
 	}
 	if rec := h.post(EmailVerifyPath, `{"challenge_id":"`+cid5+`","code":"`+tok5+`"}`); rec.Code != 500 {
@@ -545,7 +545,7 @@ func TestEmailLogin(t *testing.T) {
 	rec = h.post(EmailStartPath, `{"email":"bia@example.com"}`)
 	cid6 := decode(t, rec)["challenge_id"].(string)
 	id6 := mustDecode(t, cid6)
-	lu6, _ := url.Parse(strings.Fields(h.store.Sent[len(h.store.Sent)-1].Text[strings.Index(h.store.Sent[len(h.store.Sent)-1].Text, "https://"):])[0])
+	lu6, _ := url.Parse(linkOf(t, h.store.Sent[len(h.store.Sent)-1].Text))
 	c6 := h.store.Challenges[id6]
 	c6.ConsumedAt = &h.now
 	h.store.Challenges[id6] = c6
@@ -560,11 +560,21 @@ func TestEmailLogin(t *testing.T) {
 	h.now = h.now.Add(time.Minute)
 	rec = h.post(EmailStartPath, `{"email":"ana@example.com"}`)
 	cid7 := decode(t, rec)["challenge_id"].(string)
-	lu7, _ := url.Parse(strings.Fields(h.store.Sent[len(h.store.Sent)-1].Text[strings.Index(h.store.Sent[len(h.store.Sent)-1].Text, "https://"):])[0])
+	lu7, _ := url.Parse(linkOf(t, h.store.Sent[len(h.store.Sent)-1].Text))
 	rec = h.post(EmailVerifyPath, `{"challenge_id":"`+cid7+`","code":"`+lu7.Query().Get("code")+`"}`)
 	if rec.Code != 403 || decode(t, rec)["code"] != "account_deletion_pending" {
 		t.Fatalf("exclusão pendente: %d %s", rec.Code, rec.Body.String())
 	}
+}
+
+// linkOf extracts the first https link of an e-mail body.
+func linkOf(t *testing.T, text string) string {
+	t.Helper()
+	i := strings.Index(text, "https://")
+	if i < 0 {
+		t.Fatalf("link ausente: %q", text)
+	}
+	return strings.Fields(text[i:])[0]
 }
 
 func mustDecode(t *testing.T, cid string) uuid.UUID {
@@ -860,7 +870,7 @@ func TestLoginFailureModes(t *testing.T) {
 	h.auditRec.err = errors.New("auditoria fora")
 	rec := h.post(EmailStartPath, `{"email":"ana@example.com"}`)
 	cid := decode(t, rec)["challenge_id"].(string)
-	lu, _ := url.Parse(strings.Fields(h.store.Sent[0].Text[strings.Index(h.store.Sent[0].Text, "https://"):])[0])
+	lu, _ := url.Parse(linkOf(t, h.store.Sent[0].Text))
 	rec = h.post(EmailVerifyPath, `{"challenge_id":"`+cid+`","code":"`+lu.Query().Get("code")+`"}`)
 	if rec.Code != 500 {
 		t.Fatalf("auditoria fora: %d %s", rec.Code, rec.Body.String())

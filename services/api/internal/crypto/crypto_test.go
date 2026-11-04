@@ -43,7 +43,8 @@ func TestKeyring(t *testing.T) {
 	if len(k1.Key(PurposeSignedURL)) != 32 || len(k1.Key(PurposeEmailCode)) != 32 {
 		t.Fatal("subchaves de 32 bytes")
 	}
-	if &k1.Key(PurposeKEK)[0] != &k1.Key(PurposeKEK)[0] {
+	first, second := k1.Key(PurposeKEK), k1.Key(PurposeKEK)
+	if &first[0] != &second[0] {
 		t.Fatal("cache de subchaves")
 	}
 	master := testMaster()
@@ -193,7 +194,8 @@ func TestPassword(t *testing.T) {
 	if _, err := HashPasswordWith("x", Argon2Params{}); err == nil {
 		t.Fatal("parâmetros zerados")
 	}
-	if DummyHash() != DummyHash() || DummyHash() == "" {
+	d1, d2 := DummyHash(), DummyHash()
+	if d1 != d2 || d1 == "" {
 		t.Fatal("DummyHash estável")
 	}
 	if ok, _ := VerifyPassword(DummyHash(), "qualquer"); ok {
@@ -419,7 +421,7 @@ func TestParseECPrivateKey(t *testing.T) {
 	pkcs8, _ := x509.MarshalPKCS8PrivateKey(key)
 	pemText := string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: pkcs8}))
 	got, err := ParseECPrivateKey(pemText)
-	if err != nil || got.D.Cmp(key.D) != 0 {
+	if err != nil || !got.Equal(key) {
 		t.Fatalf("pkcs8: %v", err)
 	}
 	escaped := strings.ReplaceAll(pemText, "\n", `\n`)
@@ -445,10 +447,15 @@ func TestParseECPrivateKey(t *testing.T) {
 
 func jwksJSON(t *testing.T, rsaKey *rsa.PublicKey, ecPub *ecdsa.PublicKey, extra ...jwk) []byte {
 	t.Helper()
-	keys := []jwk{
-		{Kty: "RSA", Kid: "r1", N: base64.RawURLEncoding.EncodeToString(rsaKey.N.Bytes()), E: base64.RawURLEncoding.EncodeToString(big.NewInt(int64(rsaKey.E)).Bytes())},
-		{Kty: "EC", Kid: "e1", Crv: "P-256", X: base64.RawURLEncoding.EncodeToString(ecPub.X.Bytes()), Y: base64.RawURLEncoding.EncodeToString(ecPub.Y.Bytes())},
+	point, err := ecPub.Bytes() // 0x04 ‖ X ‖ Y
+	if err != nil {
+		t.Fatal(err)
 	}
+	keys := make([]jwk, 0, 2+len(extra))
+	keys = append(keys,
+		jwk{Kty: "RSA", Kid: "r1", N: base64.RawURLEncoding.EncodeToString(rsaKey.N.Bytes()), E: base64.RawURLEncoding.EncodeToString(big.NewInt(int64(rsaKey.E)).Bytes())},
+		jwk{Kty: "EC", Kid: "e1", Crv: "P-256", X: base64.RawURLEncoding.EncodeToString(point[1:33]), Y: base64.RawURLEncoding.EncodeToString(point[33:])},
+	)
 	keys = append(keys, extra...)
 	b, _ := json.Marshal(jwkSet{Keys: keys})
 	return b

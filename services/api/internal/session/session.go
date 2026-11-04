@@ -317,7 +317,7 @@ func (m *Manager) setCookies(w http.ResponseWriter, id uuid.UUID, access, refres
 }
 
 func (m *Manager) setCookie(w http.ResponseWriter, name, value, path string, maxAge time.Duration) {
-	c := &http.Cookie{
+	c := &http.Cookie{ //nolint:gosec // HttpOnly and SameSite are set; Secure follows DM_ENV (off only in dev over http)
 		Name: name, Value: value, Path: path,
 		HttpOnly: true, Secure: m.cfg.Secure, SameSite: http.SameSiteLaxMode,
 	}

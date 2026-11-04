@@ -47,7 +47,7 @@ const (
 	AppleCallbackPath  = "/v1/auth/apple/callback"
 	EmailStartPath     = "/v1/auth/email/start"
 	EmailVerifyPath    = "/v1/auth/email/verify"
-	PasswordLoginPath  = "/v1/auth/password/login"
+	PasswordLoginPath  = "/v1/auth/password/login" //nolint:gosec // route path, not a credential
 	RefreshPath        = "/v1/auth/refresh"
 	LogoutPath         = "/v1/auth/logout"
 )

@@ -36,9 +36,10 @@ COVER_DIR := coverage
 # Pisos de cobertura (make test): 85% em internal/ e 95% nos pacotes centrais.
 # Pacotes que só existem para falar com o banco (internal/db, pgstore, sqlc) e
 # o harness de testes são medidos no ci-full, com os testes de integração.
-UNIT_EXCLUDES := -exclude internal/db -exclude internal/db/pgstore -exclude internal/db/sqlc -exclude internal/testdb
+UNIT_EXCLUDES := -exclude internal/db -exclude internal/db/pgstore -exclude internal/db/sqlc -exclude internal/testdb \
+                 -exclude internal/account/accountpg -exclude internal/email/emailpg -exclude internal/session/sessionpg
 FULL_EXCLUDES := -exclude internal/db/sqlc -exclude internal/testdb
-FLOORS        := -floor 85 -pkg internal/credits=95 -pkg internal/config=95
+FLOORS        := -floor 85 -pkg internal/credits=95 -pkg internal/config=95 -pkg internal/auth=90 -pkg internal/session=90
 
 .PHONY: help setup tools generate sync sync-check sqlc-check fmt lint vet test test-integration \
         vuln ci ci-full build dev migrate run-api run-worker clean
