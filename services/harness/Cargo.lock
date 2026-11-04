@@ -819,6 +819,7 @@ dependencies = [
  "chrono",
  "clap",
  "dm-core",
+ "dm-guard",
  "dm-ingest",
  "dm-match",
  "dm-normalize",
@@ -874,8 +875,10 @@ dependencies = [
 name = "dm-graph"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "dm-core",
  "duckdb",
+ "indexmap",
  "serde",
  "serde_json",
  "thiserror",
@@ -886,6 +889,7 @@ name = "dm-guard"
 version = "0.1.0"
 dependencies = [
  "dm-core",
+ "indexmap",
  "regex",
  "serde",
  "serde_json",
@@ -962,7 +966,9 @@ name = "dm-media"
 version = "0.1.0"
 dependencies = [
  "dm-core",
+ "indexmap",
  "serde",
+ "serde_json",
  "thiserror",
 ]
 
@@ -1024,6 +1030,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]

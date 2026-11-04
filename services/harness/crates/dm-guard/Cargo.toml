@@ -18,3 +18,4 @@ serde_json.workspace = true
 regex.workspace = true
 unicode-normalization.workspace = true
 thiserror.workspace = true
+indexmap.workspace = true
