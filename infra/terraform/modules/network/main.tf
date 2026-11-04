@@ -103,9 +103,13 @@ resource "aws_route_table_association" "sandbox" {
 }
 
 # ------------------------------------------------------------------------- S3 gateway endpoint
-# Free. Both route tables use it, so the instance reaches S3 without leaving the AWS network and
-# the sandbox reaches S3 at all. The policy only admits requests signed by this account against
-# project buckets: anonymous or foreign credentials cannot push data out through the endpoint.
+# Free. The isolated route table always uses it (it is the sandbox's only way to S3). The policy
+# only admits requests signed by this account against project buckets: anonymous or foreign
+# credentials cannot push data out through the endpoint. That same policy is why the public
+# route table does not use it by default: once associated, every S3-bound packet from the
+# instance goes through the endpoint, and third-party artifacts served straight from S3 in the
+# region (apt mirrors, release downloads) would be denied with a bare 403 during the Packer
+# build and at runtime. In-region EC2 to S3 traffic is free either way.
 data "aws_iam_policy_document" "s3_endpoint" {
   statement {
     sid    = "ProjectBucketsFromThisAccountOnly"
@@ -131,7 +135,7 @@ resource "aws_vpc_endpoint" "s3" {
   vpc_id            = aws_vpc.this.id
   service_name      = "com.amazonaws.${data.aws_region.current.region}.s3"
   vpc_endpoint_type = "Gateway"
-  route_table_ids   = [aws_route_table.public.id, aws_route_table.sandbox.id]
+  route_table_ids   = concat([aws_route_table.sandbox.id], var.s3_endpoint_on_app_route_table ? [aws_route_table.public.id] : [])
   policy            = data.aws_iam_policy_document.s3_endpoint.json
 
   tags = merge(var.tags, { Name = "${var.name}-s3-endpoint" })

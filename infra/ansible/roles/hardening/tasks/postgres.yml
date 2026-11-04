@@ -77,23 +77,8 @@
     group: root
     mode: "0750"
 
-- name: Limit PostgreSQL memory and order it after the data volume
-  ansible.builtin.template:
-    src: postgresql-override.conf.j2
-    dest: "/etc/systemd/system/postgresql@.service.d/override.conf"
-    owner: root
-    group: root
-    mode: "0644"
-  notify: Reload systemd
-
-- name: Create the PostgreSQL drop-in directory first
-  ansible.builtin.file:
-    path: "/etc/systemd/system/postgresql@.service.d"
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
-
+# Build-time validation of the configuration runs before the unit override below is installed:
+# the override requires the data volume mount, which the build instance does not have.
 - name: Start the cluster once so the configuration is validated during the build
   ansible.builtin.systemd_service:
     name: "postgresql@{{ hardening_pg_version }}-{{ hardening_pg_cluster }}"
@@ -119,3 +104,20 @@
   ansible.builtin.systemd_service:
     name: postgresql
     enabled: false
+
+- name: Create the PostgreSQL drop-in directory
+  ansible.builtin.file:
+    path: "/etc/systemd/system/postgresql@.service.d"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Limit PostgreSQL memory and bind it to the data volume mount
+  ansible.builtin.template:
+    src: postgresql-override.conf.j2
+    dest: "/etc/systemd/system/postgresql@.service.d/override.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd

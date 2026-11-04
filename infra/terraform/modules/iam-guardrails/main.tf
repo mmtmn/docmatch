@@ -117,28 +117,20 @@ data "aws_iam_policy_document" "deny_s3_public" {
     }
   }
 
-  # Removing a public access block is denied outright; Terraform only ever creates or updates
-  # blocks with every flag set to true.
+  # Deleting a public access block (bucket or account level) is denied outright. Writing one is
+  # allowed: Terraform creates the bucket blocks with every flag true, and the owner may still
+  # turn on the account-level block (there is no condition key for the flag values, so the
+  # alternative would be to deny enabling it as well). Object ownership is not guarded here:
+  # with BlockPublicAcls and IgnorePublicAcls in force, ACLs cannot grant public access whatever
+  # the ownership setting, and a tag-conditioned deny would break every bucket (re)creation.
   statement {
     sid    = "DenyRemovingPublicAccessBlocks"
     effect = "Deny"
     actions = [
       "s3:DeleteBucketPublicAccessBlock",
-      "s3:PutAccountPublicAccessBlock",
+      "s3:DeleteAccountPublicAccessBlock",
     ]
     resources = ["*"]
-  }
-
-  statement {
-    sid       = "DenyObjectOwnershipChanges"
-    effect    = "Deny"
-    actions   = ["s3:PutBucketOwnershipControls"]
-    resources = ["*"]
-    condition {
-      test     = "StringNotEquals"
-      variable = "aws:PrincipalTag/docmatch-terraform"
-      values   = ["true"]
-    }
   }
 }
 

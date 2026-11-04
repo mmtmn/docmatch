@@ -83,8 +83,3 @@
   ansible.builtin.systemd_service:
     name: clamav-freshclam
     state: restarted
-
-- name: Reload nftables
-  ansible.builtin.command:
-    cmd: nft -c -f /etc/nftables.conf
-  changed_when: false

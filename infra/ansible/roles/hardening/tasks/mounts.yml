@@ -39,10 +39,17 @@
     masked: true
   failed_when: false
 
-- name: Set a hardened umask for the root filesystem remount options
+# Read the build instance's fstab (a lookup would read the controller's) and only touch the
+# root line when it does not carry nodev yet; the tmpfs lines above always do.
+- name: Read the target fstab
+  ansible.builtin.slurp:
+    src: /etc/fstab
+  register: hardening_fstab
+
+- name: Add nodev to the root filesystem options
   ansible.builtin.lineinfile:
     path: /etc/fstab
     regexp: '^(\S+\s+/\s+\S+\s+)(\S+)(\s+.*)$'
     line: '\1\2,nodev\3'
     backrefs: true
-  when: "'nodev' not in lookup('ansible.builtin.file', '/etc/fstab')"
+  when: not ((hardening_fstab.content | b64decode) is regex('(?m)^\S+\s+/\s+\S+\s+\S*\bnodev\b'))

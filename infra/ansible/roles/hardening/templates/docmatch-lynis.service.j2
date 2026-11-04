@@ -7,4 +7,5 @@ Type=oneshot
 Nice=19
 IOSchedulingClass=idle
 Environment=LYNIS_MIN_SCORE={{ hardening_lynis_min_score | default(90) }}
-ExecStart=/bin/sh -c '/usr/local/sbin/lynis-gate 2>&1 | tee /run/docmatch-lynis.out >/dev/null; rc=$?; if [ "$rc" -ne 0 ]; then /usr/local/sbin/docmatch-alert --subject "Lynis abaixo do minimo" --stdin < /run/docmatch-lynis.out; fi; rm -f /run/docmatch-lynis.out; exit 0'
+# The gate's output goes straight to a file (no pipe: $? must be the gate's status, not tee's).
+ExecStart=/bin/sh -c '/usr/local/sbin/lynis-gate >/run/docmatch-lynis.out 2>&1; rc=$?; if [ "$rc" -ne 0 ]; then /usr/local/sbin/docmatch-alert --subject "Lynis abaixo do minimo" --stdin </run/docmatch-lynis.out; fi; rm -f /run/docmatch-lynis.out; exit 0'

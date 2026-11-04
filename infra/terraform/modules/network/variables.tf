@@ -54,6 +54,12 @@ variable "s3_bucket_name_prefix" {
   type        = string
 }
 
+variable "s3_endpoint_on_app_route_table" {
+  description = "Also route the application subnet's S3 traffic through the gateway endpoint. The endpoint policy admits only the project's buckets, so third-party artifacts served straight from S3 in the region would be denied; keep it off until a Packer build and a boot have been verified with it on."
+  type        = bool
+  default     = false
+}
+
 variable "enable_flow_logs" {
   description = "Create VPC flow logs (REJECT traffic only) delivered to the logs bucket. Off by default to stay within the bill target."
   type        = bool
