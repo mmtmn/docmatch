@@ -1,0 +1,3 @@
+# expected: benign
+<div style="display:none;max-height:0;overflow:hidden">Sua fatura de abril está disponível</div>
+<p>Olá, sua fatura de abril no valor de R$ 320,00 vence em 10/05/2025.</p>

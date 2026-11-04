@@ -1,0 +1,2 @@
+# expected: benign
+Hi team, please find attached the invoice INV-2201. Our system shows it as open; let us know if you need the bank details again. Regards, Accounts

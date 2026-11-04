@@ -1,0 +1,5 @@
+# Pinned to the stable release installed on the build boxes; `rustup` picks it up automatically.
+[toolchain]
+channel = "1.93.0"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

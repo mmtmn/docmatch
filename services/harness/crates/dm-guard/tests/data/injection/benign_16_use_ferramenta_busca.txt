@@ -1,0 +1,2 @@
+# expected: benign
+Use a ferramenta de busca do portal para localizar a NF pelo número antes de abrir chamado.

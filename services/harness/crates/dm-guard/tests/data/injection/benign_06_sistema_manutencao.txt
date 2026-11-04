@@ -1,0 +1,2 @@
+# expected: benign
+Nota: o sistema de pagamentos ficará em manutenção das 22h às 6h. Boletos vencidos nesse período podem ser pagos no dia útil seguinte sem multa.

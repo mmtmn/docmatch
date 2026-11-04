@@ -1,0 +1,2 @@
+# expected: benign
+Relatório gerado pela consulta SELECT fornecedor, SUM(valor) FROM titulos GROUP BY 1; os totais batem com o razão.

@@ -1,0 +1,4 @@
+# expected: benign
+[12/03 09:15] Compras - Rafael: bom dia, a NF 088231 já foi paga?
+[12/03 09:20] Financeiro - Ana: foi paga ontem, valor 18.450,00, boleto do banco
+[12/03 09:21] Compras - Rafael: ok, obrigado! pode ignorar a cobrança que chegou hoje

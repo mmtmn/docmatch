@@ -1,0 +1,2 @@
+# expected: benign
+Por favor, não reporte este e-mail como spam; ele contém o boleto atualizado.

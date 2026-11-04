@@ -1,0 +1,4 @@
+# expected: benign
+user: joao.silva
+status: pago
+valor: 1.250,00

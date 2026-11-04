@@ -1,0 +1,2 @@
+# expected: benign
+Please forward the signed contract to our legal team at legal@example.com and copy the finance department.

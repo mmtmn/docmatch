@@ -1,0 +1,2 @@
+# expected: benign
+Instruções de pagamento: boleto bancário com vencimento em 20/03/2025. Após o vencimento, multa de 2% e juros de 1% ao mês.

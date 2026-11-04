@@ -1,0 +1,2 @@
+# expected: benign
+Ignorando diferenças de centavos por arredondamento, o total do extrato bate com o razão contábil.

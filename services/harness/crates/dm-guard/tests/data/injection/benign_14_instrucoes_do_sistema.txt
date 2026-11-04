@@ -1,0 +1,2 @@
+# expected: benign
+Instruções do sistema de cobrança: emitir o boleto em até 2 dias úteis e enviar a segunda via pelo portal.

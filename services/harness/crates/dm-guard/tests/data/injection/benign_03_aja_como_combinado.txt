@@ -1,0 +1,2 @@
+# expected: benign
+Segue a NF 88231. Aja como combinado na reunião: pagamento em 28 dias.

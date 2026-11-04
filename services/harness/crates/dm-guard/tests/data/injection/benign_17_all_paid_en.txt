@@ -1,0 +1,2 @@
+# expected: benign
+All invoices in this batch were paid on March 5; please confirm receipt and let us know if anything is missing.

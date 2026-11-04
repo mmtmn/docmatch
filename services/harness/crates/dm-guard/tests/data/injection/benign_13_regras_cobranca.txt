@@ -1,0 +1,2 @@
+# expected: benign
+Regras de cobrança: após o vencimento, aplicar multa de 2% e juros de 0,033% ao dia. Desconsiderar centavos no arredondamento.

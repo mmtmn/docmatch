@@ -1,0 +1,2 @@
+# expected: benign
+O boleto enviado ontem saiu com valor errado. Ignore o boleto anterior e use o novo, em anexo.

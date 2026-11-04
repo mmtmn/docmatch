@@ -1,0 +1,155 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/dm-core",
+  "crates/dm-validators",
+  "crates/dm-normalize",
+  "crates/dm-ingest",
+  "crates/dm-match",
+  "crates/dm-graph",
+  "crates/dm-discover",
+  "crates/dm-guard",
+  "crates/dm-llm",
+  "crates/dm-sandbox",
+  "crates/dm-report",
+  "crates/dm-server",
+  "crates/dm-eval",
+  "crates/dm-media",
+  "crates/dm-tools",
+  "crates/dm-planner",
+  "crates/dm",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.93"
+license = "AGPL-3.0-only"
+publish = false
+repository = "https://github.com/mmtmn/docmatch"
+
+[workspace.dependencies]
+# internal crates
+dm-core = { path = "crates/dm-core" }
+dm-validators = { path = "crates/dm-validators" }
+dm-normalize = { path = "crates/dm-normalize" }
+dm-ingest = { path = "crates/dm-ingest" }
+dm-match = { path = "crates/dm-match" }
+dm-graph = { path = "crates/dm-graph" }
+dm-discover = { path = "crates/dm-discover" }
+dm-guard = { path = "crates/dm-guard" }
+dm-llm = { path = "crates/dm-llm" }
+dm-sandbox = { path = "crates/dm-sandbox" }
+dm-report = { path = "crates/dm-report" }
+dm-server = { path = "crates/dm-server" }
+dm-eval = { path = "crates/dm-eval" }
+dm-media = { path = "crates/dm-media" }
+dm-tools = { path = "crates/dm-tools" }
+dm-planner = { path = "crates/dm-planner" }
+
+# serialization
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+serde-saphyr = "2.1.0"
+schemars = { version = "1.2.3", features = ["chrono04", "rust_decimal1", "indexmap2"] }
+indexmap = { version = "2.14.2", features = ["serde"] }
+
+# numbers, dates
+rust_decimal = { version = "1.43.0", default-features = false, features = ["std", "serde"] }
+chrono = { version = "0.4.45", default-features = false, features = ["std", "clock", "serde"] }
+
+# errors, logging
+thiserror = "2.0.21"
+anyhow = "1.0.104"
+tracing = "0.1.44"
+
+# text
+unicode-normalization = "0.1.26"
+regex = "1.13.1"
+strsim = "0.11.1"
+encoding_rs = "0.8.44"
+chardetng = "1.0.0"
+
+# formats
+csv = "1.4.0"
+calamine = { version = "0.38.0", features = ["dates"] }
+mailparse = "0.18.0"
+quick-xml = "0.42.0"
+rust_xlsxwriter = "0.102.0"
+
+# algorithms, hashing
+pathfinding = "4.16.0"
+sha2 = "0.11.1"
+hex = "0.4.3"
+rand = "0.10.3"
+
+# network, async
+# TLS é sempre rustls com o provedor `ring` (puro Rust): o padrão do reqwest puxaria
+# aws-lc-sys (cmake + C), que custa minutos no build frio do CI. O provedor é instalado em
+# dm-llm antes de qualquer cliente.
+reqwest = { version = "0.13.5", default-features = false, features = ["json", "charset", "http2", "system-proxy", "rustls-no-provider"] }
+rustls = { version = "0.23.46", default-features = false, features = ["ring", "logging", "std", "tls12"] }
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "time", "sync", "fs"] }
+async-trait = "0.1.92"
+
+# database
+duckdb = { version = "1.20000.1", features = ["bundled"] }
+
+# cli
+clap = { version = "4.6.7", features = ["derive"] }
+
+# test only
+proptest = "1.12.0"
+wiremock = "0.6.5"
+tempfile = "3.27.0"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[workspace.lints.clippy]
+# pedantic where sane: every crate opts in and the allow-list below removes the noisy ones
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+too_many_lines = "allow"
+doc_markdown = "allow"
+similar_names = "allow"
+struct_excessive_bools = "allow"
+items_after_statements = "allow"
+return_self_not_must_use = "allow"
+implicit_hasher = "allow"
+unnecessary_wraps = "allow"
+needless_pass_by_value = "allow"
+cast_possible_truncation = "allow"
+cast_possible_wrap = "allow"
+cast_sign_loss = "allow"
+cast_precision_loss = "allow"
+match_same_arms = "allow"
+format_push_string = "allow"
+semicolon_if_nothing_returned = "allow"
+# correctness-adjacent lints we want louder than default
+dbg_macro = "deny"
+todo = "deny"
+
+# Debug info is the biggest consumer of disk space with a shared target dir (rule 9):
+# line tables are enough to read a backtrace, and dependencies get none.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+opt-level = 1
+
+# The DuckDB amalgamation at -O0 is painfully slow at runtime and gigantic on disk.
+[profile.dev.package.libduckdb-sys]
+opt-level = 2
+debug = false
+
+[profile.release]
+debug = false
+strip = "debuginfo"
+lto = "thin"
+codegen-units = 16
