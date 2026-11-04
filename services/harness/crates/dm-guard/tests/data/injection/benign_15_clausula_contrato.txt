@@ -1,0 +1,2 @@
+# expected: benign
+Cláusula 5 — O CONTRATADO deverá atuar como representante da CONTRATANTE perante o banco, sem restrições de horário.

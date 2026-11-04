@@ -1,0 +1,2 @@
+# expected: benign
+Acesse o portal do fornecedor em https://example.com/portal para baixar a segunda via do boleto.

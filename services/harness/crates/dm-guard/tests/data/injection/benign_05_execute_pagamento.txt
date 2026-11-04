@@ -1,0 +1,2 @@
+# expected: benign
+Execute o pagamento conforme combinado com o financeiro; o comprovante deve ser anexado ao pedido.

@@ -1,0 +1,3 @@
+# expected: benign
+<infCpl>Pedido 2201. Vencimento 10/05/2025.</infCpl>
+<SignatureValue>Z2VyYWRvIHBlbG8gZW1pc3NvciBkYSBub3RhIGZpc2NhbCBlbGV0cm9uaWNhIGRvIGZvcm5lY2Vkb3I=</SignatureValue>

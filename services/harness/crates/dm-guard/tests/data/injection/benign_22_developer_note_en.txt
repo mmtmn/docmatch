@@ -1,0 +1,2 @@
+# expected: benign
+Developer note: the CSV export uses semicolons and dates are dd/mm/yyyy. The login screen's system prompt was translated to Portuguese last week.

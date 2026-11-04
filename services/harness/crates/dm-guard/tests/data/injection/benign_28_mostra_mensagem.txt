@@ -1,0 +1,2 @@
+# expected: benign
+O portal mostra a mensagem do sistema "boleto não encontrado" quando o número é digitado com zeros à esquerda.

@@ -1,0 +1,2 @@
+# expected: benign
+Posteriormente, os dados do pagamento serão enviados para o e-mail cadastrado; o relatório segue para financeiro@example.com no fechamento.

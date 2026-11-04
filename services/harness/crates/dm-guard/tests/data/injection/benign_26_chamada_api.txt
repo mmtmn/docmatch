@@ -1,0 +1,2 @@
+# expected: benign
+A chamada à API de consulta retornou erro 500 ontem; o time de TI vai rodar o processo novamente hoje à noite.
