@@ -52,9 +52,26 @@
     group: systemd-journal
     mode: "2755"
 
-- name: Restrict access to log files
+# /var/log itself stays traversable: postgres, caddy, clamav, tinyproxy, chrony, pgbackrest and
+# docmatch each log to their own directory below it and 0750 root:syslog would cut all of them
+# off (the build's PostgreSQL start is the first casualty). Ubuntu ships it 0775 root:syslog;
+# with rsyslog removed nothing needs the group write bit. Sensitive entries are restricted one by
+# one instead: /var/log/audit 0700 (auditd.yml), /var/log/journal 2755 root:systemd-journal
+# (above), /var/log/docmatch 0750 (users.yml) and the sudo log below.
+- name: Keep /var/log traversable by every service that logs below it
   ansible.builtin.file:
     path: /var/log
+    state: directory
     owner: root
     group: syslog
-    mode: "0750"
+    mode: "0755"
+
+- name: Restrict the sudo log to root (created here so the mode exists before the first sudo)
+  ansible.builtin.file:
+    path: /var/log/sudo.log
+    state: touch
+    owner: root
+    group: root
+    mode: "0600"
+    modification_time: preserve
+    access_time: preserve
