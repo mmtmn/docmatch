@@ -18,11 +18,12 @@
     cmd: update-grub
   changed_when: true
 
+# Fails the build on any rule auditctl rejects (a partial load used to be silent); verify.yml
+# checks afterwards that every rule is in the kernel and the configuration is immutable.
 - name: Reload audit rules
   ansible.builtin.command:
     cmd: augenrules --load
   changed_when: true
-  failed_when: false
 
 - name: Restart auditd
   ansible.builtin.systemd_service:

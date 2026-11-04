@@ -40,8 +40,11 @@
 -w /var/log/wtmp -p wa -k session
 -w /var/log/btmp -p wa -k session
 
-## Permission and ownership changes (aarch64 has only the *at variants of these syscalls)
--a always,exit -F arch=b64 -S fchmod,fchmodat,fchmodat2 -F auid>=1000 -F auid!=unset -k perm_mod
+## Permission and ownership changes (aarch64 has only the *at variants of these syscalls).
+## fchmodat2 exists in the kernel since 6.6 but not in the syscall table of Ubuntu 24.04's
+## auditd 3.1.2 (ausyscall aarch64 fchmodat2: unknown); auditctl -R stops at the first unknown
+## name and nothing after it would load, -e 2 included, so it is left out on purpose.
+-a always,exit -F arch=b64 -S fchmod,fchmodat -F auid>=1000 -F auid!=unset -k perm_mod
 -a always,exit -F arch=b64 -S fchown,fchownat -F auid>=1000 -F auid!=unset -k perm_mod
 -a always,exit -F arch=b64 -S setxattr,lsetxattr,fsetxattr,removexattr,lremovexattr,fremovexattr -F auid>=1000 -F auid!=unset -k perm_mod
 

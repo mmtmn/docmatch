@@ -1,13 +1,17 @@
 ---
 # Separate tmpfs for /tmp and /var/tmp, hardened /dev/shm and a nodev,nosuid,noexec bind of
-# /var/log. Applied late in the build so package installers still get an executable /tmp.
+# /var/log. Applied late in the build so package installers still get an executable /tmp; /tmp
+# and /var/tmp are mounted right away so the rest of the build (and verify.yml) sees the runtime
+# layout. The fstab lines are enough for boot: systemd-fstab-generator turns them into tmp.mount
+# and var-tmp.mount, which outrank the stock unit. They must never be masked: a mask in
+# /etc/systemd/system also masks the generated unit and /tmp silently stays on the root fs.
 - name: Mount /tmp as tmpfs
   ansible.posix.mount:
     path: /tmp
     src: tmpfs
     fstype: tmpfs
     opts: defaults,rw,nodev,nosuid,noexec,relatime,size=512M,mode=1777
-    state: present
+    state: mounted
 
 - name: Mount /var/tmp as tmpfs
   ansible.posix.mount:
@@ -15,7 +19,7 @@
     src: tmpfs
     fstype: tmpfs
     opts: defaults,rw,nodev,nosuid,noexec,relatime,size=256M,mode=1777
-    state: present
+    state: mounted
 
 - name: Harden /dev/shm
   ansible.posix.mount:
@@ -33,11 +37,15 @@
     opts: bind,nodev,nosuid,noexec
     state: present
 
-- name: Keep the systemd tmp.mount unit out of the way (fstab wins)
+- name: Make sure no tmpfs unit is masked (a mask would also hide the fstab-generated unit)
   ansible.builtin.systemd_service:
-    name: tmp.mount
-    masked: true
-  failed_when: false
+    name: "{{ item }}"
+    masked: false
+  loop: [tmp.mount, var-tmp.mount]
+
+- name: Reload systemd so the fstab generator renders the mount units
+  ansible.builtin.systemd_service:
+    daemon_reload: true
 
 # Read the build instance's fstab (a lookup would read the controller's) and only touch the
 # root line when it does not carry nodev yet; the tmpfs lines above always do.
