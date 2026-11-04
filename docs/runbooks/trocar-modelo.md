@@ -77,7 +77,7 @@ ambiente no SSM (imediato, para incidente ou canário).
    `model_canary`, acompanhando as mesmas métricas no painel admin.
 
    ```bash
-   ssm_run "docmatch-api flags set model_canary '{\"role\":\"adjudicator\",\"model\":\"<id novo>\",\"percent\":10}' --reason 'canário PR #NNN'"
+   ssm_run "docmatch-api flags set model_canary --role adjudicator --model '<id novo>' --percent 10 --reason 'canário PR #NNN'"
    ```
 
 6. Mescle, implante ([implantar.md](implantar.md)), remova a flag de canário e acompanhe por

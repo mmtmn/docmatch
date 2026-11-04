@@ -23,9 +23,9 @@ de outra família e devolve um relatório em pt-BR onde cada linha cita a prova.
   │ navegador    │  │ Android/iOS  │  │ SDKs / chaves  │  │ Stripe · Google · │
   │ (apps/web)   │  │ (fase 7)     │  │ de API (fase 6)│  │ Apple (webhooks)  │
   └──────┬───────┘  └──────┬───────┘  └──────┬─────────┘  └─────────┬─────────┘
-         │ HTTPS           │ HTTPS           │ HTTPS               │ HTTPS assinado
-═════════╪═════════════════╪═════════════════╪═════════════════════╪═══════ F1 · borda
-  ┌──────┴─────────────────┴─────────────────┴─────────────────────┴─────────┐
+         │ HTTPS           │ HTTPS           │ HTTPS                │ HTTPS assinado
+═════════╪═════════════════╪═════════════════╪══════════════════════╪══════ F1 · borda
+  ┌──────┴─────────────────┴─────────────────┴──────────────────────┴─────────┐
   │ CloudFront: TLS, cache do site, cabeçalho secreto para a origem, logs     │
   │   /       → bucket do site (Astro estático + blog)            [OAC]       │
   │   /api/*  → origem EC2 (só pela lista de prefixos do CloudFront)          │
@@ -167,8 +167,8 @@ cmd/worker                       harness (Rust)                        OpenRoute
 - O worker é o dono do dinheiro: o harness só emite eventos de custo. Antes de ultrapassar o hold,
   o worker pausa, o cliente recebe "esta execução vai passar do orçamento; continuar?" e nada é
   gasto até a resposta.
-- O harness roda como usuário de sistema próprio, sem acesso ao S3 nem à rede: recebe os extratos
-  em um diretório de execução efêmero e chama modelos só pelo proxy de saída.
+- O harness roda como usuário de sistema próprio, sem acesso ao S3 e sem rede além do proxy de
+  saída: recebe os extratos em um diretório de execução efêmero e só fala com modelos.
 - O orçamento de tokens de modelo por execução entra na `RunRequest`; o harness recusa qualquer
   chamada que o ultrapasse.
 
@@ -203,7 +203,7 @@ cmd/worker                       harness (Rust)                        OpenRoute
 | F1→F2 origem | CloudFront → EC2 | Apenas `/api/*` | Grupo de segurança aceita 443 só da lista de prefixos gerenciada do CloudFront; Caddy exige `DM_ORIGIN_SECRET`; sem o cabeçalho, 403 antes de tocar a aplicação. IP do cliente vem de `CloudFront-Viewer-Address` e só é confiado quando o segredo confere. |
 | F2 instância | Caddy → API | HTTP em loopback | GCRA em quatro camadas (nftables por conexão, Caddy por IP, CrowdSec por comportamento, aplicação por tenant e por rota). Corpo JSON ≤ 256 KB, cabeçalhos ≤ 16 KB, timeouts de `limits.yaml`. |
 | F2 banco | API/worker → PostgreSQL | SQL via pgx + sqlc | Papel da aplicação sem `BYPASSRLS`; `SET LOCAL app.tenant_id` por transação; RLS em toda tabela com dados de cliente; papel de migração separado; ledger `INSERT`-only por trigger; auditoria com hash encadeado. |
-| F2 harness | worker → harness | gRPC em socket Unix | Usuário `docmatch-harness`, `systemd` com `ProtectSystem=strict`, `PrivateNetwork=no` apenas para o proxy, `MemoryMax`, `TasksMax`, diretório de execução efêmero. Recebe extratos, nunca originais. |
+| F2 harness | worker → harness | gRPC em socket Unix | Usuário `docmatch-harness`, `systemd` com `ProtectSystem=strict`, `IPAddressDeny=any` mais `IPAddressAllow` só do proxy de saída, `MemoryMax`, `TasksMax`, diretório de execução efêmero. Recebe extratos, nunca originais. |
 | F3 sandbox | worker → Lambda | Objetos do S3 por chave | Sub-rede sem rota para a internet, só endpoint de gateway do S3. Papel IAM por função, restrito ao prefixo do tenant. Tempo e memória limitados. Único lugar onde bytes não confiáveis são abertos ([ADR-0005](decisoes/ADR-0005-sandbox-lambda.md)). |
 | F4 terceiros | instância → OpenRouter, Stripe, Resend, Google, Apple, R2 | HTTPS | nftables bloqueia toda saída exceto o proxy; o proxy só resolve a lista de permissões. Prompts são dados (spotlighting); respostas são validadas como saída estruturada; nenhuma resposta de modelo vira comando. |
 | F5 modelo | harness → modelo | Texto extraído e regras do usuário | Guarda de entrada classifica instruções embutidas e as reporta como achado; o modelo não tem ferramentas além de responder JSON; orçamento por execução. |

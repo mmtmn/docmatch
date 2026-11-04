@@ -80,10 +80,9 @@ ssm_run "pgbackrest --stanza=docmatch check"
 5. Reconcilie a fila e as execuções que estavam em andamento no instante alvo.
 
    ```bash
-   ssm_run "sudo -u postgres psql -d docmatch -Atc \"update river_job set state='retryable', attempted_at=null where state='running'\""
    ssm_run "docmatch-api runs reconcile --after '$TARGET'"
-   # marca como failed (com hold liberado) toda execução que ficou em running sem worker, e lista
-   # para o operador as que precisam de aviso ao cliente
+   # devolve à fila os trabalhos que ficaram em running sem worker, marca como failed (com hold
+   # liberado) as execuções cujo trabalho não existe mais, e lista as que precisam de aviso ao cliente
    ```
 
 6. Verifique a cadeia de auditoria e o ledger.
