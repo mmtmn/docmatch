@@ -470,3 +470,38 @@ func TestKnownVarsMatchEnvExample(t *testing.T) {
 		}
 	}
 }
+
+func TestKillFlagsAndMaintenance(t *testing.T) {
+	t.Parallel()
+	env := validEnv()
+	env[VarKillFlags] = " spending, signups,,spending "
+	env[VarMaintenance] = "1"
+	cfg := mustLoad(t, env)
+	if got, want := strings.Join(cfg.KillFlags, ","), "spending,signups"; got != want {
+		t.Fatalf("KillFlags = %q, quer %q", got, want)
+	}
+	if !cfg.Maintenance {
+		t.Fatal("Maintenance deveria ser true")
+	}
+
+	env = validEnv()
+	cfg = mustLoad(t, env)
+	if cfg.KillFlags != nil || cfg.Maintenance {
+		t.Fatalf("padrões: KillFlags=%v Maintenance=%v", cfg.KillFlags, cfg.Maintenance)
+	}
+
+	for _, bad := range []map[string]string{
+		{VarKillFlags: "Spending"},
+		{VarKillFlags: "rm -rf"},
+		{VarMaintenance: "talvez"},
+	} {
+		env = validEnv()
+		for k, v := range bad {
+			env[k] = v
+		}
+		_, err := LoadFrom(lookupFrom(env))
+		if err == nil {
+			t.Fatalf("%v deveria ser rejeitado", bad)
+		}
+	}
+}

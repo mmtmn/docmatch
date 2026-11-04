@@ -44,6 +44,8 @@ const (
 	VarAdminListen   = "DM_ADMIN_LISTEN"
 	VarOriginSecret  = "DM_ORIGIN_SECRET"
 	VarVantaraPath   = "DM_VANTARA_PATH"
+	VarKillFlags     = "DM_KILL_FLAGS"
+	VarMaintenance   = "DM_MAINTENANCE"
 
 	VarDatabaseURL       = "DATABASE_URL"
 	VarDBAppRole         = "DM_DB_APP_ROLE"
@@ -116,6 +118,11 @@ type Config struct {
 	AdminListen   string
 	OriginSecret  Secret
 	VantaraPath   string
+	// KillFlags are feature flags forced off from the environment (layer 2 of
+	// the kill switches); they win over anything stored in the database.
+	KillFlags []string
+	// Maintenance makes the API answer 503 to everything except health and version.
+	Maintenance bool
 
 	Database Database
 	Storage  Storage
@@ -220,6 +227,8 @@ func LoadFrom(lookup Lookup) (*Config, error) {
 		r.problem(VarOriginSecret, "não pode manter o valor de exemplo em produção")
 	}
 	cfg.VantaraPath = r.optional(VarVantaraPath, "")
+	cfg.KillFlags = r.list(VarKillFlags)
+	cfg.Maintenance = r.boolean(VarMaintenance, false)
 
 	cfg.Database.URL = r.secret(VarDatabaseURL, true)
 	if u := cfg.Database.URL.Reveal(); u != "" && !strings.HasPrefix(u, "postgres://") && !strings.HasPrefix(u, "postgresql://") {
@@ -367,6 +376,8 @@ func (c *Config) redacted() [][2]string {
 		{VarAdminListen, c.AdminListen},
 		{VarOriginSecret, presence(c.OriginSecret)},
 		{VarVantaraPath, c.VantaraPath},
+		{VarKillFlags, strings.Join(c.KillFlags, ",")},
+		{VarMaintenance, strconv.FormatBool(c.Maintenance)},
 		{VarDatabaseURL, presence(c.Database.URL)},
 		{VarDBAppRole, c.Database.AppRole},
 		{VarAWSRegion, c.Storage.AWSRegion},
@@ -475,6 +486,51 @@ func (r *reader) optional(name, def string) string {
 	if v, ok := r.get(name); ok {
 		return v
 	}
+	return def
+}
+
+// list reads a comma-separated list of flag names. Items are trimmed, empty
+// items dropped, duplicates removed; each item must be a simple lowercase
+// identifier so a typo never silently disables the wrong switch.
+func (r *reader) list(name string) []string {
+	v, ok := r.get(name)
+	if !ok {
+		return nil
+	}
+	var out []string
+	seen := map[string]bool{}
+	for _, item := range strings.Split(v, ",") {
+		item = strings.TrimSpace(item)
+		if item == "" || seen[item] {
+			continue
+		}
+		for i, c := range item {
+			isLower := (c >= 'a' && c <= 'z') || c == '_'
+			isDigit := c >= '0' && c <= '9'
+			if !isLower && (!isDigit || i == 0) {
+				r.problem(name, fmt.Sprintf("item %q inválido (use letras minúsculas, dígitos e _, separados por vírgula)", item))
+				return nil
+			}
+		}
+		seen[item] = true
+		out = append(out, item)
+	}
+	return out
+}
+
+// boolean reads a switch: 1/0, true/false, on/off, yes/no, sim/não.
+func (r *reader) boolean(name string, def bool) bool {
+	v, ok := r.get(name)
+	if !ok {
+		return def
+	}
+	switch strings.ToLower(v) {
+	case "1", "true", "on", "yes", "sim":
+		return true
+	case "0", "false", "off", "no", "nao", "não":
+		return false
+	}
+	r.problem(name, fmt.Sprintf("valor %q inválido (use 1 ou 0)", v))
 	return def
 }
 
@@ -654,6 +710,7 @@ func (r *reader) address(name string) *mail.Address {
 func KnownVars() []string {
 	return []string{
 		VarEnv, VarPublicBaseURL, VarAPIBaseURL, VarAPIListen, VarAdminListen, VarOriginSecret, VarVantaraPath,
+		VarKillFlags, VarMaintenance,
 		VarDatabaseURL, VarDBAppRole, VarAWSRegion, VarS3UploadsBucket, VarS3BackupsBucket, VarS3Endpoint,
 		VarR2AccountID, VarR2AccessKeyID, VarR2SecretAccessKey, VarR2MediaBucket,
 		VarLLMMode, VarOpenRouterKey, VarLocalLLMBaseURL, VarModelsFile, VarLLMCacheDir,
