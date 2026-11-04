@@ -1,0 +1,591 @@
+// Contract between the Go worker and the Rust harness (gRPC over a Unix socket).
+// Messages mirror the JSON Schemas in packages/contracts/schemas (finding, evidence-locator,
+// rule, quote, estimate-breakdown): same field names, same enums, same units (centavos,
+// credits as integers, milliseconds). Changing one side without the other is a bug;
+// tools/codegen validate lints this file with buf.
+//
+// Versioning: this package is docmatch.harness.v1. Fields are only ever added, never
+// renumbered or reused. Breaking changes get a v2 package.
+syntax = "proto3";
+
+package docmatch.harness.v1;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/mmtmn/docmatch/packages/contracts/gen/harnessv1;harnessv1";
+
+// Harness is the reconciliation engine. Every call is tenant-scoped through
+// RunOptions.tenant_id; the harness never reaches the database, the worker hands it
+// everything it needs (sources, resolved rules, budget) and persists what streams back.
+service Harness {
+  // Estimate prices a run without starting it. The returned Quote has `expected_credits`,
+  // `cap_credits`, the breakdown and `requires_approval` filled; `id`, `signature` and
+  // `expires_at` are filled by the API, which owns the signing key.
+  rpc Estimate(EstimateRequest) returns (Quote);
+  // Run executes a reconciliation and streams events until `completed`, `failed` or
+  // `needs_approval`. After approval the worker calls Run again with the same `run_id`
+  // and the approved quote; the harness resumes from its checkpoint.
+  rpc Run(RunRequest) returns (stream RunEvent);
+  // Replay re-executes a past run against cached model responses (DM_LLM_CACHE_DIR).
+  // Used by tests and by rule regression; never spends credits.
+  rpc Replay(ReplayRequest) returns (stream RunEvent);
+  // ProposeRules turns confirmed feedback into candidate rules (compiled and
+  // back-tested) for the user to accept.
+  rpc ProposeRules(ProposeRulesRequest) returns (ProposeRulesResponse);
+  // Health reports readiness, the active LLM mode and whether the model endpoint answers.
+  rpc Health(HealthRequest) returns (HealthResponse);
+}
+
+// ----------------------------------------------------------------------------- sources
+
+enum SourceKind {
+  SOURCE_KIND_UNSPECIFIED = 0;
+  SOURCE_KIND_DOCUMENT = 1;
+  SOURCE_KIND_TABLE = 2;
+  SOURCE_KIND_MEDIA = 3;
+  SOURCE_KIND_EMAIL = 4;
+  SOURCE_KIND_ARCHIVE = 5;
+}
+
+// Source is one uploaded file, already scanned and accepted by the API.
+message Source {
+  // Upload id (`upl_` + ULID). Findings and matches cite it in `source_id`.
+  string id = 1;
+  SourceKind kind = 2;
+  // Storage URI (`s3://` for documents, `r2://` for media). Resolved through the egress
+  // allowlist proxy; never a public URL.
+  string uri = 3;
+  // Hex SHA-256 of the object, verified after download.
+  string sha256 = 4;
+  // MIME type sniffed from content by the scanner, not the client-declared one.
+  string mime = 5;
+  uint64 size_bytes = 6;
+  // Original file name, NFC-normalized, for messages and reports.
+  string file_name = 7;
+  // Workflow role (ex.: `bank_statement`), empty when the run has no workflow.
+  string role = 8;
+  // Reading hints: sheet, header_row, delimiter, encoding, date_format,
+  // decimal_separator, timezone, currency, language. All optional.
+  map<string, string> locator_hints = 9;
+  // Media duration, when known (0 otherwise).
+  uint64 duration_ms = 10;
+}
+
+// ----------------------------------------------------------------------------- options
+
+enum LlmMode {
+  LLM_MODE_UNSPECIFIED = 0;
+  LLM_MODE_OPENROUTER = 1;
+  LLM_MODE_LOCAL = 2;
+  LLM_MODE_OFF = 3;
+}
+
+enum Lane {
+  LANE_UNSPECIFIED = 0;
+  LANE_APP = 1;
+  LANE_API_BATCH = 2;
+  LANE_API_STANDARD = 3;
+  LANE_API_PRIORITY = 4;
+}
+
+// RunOptions bounds a run. The harness enforces `credit_budget` and `deadline` itself and
+// stops with `needs_approval` (budget) or `failed` (deadline) instead of overrunning.
+message RunOptions {
+  // Hard cap in credits (the quote's `cap_credits`). Never exceeded.
+  uint64 credit_budget = 1;
+  google.protobuf.Timestamp deadline = 2;
+  LlmMode llm_mode = 3;
+  bool web_search = 4;
+  // Apply tenant and global rules (false runs the deterministic cascade only).
+  bool use_rules = 5;
+  // Explicit rule ids; empty with `use_rules` means every trusted rule visible to the tenant.
+  repeated string rule_ids = 6;
+  string tenant_id = 7;
+  string workflow_id = 8;
+  Lane lane = 9;
+  // Free-text rules typed for this run (limits.yaml text.rules_text).
+  string rules_text = 10;
+  // Escalation model allowed (plan business).
+  bool escalation_allowed = 11;
+  // Maximum number of new tools the toolsmith may build in this run.
+  uint32 max_new_tools = 12;
+  // Tool scope the run may use: tenant tools plus global ones at least `trusted`.
+  bool allow_candidate_tools = 13;
+}
+
+// ----------------------------------------------------------------------------- estimate
+
+message EstimateRequest {
+  string tenant_id = 1;
+  repeated Source sources = 2;
+  RunOptions options = 3;
+}
+
+enum ApprovalReason {
+  APPROVAL_REASON_UNSPECIFIED = 0;
+  APPROVAL_REASON_NEW_TOOLS = 1;
+  APPROVAL_REASON_OVER_DEFAULT_BUDGET = 2;
+  APPROVAL_REASON_MEDIA_HEAVY = 3;
+  APPROVAL_REASON_WEB_SEARCH = 4;
+  APPROVAL_REASON_ESCALATION_MODEL = 5;
+}
+
+enum EstimateItemKind {
+  ESTIMATE_ITEM_KIND_UNSPECIFIED = 0;
+  ESTIMATE_ITEM_KIND_DOCUMENTS = 1;
+  ESTIMATE_ITEM_KIND_SCAN_FILES = 2;
+  ESTIMATE_ITEM_KIND_AUDIO_MINUTES = 3;
+  ESTIMATE_ITEM_KIND_VIDEO_MINUTES = 4;
+  ESTIMATE_ITEM_KIND_FRAMES = 5;
+  ESTIMATE_ITEM_KIND_LLM_TOKENS = 6;
+  ESTIMATE_ITEM_KIND_EMBEDDINGS = 7;
+  ESTIMATE_ITEM_KIND_NEW_TOOLS = 8;
+  ESTIMATE_ITEM_KIND_WEB_REQUESTS = 9;
+}
+
+enum EstimateUnit {
+  ESTIMATE_UNIT_UNSPECIFIED = 0;
+  ESTIMATE_UNIT_FILES = 1;
+  ESTIMATE_UNIT_PAGES = 2;
+  ESTIMATE_UNIT_MB = 3;
+  ESTIMATE_UNIT_MINUTES = 4;
+  ESTIMATE_UNIT_FRAMES = 5;
+  ESTIMATE_UNIT_TOKENS = 6;
+  ESTIMATE_UNIT_TOOLS = 7;
+  ESTIMATE_UNIT_REQUESTS = 8;
+}
+
+// EstimateItem mirrors schemas/estimate-breakdown.json#/$defs/Item.
+message EstimateItem {
+  EstimateItemKind item = 1;
+  double quantity = 2;
+  EstimateUnit unit = 3;
+  uint64 credits = 4;
+  // pt-BR note shown next to the item.
+  string note = 5;
+}
+
+// EstimateBreakdown mirrors schemas/estimate-breakdown.json.
+message EstimateBreakdown {
+  Lane lane = 1;
+  double lane_multiplier = 2;
+  repeated EstimateItem items = 3;
+  uint64 subtotal_credits = 4;
+  uint64 minimum_credits = 5;
+  uint64 total_credits = 6;
+  string pricing_version = 7;
+  Calibration calibration = 8;
+}
+
+message Calibration {
+  uint64 sample_runs = 1;
+  double p99_overrun = 2;
+  google.protobuf.Timestamp calibrated_at = 3;
+}
+
+// Quote mirrors schemas/quote.json. The harness fills everything except `id`, `signature`
+// and `expires_at` (API-owned); on Run the worker passes the approved, signed quote back.
+message Quote {
+  string id = 1;
+  string run_id = 2;
+  uint64 expected_credits = 3;
+  uint64 cap_credits = 4;
+  EstimateBreakdown breakdown = 5;
+  google.protobuf.Timestamp expires_at = 6;
+  string signature = 7;
+  // Hex SHA-256 over canonical sources + options; Run rejects a quote whose fingerprint
+  // does not match its request.
+  string fingerprint = 8;
+  bool requires_approval = 9;
+  repeated ApprovalReason approval_reasons = 10;
+  google.protobuf.Timestamp created_at = 11;
+}
+
+// ----------------------------------------------------------------------------- run
+
+message RunRequest {
+  string run_id = 1;
+  string tenant_id = 2;
+  repeated Source sources = 3;
+  RunOptions options = 4;
+  // Approved quote; its `cap_credits` is the budget.
+  Quote quote = 5;
+  // Rules resolved by the worker (bodies and compiled SQL), so the harness stays stateless.
+  repeated Rule rules = 6;
+  // Resume after `needs_approval`: the harness restarts from its last checkpoint.
+  bool resume = 7;
+}
+
+message ReplayRequest {
+  // New run id for the replay's own events.
+  string run_id = 1;
+  // Run whose cached model responses are used.
+  string replay_of_run_id = 2;
+  string tenant_id = 3;
+  repeated Source sources = 4;
+  RunOptions options = 5;
+  repeated Rule rules = 6;
+  // Fail instead of calling a model when a response is missing from the cache.
+  bool strict = 7;
+}
+
+enum Stage {
+  STAGE_UNSPECIFIED = 0;
+  STAGE_SCAN = 1;
+  STAGE_INGEST = 2;
+  STAGE_NORMALIZE = 3;
+  STAGE_MATCH = 4;
+  STAGE_DISCOVER = 5;
+  STAGE_ADJUDICATE = 6;
+  STAGE_VERIFY = 7;
+  STAGE_TOOLSMITH = 8;
+  STAGE_REPORT = 9;
+}
+
+// RunEvent is one item of the Run/Replay stream. `seq` is monotonic per run and is what the
+// API exposes as the SSE id, so clients resume with Last-Event-ID.
+message RunEvent {
+  string run_id = 1;
+  uint64 seq = 2;
+  google.protobuf.Timestamp at = 3;
+  oneof event {
+    StageStarted stage_started = 10;
+    Progress progress = 11;
+    TokenUsage token_usage = 12;
+    Finding finding = 13;
+    Match match = 14;
+    NeedsApproval needs_approval = 15;
+    Completed completed = 16;
+    Failed failed = 17;
+  }
+}
+
+message StageStarted {
+  Stage stage = 1;
+  // pt-BR message for the progress panel.
+  string message = 2;
+  uint64 total_steps = 3;
+}
+
+message Progress {
+  Stage stage = 1;
+  uint64 done = 2;
+  uint64 total = 3;
+  string message = 4;
+  uint64 credits_spent = 5;
+}
+
+// TokenUsage is emitted after every model call so the ledger and the UI meter stay live.
+message TokenUsage {
+  // Role from config/models.yaml (extraction, discovery, adjudicator, verifier, ...).
+  string role = 1;
+  string model = 2;
+  uint64 prompt_tokens = 3;
+  uint64 completion_tokens = 4;
+  uint64 cached_tokens = 5;
+  // Provider cost in micro-USD (1e-6 USD), for margin audits.
+  uint64 cost_micro_usd = 6;
+  // Credits spent by this call and in the run so far.
+  uint64 credits = 7;
+  uint64 credits_spent_total = 8;
+  // True when the response came from the replay cache.
+  bool cached = 9;
+}
+
+message NeedsApproval {
+  // Revised quote for the remaining work.
+  Quote quote = 1;
+  repeated ApprovalReason reasons = 2;
+  string message = 3;
+  uint64 credits_spent_so_far = 4;
+}
+
+message Completed {
+  RunSummary summary = 1;
+  uint64 credits_spent = 2;
+  uint64 credits_refunded = 3;
+}
+
+message RunSummary {
+  uint32 findings_total = 1;
+  // Keys are severities (info, low, medium, high, critical).
+  map<string, uint32> findings_by_severity = 2;
+  // Sum of amount_at_risk, in centavos.
+  int64 amount_at_risk = 3;
+  string currency = 4;
+  uint32 matches_total = 5;
+  uint32 lines_total = 6;
+  uint32 lines_matched = 7;
+  double matched_ratio = 8;
+  repeated string new_tool_ids = 9;
+  repeated string proposed_rule_ids = 10;
+}
+
+message Failed {
+  // Stable code from errors.yaml (ex.: run_timeout, run_source_unreadable, model_unavailable).
+  string code = 1;
+  string message = 2;
+  bool retryable = 3;
+  google.protobuf.Struct details = 4;
+  uint64 credits_spent = 5;
+}
+
+// ----------------------------------------------------------------------------- findings
+
+enum FindingKind {
+  FINDING_KIND_UNSPECIFIED = 0;
+  FINDING_KIND_MISSING = 1;
+  FINDING_KIND_DUPLICATE = 2;
+  FINDING_KIND_MISMATCH = 3;
+  FINDING_KIND_PARTIAL = 4;
+  FINDING_KIND_CONTRADICTION = 5;
+  FINDING_KIND_ANOMALY = 6;
+  FINDING_KIND_UNREADABLE = 7;
+  FINDING_KIND_NOTE = 8;
+}
+
+enum Severity {
+  SEVERITY_UNSPECIFIED = 0;
+  SEVERITY_INFO = 1;
+  SEVERITY_LOW = 2;
+  SEVERITY_MEDIUM = 3;
+  SEVERITY_HIGH = 4;
+  SEVERITY_CRITICAL = 5;
+}
+
+// ConfidenceLabel maps to the pt-BR labels Confirmado, Provável, Precisa de você.
+enum ConfidenceLabel {
+  CONFIDENCE_LABEL_UNSPECIFIED = 0;
+  CONFIDENCE_LABEL_CONFIRMED = 1;
+  CONFIDENCE_LABEL_PROBABLE = 2;
+  CONFIDENCE_LABEL_NEEDS_YOU = 3;
+}
+
+enum FindingStatus {
+  FINDING_STATUS_UNSPECIFIED = 0;
+  FINDING_STATUS_OPEN = 1;
+  FINDING_STATUS_CONFIRMED = 2;
+  FINDING_STATUS_DISMISSED = 3;
+  FINDING_STATUS_RESOLVED = 4;
+}
+
+// Finding mirrors schemas/finding.json.
+message Finding {
+  string id = 1;
+  string run_id = 2;
+  string code = 3;
+  FindingKind kind = 4;
+  Severity severity = 5;
+  // Centavos.
+  int64 amount_at_risk = 6;
+  string currency = 7;
+  string title = 8;
+  string explanation = 9;
+  double confidence = 10;
+  ConfidenceLabel confidence_label = 11;
+  // At least one; the harness drops findings without evidence.
+  repeated Evidence evidence = 12;
+  FindingStatus status = 13;
+  string rule_id = 14;
+  string match_id = 15;
+  repeated string source_ids = 16;
+  google.protobuf.Struct details = 17;
+  google.protobuf.Timestamp created_at = 18;
+}
+
+// Evidence mirrors schemas/finding.json#/$defs/Evidence.
+message Evidence {
+  string source_id = 1;
+  Locator locator = 2;
+  string excerpt = 3;
+  string label = 4;
+  google.protobuf.Struct values = 5;
+}
+
+// Locator mirrors schemas/evidence-locator.json.
+message Locator {
+  oneof locator {
+    RowLocator row = 1;
+    PageBoxLocator page_box = 2;
+    ByteRangeLocator byte_range = 3;
+    TimeRangeLocator time_range = 4;
+  }
+}
+
+message RowLocator {
+  string sheet = 1;
+  // 1-based.
+  uint32 row = 2;
+  uint32 row_end = 3;
+  string column = 4;
+}
+
+message PageBoxLocator {
+  // 1-based.
+  uint32 page = 1;
+  // Normalized 0..1, origin top-left.
+  double x = 2;
+  double y = 3;
+  double w = 4;
+  double h = 5;
+}
+
+message ByteRangeLocator {
+  uint64 start = 1;
+  // Exclusive.
+  uint64 end = 2;
+  string encoding = 3;
+}
+
+enum Track {
+  TRACK_UNSPECIFIED = 0;
+  TRACK_AUDIO = 1;
+  TRACK_VIDEO = 2;
+  TRACK_TRANSCRIPT = 3;
+}
+
+message TimeRangeLocator {
+  uint64 start_ms = 1;
+  // Exclusive.
+  uint64 end_ms = 2;
+  Track track = 3;
+  uint32 frame = 4;
+}
+
+// ----------------------------------------------------------------------------- matches
+
+enum MatchKind {
+  MATCH_KIND_UNSPECIFIED = 0;
+  MATCH_KIND_EXACT = 1;
+  MATCH_KIND_TOLERANCE = 2;
+  MATCH_KIND_SUM = 3;
+  MATCH_KIND_FUZZY = 4;
+  MATCH_KIND_RULE = 5;
+  MATCH_KIND_MODEL = 6;
+}
+
+// Match is a reconciled pair (or one-to-many group) across sources.
+message Match {
+  string id = 1;
+  string run_id = 2;
+  MatchKind kind = 3;
+  repeated Evidence left = 4;
+  repeated Evidence right = 5;
+  double confidence = 6;
+  // Centavos.
+  int64 amount = 7;
+  string currency = 8;
+  string rule_id = 9;
+  string explanation = 10;
+  google.protobuf.Timestamp created_at = 11;
+}
+
+// ----------------------------------------------------------------------------- rules
+
+enum RuleScope {
+  RULE_SCOPE_UNSPECIFIED = 0;
+  RULE_SCOPE_TENANT = 1;
+  RULE_SCOPE_GLOBAL = 2;
+}
+
+enum RuleStatus {
+  RULE_STATUS_UNSPECIFIED = 0;
+  RULE_STATUS_DRAFT = 1;
+  RULE_STATUS_CANDIDATE = 2;
+  RULE_STATUS_VERIFIED = 3;
+  RULE_STATUS_TRUSTED = 4;
+  RULE_STATUS_RETIRED = 5;
+}
+
+enum RuleOrigin {
+  RULE_ORIGIN_UNSPECIFIED = 0;
+  RULE_ORIGIN_USER = 1;
+  RULE_ORIGIN_MODEL = 2;
+  RULE_ORIGIN_IMPORT = 3;
+  RULE_ORIGIN_ADMIN = 4;
+}
+
+// Rule mirrors schemas/rule.json.
+message Rule {
+  string id = 1;
+  string tenant_id = 2;
+  RuleScope scope = 3;
+  string title = 4;
+  string body = 5;
+  uint32 version = 6;
+  RuleStatus status = 7;
+  CompiledRule compiled = 8;
+  RuleStats stats = 9;
+  RuleProvenance provenance = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
+}
+
+message CompiledRule {
+  // Always `sql` today.
+  string language = 1;
+  string text = 2;
+  // Hex SHA-256 of `text`.
+  string hash = 3;
+  google.protobuf.Struct parameters = 4;
+  string compiled_by = 5;
+  google.protobuf.Timestamp compiled_at = 6;
+}
+
+message RuleStats {
+  uint64 runs_evaluated = 1;
+  uint64 true_positives = 2;
+  uint64 false_positives = 3;
+  // Centavos.
+  int64 explained_amount = 4;
+  string currency = 5;
+  google.protobuf.Timestamp last_evaluated_at = 6;
+}
+
+message RuleProvenance {
+  RuleOrigin origin = 1;
+  string model = 2;
+  string run_id = 3;
+  google.protobuf.Timestamp proposed_at = 4;
+  string accepted_by = 5;
+  google.protobuf.Timestamp accepted_at = 6;
+}
+
+message ProposeRulesRequest {
+  string tenant_id = 1;
+  string run_id = 2;
+  repeated Finding confirmed_findings = 3;
+  repeated Finding dismissed_findings = 4;
+  repeated Match confirmed_matches = 5;
+  uint32 max_rules = 6;
+  LlmMode llm_mode = 7;
+  uint64 credit_budget = 8;
+}
+
+message ProposeRulesResponse {
+  // Candidate rules, already compiled and back-tested against the tenant's history.
+  repeated Rule rules = 1;
+  repeated TokenUsage usage = 2;
+  uint64 credits_spent = 3;
+}
+
+// ----------------------------------------------------------------------------- health
+
+message HealthRequest {}
+
+enum ServingStatus {
+  SERVING_STATUS_UNSPECIFIED = 0;
+  SERVING_STATUS_SERVING = 1;
+  SERVING_STATUS_NOT_SERVING = 2;
+  SERVING_STATUS_DEGRADED = 3;
+}
+
+message HealthResponse {
+  ServingStatus status = 1;
+  string version = 2;
+  LlmMode llm_mode = 3;
+  bool llm_reachable = 4;
+  uint32 active_runs = 5;
+  google.protobuf.Timestamp started_at = 6;
+}

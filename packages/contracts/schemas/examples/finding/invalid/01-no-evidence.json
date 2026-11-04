@@ -1,0 +1,16 @@
+{
+  "id": "fnd_01JBXK4A7D3E8F9G0H1J2K3M4N",
+  "run_id": "run_01JBXK3M9Q2V7R8S4T6W0YZ1AB",
+  "code": "bank.missing_title",
+  "kind": "missing",
+  "severity": "high",
+  "amount_at_risk": 125000,
+  "currency": "BRL",
+  "title": "Débito sem título",
+  "explanation": "Sem evidência: deve ser rejeitado.",
+  "confidence": 0.97,
+  "confidence_label": "Confirmado",
+  "evidence": [],
+  "status": "open",
+  "created_at": "2026-11-04T12:00:00Z"
+}

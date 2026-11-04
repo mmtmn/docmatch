@@ -1,0 +1,36 @@
+{
+  "id": "rul_01JBXK6D0G6H1J2K3M4N5P6Q7R",
+  "tenant_id": "org_01JBXK9G3K9M4N5P6Q7R8S9T0V",
+  "scope": "tenant",
+  "title": "Tarifa bancária no mesmo dia faz parte do pagamento",
+  "body": "Quando houver um débito de tarifa de até R$ 30,00 no mesmo dia de um pagamento a fornecedor, considere a tarifa parte do pagamento e não um débito sem título.",
+  "version": 2,
+  "status": "verified",
+  "compiled": {
+    "language": "sql",
+    "text": "SELECT fee.id FROM bank_lines fee JOIN bank_lines pay ON pay.date = fee.date AND pay.amount < 0 WHERE fee.kind = 'fee' AND abs(fee.amount) <= :max_amount_centavos",
+    "hash": "3b7c1f2e9a4d5c6b8e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d",
+    "parameters": { "max_amount_centavos": 3000 },
+    "compiled_by": "discovery:anthropic/claude-opus-5.5",
+    "compiled_at": "2026-10-20T15:12:00Z"
+  },
+  "applies_to": { "source_kinds": ["table", "document"] },
+  "stats": {
+    "runs_evaluated": 14,
+    "true_positives": 31,
+    "false_positives": 0,
+    "explained_amount": 48250,
+    "currency": "BRL",
+    "last_evaluated_at": "2026-11-03T22:00:00Z"
+  },
+  "provenance": {
+    "origin": "model",
+    "model": "anthropic/claude-opus-5.5",
+    "run_id": "run_01JBXK3M9Q2V7R8S4T6W0YZ1AB",
+    "proposed_at": "2026-10-20T15:10:00Z",
+    "accepted_by": "usr_01JBXK8F2J8K3M4N5P6Q7R8S9T",
+    "accepted_at": "2026-10-20T16:00:00Z"
+  },
+  "created_at": "2026-10-20T15:10:00Z",
+  "updated_at": "2026-11-03T22:00:00Z"
+}

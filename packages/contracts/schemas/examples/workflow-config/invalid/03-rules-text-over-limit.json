@@ -1,0 +1,22 @@
+{
+  "name": "Texto de regras com 4001 caracteres",
+  "sources": [
+    {
+      "role": "payroll",
+      "kind": "table"
+    },
+    {
+      "role": "bank_file",
+      "kind": "table"
+    }
+  ],
+  "matching": {
+    "keys": [
+      "tax_id",
+      "amount"
+    ]
+  },
+  "rules": {
+    "text": "Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para o limite. Regra longa demais para"
+  }
+}

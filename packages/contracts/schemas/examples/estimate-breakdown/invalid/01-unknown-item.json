@@ -1,0 +1,9 @@
+{
+  "lane": "app",
+  "lane_multiplier": 1.0,
+  "items": [{ "item": "coffee", "quantity": 1, "unit": "files", "credits": 1 }],
+  "subtotal_credits": 1,
+  "minimum_credits": 10,
+  "total_credits": 10,
+  "pricing_version": "2026-11-01-a3f9"
+}

@@ -1,0 +1,4 @@
+# Configuração do pnpm para tools/codegen (pacote isolado, sem workspace).
+# @bufbuild/buf tem um postinstall que só baixa o binário se o pacote opcional da plataforma faltar.
+allowBuilds:
+  '@bufbuild/buf': true

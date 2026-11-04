@@ -1,0 +1,52 @@
+{
+  "id": "tool_01JBXKCK6P2Q7R8S9T0V1W2X3Y",
+  "name": "ofx_parser",
+  "version": "1.4.0",
+  "kind": "parser",
+  "description": "Lê extratos OFX 1.x (SGML) e 2.x (XML) de bancos brasileiros e emite transações normalizadas.",
+  "accepts": {
+    "fingerprint": {
+      "any": [
+        { "mime": "application/x-ofx" },
+        { "all": [{ "extension": "ofx" }, { "header_regex": { "pattern": "OFXHEADER|<OFX>", "max_bytes": 2048 } }] }
+      ]
+    },
+    "max_size_bytes": 52428800
+  },
+  "emits": {
+    "record_kind": "transactions",
+    "schema": {
+      "type": "object",
+      "required": ["date", "amount", "description"],
+      "properties": {
+        "date": { "type": "string", "format": "date" },
+        "amount": { "type": "integer", "description": "centavos, negativo para débito" },
+        "description": { "type": "string" },
+        "fitid": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "entrypoint": {
+    "runtime": "native_rust",
+    "handler": "docmatch_tools::ofx::parse",
+    "artifact_sha256": "3b7c1f2e9a4d5c6b8e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d",
+    "timeout_s": 30,
+    "memory_mb": 256
+  },
+  "permissions": { "network": false, "filesystem": "read_input" },
+  "tests_ref": "tools/ofx_parser/1.4.0/tests.json",
+  "provenance": {
+    "origin": "human",
+    "created_at": "2026-08-01T12:00:00Z",
+    "reviewed_at": "2026-08-02T09:00:00Z",
+    "reviewed_by": "usr_01JBXK8F2J8K3M4N5P6Q7R8S9T",
+    "review_notes": "Cobre OFX 1.02 com SGML não fechado."
+  },
+  "stats": { "uses": 4821, "successes": 4819, "failures": 2, "distinct_tenants": 212, "avg_ms": 84.2, "last_used_at": "2026-11-04T11:58:00Z" },
+  "status": "trusted",
+  "scope": "global",
+  "tenant_id": null,
+  "created_at": "2026-08-01T12:00:00Z",
+  "updated_at": "2026-11-04T11:58:00Z"
+}

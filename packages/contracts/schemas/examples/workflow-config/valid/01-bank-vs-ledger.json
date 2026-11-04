@@ -1,0 +1,46 @@
+{
+  "name": "Extrato × razão (mensal)",
+  "sources": [
+    {
+      "role": "bank_statement",
+      "label": "Extrato bancário",
+      "kind": "table",
+      "required": true,
+      "multiple": true,
+      "accept": ["application/x-ofx", "text/csv", ".ofx", ".csv", "application/pdf"],
+      "hints": { "encoding": "latin1", "delimiter": ";", "date_format": "dd/MM/yyyy", "decimal_separator": ",", "timezone": "America/Sao_Paulo", "currency": "BRL" }
+    },
+    {
+      "role": "ledger",
+      "label": "Razão / títulos",
+      "kind": "table",
+      "required": true,
+      "multiple": false,
+      "accept": ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ".xlsx"],
+      "hints": { "sheet": "Títulos", "header_row": 3 }
+    },
+    {
+      "role": "invoices",
+      "label": "Notas fiscais",
+      "kind": "document",
+      "required": false,
+      "multiple": true,
+      "accept": ["application/pdf", "application/xml"]
+    }
+  ],
+  "matching": {
+    "keys": ["amount", "date", "document_number", "counterparty"],
+    "tolerances": { "amount_centavos": 5, "days": 3, "text_similarity": 0.85 },
+    "strategies": ["exact", "tolerance", "sum", "fuzzy", "rules", "model"],
+    "one_to_many": true
+  },
+  "rules": {
+    "rule_ids": ["rul_01JBXK6D0G6H1J2K3M4N5P6Q7R"],
+    "text": "Tarifas de até R$ 30 no mesmo dia de um pagamento fazem parte dele. Ignore estornos que se anulam no mesmo dia.",
+    "auto_learning": true
+  },
+  "llm": { "mode": "openrouter", "web_search": false },
+  "budget": { "default_credits": 120, "auto_approve_up_to_credits": 200, "lane": "app" },
+  "outputs": { "formats": ["xlsx", "pdf"], "ui_manifest_id": "cst_01JBXKDM7Q3R8S9T0V1W2X3Y4Z" },
+  "version": 3
+}

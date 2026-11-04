@@ -1,0 +1,16 @@
+{
+  "id": "tool_01JBXKCK6P2Q7R8S9T0V1W2X3Y",
+  "name": "orphan_tool",
+  "version": "0.1.0",
+  "kind": "parser",
+  "accepts": { "fingerprint": { "mime": "text/csv" } },
+  "emits": { "record_kind": "lines", "schema": { "type": "object" } },
+  "entrypoint": { "runtime": "wasm", "handler": "run", "artifact_sha256": "9a0b1c2d3b7c1f2e9a4d5c6b8e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f" },
+  "tests_ref": "tools/orphan_tool/tests.json",
+  "provenance": { "origin": "model", "created_at": "2026-11-04T12:02:00Z" },
+  "stats": { "uses": 0, "successes": 0, "failures": 0 },
+  "status": "candidate",
+  "scope": "tenant",
+  "tenant_id": null,
+  "created_at": "2026-11-04T12:02:00Z"
+}
