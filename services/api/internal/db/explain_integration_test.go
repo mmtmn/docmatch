@@ -72,15 +72,15 @@ func TestExplainBudget(t *testing.T) {
 	ctx := context.Background()
 	queries := loadQueries(t)
 
-	orgs := seed(t, d)
-	org := orgs[0]
+	s := seed(t, d)
+	org := s.orgs[0]
 	var runID, sessionID, keyID, holdID uuid.UUID
 	var refresh []byte
 	var ledgerSeq int64
 	if err := d.Admin.QueryRow(ctx, "SELECT id FROM runs WHERE org_id = $1 LIMIT 1", org).Scan(&runID); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.Admin.QueryRow(ctx, "SELECT id, refresh_hash FROM sessions LIMIT 1").Scan(&sessionID, &refresh); err != nil {
+	if err := d.Admin.QueryRow(ctx, "SELECT id, refresh_hash FROM sessions WHERE user_id = $1 LIMIT 1", s.userID).Scan(&sessionID, &refresh); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.Admin.QueryRow(ctx, "SELECT id FROM api_keys WHERE org_id = $1 LIMIT 1", org).Scan(&keyID); err != nil {
@@ -104,7 +104,7 @@ func TestExplainBudget(t *testing.T) {
 		{name: "GetSession", args: []any{sessionID}},
 		{name: "GetSessionByRefreshHash", args: []any{refresh}},
 		{name: "GetAPIKey", args: []any{keyID}},
-		{name: "GetStripeEvent", args: []any{"evt_1"}},
+		{name: "GetStripeEvent", args: []any{s.stripeEventID}},
 		{name: "ListRecentRuns", org: tenant, args: []any{org, int32(20)}},
 		{name: "ListRecentRunsBefore", org: tenant, args: []any{org, time.Now(), int32(20)}},
 		{name: "CountActiveRuns", org: tenant, args: []any{org}},
@@ -121,7 +121,7 @@ func TestExplainBudget(t *testing.T) {
 		{name: "ListAuditRange", org: tenant, args: []any{org, int64(10), int64(60)}},
 		{name: "ListAuditByOrg", org: tenant, args: []any{org, int32(50)}},
 		{name: "GetOrg", org: tenant, args: []any{org}},
-		{name: "GetUserByEmail", args: []any{"user-1@example.test"}},
+		{name: "GetUserByEmail", args: []any{s.userEmail}},
 		{name: "ListAPIKeys", org: tenant, args: []any{org}},
 		{name: "CountRecentUploads", org: tenant, args: []any{org, time.Now().Add(-time.Hour)}},
 	}
@@ -156,8 +156,7 @@ func TestExplainBudgetDetectsMissingIndex(t *testing.T) {
 	d := testdb.Get(t)
 	ctx := context.Background()
 	queries := loadQueries(t)
-	orgs := seed(t, d)
-	org := orgs[0]
+	org := seed(t, d).orgs[0]
 	if _, err := d.Admin.Exec(ctx, "DROP INDEX runs_org_recent_idx"); err != nil {
 		t.Fatal(err)
 	}
@@ -318,15 +317,25 @@ func seqScans(plan map[string]any) []string {
 	return out
 }
 
+// seeded carries the handles a test needs after seeding. Every unique value
+// is suffixed with a random tag so several tests can seed the same database.
+type seeded struct {
+	orgs          []uuid.UUID
+	userID        uuid.UUID
+	userEmail     string
+	stripeEventID string
+}
+
 // seed fills the tables through the owner connection (RLS bypassed) using
 // generate_series, spreading rows over the current and two previous months.
-func seed(t *testing.T, d *testdb.DB) []uuid.UUID {
+func seed(t *testing.T, d *testdb.DB) seeded {
 	t.Helper()
 	ctx := context.Background()
 	start := time.Now()
 	if _, err := db.EnsureMonthPartitions(ctx, d.Admin, 1, 2); err != nil {
 		t.Fatal(err)
 	}
+	tag := uuid.NewString()[:8]
 	orgs := make([]uuid.UUID, seedOrgs)
 	for i := range orgs {
 		orgs[i] = uuid.New()
@@ -338,7 +347,12 @@ func seed(t *testing.T, d *testdb.DB) []uuid.UUID {
 		}
 	}
 	exec(`INSERT INTO orgs (id, name, slug) SELECT o, 'Org ' || o::text, 'org-' || o::text FROM unnest($1::uuid[]) AS o`, orgs)
-	exec(`INSERT INTO users (id, email) SELECT uuidv7(), 'user-' || g || '@example.test' FROM generate_series(1, 2000) g`)
+	exec(`INSERT INTO users (id, email) SELECT uuidv7(), 'user-' || g || '-' || $1 || '@example.test' FROM generate_series(1, 2000) g`, tag)
+	var userID uuid.UUID
+	userEmail := "user-1-" + tag + "@example.test"
+	if err := d.Admin.QueryRow(ctx, "SELECT id FROM users WHERE email = $1", userEmail).Scan(&userID); err != nil {
+		t.Fatal(err)
+	}
 	exec(`INSERT INTO credit_accounts (org_id, balance, held, ledger_seq) SELECT o, 1000000, 1000, $2 FROM unnest($1::uuid[]) AS o`, orgs, seedLedgerRows/seedOrgs+1)
 	exec(`INSERT INTO credit_grants (org_id, kind, amount, remaining, expires_at)
 	      SELECT o, 'plan', 100000, 50000, now() + interval '30 days' FROM unnest($1::uuid[]) AS o, generate_series(1, 20)`, orgs)
@@ -350,12 +364,12 @@ func seed(t *testing.T, d *testdb.DB) []uuid.UUID {
 	             now() - (g % 80) * interval '1 day'
 	      FROM (SELECT $1::uuid[] AS o) s, generate_series(1, $3) g`, orgs, seedOrgs, seedLedgerRows)
 	exec(`INSERT INTO sessions (user_id, device_hash, refresh_hash, family_id, expires_at)
-	      SELECT (SELECT id FROM users ORDER BY id LIMIT 1), sha256(g::text::bytea), sha256(('r' || g)::text::bytea), uuidv7(), now() + interval '30 days'
-	      FROM generate_series(1, $1) g`, seedSessions)
+	      SELECT $2, sha256(g::text::bytea), sha256(('r' || g || $3)::text::bytea), uuidv7(), now() + interval '30 days'
+	      FROM generate_series(1, $1) g`, seedSessions, userID, tag)
 	exec(`INSERT INTO api_keys (org_id, label, prefix, key_hash)
-	      SELECT o[1 + (g % $2)], 'chave ' || g, 'dm_' || g, sha256(('k' || g)::text::bytea)
-	      FROM (SELECT $1::uuid[] AS o) s, generate_series(1, $3) g`, orgs, seedOrgs, seedAPIKeys)
-	exec(`INSERT INTO stripe_events (id, type, payload) SELECT 'evt_' || g, 'invoice.paid', '{}'::jsonb FROM generate_series(1, $1) g`, seedStripe)
+	      SELECT o[1 + (g % $2)], 'chave ' || g, 'dm_' || g, sha256(('k' || g || $4)::text::bytea)
+	      FROM (SELECT $1::uuid[] AS o) s, generate_series(1, $3) g`, orgs, seedOrgs, seedAPIKeys, tag)
+	exec(`INSERT INTO stripe_events (id, type, payload) SELECT 'evt_' || $2 || '_' || g, 'invoice.paid', '{}'::jsonb FROM generate_series(1, $1) g`, seedStripe, tag)
 	exec(`INSERT INTO runs (id, org_id, lane, status, created_at)
 	      SELECT uuidv7(), o[1 + (g % $2)], 'app', CASE WHEN g % 50 = 0 THEN 'queued' WHEN g % 51 = 0 THEN 'running' ELSE 'succeeded' END,
 	             now() - (g % 80) * interval '1 day'
@@ -376,5 +390,5 @@ func seed(t *testing.T, d *testdb.DB) []uuid.UUID {
 	      FROM (SELECT $1::uuid[] AS o) s, generate_series(1, $3) g`, orgs, seedOrgs, seedAudit)
 	exec(`ANALYZE`)
 	t.Logf("seed de %d linhas de razão (e demais tabelas) em %v", seedLedgerRows, time.Since(start).Round(time.Millisecond))
-	return orgs
+	return seeded{orgs: orgs, userID: userID, userEmail: userEmail, stripeEventID: "evt_" + tag + "_1"}
 }
