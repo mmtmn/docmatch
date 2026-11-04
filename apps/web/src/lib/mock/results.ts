@@ -1,4 +1,6 @@
 // Mocked run for the results screen (behind PUBLIC_DM_FEATURE_RESULTS). No API wiring yet.
+// Every counterparty, document number and amount below is invented for the demo: nothing here may
+// come from a real customer case or from testdata/private (which is never committed or published).
 import type { CleanMatch, Finding, RunResults } from '../../components/results/types';
 
 const BRL = 'BRL';
@@ -40,12 +42,12 @@ export const mockFindings: Finding[] = [
     id: 'f-001',
     title: 'Transferência sem contrapartida no razão',
     matchType: 'missing',
-    amountAtRisk: 18450,
+    amountAtRisk: 9730,
     currency: BRL,
     confidence: 'high',
     status: 'open',
     explanation:
-      'O extrato mostra uma TED recebida de Vantara Logística em 12/10 que não aparece em nenhum título do razão. Nenhuma regra de tolerância explica a diferença.',
+      'O extrato mostra uma TED recebida de Serra Azul Transportes em 12/10 que não aparece em nenhum título do razão. Nenhuma regra de tolerância explica a diferença.',
     rule: 'Chave exata: valor + data ± 2 dias úteis + contraparte',
     left: {
       kind: 'table',
@@ -61,8 +63,8 @@ export const mockFindings: Finding[] = [
         {
           id: 'l2',
           date: '2026-10-12',
-          description: 'TED RECEBIDA VANTARA LOGISTICA',
-          amount: 18450,
+          description: 'TED RECEBIDA SERRA AZUL TRANSPORTES',
+          amount: 9730,
           document: 'E-8813',
           cited: true,
         },
@@ -276,7 +278,7 @@ export const mockCleanMatches: CleanMatch[] = Array.from({ length: 18 }, (_, i) 
     'Recebimento cliente',
     'Frete',
   ][i % 5]!,
-  amount: [-42800, -1320.45, -890, 15600, -2140.9][i % 5]!,
+  amount: [-42800, -1320.45, -890, 15230, -2140.9][i % 5]!,
   currency: BRL,
   leftSource: 'extrato-outubro.ofx',
   rightSource: 'razao-outubro.xlsx',
