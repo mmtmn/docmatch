@@ -1,0 +1,29 @@
+{
+  "name": "@docmatch/codegen",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Gera constantes (limites, erros) para todas as linguagens e valida os contratos em packages/contracts.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "packageManager": "pnpm@11.5.3",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "bin": {
+    "docmatch-codegen": "./bin/codegen.mjs"
+  },
+  "scripts": {
+    "gen": "node bin/codegen.mjs gen",
+    "check": "node bin/codegen.mjs check",
+    "validate": "node bin/codegen.mjs validate",
+    "smoke": "node bin/codegen.mjs smoke",
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "@bufbuild/buf": "1.75.0",
+    "@redocly/cli": "2.72.1",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "yaml": "2.9.1"
+  }
+}
