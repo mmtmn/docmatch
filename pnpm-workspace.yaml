@@ -1,9 +1,12 @@
 # Workspaces pnpm do monorepo. Pastas sem package.json são ignoradas.
+# tools/codegen fica de fora de propósito: é um pacote isolado, com pnpm-workspace.yaml e
+# pnpm-lock.yaml próprios, instalado por packages/contracts/Makefile. Se entrasse aqui, o
+# `pnpm install --frozen-lockfile` da raiz exigiria o importer dele neste lockfile.
 packages:
   - apps/*
   - packages/*
-  - tools/codegen
   - sdks/typescript
+  - '!tools/**'
 
 # Scripts de instalação permitidos (o pnpm bloqueia os demais). esbuild e sharp só
 # validam o binário nativo que já chega como dependência opcional.
