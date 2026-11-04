@@ -22,7 +22,7 @@ var (
 
 func record(t *testing.T, svc *audit.Service, org *uuid.UUID, n int) []audit.Entry {
 	t.Helper()
-	var out []audit.Entry
+	out := make([]audit.Entry, 0, n)
 	for i := range n {
 		e, err := svc.Record(context.Background(), org, actor, "run.create", target, map[string]any{"i": i, "nested": map[string]any{"b": 1, "a": "x"}})
 		if err != nil {

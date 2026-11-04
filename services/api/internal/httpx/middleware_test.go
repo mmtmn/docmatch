@@ -137,9 +137,9 @@ func TestStatusWriterPassThroughs(t *testing.T) {
 	if sw.Unwrap() != rec || sw.Status() != 0 {
 		t.Fatal("Unwrap/Status incorretos")
 	}
-	sw.WriteHeader(201)
-	sw.WriteHeader(500) // second call must not change the recorded status
-	if sw.Status() != 201 {
+	sw.WriteHeader(http.StatusCreated)
+	sw.WriteHeader(http.StatusInternalServerError) // second call must not change the recorded status
+	if sw.Status() != http.StatusCreated {
 		t.Fatalf("Status = %d", sw.Status())
 	}
 	if sanitizeLogValue(strings.Repeat("a", 10)+"é\x7f", 11) != "aaaaaaaaaa?" {

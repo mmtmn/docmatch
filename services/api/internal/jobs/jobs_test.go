@@ -90,7 +90,7 @@ func TestPartitionWorker(t *testing.T) {
 	if len(entries) != 1 || entries[0].Action != "partitions.ensure" || !strings.Contains(entries[0].MetaText, "credit_ledger_y2026m12") || entries[0].Actor.ID != "worker@h1" {
 		t.Fatalf("auditoria: %+v", entries)
 	}
-	// Explicit args and negative months_back are honoured/clamped; nothing created means no audit row.
+	// Explicit args and negative months_back are honored/clamped; nothing created means no audit row.
 	part2 := func(_ context.Context, ahead, back int) ([]db.Partition, error) {
 		gotAhead, gotBack = ahead, back
 		return nil, nil

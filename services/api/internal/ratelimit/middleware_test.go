@@ -21,7 +21,7 @@ func TestMiddlewareHeadersAnd429(t *testing.T) {
 		}
 		return "k:" + r.Header.Get("X-Client"), policy, true
 	}
-	h := Middleware(m, keyer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) }))
+	h := Middleware(m, keyer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
 	do := func(path, client string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		req.Header.Set("X-Client", client)
@@ -69,7 +69,7 @@ func TestMiddlewareFailsOpenOnLimiterError(t *testing.T) {
 	t.Parallel()
 	h := Middleware(failingLimiter{}, func(*http.Request) (string, Policy, bool) {
 		return "k", Policy{Limit: 1, Period: time.Minute}, true
-	})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) }))
+	})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 	if rec.Code != 200 || rec.Header().Get(HeaderLimit) != "" {

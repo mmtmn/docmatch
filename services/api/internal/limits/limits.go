@@ -1,8 +1,8 @@
 // Package limits exposes the shared input limits declared in
 // packages/contracts/limits.yaml to Go code.
 //
-// go:embed cannot reach outside the module, so limits.yaml in this directory
-// is a synced copy of the canonical file (make generate). TestEmbeddedMatchesContract
+// The embed directive cannot reach outside the module, so limits.yaml in this
+// directory is a synced copy of the canonical file (make generate). TestEmbeddedMatchesContract
 // fails when the two drift. Until the contracts codegen lands (plano, fase de
 // contratos), this package is the single source of these numbers for Go.
 package limits

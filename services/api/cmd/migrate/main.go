@@ -74,7 +74,7 @@ func run(args []string) error {
 	if err != nil {
 		return fmt.Errorf("conectar em %s: %w", db.RedactURL(dbURL), err)
 	}
-	defer conn.Close(context.WithoutCancel(ctx))
+	defer func() { _ = conn.Close(context.WithoutCancel(ctx)) }()
 
 	m, err := db.NewMigrator(conn, appRole, log)
 	if err != nil {

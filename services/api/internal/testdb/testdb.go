@@ -192,7 +192,7 @@ func scratchDatabase(ctx context.Context, base string) (string, func(), error) {
 		if err != nil {
 			return
 		}
-		defer c.Close(context.Background())
+		defer func() { _ = c.Close(context.Background()) }()
 		_, _ = c.Exec(context.Background(), "DROP DATABASE IF EXISTS "+pgx.Identifier{name}.Sanitize()+" WITH (FORCE)")
 	}
 	return u.String(), stop, nil

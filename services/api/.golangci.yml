@@ -1,0 +1,70 @@
+# golangci-lint v2. gosec, errcheck e staticcheck ligados; o código gerado pelo
+# sqlc é excluído. Rode `make lint` em services/api.
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - gosec
+    - bodyclose
+    - copyloopvar
+    - errorlint
+    - gocritic
+    # misspell fica de fora: textos de interface e de teste são em pt-BR e o
+    # dicionário en-US os marca como erros ("comando", "validade", ...).
+    - nilerr
+    - noctx
+    - prealloc
+    - revive
+    - rowserrcheck
+    - sqlclosecheck
+    - unconvert
+    - unparam
+    - usestdlibvars
+  settings:
+    gosec:
+      excludes:
+        - G104 # errcheck já cobre erros ignorados
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+    gocritic:
+      disabled-checks:
+        - ifElseChain
+  exclusions:
+    generated: lax
+    paths:
+      - internal/db/sqlc
+    rules:
+      - path: _test\.go
+        linters:
+          - gosec
+          - noctx
+          - bodyclose
+          - unparam
+      - path: internal/testdb/
+        linters:
+          - gosec
+      # internal/config declara os NOMES das variáveis de ambiente (STRIPE_SECRET_KEY,
+      # DM_APIKEY_PEPPER...); o G101 os confunde com credenciais.
+      - path: internal/config/config\.go
+        linters:
+          - gosec
+        text: G101
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/mmtmn/docmatch
+  exclusions:
+    paths:
+      - internal/db/sqlc

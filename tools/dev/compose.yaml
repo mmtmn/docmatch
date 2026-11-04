@@ -1,0 +1,111 @@
+# Ambiente local da docmatch (Docker Compose v2). Suba com `make dev` na raiz
+# ou `tools/dev/up.sh`, que lê o .env, exporta as variáveis abaixo e espera o
+# Postgres antes de migrar.
+#
+# Variáveis (todas com padrão em up.sh, derivadas do .env):
+#   DM_DEV_PG_USER / DM_DEV_PG_PASSWORD / DM_DEV_PG_DB / DM_DEV_PG_PORT  (de DATABASE_URL)
+#   DM_DEV_MINIO_USER / DM_DEV_MINIO_PASSWORD / DM_DEV_MINIO_PORT / DM_DEV_MINIO_CONSOLE_PORT
+#   DM_DEV_MAILPIT_PORT / DM_DEV_MAILPIT_SMTP_PORT
+#   DM_DEV_STRIPE_MOCK_PORT
+#   DM_DEV_OLLAMA_PROXY_PORT / DM_DEV_OLLAMA_UPSTREAM_PORT  (perfil "llm")
+name: docmatch
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg18
+    environment:
+      POSTGRES_USER: ${DM_DEV_PG_USER:-docmatch}
+      POSTGRES_PASSWORD: ${DM_DEV_PG_PASSWORD:-docmatch}
+      POSTGRES_DB: ${DM_DEV_PG_DB:-docmatch}
+      # Checksums e coleta de estatísticas como em produção.
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - log_min_duration_statement=250ms
+      - -c
+      - timezone=UTC
+    ports:
+      - "127.0.0.1:${DM_DEV_PG_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DM_DEV_PG_USER:-docmatch} -d ${DM_DEV_PG_DB:-docmatch}"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${DM_DEV_MINIO_USER:-docmatch}
+      MINIO_ROOT_PASSWORD: ${DM_DEV_MINIO_PASSWORD:-docmatch-dev}
+    ports:
+      - "127.0.0.1:${DM_DEV_MINIO_PORT:-9000}:9000"
+      - "127.0.0.1:${DM_DEV_MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+
+  # Cria os buckets de uploads, backups e mídia (nomes do .env) e termina.
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${DM_DEV_MINIO_USER:-docmatch}
+      MINIO_ROOT_PASSWORD: ${DM_DEV_MINIO_PASSWORD:-docmatch-dev}
+      # Nome do serviço na rede do compose; o endpoint é montado no entrypoint.
+      MINIO_HOST: minio
+      DM_S3_UPLOADS_BUCKET: ${DM_S3_UPLOADS_BUCKET:-docmatch-uploads-dev}
+      DM_S3_BACKUPS_BUCKET: ${DM_S3_BACKUPS_BUCKET:-docmatch-backups-dev}
+      DM_R2_MEDIA_BUCKET: ${DM_R2_MEDIA_BUCKET:-docmatch-media-dev}
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local \"http://$${MINIO_HOST}:9000\" \"$$MINIO_ROOT_USER\" \"$$MINIO_ROOT_PASSWORD\" &&
+      for b in \"$$DM_S3_UPLOADS_BUCKET\" \"$$DM_S3_BACKUPS_BUCKET\" \"$$DM_R2_MEDIA_BUCKET\"; do
+        mc mb --ignore-existing \"local/$$b\";
+      done &&
+      echo 'buckets prontos'"
+
+  mailpit:
+    image: axllent/mailpit:latest
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    ports:
+      - "127.0.0.1:${DM_DEV_MAILPIT_PORT:-8025}:8025"
+      - "127.0.0.1:${DM_DEV_MAILPIT_SMTP_PORT:-1025}:1025"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8025/livez"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  stripe-mock:
+    image: stripe/stripe-mock:latest
+    ports:
+      - "127.0.0.1:${DM_DEV_STRIPE_MOCK_PORT:-12111}:12111"
+      - "127.0.0.1:${DM_DEV_STRIPE_MOCK_HTTPS_PORT:-12112}:12112"
+
+  # Opcional (perfil "llm"): expõe o Ollama/llama.cpp do host para outros
+  # contêineres. Usa a rede do host para alcançar o processo local.
+  ollama-proxy:
+    image: alpine/socat:latest
+    profiles: ["llm"]
+    network_mode: host
+    command: >
+      TCP-LISTEN:${DM_DEV_OLLAMA_PROXY_PORT:-11435},fork,reuseaddr
+      TCP:127.0.0.1:${DM_DEV_OLLAMA_UPSTREAM_PORT:-11434}
+
+volumes:
+  postgres-data:
+  minio-data:

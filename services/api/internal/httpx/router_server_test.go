@@ -25,7 +25,7 @@ func TestRouterEnvelopes(t *testing.T) {
 		}
 		WriteJSON(w, http.StatusCreated, p)
 	})
-	r.HandleFunc(http.MethodDelete, "/v1/items", BodyNone, func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(204) })
+	r.HandleFunc(http.MethodDelete, "/v1/items", BodyNone, func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
 
 	cases := []struct {
 		name       string
@@ -139,7 +139,7 @@ func TestServerGracefulShutdown(t *testing.T) {
 			resc <- result{err: err}
 			return
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		b, _ := io.ReadAll(resp.Body)
 		resc <- result{body: string(b)}
 	}()
@@ -148,8 +148,8 @@ func TestServerGracefulShutdown(t *testing.T) {
 	cancel() // shutdown begins while the request is in flight
 	time.Sleep(50 * time.Millisecond)
 	select {
-	case <-done:
-		t.Fatal("Serve retornou antes de drenar a requisição em andamento")
+	case err := <-done:
+		t.Fatalf("Serve retornou antes de drenar a requisição em andamento: %v", err)
 	default:
 	}
 	close(release)
@@ -233,8 +233,8 @@ func TestExtendWriteDeadline(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d", resp.StatusCode)
 	}
 	if err := ExtendWriteDeadline(httptest.NewRecorder(), time.Second); err == nil {

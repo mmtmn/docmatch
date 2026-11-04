@@ -78,7 +78,8 @@ func (s *Server) HTTPServer() *http.Server { return s.srv }
 
 // Listen binds the address; call it before Serve to learn the port.
 func (s *Server) Listen() error {
-	ln, err := net.Listen("tcp", s.addr)
+	var lc net.ListenConfig
+	ln, err := lc.Listen(context.Background(), "tcp", s.addr)
 	if err != nil {
 		return err
 	}
@@ -103,7 +104,7 @@ func (s *Server) Serve(ctx context.Context) error {
 		}
 	}
 	// Request contexts derive from baseCtx, which outlives ctx: in-flight
-	// handlers keep running during the drain and are cancelled only when
+	// handlers keep running during the drain and are canceled only when
 	// shutdown gives up.
 	baseCtx, cancelBase := context.WithCancel(context.Background())
 	defer cancelBase()
@@ -131,7 +132,9 @@ func (s *Server) Serve(ctx context.Context) error {
 		_ = s.srv.Close()
 		return err
 	}
-	<-errc
+	if err := <-errc; err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
 	s.log.Info("servidor HTTP encerrado")
 	return nil
 }

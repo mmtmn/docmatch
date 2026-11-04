@@ -22,6 +22,11 @@ import (
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "api:", err)
+		var ve *config.ValidationError
+		if errors.As(err, &ve) {
+			fmt.Fprintln(os.Stderr, "Consulte .env.example na raiz do repositório.")
+			os.Exit(2)
+		}
 		os.Exit(1)
 	}
 }
@@ -29,10 +34,6 @@ func main() {
 func run() error {
 	cfg, err := config.Load()
 	if err != nil {
-		var ve *config.ValidationError
-		if errors.As(err, &ve) {
-			return fmt.Errorf("%w\nConsulte .env.example na raiz do repositório.", err)
-		}
 		return err
 	}
 	log := logx.New(os.Stdout, cfg.Env)

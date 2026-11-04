@@ -99,7 +99,8 @@ func validateIdentifier(s string) error {
 	for i, c := range s {
 		isLetter := (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'
 		isDigit := c >= '0' && c <= '9'
-		if !isLetter && !(isDigit && i > 0) {
+		valid := isLetter || (isDigit && i > 0)
+		if !valid {
 			return fmt.Errorf("db: identificador %q inválido", s)
 		}
 	}

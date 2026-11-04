@@ -26,7 +26,7 @@ func TestAuditChainOnPostgres(t *testing.T) {
 	svc := audit.New(pgstore.NewAuditStore(d.App))
 	org := newOrg(t, d)
 
-	var entries []audit.Entry
+	entries := make([]audit.Entry, 0, 6)
 	for i := range 6 {
 		e, err := svc.Record(ctx, &org, auditActor, "run.create", auditTarget, map[string]any{"i": i, "valor": 1.50, "texto": "ação", "lista": []int{3, 1}})
 		if err != nil {

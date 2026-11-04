@@ -444,7 +444,7 @@ func TestKnownVarsMatchEnvExample(t *testing.T) {
 	if err != nil {
 		t.Skipf(".env.example indisponível (%v)", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	documented := map[string]bool{}
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {

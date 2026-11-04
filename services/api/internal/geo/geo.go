@@ -18,7 +18,7 @@ import (
 // Header names. The origin secret header name is part of the CloudFront
 // distribution configuration (infra/terraform); keep both in sync.
 const (
-	HeaderOriginSecret  = "X-DM-Origin-Secret"
+	HeaderOriginSecret  = "X-DM-Origin-Secret" //nolint:gosec // header name, not a credential
 	HeaderViewerCountry = "CloudFront-Viewer-Country"
 	HeaderViewerAddress = "CloudFront-Viewer-Address"
 )

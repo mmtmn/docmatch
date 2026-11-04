@@ -610,7 +610,8 @@ func (r *reader) identifier(name, def string) string {
 	for i, c := range v {
 		isLetter := (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'
 		isDigit := c >= '0' && c <= '9'
-		if !isLetter && !(isDigit && i > 0) {
+		valid := isLetter || (isDigit && i > 0)
+		if !valid {
 			r.problem(name, "precisa ser um identificador SQL simples (letras, dígitos e _)")
 			return ""
 		}
