@@ -103,12 +103,10 @@ func Load(fsys fs.FS) ([]Migration, error) {
 		mig.Checksum = hex.EncodeToString(sum[:])
 		out = append(out, *mig)
 	}
+	// Versions need not be contiguous: each area numbers its migrations in
+	// its own range (0010_auth_*, 0020_runs_*, ...) so parallel work never
+	// collides on a number.
 	sort.Slice(out, func(i, j int) bool { return out[i].Version < out[j].Version })
-	for i := 1; i < len(out); i++ {
-		if out[i].Version != out[i-1].Version+1 {
-			return nil, fmt.Errorf("migrations: lacuna entre as versões %d e %d", out[i-1].Version, out[i].Version)
-		}
-	}
 	return out, nil
 }
 

@@ -15,7 +15,7 @@ import (
 const consumeMagicLink = `-- name: ConsumeMagicLink :one
 UPDATE magic_links SET consumed_at = now()
 WHERE token_hash = $1 AND consumed_at IS NULL AND expires_at > now()
-RETURNING id, email, token_hash, purpose, ip_prefix, created_at, expires_at, consumed_at
+RETURNING id, email, token_hash, purpose, ip_prefix, created_at, expires_at, consumed_at, code_hash, attempts
 `
 
 func (q *Queries) ConsumeMagicLink(ctx context.Context, tokenHash []byte) (MagicLink, error) {
@@ -30,6 +30,8 @@ func (q *Queries) ConsumeMagicLink(ctx context.Context, tokenHash []byte) (Magic
 		&i.CreatedAt,
 		&i.ExpiresAt,
 		&i.ConsumedAt,
+		&i.CodeHash,
+		&i.Attempts,
 	)
 	return i, err
 }
@@ -53,7 +55,7 @@ func (q *Queries) CountRecentMagicLinks(ctx context.Context, arg CountRecentMagi
 const createMagicLink = `-- name: CreateMagicLink :one
 INSERT INTO magic_links (email, token_hash, purpose, ip_prefix, expires_at)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, email, token_hash, purpose, ip_prefix, created_at, expires_at, consumed_at
+RETURNING id, email, token_hash, purpose, ip_prefix, created_at, expires_at, consumed_at, code_hash, attempts
 `
 
 type CreateMagicLinkParams struct {
@@ -82,6 +84,8 @@ func (q *Queries) CreateMagicLink(ctx context.Context, arg CreateMagicLinkParams
 		&i.CreatedAt,
 		&i.ExpiresAt,
 		&i.ConsumedAt,
+		&i.CodeHash,
+		&i.Attempts,
 	)
 	return i, err
 }
@@ -90,7 +94,7 @@ const createUser = `-- name: CreateUser :one
 
 INSERT INTO users (email, google_sub, apple_sub, password_hash, display_name, email_verified_at)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, email, google_sub, apple_sub, password_hash, display_name, email_verified_at, last_login_at, created_at, updated_at, deleted_at
+RETURNING id, email, google_sub, apple_sub, password_hash, display_name, email_verified_at, last_login_at, created_at, updated_at, deleted_at, notifications, suspended_at, deletion_requested_at, deletion_scheduled_for
 `
 
 type CreateUserParams struct {
@@ -126,6 +130,10 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.Notifications,
+		&i.SuspendedAt,
+		&i.DeletionRequestedAt,
+		&i.DeletionScheduledFor,
 	)
 	return i, err
 }
@@ -143,7 +151,7 @@ func (q *Queries) DeleteExpiredMagicLinks(ctx context.Context) (int64, error) {
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, email, google_sub, apple_sub, password_hash, display_name, email_verified_at, last_login_at, created_at, updated_at, deleted_at FROM users WHERE id = $1 AND deleted_at IS NULL
+SELECT id, email, google_sub, apple_sub, password_hash, display_name, email_verified_at, last_login_at, created_at, updated_at, deleted_at, notifications, suspended_at, deletion_requested_at, deletion_scheduled_for FROM users WHERE id = $1 AND deleted_at IS NULL
 `
 
 func (q *Queries) GetUser(ctx context.Context, id uuid.UUID) (User, error) {
@@ -161,12 +169,16 @@ func (q *Queries) GetUser(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.Notifications,
+		&i.SuspendedAt,
+		&i.DeletionRequestedAt,
+		&i.DeletionScheduledFor,
 	)
 	return i, err
 }
 
 const getUserByAppleSub = `-- name: GetUserByAppleSub :one
-SELECT id, email, google_sub, apple_sub, password_hash, display_name, email_verified_at, last_login_at, created_at, updated_at, deleted_at FROM users WHERE apple_sub = $1 AND deleted_at IS NULL
+SELECT id, email, google_sub, apple_sub, password_hash, display_name, email_verified_at, last_login_at, created_at, updated_at, deleted_at, notifications, suspended_at, deletion_requested_at, deletion_scheduled_for FROM users WHERE apple_sub = $1 AND deleted_at IS NULL
 `
 
 func (q *Queries) GetUserByAppleSub(ctx context.Context, appleSub *string) (User, error) {
@@ -184,12 +196,16 @@ func (q *Queries) GetUserByAppleSub(ctx context.Context, appleSub *string) (User
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.Notifications,
+		&i.SuspendedAt,
+		&i.DeletionRequestedAt,
+		&i.DeletionScheduledFor,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, google_sub, apple_sub, password_hash, display_name, email_verified_at, last_login_at, created_at, updated_at, deleted_at FROM users WHERE email = $1 AND deleted_at IS NULL
+SELECT id, email, google_sub, apple_sub, password_hash, display_name, email_verified_at, last_login_at, created_at, updated_at, deleted_at, notifications, suspended_at, deletion_requested_at, deletion_scheduled_for FROM users WHERE email = $1 AND deleted_at IS NULL
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -207,12 +223,16 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.Notifications,
+		&i.SuspendedAt,
+		&i.DeletionRequestedAt,
+		&i.DeletionScheduledFor,
 	)
 	return i, err
 }
 
 const getUserByGoogleSub = `-- name: GetUserByGoogleSub :one
-SELECT id, email, google_sub, apple_sub, password_hash, display_name, email_verified_at, last_login_at, created_at, updated_at, deleted_at FROM users WHERE google_sub = $1 AND deleted_at IS NULL
+SELECT id, email, google_sub, apple_sub, password_hash, display_name, email_verified_at, last_login_at, created_at, updated_at, deleted_at, notifications, suspended_at, deletion_requested_at, deletion_scheduled_for FROM users WHERE google_sub = $1 AND deleted_at IS NULL
 `
 
 func (q *Queries) GetUserByGoogleSub(ctx context.Context, googleSub *string) (User, error) {
@@ -230,6 +250,10 @@ func (q *Queries) GetUserByGoogleSub(ctx context.Context, googleSub *string) (Us
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.Notifications,
+		&i.SuspendedAt,
+		&i.DeletionRequestedAt,
+		&i.DeletionScheduledFor,
 	)
 	return i, err
 }

@@ -11,6 +11,19 @@ import (
 	pgvector_go "github.com/pgvector/pgvector-go"
 )
 
+type AccountExport struct {
+	ID          uuid.UUID
+	UserID      uuid.UUID
+	OrgID       uuid.UUID
+	Status      string
+	RequestedAt time.Time
+	ReadyAt     *time.Time
+	ExpiresAt   *time.Time
+	Archive     []byte
+	SizeBytes   int64
+	Error       *string
+}
+
 type ApiKey struct {
 	ID              uuid.UUID
 	OrgID           uuid.UUID
@@ -269,6 +282,8 @@ type MagicLink struct {
 	CreatedAt  time.Time
 	ExpiresAt  time.Time
 	ConsumedAt *time.Time
+	CodeHash   []byte
+	Attempts   int32
 }
 
 type Match struct {
@@ -414,18 +429,22 @@ type Run struct {
 }
 
 type Session struct {
-	ID          uuid.UUID
-	UserID      uuid.UUID
-	OrgID       *uuid.UUID
-	DeviceHash  []byte
-	RefreshHash []byte
-	FamilyID    uuid.UUID
-	IpPrefix    *string
-	UserAgent   *string
-	CreatedAt   time.Time
-	LastSeenAt  time.Time
-	ExpiresAt   time.Time
-	RevokedAt   *time.Time
+	ID              uuid.UUID
+	UserID          uuid.UUID
+	OrgID           *uuid.UUID
+	DeviceHash      []byte
+	RefreshHash     []byte
+	FamilyID        uuid.UUID
+	IpPrefix        *string
+	UserAgent       *string
+	CreatedAt       time.Time
+	LastSeenAt      time.Time
+	ExpiresAt       time.Time
+	RevokedAt       *time.Time
+	AccessHash      []byte
+	AccessExpiresAt *time.Time
+	RotatedAt       *time.Time
+	Rotations       int32
 }
 
 type SourceFingerprint struct {
@@ -463,6 +482,14 @@ type Subscription struct {
 	CanceledAt           *time.Time
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
+}
+
+type TenantKey struct {
+	OrgID      uuid.UUID
+	WrappedKey []byte
+	KekVersion int32
+	CreatedAt  time.Time
+	RotatedAt  *time.Time
 }
 
 type TenantTheme struct {
@@ -530,17 +557,21 @@ type Upload struct {
 }
 
 type User struct {
-	ID              uuid.UUID
-	Email           string
-	GoogleSub       *string
-	AppleSub        *string
-	PasswordHash    *string
-	DisplayName     *string
-	EmailVerifiedAt *time.Time
-	LastLoginAt     *time.Time
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
-	DeletedAt       *time.Time
+	ID                   uuid.UUID
+	Email                string
+	GoogleSub            *string
+	AppleSub             *string
+	PasswordHash         *string
+	DisplayName          *string
+	EmailVerifiedAt      *time.Time
+	LastLoginAt          *time.Time
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+	DeletedAt            *time.Time
+	Notifications        []byte
+	SuspendedAt          *time.Time
+	DeletionRequestedAt  *time.Time
+	DeletionScheduledFor *time.Time
 }
 
 type Workflow struct {

@@ -74,7 +74,7 @@ func TestLoadParsing(t *testing.T) {
 		{"sem up", map[string]string{"0001_a.down.sql": "x"}, "sem script up", 0},
 		{"up vazio", map[string]string{"0001_a.up.sql": "  \n", "0001_a.down.sql": "y"}, "sem script up", 0},
 		{"nomes divergentes", map[string]string{"0001_a.up.sql": "x", "0001_b.down.sql": "y"}, "nomes diferentes", 0},
-		{"lacuna", map[string]string{"0001_a.up.sql": "x", "0001_a.down.sql": "y", "0003_c.up.sql": "x", "0003_c.down.sql": "y"}, "lacuna", 0},
+		{"lacuna por área é permitida", map[string]string{"0001_a.up.sql": "x", "0001_a.down.sql": "y", "0010_c.up.sql": "x", "0010_c.down.sql": "y"}, "", 2},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
