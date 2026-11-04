@@ -1,0 +1,48 @@
+---
+# apt is pointed at the egress proxy only here, after every third-party package is installed,
+# and the third-party sources are disabled in the image. Through the proxy those sources do not
+# work: packagecloud.io (CrowdSec) and download.falco.org answer both their indexes and their .deb
+# files with a redirect to a CloudFront hostname that the allowlist (FilterDefaultDeny) blocks.
+# HEAD request chains, apt user agent, checked on 2026-11-04:
+#   packagecloud.io/crowdsec/crowdsec/ubuntu/dists/noble/InRelease
+#     -> 302 d3fo0g5hm7lbuv.cloudfront.net/52998/20199/ubuntu/dists/noble/InRelease?Expires=...&Signature=... -> 200
+#   packagecloud.io/crowdsec/crowdsec/ubuntu/pool/noble/main/c/crowdsec-nginx-bouncer/crowdsec-nginx-bouncer_1.0.9_all.deb
+#     -> 302 d3fo0g5hm7lbuv.cloudfront.net/52998/20199/ubuntu/package_files/4886757.deb?Expires=...&Signature=... -> 200
+#   download.falco.org/packages/deb/dists/stable/InRelease
+#     -> 307 d20hasrqv82i0q.cloudfront.net/packages/deb/dists/stable/InRelease -> 200
+#   download.falco.org/packages/deb/stable/falco-0.36.1-aarch64.deb
+#     -> 307 d20hasrqv82i0q.cloudfront.net/packages/deb/stable/falco-0.36.1-aarch64.deb -> 200
+#   dl.cloudsmith.io (Caddy), apt.postgresql.org and ports.ubuntu.com: 200, no redirect.
+# The CDN hostnames are opaque and the URLs signed, so they are not allowlisted anywhere. The
+# build installs the third-party packages before apt uses the proxy (the firewall is not active
+# during the build), and at runtime only Ubuntu packages are ever upgraded: unattended-upgrades is
+# limited to the Ubuntu security origins and third-party packages change with a new AMI
+# (infra/README.md). With their sources disabled, the daily apt-get update of the instance only
+# talks to the Ubuntu mirrors, which the runtime allowlist (DM_EGRESS_ALLOWLIST) carries.
+- name: Disable the third-party sources in the image (their packages only change with a new AMI)
+  ansible.builtin.deb822_repository:
+    name: "{{ item.name }}"
+    types: [deb]
+    uris: "{{ item.uri }}"
+    suites: "{{ item.suite }}"
+    components: [main]
+    signed_by: "/etc/apt/keyrings/{{ item.name }}.asc"
+    architectures: [arm64]
+    enabled: false
+    state: present
+  loop: "{{ hardening_third_party_repos }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Route apt through the egress proxy
+  ansible.builtin.template:
+    src: apt-proxy.conf.j2
+    dest: /etc/apt/apt.conf.d/80docmatch-proxy
+    owner: root
+    group: root
+    mode: "0644"
+
+# What apt-daily does on the instance: fails the build if the allowlist blocks a mirror.
+- name: Refresh the package indexes through the proxy
+  ansible.builtin.apt:
+    update_cache: true

@@ -1,8 +1,9 @@
 ---
 # tinyproxy on loopback is the only path to the internet for anything that is not an AWS
 # endpoint (nftables enforces it by user). The allowlist is rendered at boot from
-# DM_EGRESS_ALLOWLIST; the file installed here is the build-time default, which also carries the
-# package repositories the rest of the build installs from (apt goes through the proxy from here on).
+# DM_EGRESS_ALLOWLIST; the file installed here is the build-time default. apt is only pointed at
+# the proxy at the end of the build, once the third-party packages are installed (apt_proxy.yml
+# explains why their repositories cannot be reached through the allowlist).
 - name: Create the tinyproxy drop-in directory
   ansible.builtin.file:
     path: /etc/systemd/system/tinyproxy.service.d
@@ -61,14 +62,6 @@
     host: 127.0.0.1
     port: "{{ hardening_proxy_port }}"
     timeout: 30
-
-- name: Route apt through the egress proxy
-  ansible.builtin.template:
-    src: apt-proxy.conf.j2
-    dest: /etc/apt/apt.conf.d/80docmatch-proxy
-    owner: root
-    group: root
-    mode: "0644"
 
 - name: Create the system.conf drop-in directory
   ansible.builtin.file:

@@ -65,3 +65,11 @@ hardening_removed_packages:
   - snap-store
 
 hardening_audit_rules_file: /etc/audit/rules.d/50-docmatch-cis.rules
+
+# Third-party apt sources (deb822, keys verified by fingerprint in packages.yml). Enabled while
+# the image is built and disabled again at the end by apt_proxy.yml (see there for why).
+hardening_third_party_repos:
+  - { name: caddy-stable, uri: "{{ hardening_repo_caddy_url }}", suite: any-version }
+  - { name: pgdg, uri: "{{ hardening_repo_pgdg_url }}", suite: "{{ ansible_facts['distribution_release'] }}-pgdg" }
+  - { name: crowdsec, uri: "{{ hardening_repo_crowdsec_url }}", suite: "{{ ansible_facts['distribution_release'] }}" }
+  - { name: falcosecurity, uri: "{{ hardening_repo_falco_url }}", suite: stable }

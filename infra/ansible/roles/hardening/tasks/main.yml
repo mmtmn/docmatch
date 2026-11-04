@@ -117,6 +117,10 @@
   ansible.builtin.import_tasks: breakglass.yml
   tags: [breakglass]
 
+- name: Apt through the proxy, third-party sources off (after every third-party install)
+  ansible.builtin.import_tasks: apt_proxy.yml
+  tags: [network, proxy, packages]
+
 - name: Filesystem mounts
   ansible.builtin.import_tasks: mounts.yml
   tags: [filesystem]
@@ -132,3 +136,7 @@
 - name: Cleanup
   ansible.builtin.import_tasks: cleanup.yml
   tags: [cleanup]
+
+- name: Build-time assertions (audit rules loaded, tmpfs mounts)
+  ansible.builtin.import_tasks: verify.yml
+  tags: [verify]
