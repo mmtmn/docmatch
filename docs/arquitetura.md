@@ -144,8 +144,11 @@ navegador                      cmd/api                              PostgreSQL
   O cliente não consegue alterar nada sem invalidar a assinatura.
 - O `HOLD` e a inserção do job acontecem na mesma transação Postgres: ou os dois existem, ou
   nenhum. É o motivo de a fila ser no Postgres ([ADR-0003](decisoes/ADR-0003-fila-no-postgres.md)).
-- Usuário anônimo pode orçar e executar com a franquia gratuita; o rascunho fica cifrado no
-  IndexedDB do navegador por 30 dias até ele entrar.
+- Usuário anônimo monta o rascunho e vê o orçamento; executar exige entrar e ter saldo. O rascunho
+  fica cifrado no IndexedDB do navegador por 30 dias até ele entrar. `config/pricing.yaml` não
+  define franquia gratuita; se ela for adotada, será declarada lá (`free_allowance`, por
+  dispositivo e IP) e os controles de abuso de
+  [ameacas.md](seguranca/ameacas.md#e1-api-pública) passam a cobri-la.
 
 ### 4.3 Execução
 

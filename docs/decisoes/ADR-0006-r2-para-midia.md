@@ -16,9 +16,11 @@ tráfego diferem dos documentos:
    servir domina.
 
 Na AWS, egresso do S3 para a internet custa na faixa de US$ 0,09 por GB (menos via CloudFront
-depois do nível gratuito). No Cloudflare R2 o egresso é zero, o armazenamento custa menos da metade
-do S3 e a API é compatível com S3. Por outro lado, o processamento de mídia acontece em Lambda sem
-rede ([ADR-0005](ADR-0005-sandbox-lambda.md)), que só enxerga o S3.
+depois do nível gratuito). No Cloudflare R2 o egresso é zero, o armazenamento é cerca de um terço
+mais barato que o S3 Standard (na faixa de US$ 0,015 contra US$ 0,023 por GB-mês) e a API é
+compatível com S3. O que decide é o egresso zero; a diferença de armazenamento é secundária. Por
+outro lado, o processamento de mídia acontece em Lambda sem rede
+([ADR-0005](ADR-0005-sandbox-lambda.md)), que só enxerga o S3.
 
 Alternativas consideradas:
 

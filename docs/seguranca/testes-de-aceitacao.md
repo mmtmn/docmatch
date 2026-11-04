@@ -402,6 +402,7 @@ pt-BR e em inglês; variantes com codificação (base64, homóglifos, zero-width
 - [ ] **CloudTrail e GuardDuty ligados.**
 
   ```bash
+  # a trilha é da conta inteira, por isso sem segmento de ambiente no nome (ADR-0011)
   aws cloudtrail get-trail-status --name "docmatch-trail" --query '[IsLogging,LatestDeliveryTime]'
   aws guardduty list-detectors --query 'DetectorIds' --output text | xargs -I{} aws guardduty get-detector --detector-id {} --query Status
   ```

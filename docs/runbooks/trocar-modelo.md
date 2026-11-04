@@ -21,8 +21,12 @@ ambiente no SSM (imediato, para incidente ou canário).
 - Candidato listado na OpenRouter com política compatível com `data_collection: deny` e com os
   parâmetros que o papel exige (`structured_output`, `reasoning`), senão `require_parameters` o
   excluirá do roteamento e você verá só `fallback` nos logs.
-- Regra de famílias respeitada: `adjudicator` ≠ `verifier` e `toolsmith` ≠ `tool_reviewer`, em
-  todas as combinações de `primary` e `fallback`. O `make ci` do harness valida.
+- Regra de famílias respeitada ([ADR-0012](../decisoes/ADR-0012-modelos-por-papel.md)): para cada
+  modelo efetivo do papel revisado (`primary` e `fallback` de `adjudicator` e de `toolsmith`), o
+  papel revisor (`verifier`, `tool_reviewer`) tem ao menos uma opção de família diferente. Não é
+  preciso que todas as combinações difiram: `toolsmith.fallback` pode ser da família de
+  `tool_reviewer.primary` desde que `tool_reviewer.fallback` seja de outra. O `make ci` do harness
+  valida.
 - Cache de replay dos testes (`DM_LLM_CACHE_DIR`) precisa ser regravado para o papel trocado;
   isso gasta tokens de verdade e exige `OPENROUTER_API_KEY` com limite de gasto definido.
 - Para `discovery`, `adjudicator`, `verifier` e `extraction`: acesso ao caso Vantara privado

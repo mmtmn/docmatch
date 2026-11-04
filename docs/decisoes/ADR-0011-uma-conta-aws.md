@@ -27,8 +27,11 @@ Alternativas consideradas:
 Uma única conta AWS, com os riscos tratados por nome, política e papel:
 
 - **Prefixos e tags.** Todo recurso se chama `docmatch-<env>-<nome>` e carrega a tag
-  `Environment`. Estados do Terraform são separados por ambiente, em bucket com versionamento e
-  trava de estado; o `backend` de cada ambiente aponta para uma chave própria.
+  `Environment`. Os poucos recursos que existem uma vez por conta, e não por ambiente (trilha do
+  CloudTrail `docmatch-trail`, detector do GuardDuty, bucket de estado do Terraform, alarme de uso
+  da conta raiz), chamam-se `docmatch-<nome>`, sem segmento de ambiente, com `Environment=shared`.
+  Estados do Terraform são separados por ambiente, nesse bucket com versionamento e trava de
+  estado; o `backend` de cada ambiente aponta para uma chave própria.
 - **Papéis por ambiente** com fronteira de permissões (`permissions boundary`): o papel de dev não
   enxerga recursos com tag `prod` (condição `aws:ResourceTag/Environment`).
 - **Políticas de negação explícita** que emulam SCPs, anexadas a todos os papéis humanos e de

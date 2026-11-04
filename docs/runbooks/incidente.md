@@ -35,7 +35,7 @@ nada seja esquecido mesmo sozinho. Se houver segunda pessoa, ela assume a comuni
   | Situação | Contenção |
   | --- | --- |
   | Gasto anômalo de tokens ou de modelo | `spending`, depois `models` |
-  | Abuso de cadastro ou franquia | `signups`; CrowdSec `cscli decisions add --ip ... --duration 24h` |
+  | Abuso de cadastro ou de orçamento anônimo | `signups`; CrowdSec `cscli decisions add --ip ... --duration 24h` |
   | Suspeita de código malicioso em ferramenta | `toolsmith` e `aws lambda put-function-concurrency --function-name docmatch-${DM_ENV}-toolrun --reserved-concurrent-executions 0` |
   | Instância possivelmente comprometida | `egress` (bloqueia saída), `maintenance`; **não** termine a instância |
   | Credencial de operador exposta | revogar sessões do papel (`aws iam put-role-policy` com negação `aws:TokenIssueTime`), depois [rotação de emergência](rotacionar-segredos.md#rotação-de-emergência) |

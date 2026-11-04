@@ -33,7 +33,7 @@ toque entrada de dados, autenticação, cobrança, sandbox ou infraestrutura, e 
 
 | Ator | Capacidade | Motivação |
 | --- | --- | --- |
-| Anônimo na internet, bots e scanners | tráfego arbitrário, uploads anônimos até a franquia | DoS, abuso da franquia, varredura |
+| Anônimo na internet, bots e scanners | tráfego arbitrário, rascunhos e orçamentos anônimos (execução só com conta e saldo; franquia gratuita só se `config/pricing.yaml` a declarar) | DoS, abuso de cadastro e de orçamento, varredura |
 | Usuário autenticado honesto | tudo que o plano permite | — (é quem protegemos) |
 | Tenant malicioso | usuário pagante, chaves de API, uploads grandes, muitas execuções | roubar dados de outros tenants, burlar cobrança, usar o sandbox como computação grátis |
 | Autor de documento malicioso | controla bytes e texto de um arquivo que um usuário honesto envia | explorar parser, injetar instruções, forjar conciliação a favor dele |
@@ -71,7 +71,7 @@ Legenda STRIDE: **S** falsificação de identidade, **T** adulteração, **R** r
 | Ameaça | STRIDE | Mitigação | Teste |
 | --- | --- | --- | --- |
 | Acesso direto à origem pulando o CloudFront (sem limites, sem logs de borda) | S, D | Grupo de segurança só com a lista de prefixos do CloudFront; Caddy exige `DM_ORIGIN_SECRET`; sem ele, 403 | nmap de fora; `curl` direto sem cabeçalho → 403 |
-| Força bruta, enumeração, scraping, abuso da franquia anônima | D, I | GCRA em quatro camadas; CrowdSec; franquia por dispositivo e IP; respostas iguais para e-mail existente ou não | k6 → 429; teste de enumeração |
+| Força bruta, enumeração, scraping, abuso de orçamento anônimo (e de franquia gratuita, se vier a existir) | D, I | GCRA em quatro camadas; CrowdSec; cotas por dispositivo e IP nas rotas anônimas; respostas iguais para e-mail existente ou não | k6 → 429; teste de enumeração |
 | IDOR entre tenants | I, E | Autorização por tenant em toda rota + RLS como segunda barreira; ids ULID | teste de RLS; teste automático de IDOR |
 | Roubo ou fixação de sessão | S | Cookie `__Host-`, `HttpOnly; Secure; SameSite=Lax`; sessão nova no login; refresh rotativo com revogação de família | testes de sessão (V7) |
 | CSRF em mutações | T | `SameSite=Lax` + conferência de `Origin`; chaves de API não usam cookie | POST sem `Origin` → 403 |

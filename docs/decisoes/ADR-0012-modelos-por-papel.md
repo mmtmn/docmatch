@@ -43,10 +43,16 @@ Roteamento por papel, declarado em `config/models.yaml` e sobrescrevível por am
 - **Regra fixa de famílias:** `adjudicator` e `verifier` são sempre de famílias diferentes;
   `toolsmith` e `tool_reviewer` também. A família é o prefixo do identificador do modelo
   (`anthropic/`, `openai/`, `google/`, `moonshotai/`, `x-ai/`, `deepseek/`, `qwen/`, `nvidia/`,
-  `baai/`). A checagem roda no boot (configuração estática) e por chamada (depois de um fallback):
-  o roteador escolhe, entre `primary` e `fallback` do papel revisor, um modelo de família diferente
-  da que efetivamente respondeu ao papel revisado; se não houver, a execução pausa com erro
-  explícito em vez de verificar com a mesma família.
+  `baai/`). A checagem tem duas formas:
+  - **estática, no boot:** para cada modelo efetivo do papel revisado (`primary` e `fallback`), o
+    papel revisor precisa ter ao menos uma opção (`primary` ou `fallback`) de família diferente.
+    Não se exige que todas as combinações difiram: `toolsmith.fallback` pode ser da mesma família
+    que `tool_reviewer.primary` desde que `tool_reviewer.fallback` seja de outra, como no
+    `config/models.yaml` atual;
+  - **por chamada, depois de um fallback:** o roteador escolhe, entre `primary` e `fallback` do
+    papel revisor, um modelo de família diferente da que efetivamente respondeu ao papel revisado;
+    se a única opção de outra família falhar (erro, timeout, limite de taxa), a execução pausa com
+    erro explícito em vez de verificar com a mesma família.
 - `fallback` entra em erro, timeout ou limite de taxa do `primary`, com registro no log de
   chamadas (`model_call`), que guarda papel, modelo efetivo, hash do prompt, tokens e custo.
 - Acesso por OpenRouter com `data_collection: deny` (só provedores sem retenção e sem treino com os
@@ -73,6 +79,8 @@ Roteamento por papel, declarado em `config/models.yaml` e sobrescrevível por am
 - O modo local tem garantias mais fracas (um modelo só, sem regra de famílias) e é dito assim na
   documentação e no log.
 - A regra de famílias precisa de configuração válida: `make ci` do harness valida
-  `config/models.yaml` contra ela, inclusive as combinações de `fallback`.
+  `config/models.yaml` com a forma estática acima (para cada modelo efetivo do papel revisado,
+  um revisor de outra família disponível), não com "todas as combinações diferentes", que
+  rejeitaria o arquivo atual.
 - O prompt é parte do modelo: cada chamada registra o hash do prompt para que uma regressão seja
   rastreável a uma mudança de texto ou de modelo.

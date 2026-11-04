@@ -51,10 +51,11 @@ ssm_run "systemctl restart docmatch-env.service docmatch-api docmatch-worker"
 
 ### `signups`
 
-- **Para:** criação de contas e primeiro login por provedor; franquia anônima também.
+- **Para:** criação de contas e primeiro login por provedor; orçamentos anônimos também (e a
+  franquia gratuita, se vier a existir em `config/pricing.yaml`).
   Mensagem: "Novos cadastros estão temporariamente fechados."
 - **Mantém:** login de contas existentes.
-- **Use em:** abuso de franquia, onda de bots, cota de e-mail estourada.
+- **Use em:** abuso de cadastro ou de orçamento anônimo, onda de bots, cota de e-mail estourada.
 
 ### `models`
 
