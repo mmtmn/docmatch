@@ -72,7 +72,7 @@ Portão:
 - [ ] `terraform apply` em staging sem drift; origem só pela lista de prefixos do CloudFront.
 - [ ] Lambda `scanner` recusa o corpus de uploads e produz extratos canônicos para os formatos de documento.
 - [ ] Custo de staging abaixo de US$ 20/mês no relatório de custos.
-- [ ] `docs/` completo: arquitetura, ADRs, segurança, runbooks, este plano; verificador de links verde.
+- [ ] `docs/` completo: arquitetura, ADRs, segurança, runbooks, este plano; `docs/scripts/check-links.py` verde e rodando como etapa `lint/links` do `make ci`.
 
 ### Fase 1: Harness e caso Vantara
 

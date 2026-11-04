@@ -50,8 +50,11 @@ python3 -I docs/scripts/check-links.py docs # só esta pasta
 ```
 
 O verificador de links não tem dependências além do Python 3 da máquina. Ele ignora blocos de
-código, links externos (`http`, `mailto`) e confere âncoras `#titulo` com a mesma regra de
-*slug* do GitHub.
+código e links externos (`http`, `mailto`), confere âncoras `#titulo` com a mesma regra de
+*slug* do GitHub, exige definição (`[id]: alvo`) para toda referência `[texto][id]` ou `[id][]`
+no mesmo arquivo e acusa como quebrado um `.md` que não seja UTF-8 válido em vez de abortar.
+Ele ainda não roda no `make ci`: a etapa `lint/links` em `tools/ci/run.sh` é um PR à parte, fora
+de `docs/`; até lá, rode-o antes de abrir qualquer PR que toque um `.md`.
 
 ## Como adicionar um documento
 

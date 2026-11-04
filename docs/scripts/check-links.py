@@ -9,12 +9,18 @@ No dependencies beyond the standard library. Exit status 1 when any link is brok
 
 What is checked:
   - inline links  [text](target)  and reference definitions  [id]: target
+  - reference uses  [text][id]  and  [id][]  must have an  [id]:  definition in the same file
+    (labels compare case-insensitively with whitespace collapsed, as in CommonMark)
   - relative targets must exist on disk (directories are accepted)
   - "#anchor" targets, with or without a path, must match a heading slug of the target
     Markdown file, using the same slug rule GitHub applies
+  - every file must be valid UTF-8; one that is not is reported as broken instead of
+    aborting the whole run
 What is skipped:
   - anything inside fenced code blocks or inline code spans
   - targets with a URL scheme (http:, https:, mailto:, tel:, ...)
+  - shortcut references  [id]  on their own (indistinguishable from plain brackets) and
+    footnotes  [^n]
 """
 from __future__ import annotations
 
@@ -27,7 +33,8 @@ from urllib.parse import unquote
 FENCE_RE = re.compile(r"^(```|~~~)")
 INLINE_CODE_RE = re.compile(r"`[^`\n]*`")
 INLINE_LINK_RE = re.compile(r"!?\[(?:[^\]]|\\\])*\]\(\s*<?([^)\s>]+)>?(?:\s+\"[^\"]*\")?\s*\)")
-REF_DEF_RE = re.compile(r"^\s{0,3}\[[^\]]+\]:\s*<?(\S+?)>?(?:\s+\"[^\"]*\")?\s*$")
+REF_DEF_RE = re.compile(r"^\s{0,3}\[([^\]]+)\]:\s*<?(\S+?)>?(?:\s+\"[^\"]*\")?\s*$")
+REF_USE_RE = re.compile(r"!?\[((?:[^\[\]\\]|\\.)+)\]\[([^\[\]]*)\]")
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
 SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]*:")
 HTML_ANCHOR_RE = re.compile(r"<a\s+(?:id|name)=\"([^\"]+)\"")
@@ -86,13 +93,20 @@ def slugify(heading: str) -> str:
     return text.replace(" ", "-")
 
 
+def normalize_label(label: str) -> str:
+    """CommonMark link labels match case-insensitively with internal whitespace collapsed."""
+    return " ".join(label.split()).casefold()
+
+
 def heading_slugs(path: str, cache: dict[str, set[str]]) -> set[str]:
     if path in cache:
         return cache[path]
     slugs: set[str] = set()
     seen: dict[str, int] = {}
     try:
-        with open(path, encoding="utf-8") as fh:
+        # A target that is not valid UTF-8 is reported when that file itself is checked;
+        # here undecodable bytes are replaced so its headings can still be matched.
+        with open(path, encoding="utf-8", errors="replace") as fh:
             raw = fh.read().splitlines()
     except OSError:
         cache[path] = slugs
@@ -111,23 +125,40 @@ def heading_slugs(path: str, cache: dict[str, set[str]]) -> set[str]:
     return slugs
 
 
-def iter_targets(lines: list[str]):
+def parse_links(lines: list[str]) -> tuple[list[tuple[int, str]], set[str], list[tuple[int, str]]]:
+    """Returns (link targets, defined reference labels, used reference labels) with line numbers."""
+    targets: list[tuple[int, str]] = []
+    defined: set[str] = set()
+    used: list[tuple[int, str]] = []
     for number, line in enumerate(strip_code(lines), start=1):
         ref = REF_DEF_RE.match(line)
         if ref:
-            yield number, ref.group(1)
+            if not ref.group(1).startswith("^"):  # footnote definitions are not links
+                defined.add(normalize_label(ref.group(1)))
+                targets.append((number, ref.group(2)))
             continue
         for match in INLINE_LINK_RE.finditer(line):
-            yield number, match.group(1)
+            targets.append((number, match.group(1)))
+        for match in REF_USE_RE.finditer(line):
+            label = match.group(2) or match.group(1)  # [text][id] or collapsed [id][]
+            if not label.startswith("^"):
+                used.append((number, normalize_label(label)))
+    return targets, defined, used
 
 
 def check_file(path: str, root: str, cache: dict[str, set[str]]) -> tuple[int, list[str]]:
-    with open(path, encoding="utf-8") as fh:
-        lines = fh.read().splitlines()
+    rel = os.path.relpath(path, root)
+    try:
+        with open(path, encoding="utf-8") as fh:
+            lines = fh.read().splitlines()
+    except UnicodeDecodeError as exc:
+        return 0, [f"{rel}: não é UTF-8 válido (byte {exc.start})"]
+    except OSError as exc:
+        return 0, [f"{rel}: não foi possível ler: {exc.strerror}"]
     checked = 0
     broken: list[str] = []
-    rel = os.path.relpath(path, root)
-    for number, target in iter_targets(lines):
+    targets, defined, used = parse_links(lines)
+    for number, target in targets:
         if SCHEME_RE.match(target) or target.startswith("//"):
             continue
         checked += 1
@@ -145,6 +176,9 @@ def check_file(path: str, root: str, cache: dict[str, set[str]]) -> tuple[int, l
                 broken.append(f"{rel}:{number}: âncora em diretório: {target}")
             elif resolved.endswith(".md") and unquote(anchor).lower() not in heading_slugs(resolved, cache):
                 broken.append(f"{rel}:{number}: âncora não encontrada: {target}")
+    for number, label in used:
+        if label not in defined:
+            broken.append(f"{rel}:{number}: referência sem definição: [{label}]")
     return checked, broken
 
 
