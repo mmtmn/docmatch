@@ -72,7 +72,7 @@ chardetng = "1.0.0"
 
 # formats
 csv = "1.4.0"
-calamine = "0.38.0"
+calamine = { version = "0.38.0", features = ["dates"] }
 mailparse = "0.18.0"
 quick-xml = "0.42.0"
 rust_xlsxwriter = "0.102.0"
