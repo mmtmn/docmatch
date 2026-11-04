@@ -19,7 +19,7 @@ command -v lynis >/dev/null 2>&1 || die "lynis não instalado"
 
 log "executando lynis audit system --quick (mínimo exigido: $min_score)"
 # Lynis returns non-zero when it finds warnings; the verdict here is the hardening index only.
-lynis audit system --quick --quiet --no-colors --report-file "$report" --log-file "$log" >/dev/null 2>&1 || true
+lynis audit system --quick --quiet --no-colors --report-file "$report" --logfile "$log" >/dev/null 2>&1 || true
 
 [[ -r "$report" ]] || die "relatório não gerado em $report"
 index="$(grep -E '^hardening_index=' "$report" | tail -1 | cut -d= -f2 | tr -d '[:space:]')"

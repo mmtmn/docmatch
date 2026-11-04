@@ -28,16 +28,21 @@
   loop: [docmatch-clamscan.service, docmatch-clamscan.timer]
   notify: Reload systemd
 
+- name: Stop the freshclam daemon the package started (it holds the database lock)
+  ansible.builtin.systemd_service:
+    name: clamav-freshclam.service
+    state: stopped
+
+- name: Download the signature database once during the build (through the proxy)
+  ansible.builtin.command:
+    cmd: freshclam --quiet --no-dns
+  register: hardening_freshclam
+  changed_when: hardening_freshclam.rc == 0
+  failed_when: false
+
 - name: Enable freshclam and the weekly scan
   ansible.builtin.systemd_service:
     name: "{{ item }}"
     enabled: true
     daemon_reload: true
   loop: [clamav-freshclam.service, docmatch-clamscan.timer]
-
-- name: Download the signature database once during the build
-  ansible.builtin.command:
-    cmd: freshclam --quiet --no-dns
-  register: hardening_freshclam
-  changed_when: hardening_freshclam.rc == 0
-  failed_when: false

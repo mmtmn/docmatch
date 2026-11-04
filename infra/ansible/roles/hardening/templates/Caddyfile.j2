@@ -5,6 +5,8 @@
 	admin unix//run/caddy/admin.sock
 	auto_https disable_redirects
 	email {$DM_ALERT_EMAIL}
+	# Third-party handler: decide its place in the pipeline (after the origin secret check).
+	order crowdsec before respond
 	servers {
 		# Only CloudFront reaches 443 (security group + nftables) and every request must carry the
 		# origin secret, so the forwarded client address can be trusted from any peer.

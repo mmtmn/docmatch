@@ -4,7 +4,9 @@
 #   inbound : 443 from CloudFront's origin-facing ranges (the security group enforces the same)
 #   outbound: VPC link-local services, AWS endpoints for the listed users, the egress proxy for
 #             everything else. No DNS, NTP or HTTP leaves otherwise.
-flush ruleset
+# Only the docmatch table is replaced on reload: the CrowdSec bouncer keeps its own tables.
+table inet docmatch {}
+delete table inet docmatch
 
 include "/etc/nftables.d/*.nft"
 

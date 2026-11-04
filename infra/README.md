@@ -85,7 +85,8 @@ por `aws iam get-user` e depois por `aws ec2 describe-security-groups`.
    `wait_for_certificate_validation = false` e `ami_id = ""`. Anote os outputs `app_subnet_id`,
    `app_security_group_id` e `packer_instance_profile_name`.
 3. **AMI**: copie `packer/example.pkrvars.hcl` para `packer/build.auto.pkrvars.hcl` com os três
-   outputs acima e rode `make -C infra packer-build`. O Packer entra pela SSM (nada de porta 22),
+   outputs acima e rode `make -C infra packer-build` (exige o `session-manager-plugin` da AWS na
+   máquina de build). O Packer entra pela SSM (nada de porta 22),
    aplica o papel `hardening`, roda o portão do Lynis (índice ≥ 90, senão a AMI não é criada),
    remove o OpenSSH e inicializa o AIDE. O id da AMI fica em `packer/manifest.json`.
 4. **prod**: mesmo fluxo de tfvars; `make -C infra init-prod plan-prod apply-prod`. Depois do

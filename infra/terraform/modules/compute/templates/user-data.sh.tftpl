@@ -82,7 +82,7 @@ fi
 
 # 4. Secrets and configuration: SSM Parameter Store -> /run/docmatch/env (tmpfs, 0400, docmatch).
 #    The unit refuses to finish while a secret still holds the Terraform placeholder.
-systemctl start docmatch-env.service
+systemctl enable --now docmatch-env.service
 
 # 5. Services of this role. Security services (nftables, auditd, CrowdSec, Falco...) are enabled
 #    in the AMI and already running.

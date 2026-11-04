@@ -128,16 +128,16 @@ hardening_sysctl:
   net.ipv4.icmp_ignore_bogus_error_responses: 1
   net.ipv4.ip_forward: 0
   net.ipv4.tcp_rfc1337: 1
-  net.ipv4.tcp_timestamps: 0
+  net.ipv4.tcp_timestamps: 1
   net.ipv6.conf.all.accept_redirects: 0
   net.ipv6.conf.default.accept_redirects: 0
   net.ipv6.conf.all.accept_source_route: 0
   net.ipv6.conf.default.accept_source_route: 0
-  net.ipv6.conf.all.accept_ra: 0
-  net.ipv6.conf.default.accept_ra: 0
+  # accept_ra stays at its default: EC2 delivers the IPv6 default route through router
+  # advertisements, and forwarding is off so RAs are honoured without the host acting as a router.
   net.ipv6.conf.all.forwarding: 0
-  net.ipv6.conf.all.use_tempaddr: 2
-  net.ipv6.conf.default.use_tempaddr: 2
+  net.ipv6.conf.all.use_tempaddr: 0
+  net.ipv6.conf.default.use_tempaddr: 0
   vm.swappiness: 120
   vm.page-cluster: 0
 

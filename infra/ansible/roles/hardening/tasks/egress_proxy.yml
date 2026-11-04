@@ -1,7 +1,25 @@
 ---
 # tinyproxy on loopback is the only path to the internet for anything that is not an AWS
 # endpoint (nftables enforces it by user). The allowlist is rendered at boot from
-# DM_EGRESS_ALLOWLIST; the file installed here is the build-time default.
+# DM_EGRESS_ALLOWLIST; the file installed here is the build-time default, which also carries the
+# package repositories the rest of the build installs from (apt goes through the proxy from here on).
+- name: Create the tinyproxy drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/tinyproxy.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Harden the tinyproxy unit
+  ansible.builtin.template:
+    src: tinyproxy-override.conf.j2
+    dest: /etc/systemd/system/tinyproxy.service.d/override.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart tinyproxy
+
 - name: Configure tinyproxy
   ansible.builtin.template:
     src: tinyproxy.conf.j2
@@ -28,30 +46,37 @@
     group: root
     mode: "0750"
 
-- name: Harden the tinyproxy unit
+- name: Apply the proxy configuration now (the rest of the build installs through it)
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start tinyproxy
+  ansible.builtin.systemd_service:
+    name: tinyproxy
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Wait for the proxy port
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ hardening_proxy_port }}"
+    timeout: 30
+
+- name: Route apt through the egress proxy
   ansible.builtin.template:
-    src: tinyproxy-override.conf.j2
-    dest: /etc/systemd/system/tinyproxy.service.d/override.conf
+    src: apt-proxy.conf.j2
+    dest: /etc/apt/apt.conf.d/80docmatch-proxy
     owner: root
     group: root
     mode: "0644"
-  notify:
-    - Reload systemd
-    - Restart tinyproxy
 
-- name: Create the tinyproxy drop-in directory first
+- name: Create the system.conf drop-in directory
   ansible.builtin.file:
-    path: /etc/systemd/system/tinyproxy.service.d
+    path: /etc/systemd/system.conf.d
     state: directory
     owner: root
     group: root
     mode: "0755"
-
-- name: Enable tinyproxy
-  ansible.builtin.systemd_service:
-    name: tinyproxy
-    enabled: true
-    daemon_reload: true
 
 - name: Export the proxy to every systemd service (NO_PROXY keeps AWS endpoints direct)
   ansible.builtin.template:
@@ -60,14 +85,6 @@
     owner: root
     group: root
     mode: "0644"
-
-- name: Create the system.conf drop-in directory first
-  ansible.builtin.file:
-    path: /etc/systemd/system.conf.d
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
 
 - name: Export the proxy to interactive sessions
   ansible.builtin.template:

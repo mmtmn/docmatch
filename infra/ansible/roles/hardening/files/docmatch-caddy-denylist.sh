@@ -20,7 +20,6 @@ fi
     echo 'respond @denied 404'
   fi
 } > "$tmp"
-if caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1; then :; fi
 install -m 0640 -o root -g caddy "$tmp" "$snippet"
 if systemctl is-active --quiet caddy; then
   systemctl reload caddy

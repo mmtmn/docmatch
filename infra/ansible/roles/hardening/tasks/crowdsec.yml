@@ -38,6 +38,12 @@
     mode: "0600"
   notify: Restart crowdsec
 
+- name: Refresh the hub index
+  ansible.builtin.command:
+    cmd: cscli hub update
+  register: hardening_cscli_hub
+  changed_when: "'Updated' in hardening_cscli_hub.stdout or 'updated' in hardening_cscli_hub.stderr | default('')"
+
 - name: Install the hub collections
   ansible.builtin.command:
     cmd: cscli collections install --ignore crowdsecurity/caddy crowdsecurity/linux crowdsecurity/base-http-scenarios crowdsecurity/http-cve

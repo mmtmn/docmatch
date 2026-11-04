@@ -10,22 +10,6 @@
     group: root
     mode: "0750"
 
-- name: Generate the AWS range sets for the first boot
-  ansible.builtin.command:
-    cmd: /usr/local/sbin/docmatch-aws-ranges --no-reload
-  register: hardening_aws_ranges
-  changed_when: hardening_aws_ranges.rc == 0
-
-- name: Install the ruleset
-  ansible.builtin.template:
-    src: nftables.conf.j2
-    dest: /etc/nftables.conf
-    owner: root
-    group: root
-    mode: "0640"
-    validate: nft -c -f %s
-  notify: Reload nftables
-
 - name: Install the break-glass include (empty unless enabled)
   ansible.builtin.template:
     src: nftables-breakglass.nft.j2
@@ -33,9 +17,23 @@
     owner: root
     group: root
     mode: "0640"
-  notify: Reload nftables
 
-- name: Enable nftables at boot (the ruleset is loaded by the service, not during the build)
+- name: Generate the AWS range sets for the first boot
+  ansible.builtin.command:
+    cmd: /usr/local/sbin/docmatch-aws-ranges --no-reload
+  register: hardening_aws_ranges
+  changed_when: hardening_aws_ranges.rc == 0
+
+- name: Install the ruleset (checked with nft -c; loaded by nftables.service at boot, not during the build)
+  ansible.builtin.template:
+    src: nftables.conf.j2
+    dest: /etc/nftables.conf
+    owner: root
+    group: root
+    mode: "0640"
+    validate: nft -c -f %s
+
+- name: Enable nftables at boot
   ansible.builtin.systemd_service:
     name: nftables
     enabled: true

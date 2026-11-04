@@ -3,6 +3,7 @@
 # /usr/local/sbin/docmatch-egress-allowlist regenerates this file from DM_EGRESS_ALLOWLIST.
 {% for host in hardening_build_allowlist | default([
   'archive.ubuntu.com', 'security.ubuntu.com', 'ports.ubuntu.com', 'esm.ubuntu.com',
+  'dl.cloudsmith.io', 'apt.postgresql.org', 'packagecloud.io', 'download.falco.org',
   'database.clamav.net', 'api.crowdsec.net', 'hub-cdn.crowdsec.net', 'api.snapcraft.io',
   'snapcraftcontent.com', 'acme-v02.api.letsencrypt.org', 'caddyserver.com']) %}
 ^([a-z0-9-]+\.)*{{ host | replace('.', '\\.') }}$

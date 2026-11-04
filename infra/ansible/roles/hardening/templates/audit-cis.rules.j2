@@ -40,14 +40,14 @@
 -w /var/log/wtmp -p wa -k session
 -w /var/log/btmp -p wa -k session
 
-## Permission and ownership changes
--a always,exit -F arch=b64 -S chmod,fchmod,fchmodat -F auid>=1000 -F auid!=unset -k perm_mod
--a always,exit -F arch=b64 -S chown,fchown,lchown,fchownat -F auid>=1000 -F auid!=unset -k perm_mod
+## Permission and ownership changes (aarch64 has only the *at variants of these syscalls)
+-a always,exit -F arch=b64 -S fchmod,fchmodat,fchmodat2 -F auid>=1000 -F auid!=unset -k perm_mod
+-a always,exit -F arch=b64 -S fchown,fchownat -F auid>=1000 -F auid!=unset -k perm_mod
 -a always,exit -F arch=b64 -S setxattr,lsetxattr,fsetxattr,removexattr,lremovexattr,fremovexattr -F auid>=1000 -F auid!=unset -k perm_mod
 
 ## Unauthorised access attempts
--a always,exit -F arch=b64 -S creat,open,openat,truncate,ftruncate -F exit=-EACCES -F auid>=1000 -F auid!=unset -k access
--a always,exit -F arch=b64 -S creat,open,openat,truncate,ftruncate -F exit=-EPERM -F auid>=1000 -F auid!=unset -k access
+-a always,exit -F arch=b64 -S openat,openat2,truncate,ftruncate -F exit=-EACCES -F auid>=1000 -F auid!=unset -k access
+-a always,exit -F arch=b64 -S openat,openat2,truncate,ftruncate -F exit=-EPERM -F auid>=1000 -F auid!=unset -k access
 
 ## Privileged commands
 -a always,exit -F path=/usr/bin/sudo -F perm=x -F auid>=1000 -F auid!=unset -k privileged
@@ -67,7 +67,7 @@
 -a always,exit -F arch=b64 -S mount -F auid>=1000 -F auid!=unset -k mounts
 
 ## File deletion by users
--a always,exit -F arch=b64 -S unlink,unlinkat,rename,renameat -F auid>=1000 -F auid!=unset -k delete
+-a always,exit -F arch=b64 -S unlinkat,renameat,renameat2 -F auid>=1000 -F auid!=unset -k delete
 
 ## sudoers and sudo log
 -w /etc/sudoers -p wa -k scope

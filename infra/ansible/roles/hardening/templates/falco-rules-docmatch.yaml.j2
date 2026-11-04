@@ -28,26 +28,28 @@
   tags: [docmatch, execution]
 
 - rule: Outbound connection by a docmatch service bypassing the proxy
-  desc: Application processes talk to AWS endpoints directly and to everything else through the proxy; any other destination port is suspicious.
+  desc: Application processes reach AWS endpoints on 443 directly, the proxy and PostgreSQL on loopback, and nothing else.
   condition: >
     outbound and proc.name in (docmatch_binaries)
-    and not fd.sport in (8080, 8443)
-    and not (fd.rip = "127.0.0.1" and fd.rport in (8118, 5432))
-    and not fd.rport in (443)
+    and not (fd.rip in ("127.0.0.1", "::1") and fd.rport in ({{ hardening_proxy_port }}, {{ hardening_pg_port }}, 8080))
+    and not fd.rport = 443
   output: >
     Unexpected outbound connection from a docmatch service (proc=%proc.name connection=%fd.name)
   priority: WARNING
   tags: [docmatch, network]
 
-# Expected activity on this image, excluded from the upstream rules.
+# Expected activity on this image, excluded from the upstream rules (condition appended).
 - rule: Read sensitive file untrusted
-  append: true
   condition: and not proc.name in (docmatch-render-, lynis, rkhunter, aide, debsums, sudo, unix_chkpwd, ssm-agent-worke, ssm-session-wor)
+  override:
+    condition: append
 
 - rule: Write below etc
-  append: true
-  condition: and not proc.name in (docmatch-egress-, docmatch-caddy-, docmatch-aws-ran, fail2ban-server, unattended-upgr, dpkg, apt-get, certbot, caddy, freshclam)
+  condition: and not proc.name in (docmatch-egress-, docmatch-caddy-, docmatch-aws-ran, fail2ban-server, unattended-upgr, dpkg, apt-get, caddy, freshclam)
+  override:
+    condition: append
 
 - rule: Run shell untrusted
-  append: true
   condition: and not proc.pname in (systemd, cron, ssm-session-wor, sudo)
+  override:
+    condition: append
