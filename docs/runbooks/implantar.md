@@ -31,7 +31,9 @@ em `s3://$DM_S3_BACKUPS_BUCKET/releases/<versão>/`. Nada é compilado na instâ
    ```bash
    VERSION=services/api/v0.9.3       # tags com prefixo de caminho (ADR-0001); o harness acompanha na mesma release
    git tag -a "$VERSION" -m "release $VERSION" && git push origin "$VERSION"
-   gh run watch --exit-status
+   # sem id, `gh run watch` abre um seletor interativo; pegue a execução da tag (leva alguns segundos para aparecer)
+   until RUN_ID="$(gh run list --branch "$VERSION" --limit 1 --json databaseId -q '.[0].databaseId')" && [ -n "$RUN_ID" ]; do sleep 5; done
+   gh run watch "$RUN_ID" --exit-status
    ```
 
 2. Verifique a proveniência e o checksum **antes** de a instância tocar no artefato.
@@ -128,16 +130,19 @@ invalidar o cache.
 SITE_BUCKET="$(terraform -chdir=infra/terraform/envs/$DM_ENV output -raw site_bucket)"
 CF_ID="$(terraform -chdir=infra/terraform/envs/$DM_ENV output -raw cloudfront_distribution_id)"
 pnpm -C apps/web install --frozen-lockfile && pnpm -C apps/web build
-# ativos com hash no nome: cache longo e imutável; HTML: sem cache
-aws s3 sync apps/web/dist "s3://$SITE_BUCKET" --delete --exclude '*.html' --cache-control 'public, max-age=31536000, immutable'
-aws s3 sync apps/web/dist "s3://$SITE_BUCKET" --exclude '*' --include '*.html' --cache-control 'no-cache' --content-type 'text/html; charset=utf-8'
+# ativos com hash no nome: cache longo e imutável; HTML: sem cache.
+# status/* fica fora dos dois sync (o último filtro que casa decide): a página de status é publicada
+# só por incidente.md, e um deploy do site não pode apagá-la (--delete) nem sobrescrevê-la
+aws s3 sync apps/web/dist "s3://$SITE_BUCKET" --delete --exclude 'status/*' --exclude '*.html' --cache-control 'public, max-age=31536000, immutable'
+aws s3 sync apps/web/dist "s3://$SITE_BUCKET" --exclude '*' --include '*.html' --exclude 'status/*' --cache-control 'no-cache' --content-type 'text/html; charset=utf-8'
 aws cloudfront create-invalidation --distribution-id "$CF_ID" --paths '/*'
 curl -s "$DM_PUBLIC_BASE_URL/" | grep -o '<title>[^<]*</title>'
 ```
 
-O blog (fase 5) usa o mesmo caminho a partir do worker, com `--include 'blog/*'` apenas; a
-página de status (`status/`) nunca é tocada pelo `--delete` (está em `--exclude` no script de
-publicação de `apps/web`).
+O blog (fase 5) usa o mesmo caminho a partir do worker, com `--include 'blog/*'` apenas. A página
+de status (`status/`) é publicada só por [incidente.md](incidente.md#comunicação) e fica fora dos
+dois `sync` acima pelo `--exclude 'status/*'`; o script de publicação de `apps/web` (fase 2) tem
+de manter o mesmo `--exclude`.
 
 **Rollback:** publique o commit anterior; o bucket tem versionamento como segunda opção.
 
