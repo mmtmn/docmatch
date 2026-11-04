@@ -142,8 +142,10 @@ aws s3api list-object-versions --bucket "$DM_S3_UPLOADS_BUCKET" --prefix "$KEY" 
 # apagado: remova o marcador de exclusão e a versão anterior volta a ser a atual
 aws s3api delete-object --bucket "$DM_S3_UPLOADS_BUCKET" --key "$KEY" --version-id '<VersionId do DeleteMarker>'
 # sobrescrito: copie a versão boa por cima
+# (--ssekms-key-id é obrigatório: SSE-KMS sem chave usa a aws/s3, que os papéis de serviço não decifram)
 aws s3api copy-object --bucket "$DM_S3_UPLOADS_BUCKET" --key "$KEY" \
-  --copy-source "${DM_S3_UPLOADS_BUCKET}/${KEY}?versionId=<VersionId boa>" --server-side-encryption aws:kms
+  --copy-source "${DM_S3_UPLOADS_BUCKET}/${KEY}?versionId=<VersionId boa>" \
+  --server-side-encryption aws:kms --ssekms-key-id "$KMS_KEY_ID"
 ```
 
 Para `runs/`, a réplica em `s3://$DM_S3_BACKUPS_BUCKET/runs/` serve de fonte se as versões já

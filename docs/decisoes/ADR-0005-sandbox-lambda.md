@@ -43,8 +43,10 @@ Regras:
   Parquet/JSONL, derivados de mídia recodificados por uma cadeia de ferramentas confiável).
 - Papel IAM por função, com permissão de leitura só no prefixo de entrada e de escrita só no
   prefixo de saída, ambos dentro do bucket `DM_S3_UPLOADS_BUCKET`.
-- Dados entram e saem pelo S3, nunca pelo payload da invocação. Arquivos grandes de vídeo são
-  divididos pelo worker em trechos de até 10 minutos antes da invocação.
+- Dados entram e saem pelo S3, nunca pelo payload da invocação. Mídia longa é dividida **dentro
+  da função `media`**: a primeira invocação só demuxa o contêiner e grava trechos de até 10 minutos
+  em `staging/`; as seguintes processam um trecho cada. A instância nunca abre o contêiner, nem
+  para dividir.
 - Falha de qualquer tipo (timeout, memória, exceção, assinatura de malware) resulta em `rejected`
   com motivo em pt-BR; nunca em "tentar na instância".
 - Assinaturas do ClamAV e regras YARA entram em uma camada da função construída diariamente pelo
@@ -61,8 +63,8 @@ Regras:
 - Custo próximo de zero no estágio inicial (nível gratuito do Lambda cobre a carga esperada).
 - Partida a frio de 1 a 2 segundos por invocação. Aceitável: a varredura já é assíncrona e o
   cliente vê progresso por SSE.
-- O teto de 15 minutos obriga a dividir mídia longa; a divisão é feita pelo worker e o alinhamento
-  dos trechos pelo harness.
+- O teto de 15 minutos obriga a dividir mídia longa; a divisão é feita pela própria função `media`
+  (invocação de demux) e o alinhamento dos trechos pelo harness.
 - Mídia no R2 precisa ser copiada para `staging/` no S3 antes da invocação
   ([ADR-0006](ADR-0006-r2-para-midia.md)); a cópia expira em um dia por regra de ciclo de vida.
 - Testar a fronteira é obrigatório: o corpus de uploads de `testdata/security-corpus` roda contra
