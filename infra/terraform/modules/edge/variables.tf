@@ -50,6 +50,17 @@ variable "origin_secret_header_name" {
   default     = "x-docmatch-origin-secret"
 }
 
+variable "viewer_ip_header_name" {
+  description = "Request header the CloudFront function sets to the viewer address, overwriting any value the viewer sent; Caddy takes the client IP from it (DM_VIEWER_IP_HEADER)."
+  type        = string
+  default     = "x-docmatch-viewer-ip"
+
+  validation {
+    condition     = can(regex("^[a-z0-9-]+$", var.viewer_ip_header_name))
+    error_message = "viewer_ip_header_name must be a lowercase header name (CloudFront Functions expose headers in lowercase)."
+  }
+}
+
 variable "api_path_patterns" {
   description = "Path patterns routed to the application origin instead of the static site."
   type        = list(string)
@@ -89,7 +100,7 @@ variable "dnssec_enabled" {
 }
 
 variable "wait_for_certificate_validation" {
-  description = "Wait for the ACM certificate to validate (requires the zone's NS to be delegated). Set to false on the very first apply, before the registrar points at Route 53."
+  description = "Wait for the ACM certificate to validate and serve the domain from the distribution (requires the zone's NS to be delegated). false on the very first apply, before the registrar points at Route 53: the certificate is requested but the distribution runs on the default *.cloudfront.net certificate without the domain aliases until the next apply with true."
   type        = bool
   default     = true
 }

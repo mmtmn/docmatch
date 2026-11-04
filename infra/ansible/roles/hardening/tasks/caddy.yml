@@ -81,6 +81,7 @@
   environment:
     DM_DOMAIN: example.invalid
     DM_ORIGIN_SECRET_HEADER: x-docmatch-origin-secret
+    DM_VIEWER_IP_HEADER: x-docmatch-viewer-ip
     DM_ORIGIN_SECRET: build-time-placeholder
     DM_ROUTE53_ZONE_ID: Z0000000000000000000
     DM_ALERT_EMAIL: root@example.invalid

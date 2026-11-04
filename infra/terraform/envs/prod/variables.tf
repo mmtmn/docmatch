@@ -71,7 +71,7 @@ variable "worker_desired_capacity" {
 }
 
 variable "wait_for_certificate_validation" {
-  description = "Wait for ACM validation (needs the zone delegated at the registrar). false on the very first apply."
+  description = "Wait for ACM validation and serve the domain from CloudFront (needs the zone delegated at the registrar). false on the very first apply: the distribution then runs on the default *.cloudfront.net certificate without the domain aliases."
   type        = bool
   default     = true
 }

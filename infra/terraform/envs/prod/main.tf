@@ -114,11 +114,13 @@ module "secrets" {
     DM_PUBLIC_BASE_URL        = "https://${var.domain}"
     DM_API_BASE_URL           = "https://${var.domain}/api"
     DM_ORIGIN_SECRET_HEADER   = module.edge.origin_secret_header_name
+    DM_VIEWER_IP_HEADER       = module.edge.viewer_ip_header_name
     DM_ROUTE53_ZONE_ID        = module.edge.hosted_zone_id
     AWS_REGION                = var.region
     DM_S3_UPLOADS_BUCKET      = module.storage.bucket_names["uploads"]
     DM_S3_BACKUPS_BUCKET      = module.storage.bucket_names["backups"]
     DM_SCAN_VERDICTS_QUEUE    = module.sandbox.verdict_queue_url
+    DM_SCAN_VERDICTS_PREFIX   = module.sandbox.verdicts_prefix
     DM_SANDBOX_MEDIARUNNER    = module.sandbox.function_names["mediarunner"]
     DM_SANDBOX_TOOLRUNNER     = module.sandbox.function_names["toolrunner"]
     DM_SANDBOX_FETCHER        = module.sandbox.function_names["fetcher"]
@@ -147,6 +149,7 @@ module "compute" {
   uploads_bucket_arn      = module.storage.bucket_arns["uploads"]
   backups_bucket_arn      = module.storage.bucket_arns["backups"]
   verdict_queue_arn       = module.sandbox.verdict_queue_arn
+  verdicts_prefix         = module.sandbox.verdicts_prefix
   invokable_function_arns = module.sandbox.invokable_function_arns
   hosted_zone_id          = module.edge.hosted_zone_id
   origin_hostname         = local.origin_hostname

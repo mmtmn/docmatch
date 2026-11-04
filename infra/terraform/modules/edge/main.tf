@@ -43,12 +43,13 @@ resource "aws_cloudfront_function" "viewer_request" {
   key_value_store_associations = [aws_cloudfront_key_value_store.edge.arn]
 
   code = templatefile("${path.module}/templates/viewer-request.js.tftpl", {
-    apex           = jsonencode(var.domain)
-    secret_header  = jsonencode(var.origin_secret_header_name)
-    scanner_regex  = jsonencode(var.scanner_user_agent_regex)
-    probe_prefixes = jsonencode([for p in var.probe_path_prefixes : lower(p)])
-    probe_suffixes = jsonencode([for s in var.probe_path_suffixes : lower(s)])
-    api_prefixes   = jsonencode([for p in var.api_path_patterns : lower(trimsuffix(p, "*"))])
+    apex             = jsonencode(var.domain)
+    secret_header    = jsonencode(var.origin_secret_header_name)
+    viewer_ip_header = jsonencode(lower(var.viewer_ip_header_name))
+    scanner_regex    = jsonencode(var.scanner_user_agent_regex)
+    probe_prefixes   = jsonencode([for p in var.probe_path_prefixes : lower(p)])
+    probe_suffixes   = jsonencode([for s in var.probe_path_suffixes : lower(s)])
+    api_prefixes     = jsonencode([for p in var.api_path_patterns : lower(trimsuffix(p, "*"))])
   })
 }
 
@@ -146,10 +147,19 @@ resource "aws_cloudfront_origin_access_control" "site" {
   signing_protocol                  = "sigv4"
 }
 
+# Before the registrar delegates the zone the ACM certificate cannot validate, and CloudFront
+# refuses a distribution that references a pending certificate. With
+# wait_for_certificate_validation = false the distribution is therefore created on the default
+# *.cloudfront.net certificate and without the domain aliases, so the first apply completes;
+# the next apply with true switches it to the validated certificate and the aliases.
+locals {
+  custom_domain = var.wait_for_certificate_validation
+}
+
 resource "aws_cloudfront_distribution" "this" {
   enabled             = true
   comment             = "docmatch ${var.env}: ${var.domain}"
-  aliases             = [var.domain, "www.${var.domain}"]
+  aliases             = local.custom_domain ? [var.domain, "www.${var.domain}"] : []
   default_root_object = "index.html"
   http_version        = "http2and3"
   is_ipv6_enabled     = true
@@ -217,20 +227,11 @@ resource "aws_cloudfront_distribution" "this" {
     }
   }
 
-  # A missing object in S3 is a 403 for CloudFront; show the site's 404 page instead.
-  custom_error_response {
-    error_code            = 403
-    response_code         = 404
-    response_page_path    = "/404.html"
-    error_caching_min_ttl = 60
-  }
-
-  custom_error_response {
-    error_code            = 404
-    response_code         = 404
-    response_page_path    = "/404.html"
-    error_caching_min_ttl = 60
-  }
+  # No custom_error_response on purpose: CloudFront applies error pages to every cache behavior,
+  # so a static /404.html would also replace the JSON 403/404 bodies of /api/*, /auth/* and
+  # /webhooks/* (and collapse forbidden into not-found). The site bucket answers a plain 404 for
+  # a missing object (ListBucket is granted below); the site handles not-found client-side until
+  # the API gets its own distribution.
 
   restrictions {
     geo_restriction {
@@ -238,10 +239,20 @@ resource "aws_cloudfront_distribution" "this" {
     }
   }
 
-  viewer_certificate {
-    acm_certificate_arn      = local.certificate_arn
-    ssl_support_method       = "sni-only"
-    minimum_protocol_version = "TLSv1.2_2021"
+  dynamic "viewer_certificate" {
+    for_each = local.custom_domain ? [1] : []
+    content {
+      acm_certificate_arn      = aws_acm_certificate_validation.this[0].certificate_arn
+      ssl_support_method       = "sni-only"
+      minimum_protocol_version = "TLSv1.2_2021"
+    }
+  }
+
+  dynamic "viewer_certificate" {
+    for_each = local.custom_domain ? [] : [1]
+    content {
+      cloudfront_default_certificate = true
+    }
   }
 
   tags = merge(var.tags, { Name = "${var.name}-edge" })

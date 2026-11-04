@@ -17,7 +17,8 @@ cloudflare_account_id = ""
 ami_id           = ""
 lambda_image_tag = ""
 
-# No primeiro apply, antes de delegar dev.<domínio> na zona prod, use false; depois volte para true.
+# No primeiro apply, antes de delegar dev.<domínio> na zona prod, use false: a distribuição nasce
+# com o certificado padrão *.cloudfront.net e sem os aliases. Depois da delegação volte para true.
 wait_for_certificate_validation = false
 dnssec_enabled                  = false
 

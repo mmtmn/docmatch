@@ -17,7 +17,9 @@ cloudflare_account_id = ""
 ami_id           = ""
 lambda_image_tag = ""
 
-# No primeiro apply, antes de apontar os NS no registrador, use false; depois volte para true.
+# No primeiro apply, antes de apontar os NS no registrador, use false: a distribuição nasce com o
+# certificado padrão *.cloudfront.net e sem os aliases do domínio. Depois da delegação volte para
+# true e aplique de novo (o certificado valida e a distribuição passa a atender o domínio).
 wait_for_certificate_validation = true
 dnssec_enabled                  = true
 

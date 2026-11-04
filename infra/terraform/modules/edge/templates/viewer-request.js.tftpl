@@ -2,7 +2,10 @@
 // 1. Known scanners and probe paths get an empty 404 before touching any origin.
 // 2. www is redirected to the apex.
 // 3. Static site paths get the Astro directory index appended.
-// 4. The origin secret from the key-value store is added as a request header; Caddy on the
+// 4. The viewer address is written to a header the viewer cannot control (any value it sent is
+//    overwritten). Caddy on the instance derives {client_ip} from it, so fail2ban, CrowdSec and
+//    the API ban or rate-limit the real address, not a spoofed X-Forwarded-For.
+// 5. The origin secret from the key-value store is added as a request header; Caddy on the
 //    instance rejects anything without it, so only CloudFront can talk to the application.
 import cf from 'cloudfront';
 
@@ -11,6 +14,7 @@ var APEX = ${apex};
 var WWW = 'www.' + APEX;
 var SECRET_HEADER = ${secret_header};
 var SECRET_KEY = 'origin_secret';
+var VIEWER_IP_HEADER = ${viewer_ip_header};
 var SCANNER_UA = new RegExp(${scanner_regex}, 'i');
 var PROBE_PREFIXES = ${probe_prefixes};
 var PROBE_SUFFIXES = ${probe_suffixes};
@@ -56,8 +60,10 @@ async function handler(event) {
   var headers = request.headers;
   var host = headers.host ? headers.host.value.toLowerCase() : '';
   var ua = headers['user-agent'] ? headers['user-agent'].value : '';
+  var isApi = startsWithAny(lower, API_PREFIXES);
 
-  if (ua === '' || SCANNER_UA.test(ua)) { return emptyNotFound(); }
+  // Browsers always send a User-Agent; webhook senders and some SDKs do not, so the API is exempt.
+  if (SCANNER_UA.test(ua) || (ua === '' && !isApi)) { return emptyNotFound(); }
   if (startsWithAny(lower, PROBE_PREFIXES) || endsWithAny(lower, PROBE_SUFFIXES)) { return emptyNotFound(); }
   if (lower.indexOf('/../') !== -1 || lower.indexOf('%2e%2e') !== -1) { return emptyNotFound(); }
 
@@ -69,13 +75,19 @@ async function handler(event) {
     };
   }
 
-  var isApi = startsWithAny(lower, API_PREFIXES);
   if (!isApi) {
     if (uri.length > 1 && uri.charAt(uri.length - 1) === '/') {
       request.uri = uri + 'index.html';
     } else if (uri.indexOf('.', uri.lastIndexOf('/')) === -1) {
       request.uri = uri + '/index.html';
     }
+  }
+
+  // Overwrite, never trust: the viewer may have sent this header itself.
+  if (event.viewer && event.viewer.ip) {
+    headers[VIEWER_IP_HEADER] = { value: event.viewer.ip };
+  } else {
+    delete headers[VIEWER_IP_HEADER];
   }
 
   try {

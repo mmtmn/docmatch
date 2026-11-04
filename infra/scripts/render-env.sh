@@ -23,7 +23,7 @@ instance_env="/etc/docmatch/instance.env"
 # Subsets for services that run as other users: <user>:<file>:<KEY,KEY,...>. A subset is only
 # written when the user exists on the box.
 subsets=(
-  "caddy:/run/docmatch/env.caddy:DM_ORIGIN_SECRET,DM_ORIGIN_SECRET_HEADER,DM_DOMAIN,DM_PUBLIC_BASE_URL,DM_ROUTE53_ZONE_ID,DM_ALERT_EMAIL,AWS_REGION"
+  "caddy:/run/docmatch/env.caddy:DM_ORIGIN_SECRET,DM_ORIGIN_SECRET_HEADER,DM_VIEWER_IP_HEADER,DM_DOMAIN,DM_PUBLIC_BASE_URL,DM_ROUTE53_ZONE_ID,DM_ALERT_EMAIL,AWS_REGION"
   "postgres:/run/docmatch/env.postgres:DM_S3_BACKUPS_BUCKET,DM_BACKUPS_PGBACKREST_KEY,AWS_REGION"
 )
 

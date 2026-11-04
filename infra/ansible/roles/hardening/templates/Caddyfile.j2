@@ -9,9 +9,13 @@
 	order crowdsec before respond
 	servers {
 		# Only CloudFront reaches 443 (security group + nftables) and every request must carry the
-		# origin secret, so the forwarded client address can be trusted from any peer.
+		# origin secret, so the peer is always an edge. The client address is NOT taken from
+		# X-Forwarded-For: CloudFront appends the viewer to whatever the viewer sent, and Caddy
+		# would pick the left-most (attacker-chosen) entry. The edge function overwrites a
+		# dedicated header with the viewer address; {client_ip} comes from it, so fail2ban,
+		# CrowdSec and the API (X-Real-IP) act on the real address.
 		trusted_proxies static 0.0.0.0/0 ::/0
-		client_ip_headers X-Forwarded-For
+		client_ip_headers {$DM_VIEWER_IP_HEADER:X-Docmatch-Viewer-Ip}
 		timeouts {
 			read_body {{ hardening_caddy_read_timeout }}
 			read_header {{ hardening_caddy_header_timeout }}

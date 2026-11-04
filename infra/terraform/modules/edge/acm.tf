@@ -36,6 +36,8 @@ resource "aws_route53_record" "acm_validation" {
   allow_overwrite = true
 }
 
+# The distribution only references the certificate through this resource, i.e. after it is
+# issued; with wait_for_certificate_validation = false it runs on the default certificate.
 resource "aws_acm_certificate_validation" "this" {
   count = var.wait_for_certificate_validation ? 1 : 0
 
@@ -45,8 +47,4 @@ resource "aws_acm_certificate_validation" "this" {
   timeouts {
     create = "75m"
   }
-}
-
-locals {
-  certificate_arn = var.wait_for_certificate_validation ? aws_acm_certificate_validation.this[0].certificate_arn : aws_acm_certificate.this.arn
 }

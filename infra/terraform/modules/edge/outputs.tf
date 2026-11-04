@@ -62,3 +62,13 @@ output "origin_secret_header_name" {
   description = "Header name Caddy must require (DM_ORIGIN_SECRET_HEADER)."
   value       = var.origin_secret_header_name
 }
+
+output "viewer_ip_header_name" {
+  description = "Header carrying the viewer address, set by the edge function (DM_VIEWER_IP_HEADER for Caddy's client_ip_headers)."
+  value       = var.viewer_ip_header_name
+}
+
+output "custom_domain_enabled" {
+  description = "Whether the distribution serves the domain aliases with the ACM certificate (false on the first apply, before delegation)."
+  value       = local.custom_domain
+}
