@@ -96,6 +96,7 @@ export function HeroForm({
   const filesRef = useRef<AcceptedFile[]>([]);
   const dragDepth = useRef(0);
   const dirty = useRef(false);
+  const storageWarned = useRef(false);
   const pasteCount = useRef(0);
   const queue = useRef<Promise<void>>(Promise.resolve());
 
@@ -115,12 +116,17 @@ export function HeroForm({
           filesRef.current = [...filesRef.current, ...result.accepted];
           setFiles(filesRef.current);
           dirty.current = true;
+          if (store && !storageWarned.current && !(await store.available())) {
+            // Private window or blocked storage: say it once, the form keeps working.
+            storageWarned.current = true;
+            setNotice(t('form.draft_unavailable'));
+          }
         }
         if (result.rejected.length > 0) setRejected((prev) => [...prev, ...result.rejected]);
       });
       return queue.current;
     },
-    [caps],
+    [caps, store],
   );
 
   const removeFile = useCallback((id: string): void => {

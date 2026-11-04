@@ -7,7 +7,6 @@
   },
   "nav": {
     "skip_to_content": "Pular para o conteúdo",
-    "home": "Início",
     "how_it_works": "Como funciona",
     "plans": "Planos",
     "security": "Segurança",
@@ -17,14 +16,12 @@
     "main_navigation": "Navegação principal",
     "footer_navigation": "Links do rodapé",
     "logo_label": "docmatch — página inicial",
-    "menu_open": "Abrir menu",
-    "menu_close": "Fechar menu"
+    "menu_open": "Abrir menu"
   },
   "landing": {
     "title": "Concilie qualquer documento.",
     "subtitle": "Solte extratos, planilhas, notas e e-mails. A docmatch encontra cada divergência e mostra a prova.",
-    "hero_region": "Nova conciliação",
-    "scroll_hint": "Saiba como funciona"
+    "hero_region": "Nova conciliação"
   },
   "form": {
     "rules_label": "Regras (opcional)",
@@ -37,7 +34,6 @@
     "estimate": "≈ {expected} tokens (máx. {cap})",
     "estimate_loading": "Calculando o orçamento…",
     "disabled_no_files": "Adicione ao menos um arquivo para conciliar.",
-    "disabled_has_errors": "Remova os arquivos recusados antes de conciliar.",
     "disabled_submitting": "A conciliação já está em andamento.",
     "disabled_offline": "Sem conexão. Reconecte para conciliar.",
     "submit_unavailable": "A conciliação será liberada em breve. Seu rascunho fica salvo só neste navegador.",
@@ -52,8 +48,7 @@
   "tooltips": {
     "use_rules": "Desligado: a docmatch descobre as regras sozinha a partir dos dados",
     "web_search": "Busca normas e layouts na web. Consome mais tokens docmatch",
-    "more_info": "Mais informações",
-    "close": "Fechar dica"
+    "more_info": "Mais informações"
   },
   "dropzone": {
     "label": "Área para soltar arquivos",
@@ -61,9 +56,7 @@
     "hint": "ou clique para escolher. Você também pode colar.",
     "hint_short": "Toque para escolher arquivos",
     "accepted": "Extratos, planilhas, PDFs, ZIPs, e-mails, imagens, áudios e vídeos",
-    "choose": "Escolher arquivos",
     "add_more": "Adicionar mais",
-    "files_count": "{count} arquivo(s)",
     "files_count_one": "1 arquivo",
     "files_count_many": "{count} arquivos",
     "total_size": "{size} no total",
@@ -164,7 +157,6 @@
     "export_pdf": "Exportar PDF",
     "export_soon": "Exportação em {format} disponível quando a API estiver conectada.",
     "export_done": "Arquivo {name} gerado.",
-    "drawer_label": "Detalhe do achado",
     "drawer_close": "Fechar detalhe",
     "evidence_heading": "Evidência",
     "evidence_side_by_side": "Comparação lado a lado",
@@ -179,7 +171,6 @@
     "match_type_amount": "Valor diferente",
     "match_type_date": "Data diferente",
     "match_type_duplicate": "Duplicidade",
-    "match_type_clean": "Conciliado",
     "col_date": "Data",
     "col_description": "Descrição",
     "col_value": "Valor",
@@ -294,7 +285,6 @@
     "heading": "Últimas do blog",
     "lead": "Notas sobre conciliação, formatos brasileiros e o que aprendemos construindo a docmatch.",
     "all_posts": "Todos os artigos",
-    "read_more": "Ler artigo",
     "published_on": "Publicado em {date}",
     "reading_time": "{minutes} min de leitura",
     "index_title": "Blog",
@@ -496,19 +486,12 @@
     "made_in": "Feito no Brasil, em português."
   },
   "common": {
-    "loading": "Carregando…",
     "close": "Fechar",
     "cancel": "Cancelar",
     "confirm": "Confirmar",
     "yes": "Sim",
     "no": "Não",
-    "and": "e",
-    "or": "ou",
     "optional": "opcional",
-    "required": "obrigatório",
-    "new_tab": "abre em nova aba",
-    "back": "Voltar",
-    "page": "Página",
     "app_title": "Nova conciliação"
   }
 }

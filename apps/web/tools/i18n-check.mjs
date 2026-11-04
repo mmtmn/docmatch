@@ -12,6 +12,8 @@ const localesFile = join(appRoot, '..', '..', 'packages', 'locales', 'pt-BR.json
 const srcDir = join(appRoot, 'src');
 
 const SOURCE_EXT = /\.(ts|tsx|mts|js|mjs|astro)$/;
+// Unit tests may reference deliberately missing keys.
+const TEST_FILE = /\.test\.[a-z]+$/;
 // t('key') / tl("key") / tf(`key`) with a static key (no `${}`).
 const CALL = /\b(t|tl|tf)\(\s*(['"`])([^'"`$]+)\2/g;
 
@@ -19,7 +21,7 @@ function walk(dir, out = []) {
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
     if (statSync(full).isDirectory()) walk(full, out);
-    else if (SOURCE_EXT.test(entry)) out.push(full);
+    else if (SOURCE_EXT.test(entry) && !TEST_FILE.test(entry)) out.push(full);
   }
   return out;
 }

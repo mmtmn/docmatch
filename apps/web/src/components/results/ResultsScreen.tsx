@@ -40,7 +40,24 @@ export function findingsCsv(findings: readonly Finding[]): string {
 }
 
 export function ResultsScreen({ results, onDecision, onExport }: ResultsScreenProps) {
-  const [findings, setFindings] = useState<Finding[]>(() => sortByRisk(results.findings));
+  // Only the user's decisions live here; the list itself is derived from props so updates to the
+  // run (e.g. media URLs resolved on the client) flow through.
+  const [decisions, setDecisions] = useState<
+    Record<string, { status: FindingStatus; note?: string | undefined }>
+  >({});
+  const findings = useMemo<Finding[]>(
+    () =>
+      sortByRisk(results.findings).map((finding) => {
+        const decision = decisions[finding.id];
+        if (!decision) return finding;
+        return {
+          ...finding,
+          status: decision.status,
+          ...(decision.note !== undefined ? { note: decision.note } : {}),
+        };
+      }),
+    [results.findings, decisions],
+  );
   const [openId, setOpenId] = useState<string | null>(null);
   const [showClean, setShowClean] = useState(false);
   const [exportStatus, setExportStatus] = useState<string | null>(null);
@@ -55,13 +72,7 @@ export function ResultsScreen({ results, onDecision, onExport }: ResultsScreenPr
 
   const decide = useCallback(
     (id: string, status: FindingStatus, note?: string): void => {
-      setFindings((prev) =>
-        prev.map((finding) =>
-          finding.id === id
-            ? { ...finding, status, ...(note !== undefined ? { note } : {}) }
-            : finding,
-        ),
-      );
+      setDecisions((prev) => ({ ...prev, [id]: { status, note: note ?? prev[id]?.note } }));
       onDecision?.(id, status, note);
     },
     [onDecision],
