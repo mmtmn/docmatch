@@ -67,8 +67,16 @@ variable "budget_project_tag" {
   default     = "docmatch"
 }
 
+# The switches below are booleans known at plan time; the names and ids they guard may be
+# unknown until apply (a count derived from `id != ""` fails the first plan).
+variable "app_alarms_enabled" {
+  description = "Create the EC2 alarms on app_autoscaling_group_name (module compute, output app_enabled)."
+  type        = bool
+  default     = false
+}
+
 variable "app_autoscaling_group_name" {
-  description = "Application Auto Scaling group (empty disables the EC2 alarms)."
+  description = "Application Auto Scaling group watched by the EC2 alarms when app_alarms_enabled."
   type        = string
   default     = ""
 }
@@ -80,13 +88,19 @@ variable "lambda_function_names" {
 }
 
 variable "dead_letter_queue_names" {
-  description = "SQS dead-letter queues; any visible message raises an alarm."
-  type        = list(string)
-  default     = []
+  description = "SQS dead-letter queues by a static key (the alarm name suffix); any visible message raises an alarm."
+  type        = map(string)
+  default     = {}
+}
+
+variable "cloudfront_alarm_enabled" {
+  description = "Create the 5xx error rate alarm on cloudfront_distribution_id."
+  type        = bool
+  default     = false
 }
 
 variable "cloudfront_distribution_id" {
-  description = "Distribution watched for 5xx error rate (empty disables the alarm)."
+  description = "Distribution watched for 5xx error rate when cloudfront_alarm_enabled."
   type        = string
   default     = ""
 }

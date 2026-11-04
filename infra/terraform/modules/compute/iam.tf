@@ -246,8 +246,10 @@ resource "aws_iam_role_policy" "app_only" {
   policy = data.aws_iam_policy_document.app_only.json
 }
 
+# Guardrail attachments iterate over the static keys of the map; the ARNs (values) are only
+# known once the policies exist, which is fine for for_each.
 resource "aws_iam_role_policy_attachment" "app_guardrails" {
-  for_each = toset(var.guardrail_policy_arns)
+  for_each = var.guardrail_policy_arns
 
   role       = aws_iam_role.app.name
   policy_arn = each.value
@@ -281,7 +283,7 @@ resource "aws_iam_role_policy" "worker_workload" {
 }
 
 resource "aws_iam_role_policy_attachment" "worker_guardrails" {
-  for_each = toset(var.guardrail_policy_arns)
+  for_each = var.guardrail_policy_arns
 
   role       = aws_iam_role.worker.name
   policy_arn = each.value
@@ -314,7 +316,7 @@ resource "aws_iam_role_policy" "packer_session_manager" {
 }
 
 resource "aws_iam_role_policy_attachment" "packer_guardrails" {
-  for_each = var.create_packer_profile ? toset(var.guardrail_policy_arns) : toset([])
+  for_each = { for k, arn in var.guardrail_policy_arns : k => arn if var.create_packer_profile }
 
   role       = aws_iam_role.packer[0].name
   policy_arn = each.value

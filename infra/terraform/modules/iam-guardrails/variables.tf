@@ -15,13 +15,13 @@ variable "cloudtrail_arn" {
 }
 
 variable "protected_bucket_arns" {
-  description = "Buckets whose deletion is denied (backups, Terraform state). Empty in dev to allow destroy."
+  description = "Buckets whose deletion is denied (backups, Terraform state). Empty in dev to allow destroy. The length must be known at plan time (the ARNs themselves may not be)."
   type        = list(string)
   default     = []
 }
 
 variable "protected_kms_key_arns" {
-  description = "KMS keys whose deletion or disabling is denied (the DNSSEC key)."
+  description = "KMS keys whose deletion or disabling is denied (the DNSSEC key). Build it as `enabled ? [arn] : []`, never with compact() over an unknown ARN: the length must be known at plan time."
   type        = list(string)
   default     = []
 }

@@ -112,7 +112,7 @@ resource "aws_budgets_budget" "monthly" {
 
 # ------------------------------------------------------------------------------- alarms
 resource "aws_cloudwatch_metric_alarm" "app_status_check" {
-  count = var.app_autoscaling_group_name != "" ? 1 : 0
+  count = var.app_alarms_enabled ? 1 : 0
 
   alarm_name          = "${var.name}-app-status-check"
   alarm_description   = "docmatch ${var.env}: instance or system status check failing"
@@ -135,7 +135,7 @@ resource "aws_cloudwatch_metric_alarm" "app_status_check" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "app_cpu" {
-  count = var.app_autoscaling_group_name != "" ? 1 : 0
+  count = var.app_alarms_enabled ? 1 : 0
 
   alarm_name          = "${var.name}-app-cpu-high"
   alarm_description   = "docmatch ${var.env}: CPU above 90% for 15 minutes"
@@ -158,7 +158,7 @@ resource "aws_cloudwatch_metric_alarm" "app_cpu" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "app_in_service" {
-  count = var.app_autoscaling_group_name != "" ? 1 : 0
+  count = var.app_alarms_enabled ? 1 : 0
 
   alarm_name          = "${var.name}-app-not-in-service"
   alarm_description   = "docmatch ${var.env}: no healthy application instance in service"
@@ -220,10 +220,11 @@ resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
   tags          = merge(var.tags, { Name = "${var.name}-sandbox-errors" })
 }
 
+# Keyed by the static map key, not by the queue name (a resource attribute).
 resource "aws_cloudwatch_metric_alarm" "dead_letter" {
-  for_each = toset(var.dead_letter_queue_names)
+  for_each = var.dead_letter_queue_names
 
-  alarm_name          = "${var.name}-dlq-${trimprefix(each.value, "${var.name}-")}"
+  alarm_name          = "${var.name}-dlq-${each.key}"
   alarm_description   = "docmatch ${var.env}: messages in dead-letter queue ${each.value}"
   namespace           = "AWS/SQS"
   metric_name         = "ApproximateNumberOfMessagesVisible"
@@ -240,11 +241,11 @@ resource "aws_cloudwatch_metric_alarm" "dead_letter" {
 
   alarm_actions = [aws_sns_topic.alerts.arn]
   ok_actions    = [aws_sns_topic.alerts.arn]
-  tags          = merge(var.tags, { Name = "${var.name}-dlq-${each.value}" })
+  tags          = merge(var.tags, { Name = "${var.name}-dlq-${each.key}" })
 }
 
 resource "aws_cloudwatch_metric_alarm" "cloudfront_5xx" {
-  count = var.cloudfront_distribution_id != "" ? 1 : 0
+  count = var.cloudfront_alarm_enabled ? 1 : 0
 
   alarm_name          = "${var.name}-edge-5xx-rate"
   alarm_description   = "docmatch ${var.env}: more than 5% of edge responses are 5xx"

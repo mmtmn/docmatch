@@ -406,11 +406,16 @@ resource "aws_iam_role_policy" "fn_data" {
   policy = local.data_policies[each.key]
 }
 
+# Keyed by function and policy name (both static); the policy ARNs stay in the values because
+# they are unknown until the guardrail policies exist.
 resource "aws_iam_role_policy_attachment" "guardrails" {
-  for_each = { for pair in setproduct(keys(var.functions), var.guardrail_policy_arns) : "${pair[0]}:${pair[1]}" => pair }
+  for_each = {
+    for pair in setproduct(keys(var.functions), keys(var.guardrail_policy_arns)) :
+    "${pair[0]}:${pair[1]}" => { function = pair[0], policy = pair[1] }
+  }
 
-  role       = aws_iam_role.fn[each.value[0]].name
-  policy_arn = each.value[1]
+  role       = aws_iam_role.fn[each.value.function].name
+  policy_arn = var.guardrail_policy_arns[each.value.policy]
 }
 
 # ----------------------------------------------------------------------------------- functions

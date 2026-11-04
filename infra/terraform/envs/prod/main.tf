@@ -63,7 +63,9 @@ module "iam_guardrails" {
     module.storage.bucket_arns["backups"],
     "arn:aws:s3:::${local.tfstate_bucket}",
   ]
-  protected_kms_key_arns = compact([module.edge.dnssec_kms_key_arn])
+  # Length known at plan time through the boolean; compact() over the (unknown) ARN would make
+  # the module's count unknown and fail the first plan.
+  protected_kms_key_arns = var.dnssec_enabled ? [module.edge.dnssec_kms_key_arn] : []
 }
 
 module "edge" {
@@ -169,9 +171,14 @@ module "observability" {
   cloudtrail_name            = local.cloudtrail_name
   alert_email                = var.alert_email
   mrr_usd                    = var.mrr_usd
+  app_alarms_enabled         = module.compute.app_enabled
   app_autoscaling_group_name = module.compute.app_autoscaling_group_name
   lambda_function_names      = module.sandbox.enabled ? values(module.sandbox.function_names) : []
-  dead_letter_queue_names    = [module.sandbox.verdict_dlq_name, module.sandbox.lambda_dlq_name]
+  dead_letter_queue_names = {
+    scan-verdicts = module.sandbox.verdict_dlq_name
+    lambda        = module.sandbox.lambda_dlq_name
+  }
+  cloudfront_alarm_enabled   = true
   cloudfront_distribution_id = module.edge.distribution_id
 }
 

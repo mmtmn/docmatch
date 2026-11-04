@@ -167,9 +167,14 @@ module "observability" {
   cloudtrail_name            = local.cloudtrail_name
   alert_email                = var.alert_email
   mrr_usd                    = var.mrr_usd
+  app_alarms_enabled         = module.compute.app_enabled
   app_autoscaling_group_name = module.compute.app_autoscaling_group_name
   lambda_function_names      = module.sandbox.enabled ? values(module.sandbox.function_names) : []
-  dead_letter_queue_names    = [module.sandbox.verdict_dlq_name, module.sandbox.lambda_dlq_name]
+  dead_letter_queue_names = {
+    scan-verdicts = module.sandbox.verdict_dlq_name
+    lambda        = module.sandbox.lambda_dlq_name
+  }
+  cloudfront_alarm_enabled   = true
   cloudfront_distribution_id = module.edge.distribution_id
 }
 

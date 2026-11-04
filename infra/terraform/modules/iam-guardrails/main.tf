@@ -142,6 +142,8 @@ resource "aws_iam_policy" "deny_s3_public" {
 }
 
 # ------------------------------------------------------------- deny destroying protected data
+# count derives from the length of the two lists, so callers must build them with a length known
+# at plan time (a known condition around an unknown ARN is fine; compact() over one is not).
 data "aws_iam_policy_document" "deny_protected_deletion" {
   count = length(var.protected_bucket_arns) + length(var.protected_kms_key_arns) > 0 ? 1 : 0
 
@@ -192,19 +194,22 @@ resource "aws_iam_group" "operators" {
   path = "/docmatch/"
 }
 
+# Attachment maps are keyed by a static name: a for_each key must be known at plan time and the
+# policy ARNs only exist after the first apply, so the ARNs travel in the values.
 locals {
-  all_policy_arns = concat(
-    [
-      aws_iam_policy.deny_cloudtrail_stop.arn,
-      aws_iam_policy.deny_other_regions.arn,
-      aws_iam_policy.deny_s3_public.arn,
-    ],
-    [for p in aws_iam_policy.deny_protected_deletion : p.arn],
+  role_policy_arns = {
+    cloudtrail = aws_iam_policy.deny_cloudtrail_stop.arn
+    regions    = aws_iam_policy.deny_other_regions.arn
+    s3_public  = aws_iam_policy.deny_s3_public.arn
+  }
+  all_policy_arns = merge(
+    local.role_policy_arns,
+    { for p in aws_iam_policy.deny_protected_deletion : "protected_deletion" => p.arn },
   )
 }
 
 resource "aws_iam_group_policy_attachment" "operators" {
-  for_each = var.create_operators_group ? toset(local.all_policy_arns) : toset([])
+  for_each = { for k, arn in local.all_policy_arns : k => arn if var.create_operators_group }
 
   group      = aws_iam_group.operators[0].name
   policy_arn = each.value

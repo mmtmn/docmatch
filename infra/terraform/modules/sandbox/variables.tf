@@ -123,9 +123,9 @@ variable "ecr_force_delete" {
 }
 
 variable "guardrail_policy_arns" {
-  description = "Deny policies attached to every function role."
-  type        = list(string)
-  default     = []
+  description = "Deny policies attached to every function role, keyed by a static name (module iam-guardrails, role_policy_arns). The keys drive for_each, so only the ARNs may be unknown until apply."
+  type        = map(string)
+  default     = {}
 }
 
 variable "tags" {
