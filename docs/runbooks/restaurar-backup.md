@@ -29,7 +29,7 @@ Se o ensaio mensal não bater esses números, abra uma issue antes de qualquer o
 
 ## Pré-requisitos
 
-- Papel de operador com MFA; `ssm_run` do [README](README.md).
+- Papel de operador com MFA; `ssm_run` e `KMS_KEY_ID` do [README](README.md).
 - Em produção: declarar incidente ([incidente.md](incidente.md)) antes de restaurar, mesmo que
   seja só para registrar. Toda restauração em produção gera uma nota de auditoria no admin.
 - Ter o **alvo** definido: um instante (`--type=time`), um rótulo de backup (`--set`) ou "o mais
@@ -164,10 +164,19 @@ em 24 h); o cliente reenvia.
 ```bash
 aws ssm get-parameter-history --name "/docmatch/${DM_ENV}/DM_QUOTE_HMAC_KEY" --with-decryption \
   --query 'Parameters[].[Version,LastModifiedDate,LastModifiedUser]' --output table
-aws ssm get-parameter --name "/docmatch/${DM_ENV}/DM_QUOTE_HMAC_KEY:<versão boa>" --with-decryption --query Parameter.Value --output text \
-  | xargs -0 -I{} aws ssm put-parameter --name "/docmatch/${DM_ENV}/DM_QUOTE_HMAC_KEY" --type SecureString --overwrite --value {}
+# leia a versão boa por substituição de comando, que descarta a quebra de linha final do --output text.
+# Nunca encadeie com xargs: `xargs -0` manteria o "\n" dentro do valor e gravaria o segredo corrompido.
+GOOD="$(aws ssm get-parameter --name "/docmatch/${DM_ENV}/DM_QUOTE_HMAC_KEY:<versão boa>" --with-decryption --query Parameter.Value --output text)"
+aws ssm put-parameter --name "/docmatch/${DM_ENV}/DM_QUOTE_HMAC_KEY" --type SecureString --key-id "$KMS_KEY_ID" --overwrite --value "$GOOD"
+# confira antes de reiniciar: o valor atual tem de ser idêntico ao da versão boa
+[ "$(aws ssm get-parameter --name "/docmatch/${DM_ENV}/DM_QUOTE_HMAC_KEY" --with-decryption --query Parameter.Value --output text)" = "$GOOD" ] && echo ok
 ssm_run "systemctl restart docmatch-env.service docmatch-api docmatch-worker docmatch-harness"
 ```
+
+`KMS_KEY_ID` é a CMK do ambiente, definida no [README](README.md). Sem `--key-id`, o SSM cifraria
+com a chave padrão `aws/ssm` da conta, que o papel da instância não pode usar, e o
+`docmatch-env.service` deixaria de renderizar o `.env` no próximo boot
+([rotacionar-segredos.md](rotacionar-segredos.md)).
 
 ## Cenário F: ensaio mensal
 

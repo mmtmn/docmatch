@@ -17,9 +17,12 @@ verificação, reversão e uma tabela de registro das execuções passadas.
 
 - **Acesso:** papel de operador com MFA (`AWS_PROFILE=docmatch-operator`). Nunca SSH: a instância
   não tem. Shell pela `aws ssm start-session`; comandos pontuais pelo auxiliar `ssm_run` abaixo.
-- **Nomes:** recursos seguem `docmatch-<env>-<nome>` ([ADR-0011](../decisoes/ADR-0011-uma-conta-aws.md)).
-  Nos comandos, `DM_ENV` é `staging` ou `prod`; buckets e URLs vêm das variáveis do
-  `.env.example`; ids de distribuição e de bucket do site vêm de `terraform output`.
+- **Nomes:** recursos seguem `docmatch-<env>-<nome>`; os poucos que são da conta inteira (trilha
+  do CloudTrail, detector do GuardDuty, estado do Terraform) seguem `docmatch-<nome>`
+  ([ADR-0011](../decisoes/ADR-0011-uma-conta-aws.md)). Nos comandos, `DM_ENV` é `staging` ou
+  `prod`; buckets e URLs vêm das variáveis do `.env.example`; ids de distribuição e de bucket do
+  site vêm de `terraform output`; a CMK do KMS do ambiente é `alias/docmatch-<env>-cmk`
+  (`KMS_KEY_ID` abaixo).
 - **Registro:** toda execução de runbook em produção termina com uma linha na tabela do próprio
   arquivo (data, quem, resultado) e, quando toca segredo, dinheiro ou dados, com uma nota de
   auditoria no painel admin. Datas aqui são registro do passado, nunca planejamento.
@@ -29,6 +32,7 @@ verificação, reversão e uma tabela de registro das execuções passadas.
 ```bash
 # auxiliar usado em todos os runbooks: roda um comando na instância pelo SSM e imprime a saída
 export AWS_PROFILE=docmatch-operator AWS_REGION="${AWS_REGION:?}" DM_ENV="${DM_ENV:?}"
+KMS_KEY_ID="alias/docmatch-${DM_ENV}-cmk"   # CMK do ambiente: todo SecureString é gravado com --key-id "$KMS_KEY_ID"
 INSTANCE_ID="$(aws ec2 describe-instances \
   --filters "Name=tag:Name,Values=docmatch-${DM_ENV}-app" "Name=instance-state-name,Values=running" \
   --query 'Reservations[].Instances[].InstanceId' --output text)"

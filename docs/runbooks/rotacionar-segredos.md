@@ -1,16 +1,22 @@
 # Rotacionar segredos
 
-Todo segredo vive no SSM Parameter Store em `/docmatch/<env>/<NOME>` (SecureString com a CMK do
-KMS), é renderizado em `/run/docmatch/.env` (tmpfs) no boot por `docmatch-env.service` e lido
-pelos processos. Rotacionar é: criar o valor novo no provedor, gravar no SSM, re-renderizar,
-reiniciar quem consome, verificar, revogar o antigo, registrar.
+Todo segredo vive no SSM Parameter Store em `/docmatch/<env>/<NOME>` (SecureString cifrada com a
+CMK do KMS do ambiente), é renderizado em `/run/docmatch/.env` (tmpfs) no boot por
+`docmatch-env.service` e lido pelos processos. Rotacionar é: criar o valor novo no provedor,
+gravar no SSM, re-renderizar, reiniciar quem consome, verificar, revogar o antigo, registrar.
+
+Todo `put-parameter` de SecureString leva `--key-id "$KMS_KEY_ID"` (variável do
+[README](README.md), junto com `ssm_run`). Sem `--key-id`, o SSM cifra com a chave padrão
+`aws/ssm` da conta; o papel da instância só tem `kms:Decrypt` na CMK do ambiente, então o
+`docmatch-env.service` deixaria de renderizar o `.env` no próximo boot, e o segredo "rotacionado"
+derrubaria o serviço.
 
 ## Procedimento padrão
 
 ```bash
 NAME=DM_QUOTE_HMAC_KEY                       # o nome exato do .env.example
 NEW_VALUE="$(openssl rand -base64 48)"       # ou o valor emitido pelo provedor
-aws ssm put-parameter --name "/docmatch/${DM_ENV}/${NAME}" --type SecureString --overwrite --value "$NEW_VALUE"
+aws ssm put-parameter --name "/docmatch/${DM_ENV}/${NAME}" --type SecureString --key-id "$KMS_KEY_ID" --overwrite --value "$NEW_VALUE"
 ssm_run "systemctl restart docmatch-env.service && systemctl restart docmatch-harness docmatch-worker docmatch-api"
 ssm_run "docmatch-api config check"          # falha rápida: confirma que tudo obrigatório está presente e válido
 curl -s -o /dev/null -w '%{http_code}\n' "$DM_API_BASE_URL/api/v1/health"
@@ -23,9 +29,9 @@ prazo de validade do artefato assinado, remover a antiga.
 
 ```bash
 OLD="$(aws ssm get-parameter --name "/docmatch/${DM_ENV}/${NAME}" --with-decryption --query Parameter.Value --output text)"
-aws ssm put-parameter --name "/docmatch/${DM_ENV}/${NAME}" --type SecureString --overwrite --value "${NEW_VALUE},${OLD}"
+aws ssm put-parameter --name "/docmatch/${DM_ENV}/${NAME}" --type SecureString --key-id "$KMS_KEY_ID" --overwrite --value "${NEW_VALUE},${OLD}"
 # ... reinicie, espere o prazo da tabela, depois:
-aws ssm put-parameter --name "/docmatch/${DM_ENV}/${NAME}" --type SecureString --overwrite --value "${NEW_VALUE}"
+aws ssm put-parameter --name "/docmatch/${DM_ENV}/${NAME}" --type SecureString --key-id "$KMS_KEY_ID" --overwrite --value "${NEW_VALUE}"
 ```
 
 ## Inventário
