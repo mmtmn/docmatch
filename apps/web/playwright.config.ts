@@ -1,7 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
 
-// The suite runs against the production build (`astro preview` over dist/) so the CSP meta and
-// the real bundles are exercised. Build with PUBLIC_DM_FEATURE_RESULTS=true first (make e2e).
+// The suite runs against the production build: tools/serve-dist.mjs serves dist/ in the foreground
+// with the same clean-URL rules as CloudFront (docs/headers.md), so the CSP meta and the real
+// bundles are exercised. Build with PUBLIC_DM_FEATURE_RESULTS=true first (make e2e, which also
+// picks a free port per run through DM_WEB_E2E_PORT).
 const host = process.env['DM_WEB_E2E_HOST'] ?? '127.0.0.1';
 const port = Number(process.env['DM_WEB_E2E_PORT'] ?? 4173);
 const baseURL = `http://${host}:${port}`;
@@ -31,9 +33,12 @@ export default defineConfig({
   },
   projects,
   webServer: {
-    command: `pnpm exec astro preview --host ${host} --port ${port}`,
+    // Not `astro preview`: Astro 7 daemonizes it when run by an agent or without a TTY, so the
+    // process "exited early" and whatever server happened to listen on the port got tested.
+    command: `node tools/serve-dist.mjs --host ${host} --port ${port}`,
     url: baseURL,
-    reuseExistingServer: !isCI,
-    timeout: 60_000,
+    // Never attach to a server this run did not start: a busy port fails fast.
+    reuseExistingServer: false,
+    timeout: 30_000,
   },
 });

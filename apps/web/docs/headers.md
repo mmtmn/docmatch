@@ -77,6 +77,10 @@ function handler(event) {
 `/.well-known/security.txt` já tem ponto no nome e passa intacto. A página 404 é `404.html`
 (resposta de erro personalizada da distribuição, código 404).
 
+`tools/serve-dist.mjs` (usado por `make preview` e pelo Playwright) aplica exatamente esta
+reescrita e as políticas de `Cache-Control` acima, então a suíte e2e exercita as mesmas URLs que a
+produção. Quem mudar a função muda o script (e `tools/serve-dist.test.mjs`) junto.
+
 ## O que o app espera do servidor
 
 - `Content-Type: text/html; charset=utf-8` nas páginas (o `<meta charset>` existe, mas o

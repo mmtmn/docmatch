@@ -10,13 +10,24 @@ ou estilos inline nossos (ver [docs/headers.md](docs/headers.md)).
 ```bash
 make setup      # pnpm (local ao usuário), dependências e o Chromium do Playwright
 make dev        # http://localhost:4321
-make ci         # lint + typecheck + testes + build (< 6 min)
+make ci         # sync + lint + typecheck + testes + build (< 6 min)
 make ci-full    # ci + e2e em chromium/firefox/webkit (os que abrirem)
 make e2e        # só o Playwright, contra o build de produção
+make preview    # serve dist/ como o CloudFront serviria (tools/serve-dist.mjs)
 make lhci       # Lighthouse CI com os orçamentos (fora do ci)
 ```
 
 Variáveis de build em [`.env.example`](.env.example). Nada aqui é segredo: tudo vai para o HTML.
+
+`make sync` (`astro sync`) gera `.astro/` com os tipos de `astro:env`, das coleções e das rotas;
+`lint` e `typecheck` dependem dele porque as regras type-aware do ESLint veriam `error` no lugar
+desses módulos num checkout limpo.
+
+O e2e sobe `tools/serve-dist.mjs` em primeiro plano numa porta livre escolhida por execução
+(`E2E_PORT=4173 make e2e` fixa uma). O Playwright nunca reaproveita um servidor que não subiu:
+porta ocupada é erro imediato, não um teste contra o build de outro diretório. `astro preview` não
+é usado em lugar nenhum: o Astro 7 o transforma em daemon quando detecta um agente ou um `stdout`
+sem TTY, o que deixava servidores órfãos e suítes rodando contra `dist/` alheios.
 
 ## Mapa
 
@@ -39,6 +50,7 @@ Variáveis de build em [`.env.example`](.env.example). Nada aqui é segredo: tud
 | `src/lib/draftStore.ts`                   | Rascunho cifrado (AES-GCM, chave não extraível) em IndexedDB, 30 dias                            |
 | `vite/`                                   | Plugins `virtual:limits` e `virtual:pricing` (YAML lido e validado no build)                     |
 | `tools/i18n-check.mjs`                    | Falha o build se uma chave usada não existe em pt-BR.json                                        |
+| `tools/serve-dist.mjs`                    | Servidor estático de `dist/` para o e2e e o `preview`, com as URLs limpas do CloudFront          |
 | `tools/eslint-rules/`                     | Regra local: nenhum texto literal em JSX nem em `placeholder`/`title`/`aria-label`/`alt`/`label` |
 | `e2e/`                                    | Playwright: matriz de viewports, teclado virtual, axe-core, tela de resultado                    |
 
@@ -78,10 +90,10 @@ mensagem no limite (`useCharLimit` + `CharCounter`).
 
 **Resultado (mock).** `ResultsScreen` ordena as divergências por valor em risco, recolhe as
 conciliações limpas numa linha, abre uma gaveta modal com a evidência lado a lado (linhas citadas
-destacadas; áudio/vídeo com player posicionado no instante citado), confiança como palavra + ícone
-
-- cor, aceitar/rejeitar/editar e exportação (CSV real no cliente; XLSX/PDF pela API, depois).
-  `src/lib/mock/` será substituído pelo cliente da API na fase correspondente do plano.
+destacadas; áudio/vídeo com player posicionado no instante citado), mostra a confiança como
+palavra, ícone e cor, e oferece aceitar/rejeitar/editar e exportação (CSV real no cliente; XLSX/PDF
+pela API, depois). Os dados de `src/lib/mock/` são inventados (nunca de um caso real) e o módulo
+será substituído pelo cliente da API na fase correspondente do plano.
 
 ## Orçamentos de desempenho
 
@@ -95,7 +107,8 @@ orçamento, então `lighthouserc.cjs` lê o JSON e aplica `maxNumericValue`).
 - `vitest` (jsdom): i18n, limites, plugins Vite, formatação, prechecagem de arquivos, rascunho
   (fake-indexeddb, inclusive cota cheia e janela privada), autosize, viewport, DropZone, Switch,
   InfoTip, RulePicker, RulesBox, RunButton, HeroForm, resultado, CSV, security.txt, i18n-check.
-- `playwright` (contra `astro preview` do build com a flag de resultados): matriz de viewports,
-  teclado virtual, CSP sem violações, rascunho sobrevivendo ao reload, seletor de regras por
-  teclado, axe-core com zero violações em `/`, `/app`, `/termos`, `/privacidade`, `/contato`,
+- `playwright` (contra `tools/serve-dist.mjs` servindo o build com a flag de resultados):
+  matriz de viewports, teclado virtual, CSP sem violações, rascunho sobrevivendo ao reload,
+  seletor de regras por teclado, axe-core com zero violações em `/`, `/app`, `/termos`,
+  `/privacidade`, `/contato`,
   `/blog`, `/resultados` (inclusive com a gaveta, a dica e o seletor abertos).

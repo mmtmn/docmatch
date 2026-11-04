@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "astro dev",
     "build": "node tools/i18n-check.mjs && astro build",
-    "preview": "astro preview",
+    "preview": "node tools/serve-dist.mjs",
     "check": "astro check",
     "typecheck": "astro check && tsc --noEmit -p tsconfig.json",
     "lint": "eslint . && prettier --check . && node tools/i18n-check.mjs",
