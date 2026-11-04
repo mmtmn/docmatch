@@ -118,6 +118,7 @@ type CreditAccount struct {
 	OrgID     uuid.UUID
 	Balance   int64
 	Held      int64
+	LedgerSeq int64
 	UpdatedAt time.Time
 }
 
@@ -150,6 +151,7 @@ type CreditHold struct {
 type CreditLedger struct {
 	ID           uuid.UUID
 	OrgID        uuid.UUID
+	Seq          int64
 	Kind         string
 	Amount       int64
 	HeldDelta    int64
@@ -166,6 +168,7 @@ type CreditLedger struct {
 type CreditLedgerDefault struct {
 	ID           uuid.UUID
 	OrgID        uuid.UUID
+	Seq          int64
 	Kind         string
 	Amount       int64
 	HeldDelta    int64

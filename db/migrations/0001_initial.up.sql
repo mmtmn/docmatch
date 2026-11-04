@@ -207,10 +207,15 @@ CREATE TABLE stripe_events (
 CREATE INDEX stripe_events_unprocessed_idx ON stripe_events (received_at) WHERE processed_at IS NULL;
 
 -- --------------------------------------------------------------- tokens docmatch
+-- ledger_seq é o contador do razão da organização: cada lançamento recebe
+-- ledger_seq + 1 sob o lock da linha da conta, o que dá uma ordem total por
+-- organização independente de relógio (now() é o início da transação e não
+-- reflete a ordem de commit entre transações concorrentes).
 CREATE TABLE credit_accounts (
   org_id      uuid PRIMARY KEY REFERENCES orgs (id) ON DELETE CASCADE,
   balance     bigint NOT NULL DEFAULT 0,
   held        bigint NOT NULL DEFAULT 0,
+  ledger_seq  bigint NOT NULL DEFAULT 0,
   updated_at  timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT credit_accounts_balance_covers_held CHECK (balance >= held AND held >= 0)
 );
@@ -252,6 +257,7 @@ CREATE INDEX credit_holds_run_idx ON credit_holds (run_id) WHERE run_id IS NOT N
 CREATE TABLE credit_ledger (
   id             uuid NOT NULL DEFAULT uuidv7(),
   org_id         uuid NOT NULL REFERENCES orgs (id) ON DELETE CASCADE,
+  seq            bigint NOT NULL CHECK (seq > 0),
   kind           text NOT NULL CHECK (kind IN ('grant', 'hold', 'settle', 'release', 'expire', 'adjust')),
   amount         bigint NOT NULL,
   held_delta     bigint NOT NULL DEFAULT 0,
@@ -265,6 +271,7 @@ CREATE TABLE credit_ledger (
   created_at     timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (id, created_at)
 ) PARTITION BY RANGE (created_at);
+CREATE INDEX credit_ledger_org_seq_idx ON credit_ledger (org_id, seq DESC);
 CREATE INDEX credit_ledger_org_created_idx ON credit_ledger (org_id, created_at DESC);
 CREATE INDEX credit_ledger_hold_idx ON credit_ledger (hold_id) WHERE hold_id IS NOT NULL;
 CREATE TABLE credit_ledger_default PARTITION OF credit_ledger DEFAULT;

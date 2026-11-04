@@ -13,9 +13,12 @@ import (
 )
 
 const appendCreditLedger = `-- name: AppendCreditLedger :one
-INSERT INTO credit_ledger (org_id, kind, amount, held_delta, balance_after, held_after, grant_id, hold_id, run_id, reference, meta)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-RETURNING id, org_id, kind, amount, held_delta, balance_after, held_after, grant_id, hold_id, run_id, reference, meta, created_at
+WITH bump AS (
+  UPDATE credit_accounts SET ledger_seq = ledger_seq + 1 WHERE org_id = $1 RETURNING ledger_seq
+)
+INSERT INTO credit_ledger (org_id, seq, kind, amount, held_delta, balance_after, held_after, grant_id, hold_id, run_id, reference, meta)
+SELECT $1, bump.ledger_seq, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11 FROM bump
+RETURNING id, org_id, seq, kind, amount, held_delta, balance_after, held_after, grant_id, hold_id, run_id, reference, meta, created_at
 `
 
 type AppendCreditLedgerParams struct {
@@ -32,6 +35,8 @@ type AppendCreditLedgerParams struct {
 	Meta         []byte
 }
 
+// O lançamento recebe o próximo número de sequência da conta na mesma
+// instrução; o chamador já segura o lock da linha da conta.
 func (q *Queries) AppendCreditLedger(ctx context.Context, arg AppendCreditLedgerParams) (CreditLedger, error) {
 	row := q.db.QueryRow(ctx, appendCreditLedger,
 		arg.OrgID,
@@ -50,6 +55,7 @@ func (q *Queries) AppendCreditLedger(ctx context.Context, arg AppendCreditLedger
 	err := row.Scan(
 		&i.ID,
 		&i.OrgID,
+		&i.Seq,
 		&i.Kind,
 		&i.Amount,
 		&i.HeldDelta,
@@ -104,7 +110,7 @@ func (q *Queries) CloseCreditHold(ctx context.Context, arg CloseCreditHoldParams
 const ensureCreditAccount = `-- name: EnsureCreditAccount :one
 INSERT INTO credit_accounts (org_id) VALUES ($1)
 ON CONFLICT (org_id) DO UPDATE SET org_id = EXCLUDED.org_id
-RETURNING org_id, balance, held, updated_at
+RETURNING org_id, balance, held, ledger_seq, updated_at
 `
 
 func (q *Queries) EnsureCreditAccount(ctx context.Context, orgID uuid.UUID) (CreditAccount, error) {
@@ -114,6 +120,7 @@ func (q *Queries) EnsureCreditAccount(ctx context.Context, orgID uuid.UUID) (Cre
 		&i.OrgID,
 		&i.Balance,
 		&i.Held,
+		&i.LedgerSeq,
 		&i.UpdatedAt,
 	)
 	return i, err
@@ -121,7 +128,7 @@ func (q *Queries) EnsureCreditAccount(ctx context.Context, orgID uuid.UUID) (Cre
 
 const getCreditAccount = `-- name: GetCreditAccount :one
 
-SELECT org_id, balance, held, updated_at FROM credit_accounts WHERE org_id = $1
+SELECT org_id, balance, held, ledger_seq, updated_at FROM credit_accounts WHERE org_id = $1
 `
 
 // Tokens docmatch. Toda consulta roda dentro de WithOrgTx (app.org_id);
@@ -133,13 +140,14 @@ func (q *Queries) GetCreditAccount(ctx context.Context, orgID uuid.UUID) (Credit
 		&i.OrgID,
 		&i.Balance,
 		&i.Held,
+		&i.LedgerSeq,
 		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const getCreditAccountForUpdate = `-- name: GetCreditAccountForUpdate :one
-SELECT org_id, balance, held, updated_at FROM credit_accounts WHERE org_id = $1 FOR UPDATE
+SELECT org_id, balance, held, ledger_seq, updated_at FROM credit_accounts WHERE org_id = $1 FOR UPDATE
 `
 
 func (q *Queries) GetCreditAccountForUpdate(ctx context.Context, orgID uuid.UUID) (CreditAccount, error) {
@@ -149,6 +157,7 @@ func (q *Queries) GetCreditAccountForUpdate(ctx context.Context, orgID uuid.UUID
 		&i.OrgID,
 		&i.Balance,
 		&i.Held,
+		&i.LedgerSeq,
 		&i.UpdatedAt,
 	)
 	return i, err
@@ -314,7 +323,7 @@ func (q *Queries) InsertCreditHold(ctx context.Context, arg InsertCreditHoldPara
 }
 
 const listCreditLedger = `-- name: ListCreditLedger :many
-SELECT id, org_id, kind, amount, held_delta, balance_after, held_after, grant_id, hold_id, run_id, reference, meta, created_at FROM credit_ledger WHERE org_id = $1 ORDER BY created_at DESC LIMIT $2
+SELECT id, org_id, seq, kind, amount, held_delta, balance_after, held_after, grant_id, hold_id, run_id, reference, meta, created_at FROM credit_ledger WHERE org_id = $1 ORDER BY seq DESC LIMIT $2
 `
 
 type ListCreditLedgerParams struct {
@@ -334,6 +343,7 @@ func (q *Queries) ListCreditLedger(ctx context.Context, arg ListCreditLedgerPara
 		if err := rows.Scan(
 			&i.ID,
 			&i.OrgID,
+			&i.Seq,
 			&i.Kind,
 			&i.Amount,
 			&i.HeldDelta,
@@ -357,17 +367,17 @@ func (q *Queries) ListCreditLedger(ctx context.Context, arg ListCreditLedgerPara
 }
 
 const listCreditLedgerBefore = `-- name: ListCreditLedgerBefore :many
-SELECT id, org_id, kind, amount, held_delta, balance_after, held_after, grant_id, hold_id, run_id, reference, meta, created_at FROM credit_ledger WHERE org_id = $1 AND created_at < $2 ORDER BY created_at DESC LIMIT $3
+SELECT id, org_id, seq, kind, amount, held_delta, balance_after, held_after, grant_id, hold_id, run_id, reference, meta, created_at FROM credit_ledger WHERE org_id = $1 AND seq < $2 ORDER BY seq DESC LIMIT $3
 `
 
 type ListCreditLedgerBeforeParams struct {
-	OrgID     uuid.UUID
-	CreatedAt time.Time
-	Limit     int32
+	OrgID uuid.UUID
+	Seq   int64
+	Limit int32
 }
 
 func (q *Queries) ListCreditLedgerBefore(ctx context.Context, arg ListCreditLedgerBeforeParams) ([]CreditLedger, error) {
-	rows, err := q.db.Query(ctx, listCreditLedgerBefore, arg.OrgID, arg.CreatedAt, arg.Limit)
+	rows, err := q.db.Query(ctx, listCreditLedgerBefore, arg.OrgID, arg.Seq, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -378,6 +388,7 @@ func (q *Queries) ListCreditLedgerBefore(ctx context.Context, arg ListCreditLedg
 		if err := rows.Scan(
 			&i.ID,
 			&i.OrgID,
+			&i.Seq,
 			&i.Kind,
 			&i.Amount,
 			&i.HeldDelta,
@@ -578,7 +589,7 @@ func (q *Queries) SumCreditLedger(ctx context.Context, orgID uuid.UUID) (SumCred
 const updateCreditAccount = `-- name: UpdateCreditAccount :one
 UPDATE credit_accounts SET balance = $2, held = $3, updated_at = now()
 WHERE org_id = $1
-RETURNING org_id, balance, held, updated_at
+RETURNING org_id, balance, held, ledger_seq, updated_at
 `
 
 type UpdateCreditAccountParams struct {
@@ -594,6 +605,7 @@ func (q *Queries) UpdateCreditAccount(ctx context.Context, arg UpdateCreditAccou
 		&i.OrgID,
 		&i.Balance,
 		&i.Held,
+		&i.LedgerSeq,
 		&i.UpdatedAt,
 	)
 	return i, err

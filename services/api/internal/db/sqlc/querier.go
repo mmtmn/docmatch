@@ -14,6 +14,8 @@ import (
 type Querier interface {
 	AddMembership(ctx context.Context, arg AddMembershipParams) error
 	AppendAudit(ctx context.Context, arg AppendAuditParams) (AuditLog, error)
+	// O lançamento recebe o próximo número de sequência da conta na mesma
+	// instrução; o chamador já segura o lock da linha da conta.
 	AppendCreditLedger(ctx context.Context, arg AppendCreditLedgerParams) (CreditLedger, error)
 	// Forma canônica de um jsonb (chaves ordenadas, sem espaços redundantes).
 	CanonicalJSON(ctx context.Context, dollar_1 []byte) (string, error)

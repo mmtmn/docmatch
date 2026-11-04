@@ -68,16 +68,21 @@ RETURNING *;
 -- name: ListOpenCreditHolds :many
 SELECT * FROM credit_holds WHERE org_id = $1 AND status = 'held' ORDER BY created_at;
 
+-- O lançamento recebe o próximo número de sequência da conta na mesma
+-- instrução; o chamador já segura o lock da linha da conta.
 -- name: AppendCreditLedger :one
-INSERT INTO credit_ledger (org_id, kind, amount, held_delta, balance_after, held_after, grant_id, hold_id, run_id, reference, meta)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+WITH bump AS (
+  UPDATE credit_accounts SET ledger_seq = ledger_seq + 1 WHERE org_id = $1 RETURNING ledger_seq
+)
+INSERT INTO credit_ledger (org_id, seq, kind, amount, held_delta, balance_after, held_after, grant_id, hold_id, run_id, reference, meta)
+SELECT $1, bump.ledger_seq, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11 FROM bump
 RETURNING *;
 
 -- name: ListCreditLedger :many
-SELECT * FROM credit_ledger WHERE org_id = $1 ORDER BY created_at DESC LIMIT $2;
+SELECT * FROM credit_ledger WHERE org_id = $1 ORDER BY seq DESC LIMIT $2;
 
 -- name: ListCreditLedgerBefore :many
-SELECT * FROM credit_ledger WHERE org_id = $1 AND created_at < $2 ORDER BY created_at DESC LIMIT $3;
+SELECT * FROM credit_ledger WHERE org_id = $1 AND seq < $2 ORDER BY seq DESC LIMIT $3;
 
 -- name: SumCreditLedger :one
 SELECT coalesce(sum(amount), 0)::bigint AS balance, coalesce(sum(held_delta), 0)::bigint AS held
