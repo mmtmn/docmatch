@@ -246,9 +246,16 @@
     "scanning": "Verificando {name}…",
     "estimating": "Calculando o orçamento…",
     "confirm_run": "Esta conciliação deve usar cerca de {expected} tokens (no máximo {cap}). Continuar?",
+    "confirm_large": "Pedido grande: deve levar cerca de {duration}. Avisamos por e-mail quando terminar.",
     "starting": "Iniciando a conciliação…",
     "rejected": "{name} foi recusado pela verificação de segurança ({reason}).",
     "cancelled": "Conciliação não iniciada."
+  },
+  "duration": {
+    "minute": "1 minuto",
+    "minutes": "{minutes} minutos",
+    "hours": "{hours} h",
+    "hours_minutes": "{hours} h {minutes} min"
   },
   "how": {
     "heading": "Como funciona",

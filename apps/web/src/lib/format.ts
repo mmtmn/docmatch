@@ -29,6 +29,26 @@ export function formatTimestamp(seconds: number): string {
   return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
+/**
+ * An approximate duration the same way on every client (testdata/duration/cases.json): minutes
+ * rounded half up, at least one; under an hour, minutes ("12 minutos"); up to ten hours, hours
+ * and minutes in steps of five ("1 h 20 min"); from ten hours on, whole hours ("11 h").
+ */
+export function formatDuration(seconds: number): string {
+  const s = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
+  let minutes = Math.max(1, Math.floor((s + 30) / 60));
+  if (minutes < 60) {
+    return minutes === 1 ? t('duration.minute') : t('duration.minutes', { minutes });
+  }
+  minutes =
+    minutes < 600 ? Math.floor((minutes + 2) / 5) * 5 : Math.floor((minutes + 30) / 60) * 60;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest === 0
+    ? t('duration.hours', { hours })
+    : t('duration.hours_minutes', { hours, minutes: rest });
+}
+
 export function formatCurrency(amount: number, currency: string): string {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency }).format(amount);
 }
