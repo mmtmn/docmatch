@@ -131,7 +131,13 @@ systemctl stop docmatch-worker.service docmatch-api.service
 # The first migration creates the RLS role with attributes only a superuser may set
 # (NOSUPERUSER, NOBYPASSRLS), so on the very first deploy the owner is superuser for that one
 # run, with the application stopped; cleanup() takes it back even if the migration fails.
-if [[ "\$(runuser -u postgres -- psql -d "\$db_name" -qAt -c "SELECT to_regclass('public.schema_migrations') IS NULL")" == t ]]; then
+# A failed first run leaves an empty schema_migrations behind, so the test is "version 1 not
+# recorded", not "no table".
+first="\$(runuser -u postgres -- psql -d "\$db_name" -qAt -c "SELECT to_regclass('public.schema_migrations') IS NULL")"
+if [[ "\$first" != t ]]; then
+  first="\$(runuser -u postgres -- psql -d "\$db_name" -qAt -c "SELECT NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version = 1)")"
+fi
+if [[ "\$first" == t ]]; then
   runuser -u postgres -- psql -v ON_ERROR_STOP=1 -qAt -c "ALTER ROLE \"\$db_user\" SUPERUSER"
   elevated="\$db_user"
 fi
@@ -148,8 +154,18 @@ for _ in \$(seq 1 30); do
   sleep 1
 done
 echo
+# A unit in a crash loop is "active" between restarts: wait a little and require zero restarts.
+sleep 8
 systemctl --no-pager --lines=0 status docmatch-harness.service docmatch-api.service docmatch-worker.service || true
-systemctl is-active --quiet docmatch-harness.service docmatch-api.service docmatch-worker.service
+for u in docmatch-harness.service docmatch-api.service docmatch-worker.service; do
+  state="\$(systemctl show "\$u" -p ActiveState --value)"
+  restarts="\$(systemctl show "\$u" -p NRestarts --value)"
+  if [[ "\$state" != active || "\$restarts" != 0 ]]; then
+    echo "\$u: \$state, \$restarts reinício(s)"
+    journalctl -u "\$u" -n 12 --no-pager -o cat | grep -vE '^[A-Z_]+=' | cut -c1-240
+    exit 1
+  fi
+done
 [[ \$ok -eq 1 ]]
 echo '$release' > '$bin_dir/../RELEASE'
 echo "release $release instalada"
@@ -162,7 +178,13 @@ if [[ $dry_run -eq 1 ]]; then
   exit 0
 fi
 
-params="$(jq -n --arg s "$remote" '{commands: [$s], executionTimeout: ["900"]}')"
+# AWS-RunShellScript runs the commands with /bin/sh (dash, no pipefail): the script goes to bash.
+if grep -qx 'DOCMATCH_REMOTE' <<<"$remote"; then
+  dm_die "o script remoto contém o delimitador do heredoc"
+fi
+params="$(jq -n --arg s "bash <<'DOCMATCH_REMOTE'
+$remote
+DOCMATCH_REMOTE" '{commands: [$s], executionTimeout: ["900"]}')"
 command_id="$(aws ssm send-command --region "$region" --instance-ids "$instance_id" \
   --document-name AWS-RunShellScript --comment "docmatch $env release $release" \
   --timeout-seconds 600 --parameters "$params" --query Command.CommandId --output text | cat)"
@@ -180,4 +202,6 @@ done
 aws ssm get-command-invocation --region "$region" --command-id "$command_id" --instance-id "$instance_id" \
   --query '[StandardOutputContent, StandardErrorContent]' --output text | cat
 [[ "$status" == "Success" ]] || dm_die "instalação terminou com $status"
+# The pointer a replacement instance installs at boot (docmatch-install-release current).
+printf '%s\n' "$release" | aws s3 cp - "s3://$bucket/releases/current" --only-show-errors | cat
 dm_log "release $release no ar em $env"

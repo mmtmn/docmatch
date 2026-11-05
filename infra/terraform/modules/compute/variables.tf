@@ -72,6 +72,11 @@ variable "ssm_path_prefix" {
   type        = string
 }
 
+variable "releases_bucket_name" {
+  description = "Name of the releases bucket; the instance installs releases/current at boot."
+  type        = string
+}
+
 variable "releases_bucket_arn" {
   description = "ARN of the releases bucket (application binaries under releases/<sha>/)."
   type        = string

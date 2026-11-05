@@ -4,6 +4,9 @@
     name:
       - "postgresql-{{ hardening_pg_version }}"
       - "postgresql-client-{{ hardening_pg_version }}"
+      # pgvector: migration 0001 creates the vector extension (citext, pgcrypto and pg_trgm ship
+      # with the server package).
+      - "postgresql-{{ hardening_pg_version }}-pgvector"
       - pgbackrest
     state: present
     install_recommends: false

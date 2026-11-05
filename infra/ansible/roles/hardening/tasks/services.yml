@@ -23,6 +23,14 @@
     - pgbackrest-backup.timer
   notify: Reload systemd
 
+- name: Install the release installer (boot and infra/scripts/deploy-app.sh)
+  ansible.builtin.template:
+    src: docmatch-install-release.sh.j2
+    dest: /usr/local/sbin/docmatch-install-release
+    owner: root
+    group: root
+    mode: "0750"
+
 - name: Install the AWS IP range refresher
   ansible.builtin.template:
     src: docmatch-aws-ranges.sh.j2

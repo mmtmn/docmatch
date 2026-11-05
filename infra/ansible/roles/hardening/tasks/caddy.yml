@@ -135,6 +135,25 @@
     CROWDSEC_BOUNCER_KEY: build-time-placeholder
   changed_when: false
 
+# Validation opens the log writers, so as root it leaves root-owned caddy.log and access.log
+# behind and the caddy user can no longer open them ("permission denied" at the first boot).
+- name: Remove the log files the validation created as root
+  ansible.builtin.command:
+    cmd: find /var/log/caddy -maxdepth 1 -type f -user root -delete
+  changed_when: false
+
+# fail2ban refuses to start when a jail's log file is missing, and at boot it starts before Caddy
+# has written access.log: the files exist from systemd-tmpfiles-setup on, owned by caddy.
+- name: Create the Caddy log files at boot
+  ansible.builtin.copy:
+    dest: /etc/tmpfiles.d/docmatch-caddy-logs.conf
+    content: |
+      f /var/log/caddy/access.log 0600 caddy caddy -
+      f /var/log/caddy/caddy.log 0600 caddy caddy -
+    owner: root
+    group: root
+    mode: "0644"
+
 - name: Keep Caddy disabled in the image (user-data enables it on the application role)
   ansible.builtin.systemd_service:
     name: caddy

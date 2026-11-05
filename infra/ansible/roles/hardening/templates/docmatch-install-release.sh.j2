@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# {{ ansible_managed }}
+# Installs an application release from the releases bucket: the binaries in
+# {{ hardening_app_bin_dir }} and pricing.yaml/models.yaml in {{ hardening_app_config_dir }}, after
+# checking every file against the release's SHA256SUMS. "current" resolves the pointer that
+# infra/scripts/deploy-app.sh writes after each successful deploy, so a replacement instance boots
+# with the release that was running. Services are not restarted here; the caller decides.
+#
+# Uso: docmatch-install-release <bucket> <release|current>
+set -euo pipefail
+umask 022
+
+log() { printf 'docmatch-install-release: %s\n' "$*" >&2; }
+die() { log "erro: $*"; exit 1; }
+
+[[ $# -eq 2 ]] || die "uso: docmatch-install-release <bucket> <release|current>"
+bucket="$1"
+release="$2"
+[[ "$bucket" =~ ^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$ ]] || die "bucket inválido: $bucket"
+[[ $EUID -eq 0 ]] || die "precisa rodar como root"
+export AWS_PAGER=""
+aws="$(command -v aws || echo /usr/local/bin/aws)"
+
+if [[ "$release" == current ]]; then
+  release="$("$aws" s3 cp "s3://$bucket/releases/current" - | tr -d '[:space:]')" ||
+    die "sem ponteiro releases/current em $bucket"
+fi
+[[ "$release" =~ ^[0-9a-f]{7,40}$ ]] || die "release inválida: $release"
+
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+"$aws" s3 cp --recursive --only-show-errors "s3://$bucket/releases/$release/" "$work/"
+cd "$work"
+sha256sum --check --strict --quiet SHA256SUMS
+
+install -d -m 0755 -o root -g root {{ hardening_app_bin_dir }} {{ hardening_app_config_dir }}
+for b in docmatch-api docmatch-worker docmatch-migrate docmatch-harness; do
+  install -m 0755 -o root -g root "$b" "{{ hardening_app_bin_dir }}/$b.new"
+  mv -f "{{ hardening_app_bin_dir }}/$b.new" "{{ hardening_app_bin_dir }}/$b"
+done
+install -m 0644 -o root -g root pricing.yaml models.yaml {{ hardening_app_config_dir }}/
+printf '%s\n' "$release" > "{{ hardening_app_bin_dir }}/../RELEASE"
+log "release $release instalada"

@@ -84,6 +84,14 @@ fi
 #    The unit refuses to finish while a secret still holds the Terraform placeholder.
 systemctl enable --now docmatch-env.service
 
+# 4b. Application release: the binaries live on the root volume, so a replacement instance
+#     installs the release that was running (releases/current, written by deploy-app.sh). The
+#     database on the data volume is already migrated. Without a pointer (before the first
+#     deploy) the units stay down by ConditionPathExists.
+if [[ -x /usr/local/sbin/docmatch-install-release ]]; then
+  /usr/local/sbin/docmatch-install-release "${releases_bucket}" current || echo "sem release para instalar ainda"
+fi
+
 # 5. Services of this role. Security services (nftables, auditd, CrowdSec, Falco...) are enabled
 #    in the AMI and already running.
 if [[ "$ROLE" == "app" ]]; then

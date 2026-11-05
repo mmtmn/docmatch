@@ -111,6 +111,8 @@ variable "egress_allowlist" {
     "www.googleapis.com",
     "appleid.apple.com",
     "acme-v02.api.letsencrypt.org",
+    # Caddy retries a failed order against the staging CA before going back to production.
+    "acme-staging-v02.api.letsencrypt.org",
     "archive.ubuntu.com",
     "security.ubuntu.com",
     "ports.ubuntu.com",

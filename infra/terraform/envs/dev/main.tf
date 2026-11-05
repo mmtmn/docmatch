@@ -148,6 +148,7 @@ module "compute" {
   ssm_path_prefix         = module.secrets.path_prefix
   uploads_bucket_arn      = module.storage.bucket_arns["uploads"]
   releases_bucket_arn     = module.storage.bucket_arns["releases"]
+  releases_bucket_name    = module.storage.bucket_names["releases"]
   backups_bucket_arn      = module.storage.bucket_arns["backups"]
   verdict_queue_arn       = module.sandbox.verdict_queue_arn
   verdicts_prefix         = module.sandbox.verdicts_prefix
