@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	contracts "github.com/mmtmn/docmatch/packages/contracts/gen"
 	"github.com/mmtmn/docmatch/services/api/internal/estimate"
 	pb "github.com/mmtmn/docmatch/services/api/internal/harness/pb"
 	"github.com/mmtmn/docmatch/services/api/internal/runs/apix"
@@ -268,11 +269,11 @@ func mustJSON(v any) json.RawMessage {
 	return data
 }
 
-// Bounds of the warnings a run keeps: enough to name every skipped file of a
-// large order, never an unbounded payload.
+// Bounds of the warnings a run keeps (limits.yaml): enough to name every
+// skipped file of a large order, never an unbounded payload.
 const (
-	maxSourceWarnings     = 100
-	maxSourceWarningRunes = 500
+	maxSourceWarnings     = contracts.IDsSourceWarningsPerRun
+	maxSourceWarningRunes = contracts.TextSourceWarning
 )
 
 // sourceWarnings copies the harness's per-file warnings within those bounds.

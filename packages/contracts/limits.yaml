@@ -22,6 +22,7 @@ text:                       # em caracteres (code points após NFC)
   contact_message: 2000
   admin_note: 1000
   finding_feedback_note: 500
+  source_warning: 500       # um aviso de arquivo que não entrou na conciliação
   blog_comment: 0           # comentários desativados
 
 files:
@@ -48,4 +49,5 @@ ids:
   idempotency_key_max: 128
   api_key_scopes_max: 10
   files_per_run_hard_max: 100
+  source_warnings_per_run: 100
   media_files_per_run_hard_max: 50000
