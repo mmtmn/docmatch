@@ -1,0 +1,109 @@
+# Gabarito da variação do gêmeo com extrato em PDF e carteira em CNAB 240: o mesmo do gêmeo
+# (testdata/golden/vantara-twin/expected.yaml) com os nomes de arquivo trocados.
+# Gerado por testdata/synth/formatos_financeiros.py.
+version: 1
+case: vantara-twin-pdf-cnab240-jul-2026
+period: { start: 2026-07-01, end: 2026-07-31 }
+
+sources:
+  protheus: 01_retorno_cobranca_jul2026.ret
+  omie: 02_titulos_unidade_norte_omie_jul2026.csv
+  bank: 03_extrato_bancario_jul2026.pdf
+  ap_inbox: 04_caixa_de_entrada_contas_a_pagar.txt
+
+totals_brl:
+  protheus_open: 321370.50
+  omie_open: 53230.00
+  bank_credits: 291020.50
+  bank_debits: 15742.00
+  applied_principal: 289480.50
+  fines_received: 390.00
+  unapplied_cash: 1150.00
+  true_open_balance: 57270.00
+  naive_open_balance: 85120.00
+  unbooked_bank_fees: 1042.00
+  uncharged_late_fees_estimate: 1475.15
+
+# status: paid | partial | open | duplicate
+# flags: late | early | fine_received | withholding_pending | proposed | intercompany | overdue
+titles:
+  - { id: T01, source: protheus, ref: NF 200311, customer: "Pao & Arte Panificadora Ltda", tax_id: 21456789000123, due: 2026-07-10, amount: 24300.00, status: paid, nosso_numero: 000098765001, paid_on: 2026-07-10, paid_amount: 24300.00, open_amount: 0, days_late: 0, flags: [] }
+  - { id: T02, source: protheus, ref: NF 200312, customer: "Pao & Arte Panificadora Ltda", tax_id: 21456789000123, due: 2026-07-10, amount: 2700.00, status: paid, nosso_numero: 000098765002, paid_on: 2026-07-10, paid_amount: 2700.00, open_amount: 0, days_late: 0, flags: [] }
+  - { id: T03, source: protheus, ref: NF 200320, customer: Confeitaria Lua Cheia Comercio de Alimentos, tax_id: 34567890000145, due: 2026-07-12, amount: 38640.50, status: paid, nosso_numero: 000098765003, effective_due: 2026-07-13, paid_on: 2026-07-14, paid_amount: 38640.50, open_amount: 0, days_late: 2, business_days_late: 1, flags: [late] }
+  - { id: T04, source: protheus, ref: NF 200328, customer: Forno da Serra Franqueado ME, tax_id: 56789012000167, due: 2026-07-13, amount: 8450.00, status: paid, nosso_numero: 000098765004, paid_on: 2026-07-13, paid_amount: 8450.00, open_amount: 0, days_late: 0, flags: [] }
+  - { id: T05, source: protheus, ref: NF 200335, customer: Rede Trigo Dourado Ltda, tax_id: 67890123000189, due: 2026-07-15, amount: 71900.00, status: paid, nosso_numero: 000098765005, paid_on: 2026-07-15, paid_amount: 71900.00, open_amount: 0, days_late: 0, flags: [] }
+  - { id: T06, source: protheus, ref: NF 200336, customer: Rede Trigo Dourado Ltda, tax_id: 67890123000189, due: 2026-07-15, amount: 6300.00, status: paid, nosso_numero: 000098765006, paid_on: 2026-07-24, paid_amount: 6300.00, open_amount: 0, days_late: 9, flags: [late] }
+  - { id: T07, source: protheus, ref: NF 200340, customer: Mercearia Colina Verde Alimentos SA, tax_id: 78901234000101, due: 2026-07-16, amount: 98000.00, status: partial, nosso_numero: 000098765007, paid_on: 2026-07-16, paid_amount: 49000.00, open_amount: 49000.00, days_late: 15, flags: [overdue] }
+  - { id: T08, source: protheus, ref: NF 200351, customer: Sabor da Roca Franquias Ltda, tax_id: 89012345000112, due: 2026-07-17, amount: 12400.00, status: paid, nosso_numero: 000098765008, paid_on: 2026-07-17, paid_amount: 11780.00, open_amount: 620.00, days_late: 0, flags: [withholding_pending] }
+  - { id: T09, source: protheus, ref: NF 200360, customer: Moinho Azul Comercio Ltda, tax_id: 90123456000134, due: 2026-07-20, amount: 27850.00, status: paid, nosso_numero: 000098765009, paid_on: 2026-07-21, paid_amount: 27850.00, open_amount: 0, days_late: 1, flags: [late] }
+  - { id: T10, source: protheus, ref: NF 200372, customer: Confeitaria Lua Cheia Comercio de Alimentos, tax_id: 34567890000145, due: 2026-07-20, amount: 5120.00, status: paid, nosso_numero: 000098765010, paid_on: 2026-07-14, paid_amount: 5120.00, open_amount: 0, days_late: -6, flags: [early] }
+  - { id: T11, source: protheus, ref: NF 200377, customer: Trigo Express Delivery ME, tax_id: 13579246000156, due: 2026-07-21, amount: 6210.00, status: paid, nosso_numero: 000098765011, paid_on: 2026-07-22, paid_amount: 6210.00, open_amount: 0, days_late: 1, flags: [late] }
+  - { id: T12, source: protheus, ref: NF 200383, customer: Padaria Beira Rio Ltda, tax_id: 24680135000178, due: 2026-07-22, amount: 19500.00, status: paid, nosso_numero: 000098765012, paid_on: 2026-07-23, paid_amount: 19890.00, open_amount: 0, days_late: 1, flags: [late, fine_received] }
+  - { id: N01, source: omie, ref: FAT-2026-0411, customer: MOINHO AZUL COM LTDA, tax_id: 90123456000134, due: 2026-07-20, amount: 27850.00, status: duplicate, duplicate_of: T09, open_amount: 0, flags: [] }
+  - { id: N02, source: omie, ref: FAT-2026-0412, customer: NORTE PAES EIRELI, tax_id: 35791357000190, due: 2026-07-14, amount: 10450.00, status: paid, paid_on: 2026-07-27, paid_amount: 10450.00, open_amount: 0, days_late: 13, flags: [late, intercompany] }
+  - { id: N03, source: omie, ref: FAT-2026-0415, customer: COLINA VERDE MERCEARIA S/A, tax_id: 78901234000101, due: 2026-07-16, amount: 2900.00, status: paid, paid_on: 2026-07-29, paid_amount: 2900.00, open_amount: 0, days_late: 13, flags: [late, intercompany] }
+  - { id: N04, source: omie, ref: FAT-2026-0420, customer: GRAOS DO NORTE LTDA, tax_id: 46802468000112, due: 2026-07-24, amount: 4380.00, status: paid, paid_on: 2026-07-28, paid_amount: 4380.00, open_amount: 0, days_late: 4, flags: [late, proposed, intercompany] }
+  - { id: N05, source: omie, ref: FAT-2026-0421, customer: NORTE PAES EIRELI, tax_id: 35791357000190, due: 2026-07-28, amount: 7650.00, status: open, open_amount: 7650.00, days_late: 3, flags: [overdue] }
+
+# kind: receipt | fee | supplier_payment | unapplied
+bank_lines:
+  - { n: 1, date: 2026-07-10, amount: 24300.00, side: C, kind: receipt, matched: [T01], rule: nosso_numero_exact, findings: [] }
+  - { n: 2, date: 2026-07-10, amount: 2700.00, side: C, kind: receipt, matched: [T02], rule: name_amount_due, findings: [F15] }
+  - { n: 3, date: 2026-07-13, amount: 8450.00, side: C, kind: receipt, matched: [T04], rule: nosso_numero_exact, findings: [] }
+  - { n: 4, date: 2026-07-14, amount: 43760.50, side: C, kind: receipt, matched: [T03, T10], rule: subset_sum_same_customer, findings: [F01, F02, F03] }
+  - { n: 5, date: 2026-07-15, amount: 71900.00, side: C, kind: receipt, matched: [T05], rule: nosso_numero_exact, findings: [] }
+  - { n: 6, date: 2026-07-15, amount: 980.00, side: D, kind: fee, matched: [], rule: bank_fee_pattern, findings: [F13] }
+  - { n: 7, date: 2026-07-16, amount: 49000.00, side: C, kind: receipt, matched: [T07], rule: nosso_numero_partial, findings: [F04] }
+  - { n: 8, date: 2026-07-17, amount: 11780.00, side: C, kind: receipt, matched: [T08], rule: name_amount_withholding, findings: [F05] }
+  - { n: 9, date: 2026-07-20, amount: 14700.00, side: D, kind: supplier_payment, matched: [AP-55120], rule: document_in_text, findings: [F16] }
+  - { n: 10, date: 2026-07-21, amount: 27850.00, side: C, kind: receipt, matched: [T09], rule: nosso_numero_exact, findings: [F06] }
+  - { n: 11, date: 2026-07-22, amount: 6210.00, side: C, kind: receipt, matched: [T11], rule: tax_id_in_text, findings: [] }
+  - { n: 12, date: 2026-07-23, amount: 19890.00, side: C, kind: receipt, matched: [T12], rule: tax_id_amount_fine, findings: [F07] }
+  - { n: 13, date: 2026-07-24, amount: 6300.00, side: C, kind: receipt, matched: [T06], rule: fuzzy_name_unique_amount, findings: [F08] }
+  - { n: 14, date: 2026-07-27, amount: 10450.00, side: C, kind: receipt, matched: [N02], rule: name_amount, findings: [F09] }
+  - { n: 15, date: 2026-07-28, amount: 4380.00, side: C, kind: receipt, matched: [N04], rule: amount_only_unique, proposed: true, findings: [F10] }
+  - { n: 16, date: 2026-07-29, amount: 2900.00, side: C, kind: receipt, matched: [N03], rule: name_amount, findings: [F11] }
+  - { n: 17, date: 2026-07-30, amount: 1150.00, side: C, kind: unapplied, matched: [], rule: none, findings: [F12] }
+  - { n: 18, date: 2026-07-31, amount: 62.00, side: D, kind: fee, matched: [], rule: bank_fee_pattern, findings: [F13] }
+
+findings:
+  - { code: F01, kind: one_payment_many_titles, severity: info, amount_at_risk_brl: 0.00, evidence: ["bank:4", "title:T03", "title:T10"], title_ptbr: Uma TED paga duas notas }
+  - { code: F02, kind: early_payment, severity: info, amount_at_risk_brl: 0.00, evidence: ["bank:4", "title:T10"], title_ptbr: Nota paga 6 dias antes do vencimento }
+  - { code: F03, kind: paid_late_no_fee, severity: low, amount_at_risk_brl: 785.69, evidence: ["bank:4", "title:T03"], title_ptbr: Vencimento em domingo; paga 1 dia útil atrasada sem encargos }
+  - { code: F04, kind: partial_payment, severity: high, amount_at_risk_brl: 49000.00, evidence: ["bank:7", "title:T07"], title_ptbr: "Pagamento parcial de exatamente 50%" }
+  - { code: F05, kind: withholding_suspected, severity: medium, amount_at_risk_brl: 620.00, evidence: ["bank:8", "title:T08"], title_ptbr: "Diferença de 5% em nota de serviço: provável ISS retido" }
+  - { code: F06, kind: duplicate_title_across_erps, severity: high, amount_at_risk_brl: 27850.00, evidence: ["title:T09", "title:N01", "bank:10"], title_ptbr: Mesmo título nos dois ERPs; contas a receber superestimado }
+  - { code: F07, kind: overpayment_fine_received, severity: low, amount_at_risk_brl: 390.00, evidence: ["bank:12", "title:T12"], title_ptbr: "Recebido 2% a mais: multa por atraso a contabilizar como receita financeira" }
+  - { code: F08, kind: ambiguous_name_match, severity: low, amount_at_risk_brl: 144.90, evidence: ["bank:13", "title:T06", "title:T11"], title_ptbr: Nome ambíguo resolvido pelo valor; 9 dias de atraso sem encargos }
+  - { code: F09, kind: intercompany_receipt, severity: medium, amount_at_risk_brl: 10450.00, evidence: ["bank:14", "title:N02"], title_ptbr: Recebível da unidade Norte caiu na conta principal }
+  - { code: F10, kind: amount_only_proposal, severity: medium, amount_at_risk_brl: 4380.00, evidence: ["bank:15", "title:N04"], title_ptbr: "Depósito não identificado: proposta por valor único, precisa de confirmação" }
+  - { code: F11, kind: customer_master_duplicate, severity: low, amount_at_risk_brl: 0.00, evidence: ["title:T07", "title:N03", "bank:16"], title_ptbr: Mesmo CNPJ com nomes diferentes nos dois cadastros }
+  - { code: F12, kind: unapplied_cash, severity: medium, amount_at_risk_brl: 1150.00, evidence: ["bank:17"], title_ptbr: "Recebimento sem título em aberto: adiantamento de cliente" }
+  - { code: F13, kind: unbooked_bank_fees, severity: low, amount_at_risk_brl: 1042.00, evidence: ["bank:6", "bank:18"], title_ptbr: Tarifas bancárias sem lançamento }
+  - { code: F14, kind: overdue_open, severity: medium, amount_at_risk_brl: 7650.00, evidence: ["title:N05"], title_ptbr: Título vencido há 3 dias sem cobrança }
+  - { code: F15, kind: paid_without_nosso_numero, severity: info, amount_at_risk_brl: 0.00, evidence: ["bank:2", "title:T02"], title_ptbr: "Pago por Pix, sem nosso número no extrato" }
+  - { code: F16, kind: ap_invoice_already_paid, severity: high, amount_at_risk_brl: 14994.00, evidence: ["bank:9", "email:1", "email:2", "chat:2026-07-19T08:33"], title_ptbr: "NF 055120 é a NF 55120, já paga no vencimento" }
+  - { code: F17, kind: ap_premature_recharge, severity: medium, amount_at_risk_brl: 294.00, evidence: ["email:2", "bank:9"], title_ptbr: "Recobrança com 2% enviada antes do vencimento" }
+  - { code: F18, kind: ap_boleto_invalid, severity: critical, amount_at_risk_brl: 14994.00, evidence: ["email:2"], title_ptbr: "Linha digitável inválida: possível fraude de boleto" }
+  - { code: F19, kind: ap_sender_or_bank_details_changed, severity: high, amount_at_risk_brl: 14994.00, evidence: ["email:1", "email:2"], title_ptbr: Remetente e forma de pagamento mudaram entre os e-mails }
+  - { code: F20, kind: ap_three_way_match_failed, severity: high, amount_at_risk_brl: 3675.00, evidence: ["email:2", "chat:2026-07-06T14:18", "bank:9"], title_ptbr: "Pedido entregue 9 de 12 volumes, pago integralmente" }
+  - { code: F21, kind: ap_invoice_without_payment_or_approval, severity: high, amount_at_risk_brl: 29480.15, evidence: ["email:3"], title_ptbr: 38 CT-e vencidos sem pagamento nesta conta e sem aprovação }
+  - { code: F22, kind: uncharged_late_fees, severity: low, amount_at_risk_brl: 1475.15, evidence: ["title:T03", "title:T06", "title:T11", "title:N02", "title:N03", "title:N04"], title_ptbr: Seis títulos pagos com atraso sem multa nem juros }
+  - { code: F23, kind: invalid_tax_ids, severity: info, amount_at_risk_brl: 0.00, evidence: ["title:T01", "title:N02"], title_ptbr: Todos os 11 CNPJs falham no dígito verificador }
+
+boleto:
+  digit_line: "03399.11223 34400.556677 88990.011223 8 91230000014994"
+  check_digits_valid: false
+  encoded_value_brl: 149.94
+  claimed_value_brl: 14994.00
+  due_factor: 9123
+  due_factor_date: 2022-09-29
+  expected_factor_for_2026_07_25: 1518
+
+late_fee_estimates_brl:
+  T03: 785.69
+  T06: 144.90
+  T11: 126.27
+  N02: 254.28
+  N03: 70.57
+  N04: 93.44

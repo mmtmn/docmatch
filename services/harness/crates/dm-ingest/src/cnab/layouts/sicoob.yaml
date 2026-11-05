@@ -1,0 +1,9 @@
+# Sicoob (756) — CNAB 400 de retorno (derivado do CBR643). As posições próprias do Sicoob
+# (nosso número, tarifa, data do crédito) não foram confirmadas: o arquivo é lido com o layout
+# comum e o aviso abaixo acompanha a fonte.
+bank: "756"
+name: Sicoob
+source: "Sicoob, leiaute CNAB 400 de retorno (derivado do CBR643); só campos comuns"
+detail_records: ["1"]
+partial: true
+note: "layout CNAB 400 do Sicoob lido só com os campos comuns: nosso número, tarifa e data do crédito não foram lidos (posições não confirmadas)"

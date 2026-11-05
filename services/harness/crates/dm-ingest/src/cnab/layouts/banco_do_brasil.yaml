@@ -1,0 +1,22 @@
+# Banco do Brasil (001) — leiaute CBR643 de retorno (400 posições), convênio de 7 posições:
+# registro de detalhe tipo 7. Registros tipo 1 (convênio de 6 posições) têm outras posições
+# e são lidos só com o layout comum, com aviso.
+bank: "001"
+name: Banco do Brasil
+source: "Banco do Brasil, leiaute CBR643 — retorno 400 posições, convênio de 7 posições (detalhe tipo 7)"
+detail_records: ["7"]
+fields:
+  uso_empresa: [39, 63]
+  nosso_numero: [64, 80]
+  data_credito: [176, 181]
+  tarifa: [182, 188]
+  outras_despesas: [189, 201]
+occurrences:
+  "02": [Confirmação de entrada, aberto]
+  "03": [Comando recusado, rejeitado]
+  "05": [Liquidado sem registro, liquidado]
+  "06": [Liquidação normal, liquidado]
+  "07": [Liquidação por conta, liquidado]
+  "08": [Liquidação por saldo, liquidado]
+  "09": [Baixa de título, baixado]
+note: "registros de detalhe tipo 1 do Banco do Brasil (convênio de 6 posições) lidos só com os campos do layout comum"

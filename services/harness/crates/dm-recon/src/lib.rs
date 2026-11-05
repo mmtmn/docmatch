@@ -41,11 +41,11 @@ pub enum ReconError {
     /// A file or folder could not be read.
     #[error("leitura: {0}")]
     Io(String),
-    /// Nothing usable in the folder.
+    /// Nothing usable in the folder; the second field lists why, file by file.
     #[error(
-        "nenhuma fonte reconhecida em {0} (esperado: títulos a receber e/ou extrato bancário)"
+        "nenhuma fonte reconhecida em {0} (esperado: títulos a receber e/ou extrato bancário){1}"
     )]
-    NoInputs(String),
+    NoInputs(String, String),
 }
 
 /// Everything a run computed, for the report and `dm explain`.
@@ -65,7 +65,12 @@ pub struct Run {
 pub fn run_dir(dir: &Path, cfg: &EngineConfig) -> Result<Run, ReconError> {
     let ds = sources::load_dir(dir, cfg)?;
     if ds.titles.is_empty() && ds.lines.is_empty() {
-        return Err(ReconError::NoInputs(dir.display().to_string()));
+        let why = if ds.warnings.is_empty() {
+            String::new()
+        } else {
+            format!(": {}", ds.warnings.join("; "))
+        };
+        return Err(ReconError::NoInputs(dir.display().to_string(), why));
     }
     let invoices = ap::invoice_numbers(&ds);
     let cascade = cascade::run(&ds, &invoices, cfg);

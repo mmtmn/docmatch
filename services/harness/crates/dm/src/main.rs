@@ -103,7 +103,7 @@ enum EvalCommand {
         /// Execuções por caso
         #[arg(long, default_value_t = 10)]
         runs: usize,
-        /// Pastas de casos (padrão: o gêmeo público e DM_VANTARA_PATH)
+        /// Pastas de casos (padrão: o gêmeo público, suas variações de formato e DM_VANTARA_PATH)
         #[arg(long = "dir")]
         dirs: Vec<PathBuf>,
         /// Configuração YAML do motor
@@ -422,13 +422,14 @@ fn cmd_eval_golden(runs: usize, dirs: &[PathBuf], config: Option<&Path>) -> Resu
     let mut cases: Vec<(PathBuf, bool)> = dirs.iter().map(|d| (d.clone(), false)).collect();
     if cases.is_empty() {
         let cwd = std::env::current_dir()?;
-        let twin = dm_eval::find_twin_dir(&cwd).ok_or_else(|| {
-            anyhow!(
+        let public = dm_eval::find_golden_dirs(&cwd);
+        if public.is_empty() {
+            return Err(anyhow!(
                 "testdata/golden/vantara-twin não encontrado a partir de {}",
                 cwd.display()
-            )
-        })?;
-        cases.push((twin, false));
+            ));
+        }
+        cases.extend(public.into_iter().map(|d| (d, false)));
         match std::env::var("DM_VANTARA_PATH") {
             Ok(p) if !p.is_empty() => cases.push((PathBuf::from(p), true)),
             _ => println!("caso privado: pulado (DM_VANTARA_PATH não definido)"),

@@ -1,13 +1,19 @@
 //! Reads a case folder: classifies every file by its columns (receivables ledger, bank
 //! statement, inbox), extracts titles, bank lines, e-mails and chat messages, and resolves
 //! customers across ledgers into entities (tax id first, then name).
+//!
+//! Every format the ingest stage reads goes through the same classification: CSV and
+//! spreadsheets by their inferred columns, OFX and PDF statements as bank statements, CNAB
+//! collection files as receivables ledgers, ZIP entries as files of their own. A file that
+//! does not take part in the run is never dropped silently: the reason goes to
+//! [`Dataset::warnings`].
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use chrono::{Datelike, Months, NaiveDate, NaiveDateTime};
 use dm_core::{ColumnRole, Item, Money, Table, Value};
-use dm_ingest::{parse_bytes, InboxContext, SourceKind};
+use dm_ingest::{parse_bytes, InboxContext, ParsedSource, SourceKind};
 use dm_normalize::{doc_number, fold_ascii, money_ptbr, name_key, tax_id, TaxIdKind};
 use sha2::{Digest, Sha256};
 
@@ -173,6 +179,9 @@ pub struct Dataset {
     pub inputs: BTreeMap<String, String>,
     /// Sum of every ledger's open titles, by ledger index.
     pub ledger_open: Vec<Money>,
+    /// Problems with the input files, in pt-BR, each naming the file: parse errors, the
+    /// parsers' own warnings and files that did not take part in the run.
+    pub warnings: Vec<String>,
 }
 
 impl Dataset {
@@ -201,14 +210,7 @@ pub fn load_dir(dir: &Path, cfg: &EngineConfig) -> Result<Dataset, ReconError> {
         .filter_map(Result::ok)
         .map(|e| e.path())
         .filter(|p| p.is_file())
-        .filter(|p| {
-            let name = p.file_name().and_then(|n| n.to_str()).unwrap_or_default();
-            let lower = name.to_ascii_lowercase();
-            let markdown = p.extension().and_then(|x| x.to_str()).is_some_and(|x| {
-                x.eq_ignore_ascii_case("md") || x.eq_ignore_ascii_case("markdown")
-            });
-            !name.starts_with('.') && !SKIPPED_FILES.contains(&lower.as_str()) && !markdown
-        })
+        .filter(|p| is_input_name(p.file_name().and_then(|n| n.to_str()).unwrap_or_default()))
         .collect();
     paths.sort();
 
@@ -233,23 +235,82 @@ pub fn load_dir(dir: &Path, cfg: &EngineConfig) -> Result<Dataset, ReconError> {
         let bytes = std::fs::read(path).map_err(|e| ReconError::Io(format!("{name}: {e}")))?;
         ds.inputs
             .insert(name.clone(), hex::encode(Sha256::digest(&bytes)));
-        let Ok(parsed) = parse_bytes(&name, &bytes, &InboxContext::default()) else {
-            continue;
+        let parsed = match parse_bytes(&name, &bytes, &InboxContext::default()) {
+            Ok(p) => p,
+            Err(e) => {
+                ds.warnings.push(format!("{name}: {e}"));
+                continue;
+            }
         };
-        match parsed.sniff.kind {
-            SourceKind::Csv | SourceKind::Spreadsheet => {
-                for table in parsed.tables {
-                    match classify(&table) {
-                        TableRole::Ledger => ledger_tables.push((name.clone(), table)),
-                        TableRole::Bank => bank_tables.push((name.clone(), table)),
-                        TableRole::Unknown => {}
+        for src in flatten(parsed) {
+            // Entries of an archive follow the same rules as the files of the folder: a
+            // zipped case folder brings its README and answer key along.
+            let base = src.name.rsplit('/').next().unwrap_or(&src.name);
+            if src.name.contains('/') && !is_input_name(base) {
+                continue;
+            }
+            ds.warnings.extend(src.warnings.iter().cloned());
+            let kind = src.sniff.kind;
+            if kind == SourceKind::Zip {
+                // A container: its entries come next, each with its own outcome.
+                continue;
+            }
+            let mut used = false;
+            let mut unused_tables: Vec<&str> = Vec::new();
+            if matches!(
+                kind,
+                SourceKind::TxtInbox | SourceKind::Text | SourceKind::Eml | SourceKind::Mbox
+            ) {
+                // Only e-mails and chat messages make an inbox; notes or a README do not.
+                if src.items.iter().any(is_message) {
+                    inbox_items.push((src.name.clone(), src.items.clone()));
+                    used = true;
+                }
+            } else {
+                for table in &src.tables {
+                    match classify_for(kind, table) {
+                        TableRole::Ledger => {
+                            // A CNAB collection file has one row per movement; the ledger
+                            // wants one per título.
+                            let table = if matches!(kind, SourceKind::Cnab240 | SourceKind::Cnab400)
+                            {
+                                dm_ingest::cnab::titles_view(table)
+                            } else {
+                                table.clone()
+                            };
+                            ledger_tables.push((src.name.clone(), table));
+                        }
+                        TableRole::Bank => bank_tables.push((src.name.clone(), table.clone())),
+                        TableRole::Unknown => {
+                            unused_tables.push(&table.name);
+                            continue;
+                        }
                     }
+                    used = true;
                 }
             }
-            SourceKind::TxtInbox | SourceKind::Text | SourceKind::Eml | SourceKind::Mbox => {
-                inbox_items.push((name.clone(), parsed.items));
+            if used {
+                if !unused_tables.is_empty() {
+                    ds.warnings.push(format!(
+                        "{}: tabela(s) {} não reconhecida(s) como títulos a receber ou extrato bancário; ficaram fora desta conciliação",
+                        src.name,
+                        unused_tables.join(", ")
+                    ));
+                }
+                continue;
             }
-            _ => {}
+            if !src.tables.is_empty() || !src.items.is_empty() {
+                ds.warnings.push(format!(
+                    "{}: lido ({}), mas nada foi reconhecido como títulos a receber, extrato bancário ou caixa de entrada; o arquivo não entrou nesta conciliação",
+                    src.name,
+                    kind.label_ptbr()
+                ));
+            } else if src.warnings.is_empty() {
+                ds.warnings.push(format!(
+                    "{}: nenhum conteúdo aproveitável; o arquivo não entrou nesta conciliação",
+                    src.name
+                ));
+            }
         }
     }
 
@@ -257,6 +318,16 @@ pub fn load_dir(dir: &Path, cfg: &EngineConfig) -> Result<Dataset, ReconError> {
     if let Some((file, table)) = bank_tables.first() {
         ds.lines = bank_lines(table);
         ds.sources.insert("bank".to_string(), file.clone());
+        for (other, other_table) in bank_tables.iter().skip(1) {
+            ds.warnings.push(if other == file {
+                format!(
+                    "{other}: a tabela {} é um segundo extrato bancário; só a tabela {} entra nesta conciliação",
+                    other_table.name, table.name
+                )
+            } else {
+                format!("{other}: segundo extrato bancário; só {file} entra nesta conciliação")
+            });
+        }
     }
     ds.period = period_of(&ds.lines, &ledger_tables);
 
@@ -264,25 +335,40 @@ pub fn load_dir(dir: &Path, cfg: &EngineConfig) -> Result<Dataset, ReconError> {
     let mut used_prefixes = BTreeSet::new();
     for (i, (file, table)) in ledger_tables.iter().enumerate() {
         let key = ledger_key(file, cfg, &used_keys, i);
-        used_keys.insert(key.clone());
         let prefix = ledger_prefix(&key, &used_prefixes);
-        used_prefixes.insert(prefix.clone());
-        ds.sources.insert(key.clone(), file.clone());
-        ds.ledgers.push(Ledger {
+        let ledger = Ledger {
             label: ledger_label(file, &key),
-            key,
+            key: key.clone(),
             file: file.clone(),
-            prefix,
+            prefix: prefix.clone(),
             main: false,
-        });
-        let ledger_index = ds.ledgers.len() - 1;
-        let (titles, open_total) = ledger_titles(table, ledger_index, &ds.ledgers[ledger_index]);
+        };
+        let (titles, open_total) = ledger_titles(table, ds.ledgers.len(), &ledger);
+        if titles.is_empty() {
+            // A ledger of settled titles (a CNAB return of liquidations, an export of paid
+            // invoices) has nothing open to reconcile; it must not become the main ledger.
+            ds.warnings.push(format!(
+                "{file}: nenhum título em aberto (todos pagos, liquidados, baixados ou rejeitados); o arquivo não entrou como carteira nesta conciliação"
+            ));
+            continue;
+        }
+        used_keys.insert(key.clone());
+        used_prefixes.insert(prefix);
+        ds.sources.insert(key, file.clone());
+        ds.ledgers.push(ledger);
         ds.ledger_open.push(open_total);
         ds.titles.extend(titles);
     }
     mark_main_ledger(&mut ds);
     resolve_entities(&mut ds);
 
+    for (other, _) in inbox_items.iter().skip(1) {
+        if let Some((first, _)) = inbox_items.first() {
+            ds.warnings.push(format!(
+                "{other}: segunda caixa de entrada; só {first} entra nesta conciliação"
+            ));
+        }
+    }
     if let Some((file, items)) = inbox_items.first() {
         ds.sources.insert("ap_inbox".to_string(), file.clone());
         let year = ds.period.map_or(2000, |p| p.end.year());
@@ -304,10 +390,61 @@ pub fn load_dir(dir: &Path, cfg: &EngineConfig) -> Result<Dataset, ReconError> {
     Ok(ds)
 }
 
+/// True for a file (or archive entry) that is an input of the case: not hidden, not the
+/// answer key, a previous result or a Markdown note.
+fn is_input_name(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    let markdown = std::path::Path::new(name)
+        .extension()
+        .and_then(|x| x.to_str())
+        .is_some_and(|x| x.eq_ignore_ascii_case("md") || x.eq_ignore_ascii_case("markdown"));
+    !name.starts_with('.') && !SKIPPED_FILES.contains(&lower.as_str()) && !markdown
+}
+
+/// An e-mail or a chat message (what [`inbox`] reads), as opposed to a plain paragraph.
+fn is_message(item: &Item) -> bool {
+    item.fields.contains_key("from") || item.fields.contains_key("sender")
+}
+
+/// A parsed file and the files inside it (ZIP entries), in order.
+fn flatten(mut src: ParsedSource) -> Vec<ParsedSource> {
+    let entries = std::mem::take(&mut src.entries);
+    let mut out = vec![src];
+    for e in entries {
+        out.extend(flatten(e));
+    }
+    out
+}
+
 enum TableRole {
     Ledger,
     Bank,
     Unknown,
+}
+
+/// Formats whose meaning is known from the format itself are not guessed from the columns:
+/// an OFX or a PDF statement is a bank statement (an OFX names the payee, which would read
+/// as a ledger), a CNAB collection file is a receivables ledger and its payments batch is
+/// not, and SPED books have nothing this engine reconciles yet.
+fn classify_for(kind: SourceKind, t: &Table) -> TableRole {
+    match kind {
+        SourceKind::Ofx | SourceKind::Pdf => {
+            if has(t, ColumnRole::Amount) && has(t, ColumnRole::Date) {
+                TableRole::Bank
+            } else {
+                TableRole::Unknown
+            }
+        }
+        SourceKind::Cnab240 | SourceKind::Cnab400 => {
+            if dm_ingest::cnab::is_collection_table(t) {
+                TableRole::Ledger
+            } else {
+                TableRole::Unknown
+            }
+        }
+        SourceKind::Sped => TableRole::Unknown,
+        _ => classify(t),
+    }
 }
 
 fn has(t: &Table, role: ColumnRole) -> bool {
@@ -404,7 +541,14 @@ fn side_of(folded: &str) -> Option<Side> {
 fn bank_lines(t: &Table) -> Vec<BankLine> {
     let date_col = col(t, ColumnRole::Date);
     let text_col = col(t, ColumnRole::FreeText);
-    let doc_col = col(t, ColumnRole::DocumentId);
+    // An OFX transaction id (FITID) is not a document number.
+    let doc_col = t
+        .columns
+        .iter()
+        .position(|c| c.role == ColumnRole::DocumentId && c.subrole.as_deref() != Some("fitid"));
+    // A statement that names the payer in its own column (OFX `NAME`) gets it appended to
+    // the description, where the name rules look for it.
+    let name_col = col(t, ColumnRole::Name);
     let amount_col = col(t, ColumnRole::Amount);
     let side_col = side_column(t);
     let mut out = Vec::new();
@@ -416,7 +560,15 @@ fn bank_lines(t: &Table) -> Vec<BankLine> {
         ) else {
             continue;
         };
-        let description = get(text_col).map(text_of).unwrap_or_default();
+        let mut description = get(text_col).map(text_of).unwrap_or_default();
+        if let Some(name) = get(name_col).map(text_of).filter(|n| !n.is_empty()) {
+            if !fold_ascii(&description).contains(&fold_ascii(&name)) {
+                if !description.is_empty() {
+                    description.push(' ');
+                }
+                description.push_str(&name);
+            }
+        }
         let side = get(side_col)
             .and_then(|v| side_of(&fold_ascii(&text_of(v))))
             .unwrap_or(if amount.is_negative() {
@@ -529,9 +681,19 @@ fn is_open_status(header_folded: &str, value_folded: &str) -> bool {
     if flag_column {
         return !matches!(value_folded, "S" | "SIM" | "Y" | "YES" | "TRUE" | "1" | "X");
     }
+    // A rejected entry or a fee record of a bank collection file is not an open title.
     !matches!(
         value_folded,
-        "PAGO" | "PAGA" | "PAID" | "QUITADO" | "LIQUIDADO" | "BAIXADO" | "RECEBIDO" | "CANCELADO"
+        "PAGO"
+            | "PAGA"
+            | "PAID"
+            | "QUITADO"
+            | "LIQUIDADO"
+            | "BAIXADO"
+            | "RECEBIDO"
+            | "CANCELADO"
+            | "REJEITADO"
+            | "TARIFA"
     )
 }
 
@@ -732,6 +894,8 @@ mod tests {
         assert!(!is_open_status("PAID_FLAG", "S"));
         assert!(is_open_status("STATUS", "ABERTO"));
         assert!(!is_open_status("STATUS", "PAGO"));
+        assert!(!is_open_status("SITUACAO", "REJEITADO"));
+        assert!(is_open_status("SITUACAO", "OUTRO"));
     }
 
     #[test]

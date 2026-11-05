@@ -2,11 +2,14 @@
 //! [`Table`]s tipadas e [`Item`]s de evidência.
 //!
 //! Formatos: CSV (qualquer separador e codificação), XLSX/XLS/ODS, dumps de texto de caixas
-//! de e-mail e conversas (WhatsApp), `.eml` e `mbox`, OFX e NF-e XML (mínimos); CNAB 240/400 e
-//! texto de PDF têm só a assinatura (fase 1). Todo parser é total: entrada arbitrária nunca
-//! causa pânico, só erro ou tabela vazia (ver `tests/never_panics.rs`).
+//! de e-mail e conversas (WhatsApp), `.eml` e `mbox`, OFX e NF-e XML (mínimos), PDF com camada
+//! de texto (extratos viram tabela, o resto vira itens com página), CNAB 240 (cobrança e
+//! pagamentos) e CNAB 400 (retorno de cobrança, layouts por banco), SPED (EFD ICMS/IPI, EFD
+//! Contribuições, ECD) e ZIP (cada arquivo de dentro é uma fonte). Todo parser é total:
+//! entrada arbitrária nunca causa pânico, só erro ou tabela vazia (ver `tests/never_panics.rs`).
 #![forbid(unsafe_code)]
 
+pub mod archive;
 pub mod cnab;
 pub mod delimited;
 pub mod inbox;
@@ -18,19 +21,23 @@ pub mod pdf;
 pub mod roles;
 pub mod sniff;
 pub mod source;
+pub mod sped;
 pub mod spreadsheet;
 
 use thiserror::Error;
 
+pub use cnab::{parse_cnab240, parse_cnab400, CnabParsed};
 pub use delimited::parse_csv;
 pub use inbox::{parse_txt_inbox, InboxContext};
 pub use mail::{parse_eml, parse_mbox};
 pub use mentions::{extract_mentions, Mention, MentionKind};
 pub use nfe_xml::parse_nfe_xml;
 pub use ofx::parse_ofx;
+pub use pdf::{parse_pdf, PdfParsed};
 pub use roles::{infer_columns, ColumnGuess};
 pub use sniff::{sniff, DateStyle, HeaderLanguage, Sniff, SourceKind};
 pub use source::{parse_bytes, parse_file, source_id_for, table_items, ParsedSource};
+pub use sped::parse_sped;
 pub use spreadsheet::parse_xlsx;
 
 /// Errors of the ingest stage. Every parser returns one of these instead of panicking.
@@ -50,8 +57,8 @@ pub enum IngestError {
         /// Library message.
         detail: String,
     },
-    /// Parser not implemented yet (CNAB, PDF).
-    #[error("parser de {0} ainda não implementado (fase 1 do plano)")]
+    /// Parser not implemented yet.
+    #[error("parser de {0} ainda não implementado")]
     NotImplemented(&'static str),
     /// The file is empty.
     #[error("arquivo vazio")]

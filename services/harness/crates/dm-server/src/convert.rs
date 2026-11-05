@@ -33,9 +33,17 @@ fn source_of(run: &Run, key: &str, index: &SourceIndex) -> String {
     run.result
         .sources
         .get(key)
-        .and_then(|file| index.get(file))
-        .cloned()
+        .and_then(|file| upload_of(file, index))
         .unwrap_or_default()
+}
+
+/// Upload id of a file of the run folder; a file inside a ZIP (`pacote.zip/extrato.pdf`)
+/// belongs to the archive's upload.
+fn upload_of(file: &str, index: &SourceIndex) -> Option<String> {
+    index.get(file).cloned().or_else(|| {
+        let (archive, _) = file.split_once('/')?;
+        index.get(archive).cloned()
+    })
 }
 
 /// Structured fields of an evidence row, for clients that render tables: `date` (ISO),
@@ -401,6 +409,7 @@ pub fn summary(run: &Run, findings: &[pb::Finding], matches_total: usize) -> pb:
         matched_ratio: ratio,
         new_tool_ids: Vec::new(),
         proposed_rule_ids: Vec::new(),
+        source_warnings: run.dataset.warnings.clone(),
     }
 }
 
@@ -414,6 +423,21 @@ mod tests {
         assert_eq!(brl(147_515), "R$ 1.475,15");
         assert_eq!(brl(-6_200), "-R$ 62,00");
         assert_eq!(brl(5), "R$ 0,05");
+    }
+
+    #[test]
+    fn zip_entries_belong_to_the_archive_upload() {
+        let index: SourceIndex = [
+            ("pacote.zip".to_string(), "up_zip".to_string()),
+            ("extrato.csv".to_string(), "up_csv".to_string()),
+        ]
+        .into();
+        assert_eq!(upload_of("extrato.csv", &index).as_deref(), Some("up_csv"));
+        assert_eq!(
+            upload_of("pacote.zip/pasta/extrato.pdf", &index).as_deref(),
+            Some("up_zip")
+        );
+        assert_eq!(upload_of("outro.csv", &index), None);
     }
 
     #[test]
