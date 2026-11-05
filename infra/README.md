@@ -176,8 +176,14 @@ no prod) cria o perfil da construção, e os outputs `app_subnet_id`, `app_secur
   `AmazonSSMManagedInstanceCore` foi evitada de propósito porque dá `GetParameter` em toda a conta.
 - As instâncias do pool sob demanda leem menos ainda: o user-data grava `DM_SSM_NAMES` em
   `instance.env` e o `render-env.sh` busca só esses nomes por `GetParameters`, os únicos que o
-  papel `docmatch-<env>-worker` pode ler (`burst_parameter_names`: nada de `DATABASE_URL`). A
-  aplicação grava o próprio endereço interno em `DM_BURST_API_URL` a cada boot.
+  papel `docmatch-<env>-worker` pode ler (`burst_parameter_names`: nada de `DATABASE_URL`). Lá,
+  `DM_ENV_EXCLUDE` tira o segredo do pool e o endpoint do arquivo do harness; eles vão só para
+  `/run/docmatch/env.burst`, do usuário `docmatch-burst`. A aplicação grava o próprio endereço
+  interno em `DM_BURST_API_URL` no primeiro boot de cada instância (o user-data roda uma vez por
+  instância; um reinício mantém o IP).
+- Segredos opcionais (`optional_secret_names` do módulo `secrets`, hoje só
+  `DM_BURST_POOL_SECRET`) nascem como `__EMPTY__`, não como `__UNSET__`: chegam vazios e nunca
+  bloqueiam o boot; a funcionalidade deles fica desligada até o segredo ser preenchido.
 
 ## Como trocar a AMI
 
