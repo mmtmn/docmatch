@@ -120,11 +120,25 @@ func printHelp(out io.Writer) {
 	}
 }
 
-func parse(fs interface{ Parse([]string) error }, args []string) error {
-	if err := fs.Parse(args); err != nil {
-		return fmt.Errorf("%w: %w", errUsage, err)
+func parse(fs *flag.FlagSet, args []string) error {
+	_, err := parseArgs(fs, args)
+	return err
+}
+
+// parseArgs parses flags anywhere among the arguments ("logs api -f" as well as "logs -f api")
+// and returns the positional ones.
+func parseArgs(fs *flag.FlagSet, args []string) ([]string, error) {
+	var positional []string
+	for {
+		if err := fs.Parse(args); err != nil {
+			return nil, fmt.Errorf("%w: %w", errUsage, err)
+		}
+		if fs.NArg() == 0 {
+			return positional, nil
+		}
+		positional = append(positional, fs.Arg(0))
+		args = fs.Args()[1:]
 	}
-	return nil
 }
 
 // logFile opens the installation's log file (logs/install-<time>.log).
@@ -219,9 +233,12 @@ func runInstall(ctx context.Context, w world, args []string, b Build) (int, erro
 		return installPlain(ctx, w, r, f, ours, plan)
 	}
 
-	dark := platform.DarkBackground(w.env)
-	// Pinned, so lipgloss never sends the OSC 11 query (and waits for an answer) by itself.
-	lipgloss.SetHasDarkBackground(dark)
+	// Bubble Tea's init already asked the terminal for its background (once, cached).
+	dark := lipgloss.HasDarkBackground()
+	if v, ok := platform.ThemeOverride(w.env); ok {
+		dark = v
+		lipgloss.SetHasDarkBackground(dark)
+	}
 	app := ui.New(ui.Deps{
 		Theme: ui.NewTheme(prefs.ascii, prefs.animate, dark), Info: w.info, Version: b.Version,
 		Opts: r.opts, Resume: r.st, FixedMode: r.fixedMode, Yes: f.y, ExplicitPorts: r.explicit,
@@ -471,7 +488,8 @@ func runLogs(ctx context.Context, w world, args []string, b Build) (int, error) 
 	fs.BoolVar(&follow, "f", false, "")
 	fs.BoolVar(&follow, "follow", false, "")
 	fs.IntVar(&tail, "tail", 200, "")
-	if err := parse(fs, args); err != nil {
+	positional, err := parseArgs(fs, args)
+	if err != nil {
 		return exitUsage, err
 	}
 	r, err := loadInstalled(ctx, w, c, b)
@@ -483,8 +501,8 @@ func runLogs(ctx context.Context, w world, args []string, b Build) (int, error) 
 		return exitOK, nil
 	}
 	service := ""
-	if fs.NArg() > 0 {
-		service = fs.Arg(0)
+	if len(positional) > 0 {
+		service = positional[0]
 	}
 	inst := install.New(r.opts, r.st)
 	if err := inst.Compose().Logs(ctx, w.stdout, service, follow, tail); err != nil && ctx.Err() == nil {

@@ -103,24 +103,16 @@ func SupportsUnicode(goos string, env Lookup) bool {
 	return goos == "darwin"
 }
 
-// DarkBackground guesses the terminal background without asking the terminal (an OSC 11 query
-// can stall for seconds on terminals that never answer): DOCMATCH_THEME=light|dark wins, then
-// COLORFGBG ("15;0" is light text on black); dark otherwise.
-func DarkBackground(env Lookup) bool {
+// ThemeOverride reads DOCMATCH_THEME=light|dark; ok is false when the terminal's own answer
+// (asked once at start by Bubble Tea) should be used.
+func ThemeOverride(env Lookup) (dark, ok bool) {
 	switch strings.ToLower(env.Get("DOCMATCH_THEME")) {
 	case "light":
-		return false
+		return false, true
 	case "dark":
-		return true
+		return true, true
 	}
-	if v := env.Get("COLORFGBG"); v != "" {
-		parts := strings.Split(v, ";")
-		switch parts[len(parts)-1] {
-		case "7", "9", "10", "11", "12", "13", "14", "15":
-			return false
-		}
-	}
-	return true
+	return false, false
 }
 
 // DefaultHome is where an installation lives unless DOCMATCH_HOME or --dir says otherwise:

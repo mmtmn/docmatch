@@ -89,8 +89,7 @@ modelo vêm do `.env` do repositório. No Windows, este modo roda no WSL2.
 | `--ascii` | automático | só caracteres ASCII |
 | `--verbose` | | com `--plain`, cada linha do log |
 
-`DOCMATCH_REPO` e `DOCMATCH_REF` escolhem de onde e de qual branch o código é clonado quando falta. `DOCMATCH_THEME=light|dark` força o tema (o padrão segue o `COLORFGBG`, senão
-escuro; o instalador nunca consulta o terminal).
+`DOCMATCH_REPO` e `DOCMATCH_REF` escolhem de onde e de qual branch o código é clonado quando falta. `DOCMATCH_THEME=light|dark` força o tema (por padrão vale a cor de fundo que o terminal informa).
 
 A pasta da instalação é `~/.local/share/docmatch/local` no Linux (`$XDG_DATA_HOME`),
 `~/Library/Application Support/docmatch/local` no macOS e `%LOCALAPPDATA%\docmatch\local` no

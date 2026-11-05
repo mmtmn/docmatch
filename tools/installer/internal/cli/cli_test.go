@@ -134,6 +134,19 @@ func TestPrefs(t *testing.T) {
 	}
 }
 
+func TestParseArgsInterspersed(t *testing.T) {
+	fs := newFlagSet("logs")
+	follow := fs.Bool("f", false, "")
+	tail := fs.Int("tail", 200, "")
+	pos, err := parseArgs(fs, []string{"api", "-f", "--tail", "5"})
+	if err != nil || !*follow || *tail != 5 || len(pos) != 1 || pos[0] != "api" {
+		t.Fatalf("%v %v %d %v", pos, *follow, *tail, err)
+	}
+	if _, err := parseArgs(newFlagSet("x"), []string{"--nada"}); !errors.Is(err, errUsage) {
+		t.Fatal(err)
+	}
+}
+
 func TestCommands(t *testing.T) {
 	w, out, errb := testWorld(t, nil)
 	if code := run(context.Background(), w, []string{"version"}, Build{Version: "0.1.0"}); code != 0 || out.String() != "docmatch 0.1.0\n" {

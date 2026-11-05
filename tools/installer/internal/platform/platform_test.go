@@ -57,12 +57,15 @@ func TestUnicode(t *testing.T) {
 	}
 }
 
-func TestDarkBackground(t *testing.T) {
-	if !DarkBackground(env(nil)) || DarkBackground(env(map[string]string{"COLORFGBG": "0;15"})) || !DarkBackground(env(map[string]string{"COLORFGBG": "15;default;0"})) {
-		t.Fatal("COLORFGBG")
+func TestThemeOverride(t *testing.T) {
+	if _, ok := ThemeOverride(env(nil)); ok {
+		t.Fatal("sem variável, vale o terminal")
 	}
-	if DarkBackground(env(map[string]string{"DOCMATCH_THEME": "light", "COLORFGBG": "15;0"})) {
-		t.Fatal("DOCMATCH_THEME vence")
+	if dark, ok := ThemeOverride(env(map[string]string{"DOCMATCH_THEME": "Light"})); !ok || dark {
+		t.Fatal("light")
+	}
+	if dark, ok := ThemeOverride(env(map[string]string{"DOCMATCH_THEME": "dark"})); !ok || !dark {
+		t.Fatal("dark")
 	}
 }
 
