@@ -56,7 +56,7 @@
     "title": "Solte os arquivos aqui",
     "hint": "ou clique para escolher. Você também pode colar.",
     "hint_short": "Toque para escolher arquivos",
-    "accepted": "Extratos, planilhas, PDFs, documentos (DOCX, ODT), notas fiscais e dados (XML, JSON), páginas HTML, ZIPs e 7z, e-mails (EML, MSG), imagens, áudios e vídeos",
+    "accepted": "Extratos, planilhas, PDFs, documentos (DOCX, ODT), notas fiscais e dados (XML, JSON), páginas HTML, ZIPs e 7z, e-mails (EML, MBOX, MSG), imagens, áudios e vídeos",
     "add_more": "Adicionar mais",
     "files_count_one": "1 arquivo",
     "files_count_many": "{count} arquivos",
@@ -106,7 +106,7 @@
     "size_gb": "{n} GB"
   },
   "errors": {
-    "file_type_unknown": "{name}: formato não reconhecido. Aceitamos CSV, TXT, XLSX, ODS, DOCX, ODT, PDF, XML, JSON, HTML, ZIP, 7Z, EML, MBOX, MSG, OFX, imagens, áudios e vídeos.",
+    "file_type_unknown": "{name}: formato não reconhecido. Aceitamos CSV, TXT, XLSX, ODS, DOCX, ODT, PDF, XML, JSON, HTML, ZIP, 7z, EML, MBOX, MSG, OFX, imagens, áudios e vídeos.",
     "file_extension_mismatch": "{name}: o conteúdo não corresponde à extensão .{ext}.",
     "file_empty": "{name}: o arquivo está vazio.",
     "file_too_large": "{name}: maior que o limite de {max}.",
