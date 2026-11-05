@@ -162,6 +162,9 @@ type StandardOptions struct {
 	Logger         *slog.Logger
 	AllowedOrigins []string
 	HSTS           bool
+	// OriginExempt marks requests that skip the Origin check (see
+	// OriginCheckMiddleware); nil exempts nothing.
+	OriginExempt func(*http.Request) bool
 }
 
 // Standard is the middleware stack every docmatch listener uses, outermost
@@ -178,6 +181,6 @@ func Standard(opts StandardOptions) []Middleware {
 		RecoverMiddleware,
 		SecurityHeadersMiddleware(opts.HSTS),
 		CORSMiddleware(DefaultCORSOptions(opts.AllowedOrigins)),
-		OriginCheckMiddleware(opts.AllowedOrigins),
+		OriginCheckMiddleware(opts.AllowedOrigins, opts.OriginExempt),
 	}
 }

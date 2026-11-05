@@ -85,6 +85,10 @@ pub enum ErrorCode {
     EmailCodeExpired,
     /// `too_many_attempts` (429)
     TooManyAttempts,
+    /// `invalid_credentials` (401)
+    InvalidCredentials,
+    /// `recent_login_required` (403)
+    RecentLoginRequired,
     /// `validation_failed` (400)
     ValidationFailed,
     /// `invalid_json` (400)
@@ -283,6 +287,8 @@ impl ErrorCode {
         ErrorCode::EmailCodeInvalid,
         ErrorCode::EmailCodeExpired,
         ErrorCode::TooManyAttempts,
+        ErrorCode::InvalidCredentials,
+        ErrorCode::RecentLoginRequired,
         ErrorCode::ValidationFailed,
         ErrorCode::InvalidJson,
         ErrorCode::BodyTooLarge,
@@ -389,6 +395,8 @@ impl ErrorCode {
             ErrorCode::EmailCodeInvalid => "email_code_invalid",
             ErrorCode::EmailCodeExpired => "email_code_expired",
             ErrorCode::TooManyAttempts => "too_many_attempts",
+            ErrorCode::InvalidCredentials => "invalid_credentials",
+            ErrorCode::RecentLoginRequired => "recent_login_required",
             ErrorCode::ValidationFailed => "validation_failed",
             ErrorCode::InvalidJson => "invalid_json",
             ErrorCode::BodyTooLarge => "body_too_large",
@@ -493,6 +501,8 @@ impl ErrorCode {
             ErrorCode::EmailCodeInvalid => 400,
             ErrorCode::EmailCodeExpired => 410,
             ErrorCode::TooManyAttempts => 429,
+            ErrorCode::InvalidCredentials => 401,
+            ErrorCode::RecentLoginRequired => 403,
             ErrorCode::ValidationFailed => 400,
             ErrorCode::InvalidJson => 400,
             ErrorCode::BodyTooLarge => 413,
@@ -597,6 +607,8 @@ impl ErrorCode {
             ErrorCode::EmailCodeInvalid => ErrorCategory::Auth,
             ErrorCode::EmailCodeExpired => ErrorCategory::Auth,
             ErrorCode::TooManyAttempts => ErrorCategory::Auth,
+            ErrorCode::InvalidCredentials => ErrorCategory::Auth,
+            ErrorCode::RecentLoginRequired => ErrorCategory::Auth,
             ErrorCode::ValidationFailed => ErrorCategory::Validation,
             ErrorCode::InvalidJson => ErrorCategory::Validation,
             ErrorCode::BodyTooLarge => ErrorCategory::Validation,
@@ -709,6 +721,10 @@ impl ErrorCode {
             ErrorCode::EmailCodeInvalid => "Código inválido.",
             ErrorCode::EmailCodeExpired => "O código expirou. Peça um novo.",
             ErrorCode::TooManyAttempts => "Muitas tentativas. Aguarde antes de tentar de novo.",
+            ErrorCode::InvalidCredentials => "E-mail ou senha incorretos.",
+            ErrorCode::RecentLoginRequired => {
+                "Por segurança, entre de novo antes de alterar a senha."
+            }
             ErrorCode::ValidationFailed => "Alguns campos estão inválidos. Confira os detalhes.",
             ErrorCode::InvalidJson => "O corpo da requisição não é um JSON válido.",
             ErrorCode::BodyTooLarge => "O corpo da requisição excede o tamanho permitido.",
@@ -899,6 +915,8 @@ impl ErrorCode {
             "email_code_invalid" => Some(ErrorCode::EmailCodeInvalid),
             "email_code_expired" => Some(ErrorCode::EmailCodeExpired),
             "too_many_attempts" => Some(ErrorCode::TooManyAttempts),
+            "invalid_credentials" => Some(ErrorCode::InvalidCredentials),
+            "recent_login_required" => Some(ErrorCode::RecentLoginRequired),
             "validation_failed" => Some(ErrorCode::ValidationFailed),
             "invalid_json" => Some(ErrorCode::InvalidJson),
             "body_too_large" => Some(ErrorCode::BodyTooLarge),

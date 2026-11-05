@@ -302,6 +302,10 @@ type ClientOptions struct {
 	Periodic bool
 	// ID names the client in River's leader election (default hostname).
 	ID string
+	// Register adds the workers of other packages (e-mail outbox, accounts).
+	Register []func(*river.Workers)
+	// ExtraPeriodic adds periodic jobs of other packages (with Periodic).
+	ExtraPeriodic []*river.PeriodicJob
 }
 
 // NewClient builds a River client bound to pool. It does not start it.
@@ -314,16 +318,20 @@ func NewClient(pool *pgxpool.Pool, d Deps, opts ClientOptions) (*river.Client[pg
 	if maxWorkers <= 0 {
 		maxWorkers = DefaultMaxWorkers
 	}
+	workers := NewWorkers(d)
+	for _, register := range opts.Register {
+		register(workers)
+	}
 	cfg := &river.Config{
 		ID:                  opts.ID,
 		Logger:              d.Logger,
 		JobTimeout:          10 * time.Minute,
 		FetchOnlyKnownKinds: true,
 		Queues:              map[string]river.QueueConfig{river.QueueDefault: {MaxWorkers: maxWorkers}},
-		Workers:             NewWorkers(d),
+		Workers:             workers,
 	}
 	if opts.Periodic {
-		cfg.PeriodicJobs = PeriodicJobs()
+		cfg.PeriodicJobs = append(PeriodicJobs(), opts.ExtraPeriodic...)
 	}
 	client, err := river.NewClient(riverpgxv5.New(pool), cfg)
 	if err != nil {

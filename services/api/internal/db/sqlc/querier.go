@@ -17,6 +17,70 @@ type Querier interface {
 	// O lançamento recebe o próximo número de sequência da conta na mesma
 	// instrução; o chamador já segura o lock da linha da conta.
 	AppendCreditLedger(ctx context.Context, arg AppendCreditLedgerParams) (CreditLedger, error)
+	AuthChallengeByID(ctx context.Context, id uuid.UUID) (MagicLink, error)
+	// Reserva uma tentativa antes de comparar o código: só incrementa enquanto
+	// attempts < $2, então tentativas em paralelo nunca passam do teto.
+	AuthClaimChallengeAttempt(ctx context.Context, arg AuthClaimChallengeAttemptParams) (int32, error)
+	AuthClaimStaleOutbox(ctx context.Context, arg AuthClaimStaleOutboxParams) ([]Outbox, error)
+	// Consome atomicamente: só a primeira chamada devolve a linha.
+	AuthConsumeChallenge(ctx context.Context, id uuid.UUID) (MagicLink, error)
+	AuthCountOrgMembers(ctx context.Context, orgID uuid.UUID) (int64, error)
+	// Desafios de login por e-mail (magic_links): um token de link (token_hash,
+	// SHA-256) e um código de 6 dígitos (code_hash, HMAC) por pedido; uso único,
+	// 15 minutos e no máximo cinco tentativas.
+	AuthCreateChallenge(ctx context.Context, arg AuthCreateChallengeParams) (MagicLink, error)
+	AuthDeleteOldExports(ctx context.Context, requestedAt time.Time) (int64, error)
+	AuthDeleteStaleChallenges(ctx context.Context, expiresAt time.Time) (int64, error)
+	AuthDeleteStaleSessions(ctx context.Context, expiresAt time.Time) (int64, error)
+	// Destruir a chave é o primeiro passo da exclusão LGPD (crypto-shredding).
+	AuthDeleteTenantKey(ctx context.Context, orgID uuid.UUID) (int64, error)
+	AuthExpireExports(ctx context.Context, expiresAt *time.Time) (int64, error)
+	AuthExportArchive(ctx context.Context, id uuid.UUID) ([]byte, error)
+	AuthExportByID(ctx context.Context, id uuid.UUID) (AuthExportByIDRow, error)
+	AuthHardDeleteOrg(ctx context.Context, id uuid.UUID) (int64, error)
+	AuthHardDeleteUser(ctx context.Context, id uuid.UUID) (int64, error)
+	// Exportações de dados pessoais (internal/account). As consultas de estado
+	// não carregam o arquivo; só AuthExportArchive o lê.
+	AuthInsertExport(ctx context.Context, arg AuthInsertExportParams) (AuthInsertExportRow, error)
+	// Sessões (internal/session): o cookie dm_session carrega "id.segredo", a
+	// busca quente é por chave primária e a rotação do refresh é feita no lugar.
+	// A tabela é do usuário (existe antes da organização) e não tem RLS.
+	AuthInsertSession(ctx context.Context, arg AuthInsertSessionParams) (Session, error)
+	// Chaves de dados por locatário (internal/crypto + internal/account). Dentro
+	// de WithOrgTx; o worker de exclusão usa modo sistema.
+	AuthInsertTenantKey(ctx context.Context, arg AuthInsertTenantKeyParams) (TenantKey, error)
+	AuthLatestExport(ctx context.Context, userID uuid.UUID) (AuthLatestExportRow, error)
+	AuthListUserSessions(ctx context.Context, userID uuid.UUID) ([]Session, error)
+	AuthListUsersDueForErasure(ctx context.Context, arg AuthListUsersDueForErasureParams) ([]uuid.UUID, error)
+	AuthMarkExportFailed(ctx context.Context, arg AuthMarkExportFailedParams) (int64, error)
+	AuthMarkExportReady(ctx context.Context, arg AuthMarkExportReadyParams) (int64, error)
+	AuthMarkOutboxAttempt(ctx context.Context, id uuid.UUID) (Outbox, error)
+	// Envio de e-mail pelo outbox (internal/email): o job imediato do River lê a
+	// linha pelo id; o varredor periódico reivindica as linhas antigas ainda não
+	// enviadas. Ambos em modo sistema (o outbox não tem RLS).
+	AuthOutboxByID(ctx context.Context, id uuid.UUID) (Outbox, error)
+	// Agenda a exclusão (LGPD); devolve zero linhas quando já havia um pedido.
+	AuthRequestUserDeletion(ctx context.Context, arg AuthRequestUserDeletionParams) (User, error)
+	AuthRevokeSession(ctx context.Context, id uuid.UUID) (int64, error)
+	AuthRevokeSessionFamily(ctx context.Context, familyID uuid.UUID) (int64, error)
+	// Revoga todas as sessões do usuário, exceto (opcionalmente) a atual.
+	AuthRevokeUserSessions(ctx context.Context, arg AuthRevokeUserSessionsParams) (int64, error)
+	AuthRotateSession(ctx context.Context, arg AuthRotateSessionParams) (Session, error)
+	// Devolve a linha em qualquer estado: o chamador distingue revogada, expirada
+	// e reuso de refresh para decidir entre 401 e revogar a família.
+	AuthSessionByID(ctx context.Context, id uuid.UUID) (Session, error)
+	// Usuários e organizações para o login (internal/auth) e a conta
+	// (internal/account). users não tem RLS; orgs e memberships têm, portanto as
+	// consultas que as tocam rodam em WithOrgTx (ou em modo sistema no worker).
+	AuthSetUserNotifications(ctx context.Context, arg AuthSetUserNotificationsParams) error
+	AuthSetUserPassword(ctx context.Context, arg AuthSetUserPasswordParams) error
+	// Resumo de créditos para GET /me (internal/account): parcela do plano e
+	// parcela avulsa entre as concessões abertas, e a próxima expiração. Dentro
+	// de WithOrgTx; não trava linhas.
+	AuthSumOpenGrantsByKind(ctx context.Context, orgID uuid.UUID) ([]AuthSumOpenGrantsByKindRow, error)
+	AuthTenantKey(ctx context.Context, orgID uuid.UUID) (TenantKey, error)
+	AuthTouchSession(ctx context.Context, id uuid.UUID) error
+	AuthUpdateOrgName(ctx context.Context, arg AuthUpdateOrgNameParams) error
 	// Forma canônica de um jsonb (chaves ordenadas, sem espaços redundantes).
 	CanonicalJSON(ctx context.Context, dollar_1 []byte) (string, error)
 	ClaimOutbox(ctx context.Context, limit int32) ([]Outbox, error)

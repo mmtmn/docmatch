@@ -121,6 +121,15 @@ func CORSMiddleware(opts CORSOptions) func(http.Handler) http.Handler {
 	}
 }
 
+func isExempt(r *http.Request, exempt []func(*http.Request) bool) bool {
+	for _, fn := range exempt {
+		if fn != nil && fn(r) {
+			return true
+		}
+	}
+	return false
+}
+
 // stateChanging reports whether the method can mutate state and therefore
 // needs CSRF protection when cookies are the credential.
 func stateChanging(method string) bool {
@@ -136,12 +145,14 @@ func stateChanging(method string) bool {
 // the allowlist decides whenever it is present. Without Origin, a
 // Sec-Fetch-Site of cross-site or a foreign Referer is rejected. Requests with
 // none of these headers come from non-browser clients, which cannot carry
-// ambient cookie credentials, so they pass.
-func OriginCheckMiddleware(origins []string) func(http.Handler) http.Handler {
+// ambient cookie credentials, so they pass. Requests matched by an exempt
+// predicate skip the check (identity-provider form posts, which carry no
+// session cookie and are protected by their own state and nonce).
+func OriginCheckMiddleware(origins []string, exempt ...func(*http.Request) bool) func(http.Handler) http.Handler {
 	policy := NewOriginPolicy(origins)
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !stateChanging(r.Method) {
+			if !stateChanging(r.Method) || isExempt(r, exempt) {
 				next.ServeHTTP(w, r)
 				return
 			}

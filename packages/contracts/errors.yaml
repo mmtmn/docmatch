@@ -90,6 +90,14 @@ errors:
     category: auth
     message: Muitas tentativas. Aguarde antes de tentar de novo.
     retryable: true
+  invalid_credentials:
+    status: 401
+    category: auth
+    message: E-mail ou senha incorretos.
+  recent_login_required:
+    status: 403
+    category: auth
+    message: Por segurança, entre de novo antes de alterar a senha.
 
   # ------------------------------------------------------------ validation
   validation_failed:

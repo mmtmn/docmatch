@@ -16,7 +16,7 @@ const createSession = `-- name: CreateSession :one
 
 INSERT INTO sessions (user_id, org_id, device_hash, refresh_hash, family_id, ip_prefix, user_agent, expires_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, user_id, org_id, device_hash, refresh_hash, family_id, ip_prefix, user_agent, created_at, last_seen_at, expires_at, revoked_at
+RETURNING id, user_id, org_id, device_hash, refresh_hash, family_id, ip_prefix, user_agent, created_at, last_seen_at, expires_at, revoked_at, access_hash, access_expires_at, rotated_at, rotations
 `
 
 type CreateSessionParams struct {
@@ -57,6 +57,10 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 		&i.LastSeenAt,
 		&i.ExpiresAt,
 		&i.RevokedAt,
+		&i.AccessHash,
+		&i.AccessExpiresAt,
+		&i.RotatedAt,
+		&i.Rotations,
 	)
 	return i, err
 }
@@ -74,7 +78,7 @@ func (q *Queries) DeleteExpiredSessions(ctx context.Context) (int64, error) {
 }
 
 const getSession = `-- name: GetSession :one
-SELECT id, user_id, org_id, device_hash, refresh_hash, family_id, ip_prefix, user_agent, created_at, last_seen_at, expires_at, revoked_at FROM sessions WHERE id = $1 AND revoked_at IS NULL AND expires_at > now()
+SELECT id, user_id, org_id, device_hash, refresh_hash, family_id, ip_prefix, user_agent, created_at, last_seen_at, expires_at, revoked_at, access_hash, access_expires_at, rotated_at, rotations FROM sessions WHERE id = $1 AND revoked_at IS NULL AND expires_at > now()
 `
 
 func (q *Queries) GetSession(ctx context.Context, id uuid.UUID) (Session, error) {
@@ -93,12 +97,16 @@ func (q *Queries) GetSession(ctx context.Context, id uuid.UUID) (Session, error)
 		&i.LastSeenAt,
 		&i.ExpiresAt,
 		&i.RevokedAt,
+		&i.AccessHash,
+		&i.AccessExpiresAt,
+		&i.RotatedAt,
+		&i.Rotations,
 	)
 	return i, err
 }
 
 const getSessionByRefreshHash = `-- name: GetSessionByRefreshHash :one
-SELECT id, user_id, org_id, device_hash, refresh_hash, family_id, ip_prefix, user_agent, created_at, last_seen_at, expires_at, revoked_at FROM sessions WHERE refresh_hash = $1
+SELECT id, user_id, org_id, device_hash, refresh_hash, family_id, ip_prefix, user_agent, created_at, last_seen_at, expires_at, revoked_at, access_hash, access_expires_at, rotated_at, rotations FROM sessions WHERE refresh_hash = $1
 `
 
 func (q *Queries) GetSessionByRefreshHash(ctx context.Context, refreshHash []byte) (Session, error) {
@@ -117,12 +125,16 @@ func (q *Queries) GetSessionByRefreshHash(ctx context.Context, refreshHash []byt
 		&i.LastSeenAt,
 		&i.ExpiresAt,
 		&i.RevokedAt,
+		&i.AccessHash,
+		&i.AccessExpiresAt,
+		&i.RotatedAt,
+		&i.Rotations,
 	)
 	return i, err
 }
 
 const listActiveSessions = `-- name: ListActiveSessions :many
-SELECT id, user_id, org_id, device_hash, refresh_hash, family_id, ip_prefix, user_agent, created_at, last_seen_at, expires_at, revoked_at FROM sessions
+SELECT id, user_id, org_id, device_hash, refresh_hash, family_id, ip_prefix, user_agent, created_at, last_seen_at, expires_at, revoked_at, access_hash, access_expires_at, rotated_at, rotations FROM sessions
 WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now()
 ORDER BY last_seen_at DESC
 `
@@ -149,6 +161,10 @@ func (q *Queries) ListActiveSessions(ctx context.Context, userID uuid.UUID) ([]S
 			&i.LastSeenAt,
 			&i.ExpiresAt,
 			&i.RevokedAt,
+			&i.AccessHash,
+			&i.AccessExpiresAt,
+			&i.RotatedAt,
+			&i.Rotations,
 		); err != nil {
 			return nil, err
 		}
@@ -199,7 +215,7 @@ func (q *Queries) RevokeUserSessions(ctx context.Context, userID uuid.UUID) (int
 const rotateSession = `-- name: RotateSession :one
 UPDATE sessions SET refresh_hash = $2, expires_at = $3, last_seen_at = now()
 WHERE id = $1 AND revoked_at IS NULL
-RETURNING id, user_id, org_id, device_hash, refresh_hash, family_id, ip_prefix, user_agent, created_at, last_seen_at, expires_at, revoked_at
+RETURNING id, user_id, org_id, device_hash, refresh_hash, family_id, ip_prefix, user_agent, created_at, last_seen_at, expires_at, revoked_at, access_hash, access_expires_at, rotated_at, rotations
 `
 
 type RotateSessionParams struct {
@@ -224,6 +240,10 @@ func (q *Queries) RotateSession(ctx context.Context, arg RotateSessionParams) (S
 		&i.LastSeenAt,
 		&i.ExpiresAt,
 		&i.RevokedAt,
+		&i.AccessHash,
+		&i.AccessExpiresAt,
+		&i.RotatedAt,
+		&i.Rotations,
 	)
 	return i, err
 }

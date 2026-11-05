@@ -30,6 +30,14 @@ type Deps struct {
 	DB Pinger
 	// ReadyTimeout bounds the readiness ping (default 2s).
 	ReadyTimeout time.Duration
+	// Mount lets the feature packages register their route groups.
+	Mount []func(*httpx.Router)
+	// Middleware runs inside the standard stack, before routing (the
+	// session middleware, which puts the principal in the context).
+	Middleware []httpx.Middleware
+	// OriginExempt marks requests that skip the Origin check (identity
+	// provider form posts).
+	OriginExempt func(*http.Request) bool
 }
 
 // NewHandler builds the full handler chain for the public listener.
@@ -54,12 +62,18 @@ func NewHandler(d Deps) http.Handler {
 	r.HandleFunc(http.MethodGet, "/healthz", httpx.BodyNone, healthz)
 	r.HandleFunc(http.MethodGet, "/readyz", httpx.BodyNone, readyz(d))
 	r.HandleFunc(http.MethodGet, "/v1/version", httpx.BodyNone, versionHandler)
+	for _, mount := range d.Mount {
+		mount(r)
+	}
 
-	return httpx.Chain(r, httpx.Standard(httpx.StandardOptions{
+	mws := httpx.Standard(httpx.StandardOptions{
 		Logger:         d.Logger,
 		AllowedOrigins: origins,
 		HSTS:           hsts,
-	})...)
+		OriginExempt:   d.OriginExempt,
+	})
+	mws = append(mws, d.Middleware...)
+	return httpx.Chain(r, mws...)
 }
 
 type status struct {
