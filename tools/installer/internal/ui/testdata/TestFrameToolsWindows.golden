@@ -1,0 +1,23 @@
+
+  docmatch 0.1.0      modo · verificações · ferramentas · escolhas · instalação · pronto
+
+  Desenvolver no Windows: WSL2
+
+  ✗ WSL2            não encontrado
+  ✓ Docker          Compose 2.40.3
+
+  Para instalar com o winget, nesta ordem:
+    ! $ wsl --install -d Ubuntu
+    ! $ winget install --exact --id Docker.DockerDesktop --accept-package-agreements
+          --accept-source-agreements
+
+  ! 2 comando(s) marcado(s) com ! pedem a sua senha (sudo) ou administrador no próprio
+    terminal. Nada roda antes de você apertar i.
+
+  O wsl --install pode pedir para reiniciar o Windows.
+
+  Depois, abra o Ubuntu do WSL e rode lá: curl -fsSL
+  https://site.invalid/install/install.sh | sh -s -- --mode desenvolver
+
+  i instalar agora · r verificar de novo · q sair
+

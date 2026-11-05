@@ -80,6 +80,9 @@ func Summary(out Outcome, total time.Duration) []string {
 	for _, c := range NextCommands(out.Mode) {
 		lines = append(lines, "  "+pad(c[0], 18)+c[1])
 	}
+	if len(out.PathHint) > 0 {
+		lines = append(lines, "", text.T("payoff.path_hint", "dirs", strings.Join(out.PathHint, ", ")))
+	}
 	if out.LogPath != "" {
 		lines = append(lines, "", text.T("payoff.log", "path", out.LogPath))
 	}
@@ -139,6 +142,9 @@ func (m *payoffModel) view(w int) string {
 	b.WriteString("\n" + t.Heading.Render(text.T("payoff.next_title")) + "\n")
 	for _, c := range NextCommands(out.Mode) {
 		b.WriteString("  " + t.Key.Render(pad(c[0], 18)) + t.Dim.Render(c[1]) + "\n")
+	}
+	if len(out.PathHint) > 0 {
+		b.WriteString("\n" + t.WarnS.Width(w).Render(t.plainText(text.T("payoff.path_hint", "dirs", strings.Join(out.PathHint, ", ")))) + "\n")
 	}
 	b.WriteString("\n")
 	pairs := []string{"Enter", text.T("hint.exit")}

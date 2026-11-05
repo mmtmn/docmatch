@@ -1,0 +1,30 @@
+
+  docmatch 0.1.0      modo · verificações · ferramentas · escolhas · instalação · pronto
+
+  Ferramentas do make local
+
+  ✓ git             2.43.0
+  ✓ make            4.3
+  ✓ compilador C    13.3.0
+  ✓ Go              1.22.2; o Go baixa o go1.27.3 do go.mod sozinho (GOTOOLCHAIN=auto)
+  ✓ Rust            1.93.0 (o rustup segue o rust-toolchain.toml)
+  ✓ Node            22.23.4
+  ✓ pnpm            11.5.3
+  ✓ Docker          Compose 2.40.3
+  ✓ openssl         3.0.13
+  ✓ curl            8.5.0
+
+  Resultado
+  ✓ sudo apt-get update
+  ✓ sudo apt-get install -y golang-go rustup
+  ✓ rustup default stable
+  ✓ sudo snap install node --classic --channel=22/stable
+  ✓ npm install --global --prefix /home/ana/.local pnpm@11.5.3
+
+  ✓ Tudo pronto para o make local.
+
+  Adicionado ao PATH desta execução: /home/ana/.cargo/bin, /snap/bin,
+  /home/ana/.local/bin.
+
+  Enter continuar · q sair
+

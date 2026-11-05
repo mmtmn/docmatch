@@ -1,0 +1,32 @@
+
+  docmatch 0.1.0      modo · verificações · ferramentas · escolhas · instalação · pronto
+
+  Ferramentas do make local
+
+  ✓ git             2.43.0
+  ✓ make            4.3
+  ✓ compilador C    13.3.0
+  ✗ Go              não encontrado
+  ✗ Rust            não encontrado
+  ✗ Node            não encontrado
+  ✗ pnpm            não encontrado
+  ✗ Docker          não encontrado
+  ✓ openssl         3.0.13
+  ✓ curl            8.5.0
+
+  Para instalar com o apt, nesta ordem:
+    ! $ sudo apt-get update
+    ! $ sudo apt-get install -y golang-go rustup
+      $ rustup default stable
+    ! $ sudo snap install node --classic --channel=22/stable
+      $ npm install --global --prefix /home/ana/.local pnpm@11.5.3
+
+  ! 3 comando(s) marcado(s) com ! pedem a sua senha (sudo) ou administrador no próprio
+    terminal. Nada roda antes de você apertar i.
+
+  Sem pacote que instale sozinho; faça à mão:
+    • Docker: Ligue a integração com o WSL no Docker Desktop (Settings > Resources >
+      WSL integration) ou instale o Docker Engine dentro do WSL.
+
+  i instalar agora · r verificar de novo · q sair
+

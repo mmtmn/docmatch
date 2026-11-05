@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/mmtmn/docmatch/tools/installer/internal/preflight"
 	"github.com/mmtmn/docmatch/tools/installer/internal/state"
 	"github.com/mmtmn/docmatch/tools/installer/internal/text"
+	"github.com/mmtmn/docmatch/tools/installer/internal/toolchain"
 )
 
 // Plan is a ready-to-run installation.
@@ -36,6 +38,9 @@ type Outcome struct {
 	Demo    *demo.Result
 	DemoErr error
 	LogPath string
+	// PathHint are folders this run added to its PATH (tools installed there): the user's shell
+	// needs them too.
+	PathHint []string
 }
 
 // Deps are the outside world of the interface; tests replace all of it.
@@ -58,6 +63,12 @@ type Deps struct {
 	Now         func() time.Time
 	PortFree    ports.Prober
 	Ours        map[int]bool
+	// Tools detects the Desenvolver toolchain and plans the installation of what is missing
+	// (nil: no tools screen). RunTools runs that plan with the terminal handed over.
+	Tools    func(ctx context.Context, opts install.Options) ToolsReport
+	RunTools func(plan toolchain.Plan) ToolsRun
+	// InstallTools (--install-tools) runs the plan as soon as the screen shows it.
+	InstallTools bool
 }
 
 type screen int
@@ -66,6 +77,7 @@ const (
 	screenSplash screen = iota
 	screenMode
 	screenChecks
+	screenTools
 	screenChoices
 	screenProgress
 	screenPayoff
@@ -96,6 +108,7 @@ type App struct {
 	splash   splashModel
 	mode     modeModel
 	checks   checksModel
+	tools    toolsModel
 	choices  *choicesModel
 	progress progressModel
 	payoff   payoffModel
@@ -173,6 +186,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a.updateMode(msg)
 	case screenChecks:
 		return a.updateChecks(msg)
+	case screenTools:
+		return a.updateTools(msg)
 	case screenChoices:
 		return a.updateChoices(msg)
 	case screenProgress:
@@ -234,6 +249,7 @@ func (a *App) updateMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if chosen := a.mode.update(msg); chosen != "" {
 		a.opts.Mode = chosen
+		a.opts = a.opts.Resolved()
 		return a, a.startChecks()
 	}
 	return a, nil
@@ -242,7 +258,18 @@ func (a *App) updateMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (a *App) startChecks() tea.Cmd {
 	a.screen = screenChecks
 	a.checks = newChecks(a.t, a.deps.Checks(a.opts))
+	a.checks.toolsHint = a.toolsEnabled()
 	return a.checks.next(a.ctx)
+}
+
+// toolsEnabled reports whether the Desenvolver tools screen exists for this run.
+func (a *App) toolsEnabled() bool {
+	return a.opts.Mode == state.ModeDev && a.deps.Tools != nil
+}
+
+// installable reports a failed check that the tools screen can install (a tool, Docker).
+func installable(id string) bool {
+	return strings.HasPrefix(id, "tool_") || id == "docker" || id == "compose"
 }
 
 func (a *App) updateChecks(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -253,6 +280,8 @@ func (a *App) updateChecks(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.startChecks()
 	case isKey(msg, "enter") && a.checks.finished() && !a.checks.failed():
 		return a, a.afterChecks()
+	case isKey(msg, "enter") && a.checks.finished() && a.toolsEnabled() && a.checks.failedAny(installable):
+		return a, a.startTools()
 	}
 	cmd, done := a.checks.update(a.ctx, msg)
 	if done && !a.checks.failed() && a.deps.Yes {
@@ -275,6 +304,10 @@ func (a *App) suggestedPorts() ports.Set {
 }
 
 func (a *App) afterChecks() tea.Cmd {
+	// Native Windows runs make local inside WSL2: the tools screen prepares it and hands over.
+	if a.toolsEnabled() && a.deps.Info.OS == "windows" {
+		return a.startTools()
+	}
 	if a.opts.Mode == state.ModeTry {
 		a.opts.Ports = a.suggestedPorts()
 	}
@@ -285,6 +318,63 @@ func (a *App) afterChecks() tea.Cmd {
 	a.choices = newChoices(a.t, a.opts, a.deps.Ours, a.deps.PortFree, a.deps.Info.OS)
 	a.choices.resize(a.contentWidth(), a.height)
 	return a.choices.form.Init()
+}
+
+func (a *App) startTools() tea.Cmd {
+	a.screen = screenTools
+	a.tools = newTools(a.t)
+	return tea.Batch(a.detectTools(), a.tools.spinTick())
+}
+
+func (a *App) detectTools() tea.Cmd {
+	ctx, opts, detect := a.ctx, a.opts, a.deps.Tools
+	return func() tea.Msg { return toolsReportMsg(detect(ctx, opts)) }
+}
+
+func (a *App) runTools() tea.Cmd {
+	a.tools.busy = "running"
+	run := a.deps.RunTools(a.tools.report.Plan)
+	return tea.Exec(run, func(error) tea.Msg { return toolsRanMsg{results: run.Results()} })
+}
+
+func (a *App) updateTools(msg tea.Msg) (tea.Model, tea.Cmd) {
+	m := &a.tools
+	switch msg := msg.(type) {
+	case toolsReportMsg:
+		r := ToolsReport(msg)
+		m.report, m.busy = &r, ""
+		if a.deps.InstallTools && m.results == nil && m.canInstall() {
+			return a, a.runTools()
+		}
+		return a, nil
+	case toolsRanMsg:
+		m.results, m.busy = msg.results, "checking"
+		return a, tea.Batch(a.detectTools(), m.spinTick())
+	case spinner.TickMsg:
+		return a, m.spinUpdate(msg)
+	}
+	if m.busy != "" {
+		return a, nil
+	}
+	ready := m.report != nil && m.report.Ready()
+	switch {
+	case isKey(msg, "q", "esc"):
+		if ready && m.report.Windows {
+			return a, a.quit(0)
+		}
+		return a, a.quit(1)
+	case isKey(msg, "i") && m.canInstall():
+		return a, a.runTools()
+	case isKey(msg, "r"):
+		m.busy = "checking"
+		return a, tea.Batch(a.detectTools(), m.spinTick())
+	case isKey(msg, "enter") && ready && m.report.Windows:
+		return a, a.quit(0)
+	case isKey(msg, "enter") && ready:
+		// Back through the checks: Docker may still need to start, the disk may be short.
+		return a, a.startChecks()
+	}
+	return a, nil
 }
 
 func (a *App) updateChoices(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -380,6 +470,8 @@ func (a *App) View() string {
 		body = a.mode.view(w)
 	case screenChecks:
 		body = a.checks.view(w)
+	case screenTools:
+		body = a.tools.view(w)
 	case screenChoices:
 		body = a.choices.view()
 	case screenProgress:
@@ -399,9 +491,12 @@ func (a *App) header(w int) string {
 	stages := []struct {
 		s   screen
 		key string
-	}{{screenMode, "nav.mode"}, {screenChecks, "nav.checks"}, {screenChoices, "nav.choices"}, {screenProgress, "nav.install"}, {screenPayoff, "nav.done"}}
+	}{{screenMode, "nav.mode"}, {screenChecks, "nav.checks"}, {screenTools, "nav.tools"}, {screenChoices, "nav.choices"}, {screenProgress, "nav.install"}, {screenPayoff, "nav.done"}}
 	parts := make([]string, 0, len(stages))
 	for _, st := range stages {
+		if st.s == screenTools && !a.toolsEnabled() {
+			continue
+		}
 		label := text.T(st.key)
 		switch {
 		case st.s == a.screen:

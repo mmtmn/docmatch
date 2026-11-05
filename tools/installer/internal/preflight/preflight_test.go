@@ -159,6 +159,11 @@ func TestPorts(t *testing.T) {
 	if r["port_api"].Status != OK || !strings.Contains(r["port_api"].Detail, "esta instalação") {
 		t.Fatalf("api é nossa: %+v", r["port_api"])
 	}
+	env.Mode = state.ModeDev
+	if r = run(env); !strings.Contains(r["port_web"].Fix, ".env") || strings.Contains(r["port_web"].Fix, "--port-web") {
+		t.Fatalf("no Desenvolver as portas vêm do .env: %+v", r["port_web"])
+	}
+	env.Mode = state.ModeTry
 	names := map[string]string{}
 	for _, c := range Checks(env) {
 		names[c.ID] = c.Name
@@ -191,10 +196,13 @@ func TestDevMode(t *testing.T) {
 	env := fake()
 	env.Mode = state.ModeDev
 	r := run(env)
-	for _, tool := range []string{"git", "make", "go", "cargo", "node", "pnpm", "openssl", "curl"} {
+	for _, tool := range []string{"git", "make", "cc", "go", "rust", "node", "pnpm", "openssl", "curl"} {
 		if r["tool_"+tool].Status != OK {
 			t.Errorf("%s: %+v", tool, r["tool_"+tool])
 		}
+	}
+	if _, ok := r["tool_docker"]; ok {
+		t.Fatal("o Docker já tem as três linhas dele")
 	}
 	old := env.Output
 	env.Output = func(ctx context.Context, name string, args ...string) (string, error) {
@@ -204,23 +212,40 @@ func TestDevMode(t *testing.T) {
 		return old(ctx, name, args...)
 	}
 	env.LookPath = func(name string) (string, error) {
-		if name == "cargo" {
+		if name == "cargo" || name == "rustup" {
 			return "", errors.New("no")
 		}
 		return "/usr/bin/" + name, nil
 	}
 	r = run(env)
-	if r["tool_node"].Status != Fail || r["tool_cargo"].Status != Fail || !strings.Contains(r["tool_cargo"].Fix, "rustup") {
-		t.Fatalf("%+v %+v", r["tool_node"], r["tool_cargo"])
+	if r["tool_node"].Status != Fail || !strings.Contains(r["tool_node"].Detail, "22.23.4") || r["tool_rust"].Status != Fail || !strings.Contains(r["tool_rust"].Fix, "rustup") {
+		t.Fatalf("%+v %+v", r["tool_node"], r["tool_rust"])
 	}
 	env.SourceDir = ""
 	if r = run(env); r["source"].Status != Fail {
-		t.Fatal("Desenvolver precisa do repositório")
+		t.Fatal("sem checkout nem pasta para clonar")
 	}
+	env.CloneDir = "/home/u/docmatch"
+	if r = run(env); r["source"].Status != Warn || !strings.Contains(r["source"].Detail, "/home/u/docmatch") {
+		t.Fatalf("sem checkout, o instalador clona: %+v", r["source"])
+	}
+	// The harness socket lives in the checkout: a path too deep for a Unix socket fails up front.
+	env.CloneDir = "/home/u/" + strings.Repeat("pasta-funda/", 8) + "docmatch"
+	if r = run(env); r["source"].Status != Fail || !strings.Contains(r["source"].Fix, "limite é 103") {
+		t.Fatalf("%+v", r["source"])
+	}
+	env.CloneDir = "/home/u/docmatch"
 	env = fake()
 	env.Mode, env.Info.OS = state.ModeDev, "windows"
-	if r = run(env); r["os"].Status != Fail || !strings.Contains(r["os"].Fix, "WSL2") {
+	r = run(env)
+	if r["os"].Status != Warn || !strings.Contains(r["os"].Fix, "WSL2") {
 		t.Fatalf("Windows: %+v", r["os"])
+	}
+	if _, ok := r["tool_wsl"]; !ok {
+		t.Fatalf("Windows confere o WSL: %v", r)
+	}
+	if _, ok := r["tool_go"]; ok {
+		t.Fatal("as toolchains rodam dentro do WSL")
 	}
 	env.Info = platform.Info{OS: "freebsd", Arch: "amd64"}
 	if r = run(env); r["os"].Status != Fail {

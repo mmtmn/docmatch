@@ -1,12 +1,14 @@
 // Package preflight checks this machine before installing: system, free disk, Docker (installed,
-// running, Compose v2), the ports, git and, for Desenvolver, the toolchains. A failing check
-// carries the fix in pt-BR; nothing is ever installed or elevated here.
+// running, Compose v2), the ports, git and, for Desenvolver, the toolchains (internal/toolchain).
+// A failing check carries the fix in pt-BR; nothing is ever installed or elevated here (the
+// Desenvolver tools screen shows the commands and asks first).
 package preflight
 
 import (
 	"context"
+	"os"
 	"os/exec"
-	"regexp"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -15,6 +17,7 @@ import (
 	"github.com/mmtmn/docmatch/tools/installer/internal/ports"
 	"github.com/mmtmn/docmatch/tools/installer/internal/state"
 	"github.com/mmtmn/docmatch/tools/installer/internal/text"
+	"github.com/mmtmn/docmatch/tools/installer/internal/toolchain"
 )
 
 // Status of a check.
@@ -60,7 +63,10 @@ type Env struct {
 	Ports     ports.Set
 	Ours      map[int]bool // ports held by this installation's own containers
 	SourceDir string
+	CloneDir  string // Desenvolver without a checkout: where it will be cloned
 	Docker    docker.CLI
+	Getenv    platform.Lookup // the toolchain checks read GOTOOLCHAIN
+	Home      string
 
 	FreeBytes func(path string) (uint64, error)
 	PortFree  ports.Prober
@@ -85,9 +91,11 @@ func (e Env) Defaults() Env {
 	}
 	if e.Output == nil {
 		e.Output = func(ctx context.Context, name string, args ...string) (string, error) {
-			out, err := exec.CommandContext(ctx, name, args...).CombinedOutput() //nolint:gosec // fixed tools
-			return strings.TrimSpace(string(out)), err
+			return toolchain.System{}.Output(ctx, "", name, args...)
 		}
+	}
+	if e.Getenv == nil {
+		e.Getenv = os.LookupEnv
 	}
 	if e.DockerOutput == nil {
 		e.DockerOutput = e.Docker.Output
@@ -137,9 +145,16 @@ func Checks(env Env) []Check {
 		{ID: "compose", Name: text.T("preflight.compose"), Run: d.compose},
 	}
 	if env.Mode == state.ModeDev {
-		checks = append(checks, Check{ID: "source", Name: text.T("preflight.source"), Run: env.checkSourceDev})
-		for _, tool := range devTools {
-			checks = append(checks, Check{ID: "tool_" + tool.name, Name: tool.name, Run: env.toolCheck(tool)})
+		tc := env.Toolchain()
+		if tc.Unix() {
+			checks = append(checks, Check{ID: "source", Name: text.T("preflight.source"), Run: env.checkSourceDev})
+		}
+		req := toolchain.ReadRequirements(env.SourceDir)
+		for _, id := range tc.IDs() {
+			if id == toolchain.Docker { // the three Docker lines above say more
+				continue
+			}
+			checks = append(checks, Check{ID: "tool_" + id, Name: toolchain.Name(id), Run: toolCheck(tc, id, req)})
 		}
 	} else {
 		checks = append(checks,
@@ -162,7 +177,7 @@ func (e Env) checkOS(_ context.Context) Result {
 		return fail(text.T("preflight.os_unsupported", "os", e.Info.Name()), text.T("preflight.fix_os"))
 	}
 	if e.Mode == state.ModeDev && e.Info.OS == "windows" {
-		return fail(e.Info.Name(), text.T("preflight.fix_wsl"))
+		return warn(e.Info.Name(), text.T("preflight.fix_wsl"))
 	}
 	return ok(e.Info.Name())
 }
@@ -285,11 +300,30 @@ func (e Env) checkSourceTry(_ context.Context) Result {
 	return warn(text.T("preflight.source_none"), text.T("preflight.fix_source_try"))
 }
 
+// MaxSocketPath is the longest Unix socket path every system takes (sun_path is 104 bytes on
+// macOS, 108 on Linux, with the final NUL): make local puts the harness socket in the checkout.
+const MaxSocketPath = 103
+
+// HarnessSocket is where `make local` (tools/dev/local.sh) puts the harness socket.
+func HarnessSocket(source string) string {
+	return filepath.Join(source, ".cache", "local", "harness.sock")
+}
+
 func (e Env) checkSourceDev(_ context.Context) Result {
+	dir := e.SourceDir
+	if dir == "" {
+		dir = e.CloneDir
+	}
+	if dir == "" {
+		return fail(text.T("preflight.not_found"), text.T("preflight.fix_source_dev"))
+	}
+	if sock := HarnessSocket(dir); len(sock) > MaxSocketPath {
+		return fail(text.T("preflight.source_too_long", "dir", dir), text.T("preflight.fix_source_too_long", "count", len(sock), "max", MaxSocketPath))
+	}
 	if e.SourceDir != "" {
 		return ok(e.SourceDir)
 	}
-	return fail(text.T("preflight.not_found"), text.T("preflight.fix_source_dev"))
+	return warn(text.T("preflight.source_clone", "dir", e.CloneDir), "")
 }
 
 func (e Env) checkGit(ctx context.Context) Result {
@@ -303,41 +337,34 @@ func (e Env) checkGit(ctx context.Context) Result {
 	return ok(strings.TrimPrefix(v, "git version "))
 }
 
-type tool struct {
-	name   string
-	args   []string
-	min    string // minimum version ("" = any)
-	fixKey string
+// Toolchain is the toolchain view of the same machine, through the same outside calls (so the
+// fakes of the tests drive both).
+func (e Env) Toolchain() toolchain.Env {
+	return toolchain.Env{
+		Info: e.Info, Getenv: e.Getenv, Home: e.Home, SourceDir: e.SourceDir,
+		Runner: runner{lookPath: e.LookPath, output: e.Output},
+	}
 }
 
-var versionRe = regexp.MustCompile(`(\d+\.\d+(?:\.\d+)?)`)
-
-// devTools are what `make local` (tools/dev/local.sh) needs besides Docker.
-var devTools = []tool{
-	{name: "git", args: []string{"--version"}, fixKey: "fix_git"},
-	{name: "make", args: []string{"--version"}, fixKey: "fix_make"},
-	{name: "go", args: []string{"version"}, min: "1.22", fixKey: "fix_go"},
-	{name: "cargo", args: []string{"--version"}, fixKey: "fix_cargo"},
-	{name: "node", args: []string{"--version"}, min: "22", fixKey: "fix_node"},
-	{name: "pnpm", args: []string{"--version"}, fixKey: "fix_pnpm"},
-	{name: "openssl", args: []string{"version"}, fixKey: "fix_openssl"},
-	{name: "curl", args: []string{"--version"}, fixKey: "fix_curl"},
+// runner adapts the preflight's outside calls to toolchain.Runner.
+type runner struct {
+	lookPath func(string) (string, error)
+	output   func(ctx context.Context, name string, args ...string) (string, error)
 }
 
-func (e Env) toolCheck(t tool) func(context.Context) Result {
+func (r runner) LookPath(name string) (string, error) { return r.lookPath(name) }
+
+func (r runner) Output(ctx context.Context, _ string, name string, args ...string) (string, error) {
+	return r.output(ctx, name, args...)
+}
+
+func toolCheck(tc toolchain.Env, id string, req toolchain.Requirements) func(context.Context) Result {
 	return func(ctx context.Context) Result {
-		if _, err := e.LookPath(t.name); err != nil {
-			return fail(text.T("preflight.not_found"), text.T("preflight."+t.fixKey))
+		s := tc.Detect(ctx, id, req)
+		if s.OK() {
+			return ok(s.Detail)
 		}
-		out, _ := e.Output(ctx, t.name, t.args...)
-		v := versionRe.FindString(firstLine(out))
-		if t.min != "" && v != "" && !docker.AtLeast(v, t.min) {
-			return fail(v, text.T("preflight."+t.fixKey))
-		}
-		if v == "" {
-			v = text.T("preflight.found")
-		}
-		return ok(v)
+		return fail(s.Detail, tc.ManualFix(id))
 	}
 }
 
@@ -355,6 +382,9 @@ func (e Env) portCheck(name string) func(context.Context) Result {
 			taken[p] = true
 		}
 		suggest := ports.Suggest(n, taken, e.PortFree)
+		if e.Mode == state.ModeDev { // make local takes its ports from the repository's .env
+			return warn(text.T("preflight.port_busy"), text.T("preflight.fix_port_dev"))
+		}
 		return warn(text.T("preflight.port_busy"), text.T("preflight.fix_port", "suggest", strconv.Itoa(suggest), "flag", "--port-"+name))
 	}
 }

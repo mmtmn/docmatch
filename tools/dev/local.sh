@@ -31,7 +31,8 @@ ensure_env() {
   for name in DM_SESSION_SECRET DM_QUOTE_HMAC_KEY DM_APIKEY_PEPPER DM_WEBHOOK_SIGNING_KEY; do
     if grep -qE "^${name}=[[:space:]]*(#.*)?$" .env; then
       if [[ "$name" == DM_SESSION_SECRET ]]; then value="$(openssl rand -base64 48 | tr -d '\n')"; else value="$(openssl rand -hex 32)"; fi
-      sed -i "s|^${name}=.*|${name}=${value}|" .env
+      # -i.bak (suffix attached) works with GNU and BSD sed; a bare -i is GNU only (macOS).
+      sed -i.bak "s|^${name}=.*|${name}=${value}|" .env && rm -f .env.bak
       log "$name gerado no .env"
     fi
   done

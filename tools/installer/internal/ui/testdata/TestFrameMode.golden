@@ -6,9 +6,10 @@
   ╭────────────────────────────────────────╮  ╭────────────────────────────────────────╮
   │  › Experimentar                        │  │    Desenvolver                         │
   │  Só precisa do Docker. Usa as imagens  │  │  Go, Rust, Node e pnpm nesta máquina:  │
-  │  prontas (ou compila a partir do       │  │  roda o make local, o mesmo ambiente   │
-  │  código), sobe tudo e concilia o       │  │  de quem contribui com o código.       │
-  │  gêmeo da Vantara.                     │  │                                        │
+  │  prontas (ou compila a partir do       │  │  instala o que falta (perguntando      │
+  │  código), sobe tudo e concilia o       │  │  antes), roda o make setup e o make    │
+  │  gêmeo da Vantara.                     │  │  local, o mesmo ambiente de quem       │
+  │                                        │  │  contribui com o código.               │
   ╰────────────────────────────────────────╯  ╰────────────────────────────────────────╯
 
   Instalação anterior em /home/ana/.local/share/docmatch/local (última etapa concluída:

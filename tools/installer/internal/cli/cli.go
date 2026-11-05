@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -26,8 +27,10 @@ import (
 	"github.com/mmtmn/docmatch/tools/installer/internal/platform"
 	"github.com/mmtmn/docmatch/tools/installer/internal/ports"
 	"github.com/mmtmn/docmatch/tools/installer/internal/preflight"
+	"github.com/mmtmn/docmatch/tools/installer/internal/selfupdate"
 	"github.com/mmtmn/docmatch/tools/installer/internal/state"
 	"github.com/mmtmn/docmatch/tools/installer/internal/text"
+	"github.com/mmtmn/docmatch/tools/installer/internal/toolchain"
 	"github.com/mmtmn/docmatch/tools/installer/internal/ui"
 )
 
@@ -47,6 +50,12 @@ func Main(args []string, b Build) int {
 	home, _ := os.UserHomeDir()
 	cwd, _ := os.Getwd()
 	exe, _ := os.Executable()
+	if real, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = real
+	}
+	if runtime.GOOS == "windows" {
+		selfupdate.Cleanup(selfupdate.OSFS{}, exe) // the binary an earlier update replaced
+	}
 	w := world{
 		env: envLookup(), info: platform.Detect(), home: home, cwd: cwd, exe: exe,
 		stdout: os.Stdout, stderr: os.Stderr, stdin: os.Stdin,
@@ -59,7 +68,10 @@ func Main(args []string, b Build) int {
 	return run(ctx, w, args, b)
 }
 
-var commands = map[string]bool{"install": true, "up": true, "down": true, "status": true, "logs": true, "doctor": true, "demo": true, "version": true, "help": true}
+var commands = map[string]bool{
+	"install": true, "up": true, "down": true, "status": true, "logs": true, "doctor": true, "demo": true,
+	"update": true, "uninstall": true, "version": true, "help": true,
+}
 
 func run(ctx context.Context, w world, args []string, b Build) int {
 	// The subcommand may follow global flags ("--plain version", as install.sh runs it without a
@@ -82,8 +94,13 @@ func run(ctx context.Context, w world, args []string, b Build) int {
 		}
 	}
 	for _, a := range args {
-		if a == "-h" || a == "--help" {
+		switch a {
+		case "-h", "--help":
 			printHelp(w.stdout)
+			return exitOK
+		case "--version":
+			// The same line as `docmatch version`; update compares it with VERSION.txt.
+			outln(w.stdout, "docmatch "+b.Version)
 			return exitOK
 		}
 	}
@@ -104,6 +121,10 @@ func run(ctx context.Context, w world, args []string, b Build) int {
 		code, err = runDoctor(ctx, w, args, b)
 	case "demo":
 		code, err = runDemo(ctx, w, args, b)
+	case "update":
+		code, err = runUpdate(ctx, w, args, b)
+	case "uninstall":
+		code, err = runUninstall(ctx, w, args, b)
 	case "version":
 		outln(w.stdout, "docmatch "+b.Version)
 		return exitOK
@@ -195,8 +216,15 @@ func eventLogger(f io.Writer) func(flow.Event) {
 	}
 }
 
-func preflightEnv(opts install.Options, ours map[int]bool) preflight.Env {
-	return preflight.Env{Info: opts.Info, Mode: opts.Mode, Dir: opts.Dir, Ports: opts.Ports, Ours: ours, SourceDir: opts.SourceDir, Docker: docker.CLI{}}
+func (w world) preflightEnv(opts install.Options, ours map[int]bool) preflight.Env {
+	opts = opts.Resolved()
+	if opts.Mode == state.ModeDev && opts.SourceDir != "" {
+		opts.Ports = install.DevPorts(opts.SourceDir) // what make local will take
+	}
+	return preflight.Env{
+		Info: opts.Info, Mode: opts.Mode, Dir: opts.Dir, Ports: opts.Ports, Ours: ours, SourceDir: opts.SourceDir,
+		CloneDir: opts.CloneDir, Docker: docker.CLI{}, Getenv: w.env, Home: w.home,
+	}
 }
 
 func runInstall(ctx context.Context, w world, args []string, b Build) (int, error) {
@@ -218,7 +246,9 @@ func runInstall(ctx context.Context, w world, args []string, b Build) (int, erro
 	}
 	var logOut *os.File
 	var logPath string
+	tools := &devTools{w: w, b: b}
 	plan := func(opts install.Options) ui.Plan {
+		opts = opts.Resolved()
 		if logOut == nil {
 			logOut, logPath = logFile(opts.Dir, w.now())
 		}
@@ -226,7 +256,8 @@ func runInstall(ctx context.Context, w world, args []string, b Build) (int, erro
 		return ui.Plan{
 			Steps: inst.Steps(), Done: inst.MarkDone, Log: eventLogger(logOut), LogPath: logPath,
 			Outcome: func() ui.Outcome {
-				return ui.Outcome{Mode: opts.Mode, Project: opts.Project, Dir: opts.Dir, URLs: opts.URLs(), Demo: inst.Demo, DemoErr: inst.DemoErr, LogPath: logPath}
+				o := inst.Opts // the clone step fills SourceDir
+				return ui.Outcome{Mode: o.Mode, Project: o.Project, Dir: o.Dir, URLs: o.URLs(), Demo: inst.Demo, DemoErr: inst.DemoErr, LogPath: logPath, PathHint: tools.pathAdded()}
 			},
 		}
 	}
@@ -240,7 +271,7 @@ func runInstall(ctx context.Context, w world, args []string, b Build) (int, erro
 		openBrowser = func(url string) error { return platform.OpenBrowser(w.info, url) }
 	}
 	if prefs.plain {
-		return installPlain(ctx, w, r, f, ours, plan)
+		return installPlain(ctx, w, r, f, ours, plan, tools)
 	}
 
 	// Bubble Tea's init already asked the terminal for its background (once, cached).
@@ -252,9 +283,14 @@ func runInstall(ctx context.Context, w world, args []string, b Build) (int, erro
 	app := ui.New(ui.Deps{
 		Theme: ui.NewTheme(prefs.ascii, prefs.animate, dark), Info: w.info, Version: b.Version,
 		Opts: r.opts, Resume: r.st, FixedMode: r.fixedMode, Yes: f.y, ExplicitPorts: r.explicit,
-		Checks:      func(opts install.Options) []preflight.Check { return preflight.Checks(preflightEnv(opts, ours)) },
+		Checks:      func(opts install.Options) []preflight.Check { return preflight.Checks(w.preflightEnv(opts, ours)) },
 		Plan:        plan,
 		OpenBrowser: openBrowser, Now: w.now, Ours: ours,
+		Tools: tools.report,
+		RunTools: func(p toolchain.Plan) ui.ToolsRun {
+			return &planExec{d: tools, ctx: ctx, plan: p, source: r.opts.Resolved().SourceDir}
+		},
+		InstallTools: f.installTools,
 	})
 	program := tea.NewProgram(app, tea.WithAltScreen(), tea.WithContext(ctx))
 	if _, err := program.Run(); err != nil && !errors.Is(err, tea.ErrProgramKilled) && !errors.Is(err, context.Canceled) {
@@ -277,7 +313,7 @@ func runInstall(ctx context.Context, w world, args []string, b Build) (int, erro
 
 // installPlain is the same installation as lines, with no questions: flags and defaults decide,
 // busy ports move to the next free one (unless given on the command line).
-func installPlain(ctx context.Context, w world, r resolved, f installFlags, ours map[int]bool, plan func(install.Options) ui.Plan) (int, error) {
+func installPlain(ctx context.Context, w world, r resolved, f installFlags, ours map[int]bool, plan func(install.Options) ui.Plan, tools *devTools) (int, error) {
 	p := ui.NewPlain(w.stdout)
 	p.Verbose = f.verbose
 	p.Header(w.version)
@@ -285,7 +321,7 @@ func installPlain(ctx context.Context, w world, r resolved, f installFlags, ours
 	p.Section(text.T("plain.mode", "mode", text.T("mode."+modeKey(opts.Mode)+"_name"), "dir", opts.Dir))
 
 	p.Section(text.T("preflight.title"))
-	checks := preflight.Checks(preflightEnv(opts, ours))
+	checks := preflight.Checks(w.preflightEnv(opts, ours))
 	results := preflight.RunAll(ctx, checks)
 	if opts.Mode == state.ModeTry {
 		// Busy ports are not failures in plain mode: the next free ones are taken.
@@ -310,6 +346,16 @@ func installPlain(ctx context.Context, w world, r resolved, f installFlags, ours
 		}
 	}
 	p.Checks(checks, results)
+	if opts.Mode == state.ModeDev && (opts.Info.OS == "windows" || failedInstallable(checks, results)) {
+		goOn, code := tools.toolsPlain(ctx, p, opts, f)
+		if !goOn {
+			return code, nil
+		}
+		p.Section(text.T("preflight.title"))
+		checks = preflight.Checks(w.preflightEnv(opts, ours))
+		results = preflight.RunAll(ctx, checks)
+		p.Checks(checks, results)
+	}
 	if preflight.Failed(results) {
 		p.Line("")
 		p.Line(text.T("plain.preflight_failed"))
@@ -340,6 +386,16 @@ func installPlain(ctx context.Context, w world, r resolved, f installFlags, ours
 		p.Line(l)
 	}
 	return exitOK, nil
+}
+
+// failedInstallable reports a failed check the tools step can install (a tool, Docker).
+func failedInstallable(checks []preflight.Check, results []preflight.Result) bool {
+	for i, c := range checks {
+		if results[i].Status == preflight.Fail && (strings.HasPrefix(c.ID, "tool_") || c.ID == "docker" || c.ID == "compose") {
+			return true
+		}
+	}
+	return false
 }
 
 func modeKey(mode string) string {
@@ -376,7 +432,7 @@ func runUp(ctx context.Context, w world, args []string, b Build) (int, error) {
 	inst := install.New(r.opts, r.st)
 	outln(w.stdout, text.T("cli.up_starting", "project", r.opts.Project))
 	if r.opts.Mode == state.ModeDev {
-		return makeTarget(ctx, w, r.opts.SourceDir, "local")
+		return makeTarget(ctx, w, r.opts.SourceDir, "local", w.devEnviron(ctx, r.opts))
 	}
 	if err := inst.Prepare(); err != nil {
 		return exitFailed, err
@@ -404,12 +460,12 @@ func runDown(ctx context.Context, w world, args []string, b Build) (int, error) 
 		return exitFailed, err
 	}
 	if r.opts.Mode == state.ModeDev {
-		return makeTarget(ctx, w, r.opts.SourceDir, "local-down")
+		return makeTarget(ctx, w, r.opts.SourceDir, "local-down", w.devEnviron(ctx, r.opts))
 	}
 	if volumes && !c.y {
 		out(w.stdout, text.T("cli.down_confirm"))
 		answer, _ := bufio.NewReader(w.stdin).ReadString('\n')
-		if a := strings.ToLower(strings.TrimSpace(answer)); a != "s" && a != "sim" && a != "y" && a != "yes" {
+		if !yes(answer) {
 			outln(w.stdout, text.T("cli.down_kept"))
 			volumes = false
 		}
@@ -537,7 +593,7 @@ func runDoctor(ctx context.Context, w world, args []string, b Build) (int, error
 	o := r.opts
 	ours := docker.CLI{}.ProjectPorts(ctx, o.Project)
 	p.Section(text.T("preflight.title"))
-	checks := preflight.Checks(preflightEnv(o, ours))
+	checks := preflight.Checks(w.preflightEnv(o, ours))
 	results := preflight.RunAll(ctx, checks)
 	p.Checks(checks, results)
 
@@ -593,9 +649,19 @@ func runDemo(ctx context.Context, w world, args []string, b Build) (int, error) 
 	return exitOK, nil
 }
 
+// devEnviron is the environment of every make of the Desenvolver mode outside the installation
+// (docmatch up, down, uninstall): the toolchain folders the installation may have added to
+// PATH, and GOTOOLCHAIN as during the installation.
+func (w world) devEnviron(ctx context.Context, opts install.Options) []string {
+	d := &devTools{w: w}
+	d.refreshPath(w.toolchainEnv(opts.SourceDir), toolchain.ReadRequirements(opts.SourceDir))
+	return install.New(opts, nil).DevEnviron(ctx)
+}
+
 // makeTarget runs `make <target>` in the repository (Desenvolver installs).
-func makeTarget(ctx context.Context, w world, dir, target string) (int, error) {
+func makeTarget(ctx context.Context, w world, dir, target string, env []string) (int, error) {
 	cmd := commandIn(ctx, dir, "make", target)
+	cmd.Env = env
 	cmd.Stdout, cmd.Stderr, cmd.Stdin = w.stdout, w.stderr, w.stdin
 	if err := cmd.Run(); err != nil {
 		return exitFailed, err

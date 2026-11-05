@@ -11,12 +11,14 @@
   ╰────────────────────────────────────────────────────────────────╯
   ╭────────────────────────────────────────────────────────────────╮
   │  › Desenvolver                                                 │
-  │  Go, Rust, Node e pnpm nesta máquina: roda o make local, o     │
+  │  Go, Rust, Node e pnpm nesta máquina: instala o que falta      │
+  │  (perguntando antes), roda o make setup e o make local, o      │
   │  mesmo ambiente de quem contribui com o código.                │
   ╰────────────────────────────────────────────────────────────────╯
 
-  ! No Windows, o modo Desenvolver roda no WSL2: abra o Ubuntu do
-    WSL e rode o instalador de lá. O Experimentar funciona direto
+  ! No Windows, o modo Desenvolver roda no WSL2: o instalador
+    prepara o WSL e o Docker Desktop (perguntando antes) e mostra o
+    comando para continuar no Ubuntu. O Experimentar funciona direto
     com o Docker Desktop.
 
   ←/→ escolher · Enter confirmar · q sair

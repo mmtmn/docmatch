@@ -1,0 +1,17 @@
+# Manifesto do winget (instalador) do docmatch __VERSION__, gerado pelo tools/installer/release.sh a
+# partir do SHA256SUMS.txt da versão. O .exe é o mesmo do install.ps1, na cópia fixa da versão.
+PackageIdentifier: __PACKAGE_ID__
+PackageVersion: __VERSION__
+InstallerType: portable
+Commands:
+  - docmatch
+ReleaseDate: __DATE__
+Installers:
+  - Architecture: x64
+    InstallerUrl: __BASE__/docmatch-windows-amd64.exe
+    InstallerSha256: __SHA_WINDOWS_AMD64__
+  - Architecture: arm64
+    InstallerUrl: __BASE__/docmatch-windows-arm64.exe
+    InstallerSha256: __SHA_WINDOWS_ARM64__
+ManifestType: installer
+ManifestVersion: 1.6.0

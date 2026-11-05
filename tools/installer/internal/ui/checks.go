@@ -21,6 +21,8 @@ type checksModel struct {
 	results []*preflight.Result
 	current int
 	spin    spinner.Model
+	// toolsHint: a failed tool check leads to the tools screen (Desenvolver).
+	toolsHint bool
 }
 
 func newChecks(t Theme, checks []preflight.Check) checksModel {
@@ -53,6 +55,16 @@ func (m *checksModel) finished() bool { return m.current >= len(m.checks) }
 func (m *checksModel) failed() bool {
 	for _, r := range m.results {
 		if r != nil && r.Status == preflight.Fail {
+			return true
+		}
+	}
+	return false
+}
+
+// failedAny reports whether a failed check matches.
+func (m *checksModel) failedAny(match func(id string) bool) bool {
+	for i, r := range m.results {
+		if r != nil && r.Status == preflight.Fail && match(m.checks[i].ID) {
 			return true
 		}
 	}
@@ -122,7 +134,11 @@ func (m *checksModel) view(w int) string {
 				}
 			}
 			b.WriteString(t.FailS.Render(text.T("preflight.summary_fail", "count", strconv.Itoa(n))) + "\n\n")
-			b.WriteString(hints(t, "r", text.T("preflight.hint_retry"), "q", text.T("hint.quit")))
+			if m.toolsHint && m.failedAny(installable) {
+				b.WriteString(hints(t, "Enter", text.T("preflight.hint_tools"), "r", text.T("preflight.hint_retry"), "q", text.T("hint.quit")))
+			} else {
+				b.WriteString(hints(t, "r", text.T("preflight.hint_retry"), "q", text.T("hint.quit")))
+			}
 		} else {
 			b.WriteString(hints(t, "Enter", text.T("hint.continue"), "q", text.T("hint.quit")))
 		}

@@ -1,0 +1,6 @@
+# Manifesto do winget (versão) do docmatch __VERSION__, gerado pelo tools/installer/release.sh.
+PackageIdentifier: __PACKAGE_ID__
+PackageVersion: __VERSION__
+DefaultLocale: pt-BR
+ManifestType: version
+ManifestVersion: 1.6.0

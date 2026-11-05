@@ -12,6 +12,11 @@ GOBIN ?= $(shell go env GOPATH)/bin
 export GOBIN
 export PATH := $(GOBIN):$(PATH)
 export GOTOOLCHAIN ?= auto
+# Ferramentas (go install) com a toolchain exata do go.mod, a do CI: com auto e um Go local mais
+# antigo, `go install m@v` usa o Go do go.mod da ferramenta, e um golangci-lint assim recusa este
+# código.
+TOOLCHAIN := $(or $(shell awk '$$1=="toolchain"{print $$2}' go.mod),go$(shell awk '$$1=="go"{print $$2}' go.mod))
+GO_INSTALL := GOTOOLCHAIN=$(TOOLCHAIN) go install
 export GOFLAGS ?= -mod=mod
 
 GOLANGCI_VERSION := v2.15.0
@@ -19,19 +24,19 @@ ASSETS := internal/assets
 CROSS_DIR ?= $(or $(TMPDIR),/tmp)/docmatch-installer-cross
 TARGETS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64
 
-.PHONY: context help setup tools sync sync-check fmt vet lint scripts test ci ci-full build cross release-dry-run clean
+.PHONY: context help setup tools sync sync-check fmt vet lint scripts test ci ci-full build cross release-dry-run images-dry-run clean
 
 help: ## lista os alvos
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
 
 setup: ## instala o golangci-lint em $(GOBIN) e baixa os módulos
-	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION)
+	$(GO_INSTALL) github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION)
 	go mod download
 
 tools: $(GOBIN)/golangci-lint
 
 $(GOBIN)/golangci-lint:
-	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION)
+	$(GO_INSTALL) github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION)
 
 # ------------------------------------------------------------------ cópias embarcadas
 sync: ## copia textos, compose, tokens e o gêmeo da Vantara para internal/assets
@@ -62,10 +67,11 @@ vet: ## go vet em Linux, macOS e Windows
 	GOOS=darwin go vet ./...
 	GOOS=windows go vet ./...
 
-scripts: ## shellcheck e sh -n no install.sh e no release.sh; o install.ps1 no pwsh quando existe
+scripts: ## shellcheck e sh -n no install.sh, release.sh, publish-images.sh e lib.sh; o install.ps1 no pwsh quando existe
 	sh -n install.sh
-	bash -n release.sh
-	@if command -v shellcheck >/dev/null 2>&1; then shellcheck -s sh install.sh && shellcheck release.sh; \
+	bash -n release.sh publish-images.sh lib.sh
+	@if command -v shellcheck >/dev/null 2>&1; then \
+	  shellcheck -s sh install.sh && shellcheck -x release.sh publish-images.sh && shellcheck -s bash lib.sh; \
 	else echo "aviso: shellcheck não instalado; só sh -n"; fi
 	@if command -v pwsh >/dev/null 2>&1; then \
 	  pwsh -NoProfile -Command '$$e = $$null; [void][System.Management.Automation.Language.Parser]::ParseFile("$(CURDIR)/install.ps1", [ref]$$null, [ref]$$e); if ($$e) { $$e | ForEach-Object { $$_.ToString() }; exit 1 }'; \
@@ -89,7 +95,7 @@ cross: ## compila os seis alvos (CGO desligado) em CROSS_DIR e apaga
 	done
 	@rm -rf $(CROSS_DIR)
 
-ci: lint test cross context ## portão rápido: lint, testes, os seis binários e o contexto das imagens
+ci: lint test cross context images-dry-run ## portão rápido: lint, testes, os seis binários, o contexto e a publicação das imagens (dry-run)
 
 context: ## o que o harness inclui de fora dele está no contexto da imagem (deploy/local)
 	python3 -I ../ci/check-docker-context.py
@@ -99,10 +105,13 @@ ci-full: ci release-dry-run ## ci + o release em dry-run
 # ------------------------------------------------------------------------ binários
 build: ## bin/docmatch para esta máquina
 	@mkdir -p bin
-	CGO_ENABLED=0 go build -trimpath -o bin/ .
+	CGO_ENABLED=0 go build -trimpath -o bin/docmatch$(if $(filter windows,$(shell go env GOOS)),.exe) .
 
-release-dry-run: ## release.sh --dry-run (compila, gera checksums e scripts; sem AWS)
+release-dry-run: ## release.sh --dry-run (compila, confere a versão, gera checksums, scripts, Homebrew e winget; sem AWS)
 	./release.sh --dry-run --out $(CURDIR)/dist/dry-run
+
+images-dry-run: ## publish-images.sh --dry-run (os comandos do buildx para o GHCR; sem Docker)
+	./publish-images.sh --dry-run >/dev/null
 
 clean: ## remove bin/ e dist/
 	rm -rf bin dist

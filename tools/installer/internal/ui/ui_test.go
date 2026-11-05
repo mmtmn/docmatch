@@ -394,7 +394,7 @@ func TestFlowInteractive(t *testing.T) {
 	if final.ExitCode != 0 || final.Outcome() == nil || final.Outcome().Demo.Findings != 23 {
 		t.Fatalf("fim: %d %+v", final.ExitCode, final.Outcome())
 	}
-	if planned.Ports[ports.Web] != 4322 || planned.Ports[ports.API] != 8080 || planned.LLMMode != "off" || planned.Dir != opts().Dir {
+	if planned.Ports[ports.Web] != 4322 || planned.Ports[ports.API] != 8080 || planned.LLMMode != "off" || planned.Dir != expandDir(opts().Dir, "") { // filepath.Abs: a drive letter on Windows
 		t.Fatalf("escolhas: %+v", planned)
 	}
 	if opened != "http://localhost:4322/app" {

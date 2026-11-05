@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/mmtmn/docmatch/tools/installer/internal/flow"
 	"github.com/mmtmn/docmatch/tools/installer/internal/preflight"
 	"github.com/mmtmn/docmatch/tools/installer/internal/text"
+	"github.com/mmtmn/docmatch/tools/installer/internal/toolchain"
 )
 
 // Plain prints the installation as lines: the same steps as the full screen, for pipes, CI,
@@ -151,5 +153,72 @@ func (p *Plain) Tail() {
 	p.printf("\n  %s\n", asciiOnly(text.T("progress.log_tail")))
 	for _, l := range p.tail {
 		p.printf("       | %s\n", l)
+	}
+}
+
+// PlainTools prints the Desenvolver tools report (and, after a run, how each command ended).
+func PlainTools(p *Plain, r ToolsReport, results []toolchain.Result) {
+	for _, s := range r.Statuses {
+		kind := "ok"
+		if !s.OK() {
+			kind = "fail"
+		}
+		p.printf("  %s %-16s %s\n", PlainMark(kind), asciiOnly(s.Name), asciiOnly(s.Detail))
+	}
+	if len(results) > 0 {
+		p.Line("")
+		p.Line(text.T("tools.results_title"))
+		for _, res := range results {
+			cmd := res.Command.String()
+			switch {
+			case res.Skipped:
+				p.Line(PlainMark("skip") + " " + text.T("tools.result_skipped", "cmd", cmd))
+			case res.Err != nil:
+				p.Line(PlainMark("fail") + " " + text.T("tools.result_failed", "cmd", cmd, "code", strconv.Itoa(res.ExitCode)))
+			default:
+				p.Line(PlainMark("ok") + " " + cmd)
+			}
+		}
+		if toolchain.Failed(results) {
+			p.Line(text.T("tools.failed"))
+		}
+	}
+	p.Line("")
+	if r.Ready() {
+		p.Line(text.T("tools.all_ok"))
+	} else {
+		plan := r.Plan
+		if !plan.Empty() {
+			p.Line(text.T("tools.plan_title", "manager", plan.Manager.Name))
+			for _, c := range plan.Commands {
+				mark := " "
+				if c.Elevated {
+					mark = "!"
+				}
+				p.printf("    %s $ %s\n", mark, asciiOnly(c.String()))
+			}
+			if n := plan.Elevated(); n > 0 {
+				p.Line(text.T("tools.elevated_note_plain", "count", strconv.Itoa(n)))
+			}
+		}
+		if len(plan.Manual) > 0 {
+			head := text.T("tools.manual_title")
+			if plan.Manager.ID == "" {
+				head = text.T("tools.no_manager")
+			}
+			p.Line(head)
+			for _, m := range plan.Manual {
+				p.Line("  * " + toolchain.Name(m.Tool) + ": " + m.Fix)
+			}
+		}
+		for _, n := range plan.Notes {
+			p.Line(n)
+		}
+	}
+	if len(r.PathAdded) > 0 {
+		p.Line(text.T("tools.path_added", "dirs", strings.Join(r.PathAdded, ", ")))
+	}
+	if r.Handoff != "" {
+		p.Line(text.T("tools.handoff", "cmd", r.Handoff))
 	}
 }
