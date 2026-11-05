@@ -1,0 +1,17 @@
+
+  docmatch 0.1.0                    modo · verificações · escolhas · instalação · pronto
+
+  Suas escolhas
+
+  ┃ Portas
+  ┃ Publicadas só em 127.0.0.1. Uma porta ocupada já vem trocada pela próxima livre.
+  ┃ site       4322
+
+    API        8080
+
+    Postgres   5432
+
+    Mailpit    8025
+
+  shift+tab voltar • enter próximo
+

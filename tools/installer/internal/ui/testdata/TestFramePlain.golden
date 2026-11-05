@@ -1,0 +1,42 @@
+docmatch 0.1.0 - concilie qualquer documento - instalação local, sem chave
+
+==> Verificando esta máquina
+  [ok] Sistema                    linux/amd64
+  [ok] Espaço em disco            48,2 GB livres em /var/lib/docker
+  [ok] Docker                     29.1.3
+  [ok] Docker rodando             servidor 29.1.3
+  [!!] Porta 4321 (site)          em uso por outro programa
+       Escolha outra porta na próxima tela (sugestão: 4322) ou use --port-web 4322.
+
+==> Instalando a docmatch
+  [..] Imagens da docmatch
+       baixando de ghcr.io/owner
+  [..] Compilar as imagens da docmatch
+       api: 8/16 | web 25%
+  [ok] Compilar as imagens da docmatch: api 110MB - web 22MB (1:12)
+  [..] Conciliar o gêmeo da Vantara
+  [!!] Conciliar o gêmeo da Vantara: login local: HTTP 404 (0,3 s)
+
+  Últimas linhas do log:
+       | #5 DONE 0.1s
+
+==> pronto
+  docmatch no ar, sem chave e sem login (3:41)
+
+  Gêmeo da Vantara conciliado
+    23 achados - R$ 183.368,89 em risco - placar 23/23 do gabarito
+    "Pagamento parcial de exatamente 50%" - Linha 7 do extrato: 16/07/2026 - LIQUIDACAO COBRANCA SIMPLES - R$ 49.000,00
+    Resultados no app: http://localhost:4321/resultados?run=run_01TESTE
+
+    site     http://localhost:4321/app  já entra com o login local
+    API      http://localhost:8080/v1/version
+    Mailpit  http://localhost:8025
+
+  Próximos comandos
+    docmatch status   o que está rodando
+    docmatch logs     logs dos serviços
+    docmatch demo     concilia o gêmeo de novo
+    docmatch down     para tudo (os dados ficam)
+
+  Log da instalação: /home/ana/.local/share/docmatch/local/logs/install.log
+

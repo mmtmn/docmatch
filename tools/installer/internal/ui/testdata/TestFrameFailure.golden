@@ -1,0 +1,35 @@
+
+  docmatch 0.1.0                    modo · verificações · escolhas · instalação · pronto
+
+  Instalando a docmatch
+
+  ✓ Preparar a pasta                     /home/ana/.local/share/docmatch/local     0,1 s
+  ✓ Compilar as imagens da docmatch      api 110MB · harness 23.5MB · web 22MB      1:23
+  ✗ Harness, API, worker e site                                                    4,0 s
+
+  ╭────────────────────────────────────────────────────────────────────────────────────╮
+  │ ✗ Falhou: Harness, API, worker e site                                              │
+  │ dependency failed to start: container docmatch-local-api-1 is unhealthy            │
+  │                                                                                    │
+  │ Log completo em /home/ana/.local/share/docmatch/local/logs/install.log. Rode o     │
+  │ docmatch de novo para retomar de onde parou; docmatch doctor ajuda a achar a       │
+  │ causa.                                                                             │
+  ╰────────────────────────────────────────────────────────────────────────────────────╯
+  log
+  ╭────────────────────────────────────────────────────────────────────────────────────╮
+  │ #12 [harness build 6/6] Compiling dm-core v0.1.0 (r)                               │
+  │ #12 [harness build 6/6] Compiling dm-core v0.1.0 (s)                               │
+  │ #12 [harness build 6/6] Compiling dm-core v0.1.0 (t)                               │
+  │ #12 [harness build 6/6] Compiling dm-core v0.1.0 (u)                               │
+  │ #12 [harness build 6/6] Compiling dm-core v0.1.0 (v)                               │
+  │ #12 [harness build 6/6] Compiling dm-core v0.1.0 (w)                               │
+  │ #12 [harness build 6/6] Compiling dm-core v0.1.0 (x)                               │
+  │ #12 [harness build 6/6] Compiling dm-core v0.1.0 (y)                               │
+  │ #12 [harness build 6/6] Compiling dm-core v0.1.0 (z)                               │
+  │ #12 [harness build 6/6] Compiling dm-core v0.1.0 (a)                               │
+  │ #12 [harness build 6/6] Compiling dm-core v0.1.0 (b)                               │
+  │ #12 [harness build 6/6] Compiling dm-core v0.1.0 (c)                               │
+  │ #12 [harness build 6/6] Compiling dm-core v0.1.0 (d)                               │
+  ╰────────────────────────────────────────────────────────────────────────────────────╯
+  l esconder o log · q sair
+

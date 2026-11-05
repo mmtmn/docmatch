@@ -1,0 +1,23 @@
+
+  docmatch 0.1.0
+  modo · verificações · escolhas · instalação · pronto
+
+  Como você quer rodar a docmatch?
+
+  ╭────────────────────────────────────────────────────────────────╮
+  │    Experimentar                                                │
+  │  Só precisa do Docker. Usa as imagens prontas (ou compila a    │
+  │  partir do código), sobe tudo e concilia o gêmeo da Vantara.   │
+  ╰────────────────────────────────────────────────────────────────╯
+  ╭────────────────────────────────────────────────────────────────╮
+  │  › Desenvolver                                                 │
+  │  Go, Rust, Node e pnpm nesta máquina: roda o make local, o     │
+  │  mesmo ambiente de quem contribui com o código.                │
+  ╰────────────────────────────────────────────────────────────────╯
+
+  ! No Windows, o modo Desenvolver roda no WSL2: abra o Ubuntu do
+    WSL e rode o instalador de lá. O Experimentar funciona direto
+    com o Docker Desktop.
+
+  ←/→ escolher · Enter confirmar · q sair
+

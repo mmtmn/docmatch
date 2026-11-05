@@ -1,0 +1,19 @@
+
+  docmatch 0.1.0                    modo · verificações · escolhas · instalação · pronto
+
+  Verificando esta máquina
+
+  ✓ Sistema                   darwin/arm64
+  ! Espaço em disco           4,1 GB livres em /Users/ana
+      São necessários uns 6,0 GB. Libere espaço (docker system prune remove imagens sem
+      uso) ou escolha outra pasta.
+  ✓ Docker                    29.1.3
+  ✗ Docker rodando            instalado, mas não está rodando
+      Abra o Docker Desktop (ou rode colima start), espere ele ficar pronto e tente de
+      novo.
+  – Porta 4321 (site)         depende do Docker
+
+  1 verificação(ões) precisam de atenção antes de instalar.
+
+  r verificar de novo · q sair
+

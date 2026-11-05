@@ -1,0 +1,23 @@
+
+  docmatch 0.1.0                    modo - verificações - escolhas - instalação - pronto
+
+  + docmatch no ar, sem chave e sem login - 1:35
+
+  +------------------------------------------------------------------------------------+
+  | Gêmeo da Vantara conciliado                                                        |
+  | O gêmeo não conciliou: login local: HTTP 404 not_found. O site já funciona;        |
+  | docmatch demo tenta de novo.                                                       |
+  +------------------------------------------------------------------------------------+
+
+    site     http://localhost:4321/app  já entra com o login local
+    API      http://localhost:8080/v1/version
+    Mailpit  http://localhost:8025
+
+  Próximos comandos
+    docmatch status   o que está rodando
+    docmatch logs     logs dos serviços
+    docmatch demo     concilia o gêmeo de novo
+    docmatch down     para tudo (os dados ficam)
+
+  Enter sair
+
