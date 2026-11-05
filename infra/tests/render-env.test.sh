@@ -159,4 +159,19 @@ if (fetch_params /docmatch/test "A1,B_MISSING" >/dev/null 2>&1); then fail "nome
 if (fetch_params /docmatch/test "a-minusculo" >/dev/null 2>&1); then fail "nome inválido deveria falhar"; fi
 [[ "$(fetch_params /docmatch/test "" | jq -r '.Parameters[0].Name')" == /docmatch/test/ALL ]] || fail "sem lista lê o caminho"
 note "lista de parâmetros (trabalhadores sob demanda) lida por GetParameters, dez por vez"
+
+# The pool secret is created as the empty sentinel (module secrets, optional_secret_names): it must
+# never block the boot like the Terraform placeholder does, and the service receives it empty.
+boot_params='{"Parameters":[{"Name":"/docmatch/test/DM_BURST_POOL_SECRET","Value":"__EMPTY__"},{"Name":"/docmatch/test/DATABASE_URL","Value":"postgres://x"}]}'
+[[ -z "$(unset_keys_of "$boot_params" __UNSET__)" ]] || fail "o segredo vazio do pool bloquearia o boot"
+params="$boot_params"
+[[ "$(render '.Parameters[] | select(.Name | endswith("DM_BURST_POOL_SECRET"))')" == 'DM_BURST_POOL_SECRET=""' ]] || fail "o segredo vazio do pool deveria chegar vazio"
+blocked='{"Parameters":[{"Name":"/docmatch/test/DM_SESSION_SECRET","Value":"__UNSET__"}]}'
+[[ "$(unset_keys_of "$blocked" __UNSET__)" == DM_SESSION_SECRET ]] || fail "o espaço reservado continua bloqueando"
+# DM_ENV_EXCLUDE: the main file of a burst worker carries neither the pool secret nor the endpoint.
+params='{"Parameters":[{"Name":"/docmatch/test/DM_BURST_POOL_SECRET","Value":"s"},{"Name":"/docmatch/test/DM_LLM_MODE","Value":"off"}]}'
+main_file="$(render ".Parameters[] | select((.Name | split(\"/\") | last) as \$n | $(keys_json DM_BURST_POOL_SECRET,DM_BURST_API_URL) | index(\$n) | not)")"
+[[ "$main_file" == 'DM_LLM_MODE="off"' ]] || fail "DM_ENV_EXCLUDE não tirou o segredo do arquivo principal: $main_file"
+[[ "$(keys_json "")" == "[]" ]] || fail "lista vazia"
+note "segredo opcional vazio não bloqueia o boot; DM_ENV_EXCLUDE mantém o segredo do pool fora do harness"
 note "ok"

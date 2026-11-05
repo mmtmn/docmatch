@@ -18,6 +18,9 @@ DATA_MOUNT="${data_mount_point}"
 INTERNAL_PORT="${internal_port}"
 BURST_API_PARAM="${burst_api_param}"
 BURST_NAMES="${burst_names}"
+BURST_USER="${burst_user}"
+BURST_STAGING="${burst_staging_dir}"
+NFT_INTERNAL="${nft_internal_file}"
 
 LOG=/var/log/docmatch-userdata.log
 touch "$LOG" && chmod 0640 "$LOG"
@@ -56,34 +59,15 @@ DM_INSTANCE_ID=$INSTANCE_ID
 DM_AVAILABILITY_ZONE=$AZ
 EOF
 if [[ "$ROLE" == "worker" ]]; then
-  # render-env reads exactly these names (GetParameters): the burst role may read no other.
+  # render-env reads exactly these names (GetParameters): the burst role may read no other. The
+  # pool secret and the endpoint stay out of the harness's environment (the burst user's subset
+  # carries them).
   echo "DM_SSM_NAMES=$BURST_NAMES" >> /etc/docmatch/instance.env
+  echo "DM_ENV_EXCLUDE=DM_BURST_POOL_SECRET,DM_BURST_API_URL" >> /etc/docmatch/instance.env
 fi
 chmod 0640 /etc/docmatch/instance.env
 chown root:docmatch /etc/docmatch/instance.env
 hostnamectl set-hostname "$NAME-$ROLE-$${INSTANCE_ID#i-}"
-
-# 1b. Internal endpoint of the pool. nftables rules of this role in tmpfs (the image includes
-#     /run/docmatch-nft/*.nft and jumps to the empty internal chains): the application admits the
-#     subnet on the port, a burst worker may reach it as the docmatch user. The security groups
-#     admit exactly the burst group on top of this.
-MAC="$(imds mac)"
-SUBNET_CIDR="$(imds "network/interfaces/macs/$MAC/subnet-ipv4-cidr-block")"
-PRIVATE_IP="$(imds local-ipv4)"
-if [[ "$ROLE" == "app" ]]; then
-  nft_chain="internal_in"
-  nft_rule="tcp dport $INTERNAL_PORT ip saddr $SUBNET_CIDR accept"
-else
-  nft_chain="internal_out"
-  nft_rule="ip daddr $SUBNET_CIDR tcp dport $INTERNAL_PORT meta skuid \"docmatch\" accept"
-fi
-if grep -q 'chain internal_in' /etc/nftables.conf; then
-  install -d -m 0750 -o root -g root /run/docmatch-nft
-  printf 'table inet docmatch {\n\tchain %s {\n\t\t%s\n\t}\n}\n' "$nft_chain" "$nft_rule" > /run/docmatch-nft/30-internal.nft
-  nft -f /etc/nftables.conf
-else
-  echo "AMI sem as cadeias internas do nftables: o pool sob demanda espera a próxima AMI"
-fi
 
 if [[ "$ROLE" == "app" ]]; then
   # 2. Elastic IP: the CloudFront origin record points at it.
@@ -111,20 +95,17 @@ if [[ "$ROLE" == "app" ]]; then
   systemctl enable --now var-lib-postgresql.mount
 fi
 
-# 3b. The application publishes the address of its internal endpoint for the burst workers.
-if [[ "$ROLE" == "app" && -n "$BURST_API_PARAM" ]]; then
-  publish_endpoint() { "$AWS" ssm put-parameter --name "$BURST_API_PARAM" --type String --overwrite --value "https://$PRIVATE_IP:$INTERNAL_PORT" >/dev/null; }
-  retry 12 5 publish_endpoint || echo "não foi possível publicar o endpoint interno em $BURST_API_PARAM"
-fi
-
-# 3c. A burst worker gives the harness the instance's memory (the image budget is the t4g.small's):
-#     runtime drop-ins in /run, never in /etc. The OS, the security agents and the Go worker keep 1 GiB.
+# 3c. A burst worker gives the harness the instance's memory (the image budget is the t4g.small's)
+#     and the burst staging directory as its local root; its socket is group-connectable so the
+#     burst user (group docmatch) reaches it. Drop-ins in /etc (a reboot keeps them; AIDE ignores
+#     these two files). The OS, the security agents and the Go worker keep 1 GiB.
 if [[ "$ROLE" == "worker" ]]; then
   total_mb=$(( $(awk '/^MemTotal:/ {print $2}' /proc/meminfo) / 1024 ))
   harness_mb=$(( total_mb > 2048 ? total_mb - 1024 : 1024 ))
-  install -d -m 0755 /run/systemd/system/docmatch-harness.service.d /run/systemd/system/docmatch.slice.d
-  printf '[Service]\nMemoryMax=%sM\nMemoryHigh=%sM\n' "$harness_mb" "$(( harness_mb * 9 / 10 ))" > /run/systemd/system/docmatch-harness.service.d/50-burst.conf
-  printf '[Slice]\nMemoryMax=%sM\nMemoryHigh=%sM\n' "$(( harness_mb + 256 ))" "$(( harness_mb + 192 ))" > /run/systemd/system/docmatch.slice.d/50-burst.conf
+  install -d -m 0755 /etc/systemd/system/docmatch-harness.service.d /etc/systemd/system/docmatch.slice.d
+  printf '[Service]\nMemoryMax=%sM\nMemoryHigh=%sM\nEnvironment=DM_MEDIA_LOCAL_DIR=%s\nUMask=0007\n' \
+    "$harness_mb" "$(( harness_mb * 9 / 10 ))" "$BURST_STAGING" > /etc/systemd/system/docmatch-harness.service.d/50-burst.conf
+  printf '[Slice]\nMemoryMax=%sM\nMemoryHigh=%sM\n' "$(( harness_mb + 256 ))" "$(( harness_mb + 192 ))" > /etc/systemd/system/docmatch.slice.d/50-burst.conf
   systemctl daemon-reload
 fi
 
@@ -153,6 +134,35 @@ elif systemctl cat docmatch-burst.service >/dev/null 2>&1; then
   systemctl enable --now docmatch-harness.service docmatch-burst.service
 else
   echo "AMI sem docmatch-burst.service: este trabalhador não pega trabalho até a próxima AMI"
+fi
+
+# 5b. Internal endpoint of the pool, after the services (nothing here may keep production down):
+#     the role's nftables rules in /etc/nftables.d (the image jumps to the empty internal chains
+#     and includes that directory; a reboot keeps the file): the application admits its subnet on
+#     the port, a burst worker's own user may reach it. The security groups admit exactly the
+#     burst group on top of this. The application then publishes its address for the workers.
+internal_endpoint() {
+  local mac cidr ip chain rule
+  grep -q 'chain internal_in' /etc/nftables.conf || { echo "AMI sem as cadeias internas do nftables"; return 1; }
+  TOKEN="$(imds_token)" || return 1 # the first token may have expired by now
+  mac="$(imds mac)" || return 1
+  cidr="$(imds "network/interfaces/macs/$mac/subnet-ipv4-cidr-block")" || return 1
+  ip="$(imds local-ipv4)" || return 1
+  if [[ "$ROLE" == "app" ]]; then
+    chain="internal_in" rule="tcp dport $INTERNAL_PORT ip saddr $cidr accept"
+  else
+    chain="internal_out" rule="ip daddr $cidr tcp dport $INTERNAL_PORT meta skuid \"$BURST_USER\" accept"
+  fi
+  printf 'table inet docmatch {\n\tchain %s {\n\t\t%s\n\t}\n}\n' "$chain" "$rule" > "$NFT_INTERNAL.new" || return 1
+  chmod 0640 "$NFT_INTERNAL.new" && mv -f "$NFT_INTERNAL.new" "$NFT_INTERNAL" || return 1
+  nft -f /etc/nftables.conf || return 1
+  if [[ "$ROLE" == "app" && -n "$BURST_API_PARAM" ]]; then
+    publish_endpoint() { "$AWS" ssm put-parameter --name "$BURST_API_PARAM" --type String --overwrite --value "https://$ip:$INTERNAL_PORT" >/dev/null; }
+    retry 12 5 publish_endpoint || return 1
+  fi
+}
+if ! internal_endpoint; then
+  echo "AVISO: endpoint interno do pool sob demanda não configurado; execuções pesadas ficam na máquina principal"
 fi
 
 install -d -m 0750 -o docmatch -g docmatch /var/lib/docmatch

@@ -10,7 +10,7 @@
   items: [docmatch-api, docmatch-worker, docmatch-harnes]
 
 - list: docmatch_sensitive_files
-  items: [{{ hardening_env_file }}, {{ hardening_caddy_env_file }}, /run/docmatch/env.postgres, /etc/caddy/crowdsec.env]
+  items: [{{ hardening_env_file }}, {{ hardening_caddy_env_file }}, {{ hardening_burst_env_file }}, /run/docmatch/env.postgres, /etc/caddy/crowdsec.env]
 
 - macro: docmatch_helper_script
   condition: >

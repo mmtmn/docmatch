@@ -11,7 +11,9 @@
 #
 # With DM_SSM_NAMES (or --names A,B,C) only those parameters under the path are read, with
 # GetParameters: the burst workers' role may read exactly that list (no DATABASE_URL, no other
-# secret), so a GetParametersByPath on the whole path would be refused anyway.
+# secret), so a GetParametersByPath on the whole path would be refused anyway. DM_ENV_EXCLUDE
+# (A,B) keeps those keys out of the main file: on a burst worker the pool secret and the internal
+# endpoint go only to the burst user's subset, never to the harness's environment.
 #
 # Uso: render-env.sh [--path /docmatch/prod] [--names A,B] [--out /run/docmatch/env]
 #                    [--owner docmatch] [--allow-placeholders]
@@ -65,6 +67,18 @@ fetch_params() {
   printf '%s\n' "$out"
 }
 
+# unset_keys_of <params json> <placeholder>: the parameters still holding the Terraform
+# placeholder, which block the boot. The empty sentinel (__EMPTY__) of an optional secret is not
+# one of them: its feature just stays off.
+unset_keys_of() {
+  jq -r --arg p "$2" '.Parameters[] | select(.Value == $p) | .Name | split("/") | last' <<<"$1" | sort
+}
+
+# keys_json <A,B,C>: the list as a JSON array of strings.
+keys_json() {
+  printf '%s\n' "$1" | tr ',' '\n' | sed '/^$/d' | jq -R . | jq -sc .
+}
+
 write_atomic() { # write_atomic <path> <owner> <content>
   local path="$1" who="$2" content="$3" tmp
   tmp="$(mktemp "$(dirname "$path")/.env.XXXXXX")"
@@ -76,9 +90,10 @@ write_atomic() { # write_atomic <path> <owner> <content>
 
 main() {
   local out owner placeholder allow_placeholders instance_env count unset_keys empty_keys ssm_names
-  local spec sub_user sub_file sub_keys keys_json
+  local spec sub_user sub_file sub_keys exclude
   ssm_path="${DM_SSM_PATH:-}"
   ssm_names="${DM_SSM_NAMES:-}"
+  exclude="${DM_ENV_EXCLUDE:-}"
   out="/run/docmatch/env"
   owner="docmatch"
   placeholder="${DM_PLACEHOLDER:-__UNSET__}"
@@ -89,6 +104,7 @@ main() {
   local -a subsets=(
     "caddy:/run/docmatch/env.caddy:DM_ORIGIN_SECRET,DM_ORIGIN_SECRET_HEADER,DM_VIEWER_IP_HEADER,DM_DOMAIN,DM_PUBLIC_BASE_URL,DM_ROUTE53_ZONE_ID,DM_ALERT_EMAIL,AWS_REGION"
     "postgres:/run/docmatch/env.postgres:DM_S3_BACKUPS_BUCKET,DM_BACKUPS_PGBACKREST_KEY,AWS_REGION"
+    "docmatch-burst:/run/docmatch/env.burst:DM_ENV,AWS_REGION,DM_BURST_API_URL,DM_BURST_POOL_SECRET"
   )
 
   while [[ $# -gt 0 ]]; do
@@ -110,6 +126,7 @@ main() {
     source "$instance_env"
     ssm_path="${ssm_path:-${DM_SSM_PATH:-}}"
     ssm_names="${ssm_names:-${DM_SSM_NAMES:-}}"
+    exclude="${exclude:-${DM_ENV_EXCLUDE:-}}"
   fi
   [[ -n "$ssm_path" ]] || die "caminho SSM indefinido (--path ou DM_SSM_PATH em $instance_env)"
   [[ -n "${AWS_REGION:-}" ]] || die "AWS_REGION indefinida"
@@ -126,7 +143,7 @@ main() {
   count="$(jq -r '.Parameters | length' <<<"$params")"
   [[ "$count" -gt 0 ]] || die "nenhum parâmetro em $ssm_path (terraform apply ainda não rodou?)"
 
-  unset_keys="$(jq -r --arg p "$placeholder" '.Parameters[] | select(.Value == $p) | .Name | split("/") | last' <<<"$params" | sort)"
+  unset_keys="$(unset_keys_of "$params" "$placeholder")"
   if [[ -n "$unset_keys" ]]; then
     log "segredos ainda com o valor de espaço reservado do Terraform:"
     printf '  %s\n' "$unset_keys" >&2
@@ -136,15 +153,14 @@ main() {
   empty_keys="$(jq -r --arg e "${DM_EMPTY_VALUE:-__EMPTY__}" '.Parameters[] | select(.Value == $e) | .Name | split("/") | last' <<<"$params" | sort | paste -sd ' ' -)"
   [[ -z "$empty_keys" ]] || log "vazios por escolha (${DM_EMPTY_VALUE:-__EMPTY__}): $empty_keys"
 
-  write_atomic "$out" "$owner" "$(render '.Parameters[]')"
-  log "escrito $out ($count variáveis, dono $owner, modo 0400)"
+  write_atomic "$out" "$owner" "$(render ".Parameters[] | select((.Name | split(\"/\") | last) as \$n | $(keys_json "$exclude") | index(\$n) | not)")"
+  log "escrito $out ($count variáveis, dono $owner, modo 0400${exclude:+, sem $exclude})"
 
   for spec in "${subsets[@]}"; do
     IFS=: read -r sub_user sub_file sub_keys <<<"$spec"
     [[ -n "$sub_user" && -n "$sub_file" && -n "$sub_keys" ]] || die "subset inválido: $spec"
     id "$sub_user" >/dev/null 2>&1 || continue
-    keys_json="$(printf '%s\n' "$sub_keys" | tr ',' '\n' | jq -R . | jq -sc .)"
-    write_atomic "$sub_file" "$sub_user" "$(render ".Parameters[] | select((.Name | split(\"/\") | last) as \$n | ${keys_json} | index(\$n))")"
+    write_atomic "$sub_file" "$sub_user" "$(render ".Parameters[] | select((.Name | split(\"/\") | last) as \$n | $(keys_json "$sub_keys") | index(\$n))")"
     log "escrito $sub_file (dono $sub_user)"
   done
 }

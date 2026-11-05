@@ -5,16 +5,15 @@
 #   outbound: VPC link-local services, AWS endpoints for the listed users, the egress proxy for
 #             everything else. No DNS, NTP or HTTP leaves otherwise.
 #   internal: the chains internal_in / internal_out are empty in the image; the user-data of each
-#             role fills them at boot in {{ hardening_nft_runtime_dir }} (tmpfs, never in /etc):
-#             the application admits the burst workers' subnet on the internal endpoint port, a
-#             burst worker may reach that port (docs/escala.md). The security groups do the same.
+#             role fills them at its first boot in {{ hardening_nft_internal_file }} (persistent, so
+#             every reboot keeps them; AIDE ignores that one file): the application admits the
+#             burst workers' subnet on the internal endpoint port, a burst worker's own user may
+#             reach that port (docs/escala.md). The security groups do the same.
 # Only the docmatch table is replaced on reload: the CrowdSec bouncer keeps its own tables.
 table inet docmatch {}
 delete table inet docmatch
 
 include "/etc/nftables.d/*.nft"
-# Role rules written by user-data at boot; a missing directory matches nothing.
-include "{{ hardening_nft_runtime_dir }}/*.nft"
 
 table inet docmatch {
 	set aws_v4 { type ipv4_addr; flags interval; auto-merge; }

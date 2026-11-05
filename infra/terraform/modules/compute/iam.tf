@@ -154,8 +154,9 @@ data "aws_iam_policy_document" "workload" {
 }
 
 # Burst workers (docs/escala.md): the named parameters (no DATABASE_URL, no store or provider
-# credential beyond the model key), the release they install at boot and the log group. No
-# uploads, no queue, no sandbox: the inputs of a run come as presigned URLs in its manifest.
+# credential beyond the model key) and the release they install at boot. No uploads, no queue,
+# no sandbox: the inputs of a run come as presigned URLs in its manifest. No log group either:
+# there is no shipper on the box; the worker's last error reaches burst_instances instead.
 data "aws_iam_policy_document" "burst" {
   statement {
     sid       = "ReadBurstParameters"
@@ -180,16 +181,6 @@ data "aws_iam_policy_document" "burst" {
       test     = "StringLike"
       variable = "s3:prefix"
       values   = ["releases/*"]
-    }
-  }
-
-  dynamic "statement" {
-    for_each = var.log_group_arn != "" ? [1] : []
-    content {
-      sid       = "ShipLogs"
-      effect    = "Allow"
-      actions   = ["logs:CreateLogStream", "logs:PutLogEvents", "logs:DescribeLogStreams"]
-      resources = ["${var.log_group_arn}:*"]
     }
   }
 }

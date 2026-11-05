@@ -1,9 +1,11 @@
 # {{ ansible_managed }}
 # Burst worker of the pool of on-demand workers (docs/escala.md): claims signed job manifests from
-# the application's internal endpoint, runs the local harness and streams the events back. It
-# reads DM_BURST_API_URL, DM_BURST_POOL_SECRET, DM_HARNESS_SOCKET and DM_MEDIA_LOCAL_DIR only: the
-# burst role's SSM list (DM_SSM_NAMES) carries no database or store credential. Enabled by
-# user-data on the worker role, never on the application instance.
+# the application's internal endpoint, stages the inputs, runs the local harness and streams the
+# events back. Its own user ({{ hardening_burst_user }}) and its own environment
+# ({{ hardening_burst_env_file }}: DM_BURST_API_URL, DM_BURST_POOL_SECRET, DM_ENV, AWS_REGION),
+# readable by nobody else; the harness's environment carries neither (DM_ENV_EXCLUDE on this role),
+# and only this uid may open the internal endpoint port (nftables internal_out). No database or
+# store credential exists on the box. Enabled by user-data on the worker role only.
 [Unit]
 Description=docmatch burst worker (Go): pool job claims, local harness, events to the API
 After=docmatch-env.service docmatch-harness.service
@@ -14,15 +16,16 @@ ConditionPathExists={{ hardening_app_bin_dir }}/docmatch-worker
 [Service]
 Type=simple
 Slice=docmatch-go.slice
-User={{ hardening_app_user }}
-Group={{ hardening_app_group }}
-EnvironmentFile={{ hardening_env_file }}
+User={{ hardening_burst_user }}
+Group={{ hardening_burst_user }}
+SupplementaryGroups={{ hardening_app_group }}
+EnvironmentFile={{ hardening_burst_env_file }}
 EnvironmentFile={{ hardening_instance_env_file }}
-Environment=DM_HARNESS_SOCKET={{ hardening_harness_socket }} DM_MEDIA_LOCAL_DIR={{ hardening_media_dir }} GOMEMLIMIT=120MiB
+Environment=DM_HARNESS_SOCKET={{ hardening_harness_socket }} DM_MEDIA_LOCAL_DIR={{ hardening_burst_staging_dir }} GOMEMLIMIT=120MiB
 # Re-render the environment on every start (as root, failure tolerated): after a replacement of
 # the application instance the restart picks up its new DM_BURST_API_URL.
 ExecStartPre=-+/usr/local/sbin/docmatch-render-env --out {{ hardening_env_file }} --owner {{ hardening_app_user }}
-ExecStart={{ hardening_app_bin_dir }}/docmatch-worker burst
+ExecStart={{ hardening_app_bin_dir }}/docmatch-worker burst -state-dir {{ hardening_burst_home }}
 Restart=always
 RestartSec=5
 TimeoutStopSec=60
@@ -55,9 +58,10 @@ AmbientCapabilities=
 SystemCallFilter=@system-service
 SystemCallFilter=~@privileged @resources
 SystemCallArchitectures=native
-UMask=0077
-ReadWritePaths={{ hardening_app_home }} /var/log/docmatch
-ReadOnlyPaths={{ hardening_env_file }}
+# Staged inputs are group-readable for the harness (docmatch); nothing else is.
+UMask=0027
+ReadWritePaths={{ hardening_burst_home }}
+ReadOnlyPaths={{ hardening_burst_env_file }}
 
 [Install]
 WantedBy=multi-user.target

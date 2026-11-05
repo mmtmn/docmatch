@@ -91,18 +91,33 @@ variable "burst_monthly_hours" {
   description = "Instance-hour budget of the pool per calendar month (DM_BURST_MONTHLY_HOURS); past it every run stays on the main box."
   type        = number
   default     = 60
+
+  validation {
+    condition     = var.burst_monthly_hours >= 0
+    error_message = "burst_monthly_hours must be zero or positive."
+  }
 }
 
 variable "burst_budget_usd" {
-  description = "AWS Budgets limit in USD for the pool (alarm at 80% actual and 100% forecast); 60 h of c7g.large on demand is about US$ 4.35."
+  description = "AWS Budgets limit in USD for the pool (alarm at 80% actual and 100% forecast); 60 h of c7g.large on demand is about US$ 4.35 plus disk and IPv4. 0 removes the budget."
   type        = number
   default     = 5
+
+  validation {
+    condition     = var.burst_budget_usd >= 0
+    error_message = "burst_budget_usd must be zero or positive."
+  }
 }
 
 variable "burst_internal_port" {
   description = "Port of the application's internal endpoint for the burst workers."
   type        = number
   default     = 8444
+
+  validation {
+    condition     = var.burst_internal_port > 1024 && var.burst_internal_port < 65536 && var.burst_internal_port != 8443
+    error_message = "burst_internal_port must be an unprivileged port other than the admin port (8443)."
+  }
 }
 
 variable "wait_for_certificate_validation" {

@@ -10,15 +10,6 @@
     group: root
     mode: "0750"
 
-- name: Create the runtime include directory at boot (role rules written by user-data)
-  ansible.builtin.copy:
-    dest: /etc/tmpfiles.d/docmatch-nft.conf
-    content: |
-      d {{ hardening_nft_runtime_dir }} 0750 root root -
-    owner: root
-    group: root
-    mode: "0644"
-
 - name: Install the break-glass include (empty unless enabled)
   ansible.builtin.template:
     src: nftables-breakglass.nft.j2

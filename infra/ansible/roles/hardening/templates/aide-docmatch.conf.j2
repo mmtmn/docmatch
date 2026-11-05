@@ -21,5 +21,9 @@
 !/var/log/pgbackrest
 !/run
 !/etc/nftables.d/10-aws-ranges.nft
+!{{ hardening_nft_internal_file }}
+!/etc/systemd/system/docmatch-harness.service.d/50-burst.conf
+!/etc/systemd/system/docmatch.slice.d/50-burst.conf
+!{{ hardening_burst_home }}
 !/etc/caddy/snippets/denylist.caddy
 !/etc/tinyproxy/filter

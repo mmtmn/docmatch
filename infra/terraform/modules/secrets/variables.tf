@@ -23,6 +23,23 @@ variable "secret_names" {
   }
 }
 
+variable "optional_secret_names" {
+  description = "Secret parameters whose feature stays off while they are empty: created with empty_placeholder, which never blocks the boot (render-env renders it as an empty value)."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for n in var.optional_secret_names : can(regex("^[A-Z][A-Z0-9_]*$", n))])
+    error_message = "optional secret names must be UPPER_SNAKE_CASE environment variable names."
+  }
+}
+
+variable "empty_placeholder" {
+  description = "Sentinel SSM holds for an empty value (SSM refuses \"\"); render-env.sh renders it as an empty variable (DM_EMPTY_VALUE)."
+  type        = string
+  default     = "__EMPTY__"
+}
+
 variable "config_values" {
   description = "Non-secret environment variables (bucket names, URLs, modes) managed by Terraform as String parameters."
   type        = map(string)

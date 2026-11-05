@@ -30,7 +30,11 @@ locals {
     "STRIPE_WEBHOOK_SECRET",
     "STRIPE_PUBLISHABLE_KEY",
     "RESEND_API_KEY",
-    # Shared with the burst workers (docs/escala.md); __EMPTY__ while the pool is off.
+  ]
+
+  # Secrets whose feature stays off while they are empty (created as __EMPTY__, never blocking the
+  # boot): the pool of on-demand workers boots off until DM_BURST_POOL_SECRET holds 32+ characters.
+  optional_secret_names = [
     "DM_BURST_POOL_SECRET",
   ]
 }
@@ -112,9 +116,10 @@ module "sandbox" {
 module "secrets" {
   source = "../../modules/secrets"
 
-  name         = local.name
-  env          = local.env
-  secret_names = local.secret_names
+  name                  = local.name
+  env                   = local.env
+  secret_names          = local.secret_names
+  optional_secret_names = local.optional_secret_names
 
   config_values = merge({
     DM_ENV                    = local.env
@@ -174,20 +179,22 @@ module "compute" {
   worker_max_size         = var.burst_max_instances
   burst_security_group_id = module.network.burst_security_group_id
   burst_internal_port     = var.burst_internal_port
+  launch_tags             = { Project = "docmatch", Environment = local.env }
   create_packer_profile   = var.create_packer_profile
 }
 
 module "observability" {
   source = "../../modules/observability"
 
-  name                       = local.name
-  env                        = local.env
-  account_id                 = var.account_id
-  logs_bucket_name           = module.storage.logs_bucket_name
-  cloudtrail_name            = local.cloudtrail_name
-  alert_email                = var.alert_email
-  mrr_usd                    = var.mrr_usd
-  burst_budget_usd           = var.burst_enabled ? var.burst_budget_usd : 0
+  name             = local.name
+  env              = local.env
+  account_id       = var.account_id
+  logs_bucket_name = module.storage.logs_bucket_name
+  cloudtrail_name  = local.cloudtrail_name
+  alert_email      = var.alert_email
+  mrr_usd          = var.mrr_usd
+  # The group exists (and may still run instances) even with the pool off: its budget stays.
+  burst_budget_usd           = var.burst_budget_usd
   app_alarms_enabled         = module.compute.app_enabled
   app_autoscaling_group_name = module.compute.app_autoscaling_group_name
   lambda_function_names      = module.sandbox.enabled ? values(module.sandbox.function_names) : []

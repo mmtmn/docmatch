@@ -22,6 +22,22 @@ resource "aws_ssm_parameter" "secret" {
   tags = merge(var.tags, { Name = "${var.name}-${lower(replace(each.value, "_", "-"))}", "docmatch:secret" = "true" })
 }
 
+# Optional secrets (a feature that stays off without them, e.g. DM_BURST_POOL_SECRET) start as
+# the empty sentinel: render-env renders it as "" and never blocks the boot, so creating one can
+# never take production down before the owner fills it.
+resource "aws_ssm_parameter" "optional_secret" {
+  for_each = toset(var.optional_secret_names)
+
+  name             = "${local.path_prefix}/${each.value}"
+  description      = "docmatch ${var.env}: ${each.value} (optional secret; empty keeps its feature off; set with the AWS CLI)"
+  type             = "SecureString"
+  tier             = "Standard"
+  value_wo         = var.empty_placeholder
+  value_wo_version = 1
+
+  tags = merge(var.tags, { Name = "${var.name}-${lower(replace(each.value, "_", "-"))}", "docmatch:secret" = "true" })
+}
+
 resource "aws_ssm_parameter" "config" {
   for_each = var.config_values
 

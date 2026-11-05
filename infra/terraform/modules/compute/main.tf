@@ -12,6 +12,10 @@ locals {
   burst_sg          = var.burst_security_group_id != "" ? var.burst_security_group_id : var.security_group_id
   burst_api_param   = "${var.ssm_path_prefix}/DM_BURST_API_URL"
   burst_param_names = distinct(concat(var.burst_parameter_names, ["DM_BURST_API_URL"]))
+  # Provider default_tags never reach launch template tag_specifications nor what a group
+  # launches: these tags do (cost allocation and the budgets filter on them).
+  app_launch_tags   = merge(local.common_tags, var.launch_tags, { Name = "${var.name}-app", "docmatch:role" = "app" })
+  burst_launch_tags = merge(local.common_tags, var.launch_tags, { Name = "${var.name}-worker", "docmatch:role" = "worker", "docmatch:pool" = "burst" })
 
   user_data_app = templatefile("${path.module}/templates/user-data.sh.tftpl", {
     role              = "app"
@@ -26,6 +30,9 @@ locals {
     internal_port     = var.burst_internal_port
     burst_api_param   = local.burst_api_param
     burst_names       = ""
+    burst_user        = var.burst_user
+    burst_staging_dir = var.burst_staging_dir
+    nft_internal_file = var.nft_internal_file
   })
 
   user_data_worker = templatefile("${path.module}/templates/user-data.sh.tftpl", {
@@ -41,6 +48,9 @@ locals {
     internal_port     = var.burst_internal_port
     burst_api_param   = ""
     burst_names       = join(",", local.burst_param_names)
+    burst_user        = var.burst_user
+    burst_staging_dir = var.burst_staging_dir
+    nft_internal_file = var.nft_internal_file
   })
 }
 
@@ -144,7 +154,7 @@ resource "aws_launch_template" "app" {
     for_each = ["instance", "volume", "network-interface"]
     content {
       resource_type = tag_specifications.value
-      tags          = merge(local.common_tags, { Name = "${var.name}-app", "docmatch:role" = "app" })
+      tags          = local.app_launch_tags
     }
   }
 
@@ -186,7 +196,7 @@ resource "aws_autoscaling_group" "app" {
   metrics_granularity = "1Minute"
 
   dynamic "tag" {
-    for_each = merge(local.common_tags, { Name = "${var.name}-app", "docmatch:role" = "app" })
+    for_each = local.app_launch_tags
     content {
       key                 = tag.key
       value               = tag.value
@@ -248,7 +258,7 @@ resource "aws_launch_template" "worker" {
     for_each = ["instance", "volume", "network-interface"]
     content {
       resource_type = tag_specifications.value
-      tags          = merge(local.common_tags, { Name = "${var.name}-worker", "docmatch:role" = "worker" })
+      tags          = local.burst_launch_tags
     }
   }
 
@@ -308,7 +318,7 @@ resource "aws_autoscaling_group" "worker" {
   metrics_granularity = "1Minute"
 
   dynamic "tag" {
-    for_each = merge(local.common_tags, { Name = "${var.name}-worker", "docmatch:role" = "worker", "docmatch:pool" = "burst" })
+    for_each = local.burst_launch_tags
     content {
       key                 = tag.key
       value               = tag.value
