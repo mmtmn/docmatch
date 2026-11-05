@@ -109,7 +109,7 @@ func TestExplainBudget(t *testing.T) {
 		{name: "ListRecentRunsBefore", org: tenant, args: []any{org, time.Now(), int32(20)}},
 		{name: "CountActiveRuns", org: tenant, args: []any{org}},
 		{name: "NextQueuedRun"},
-		{name: "CountRunsInFlight"},
+		{name: "CountRunsInFlight", args: []any{time.Now().Add(-3 * time.Hour)}},
 		{name: "ListRecentRunTimings", args: []any{time.Now().Add(-30 * 24 * time.Hour), int32(1000)}},
 		{name: "GetRun", org: tenant, args: []any{org, runID}},
 		{name: "ListFindingsByRun", org: tenant, args: []any{org, runID, int32(50), int32(0)}},

@@ -196,7 +196,7 @@ var errDown = errors.New("banco fora")
 func (failingTimings) RecentTimings(context.Context, time.Time, int) ([]TimingSample, error) {
 	return nil, errDown
 }
-func (failingTimings) RunsInFlight(context.Context) (int64, error) { return 0, errDown }
+func (failingTimings) RunsInFlight(context.Context, time.Time) (int64, error) { return 0, errDown }
 
 func TestEstimateTimesTheQuote(t *testing.T) {
 	t.Parallel()

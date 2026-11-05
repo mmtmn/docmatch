@@ -13,12 +13,14 @@ import (
 )
 
 const countRunsInFlight = `-- name: CountRunsInFlight :one
-SELECT count(*) FROM runs WHERE status IN ('queued', 'running')
+SELECT count(*) FROM runs WHERE status IN ('queued', 'running') AND updated_at > $1
 `
 
-// Execuções na frente de uma nova (modo sistema): em fila ou rodando.
-func (q *Queries) CountRunsInFlight(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, countRunsInFlight)
+// Execuções na frente de uma nova (modo sistema): em fila ou rodando e tocadas
+// desde $1; uma parada há mais tempo que o prazo de execução está presa, não
+// na frente.
+func (q *Queries) CountRunsInFlight(ctx context.Context, updatedAt time.Time) (int64, error) {
+	row := q.db.QueryRow(ctx, countRunsInFlight, updatedAt)
 	var count int64
 	err := row.Scan(&count)
 	return count, err

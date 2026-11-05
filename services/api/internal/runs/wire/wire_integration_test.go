@@ -296,7 +296,7 @@ func TestPipelineOnPostgres(t *testing.T) {
 	if err != nil || len(samples) == 0 || samples[0].Units["table"] <= 0 {
 		t.Fatalf("histórico: %+v %v", samples, err)
 	}
-	if _, err := sys.Store.RunsInFlight(ctx); err != nil {
+	if _, err := sys.Store.RunsInFlight(ctx, time.Now().Add(-time.Hour)); err != nil {
 		t.Fatalf("execuções em voo: %v", err)
 	}
 	var mails int
@@ -373,7 +373,7 @@ func TestLargeRunMailOnPostgres(t *testing.T) {
 	if err != nil || !q.Large || q.ExpectedSeconds <= 1 {
 		t.Fatalf("orçamento grande esperado: %+v %v", q, err)
 	}
-	before, err := sys.Store.RunsInFlight(ctx)
+	before, err := sys.Store.RunsInFlight(ctx, time.Now().Add(-time.Hour))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -381,8 +381,11 @@ func TestLargeRunMailOnPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n, _ := sys.Store.RunsInFlight(ctx); n != before+1 {
+	if n, _ := sys.Store.RunsInFlight(ctx, time.Now().Add(-time.Hour)); n != before+1 {
 		t.Fatalf("a execução criada deveria contar na fila: %d (antes %d)", n, before)
+	}
+	if n, _ := sys.Store.RunsInFlight(ctx, time.Now().Add(time.Minute)); n != 0 {
+		t.Fatalf("execuções sem toque desde o corte não contam na fila: %d", n)
 	}
 	stored, _ := sys.Runs.Get(ctx, org, run.ID)
 	if tm := stored.Timing(); !tm.Large || tm.ExpectedSeconds != q.ExpectedSeconds || tm.Units["table"] <= 0 {

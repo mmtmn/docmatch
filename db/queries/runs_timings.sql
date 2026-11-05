@@ -13,6 +13,8 @@ WHERE status = 'completed' AND finished_at > $1
 ORDER BY finished_at DESC
 LIMIT $2;
 
--- Execuções na frente de uma nova (modo sistema): em fila ou rodando.
+-- Execuções na frente de uma nova (modo sistema): em fila ou rodando e tocadas
+-- desde $1; uma parada há mais tempo que o prazo de execução está presa, não
+-- na frente.
 -- name: CountRunsInFlight :one
-SELECT count(*) FROM runs WHERE status IN ('queued', 'running');
+SELECT count(*) FROM runs WHERE status IN ('queued', 'running') AND updated_at > $1;

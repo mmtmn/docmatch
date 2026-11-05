@@ -95,8 +95,10 @@ type Querier interface {
 	CountRecentMagicLinks(ctx context.Context, arg CountRecentMagicLinksParams) (int64, error)
 	CountRecentUploads(ctx context.Context, arg CountRecentUploadsParams) (int64, error)
 	CountRunsByWorkflow(ctx context.Context, arg CountRunsByWorkflowParams) (int64, error)
-	// Execuções na frente de uma nova (modo sistema): em fila ou rodando.
-	CountRunsInFlight(ctx context.Context) (int64, error)
+	// Execuções na frente de uma nova (modo sistema): em fila ou rodando e tocadas
+	// desde $1; uma parada há mais tempo que o prazo de execução está presa, não
+	// na frente.
+	CountRunsInFlight(ctx context.Context, updatedAt time.Time) (int64, error)
 	CountUnsentOutbox(ctx context.Context) (int64, error)
 	// Chaves de API. GetAPIKey roda antes de conhecer a organização (é a própria
 	// autenticação), portanto em modo sistema; o resto dentro de WithOrgTx.

@@ -124,7 +124,7 @@ func (m *MemStore) InsertTiming(_ context.Context, t RunTiming) error {
 }
 
 // RunsInFlight implements Store.
-func (m *MemStore) RunsInFlight(context.Context) (int64, error) {
+func (m *MemStore) RunsInFlight(context.Context, time.Time) (int64, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.inFlight, nil

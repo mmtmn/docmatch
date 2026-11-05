@@ -52,12 +52,12 @@ func (s *Store) InsertTiming(ctx context.Context, t estimate.RunTiming) error {
 }
 
 // RunsInFlight implements estimate.Store: queued or running runs of every
-// organization (system mode).
-func (s *Store) RunsInFlight(ctx context.Context) (int64, error) {
+// organization touched after since (system mode).
+func (s *Store) RunsInFlight(ctx context.Context, since time.Time) (int64, error) {
 	var n int64
 	err := s.system(ctx, func(ctx context.Context, q *sqlc.Queries) error {
 		var err error
-		n, err = q.CountRunsInFlight(ctx)
+		n, err = q.CountRunsInFlight(ctx, since)
 		return err
 	})
 	return n, err

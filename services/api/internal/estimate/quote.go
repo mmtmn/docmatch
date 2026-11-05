@@ -293,6 +293,7 @@ type Store interface {
 	// InsertTiming stores the measured duration of a finished run; a second
 	// call for the same run changes nothing.
 	InsertTiming(ctx context.Context, t RunTiming) error
-	// RunsInFlight counts the runs queued or running in every organization.
-	RunsInFlight(ctx context.Context) (int64, error)
+	// RunsInFlight counts the runs queued or running in every organization,
+	// touched after since (older ones are stuck, not ahead in the queue).
+	RunsInFlight(ctx context.Context, since time.Time) (int64, error)
 }

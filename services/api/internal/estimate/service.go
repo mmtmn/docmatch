@@ -30,6 +30,11 @@ import (
 // ratesTTL bounds how long model rates are cached in memory.
 const ratesTTL = 5 * time.Minute
 
+// inFlightFreshness bounds the runs counted ahead in the queue: a queued or
+// running run untouched for longer than the run deadline (2 h) plus the job
+// pad is stuck, not waiting (a running run is touched by every event).
+const inFlightFreshness = 3 * time.Hour
+
 // overrunWindow and overrunLimit select the runs the p99 is computed on.
 const (
 	overrunWindow = 30 * 24 * time.Hour
@@ -516,7 +521,7 @@ func (s *Service) Time(ctx context.Context, units Units) (int64, bool) {
 		return 0, false
 	}
 	tp := s.throughputRates(ctx)
-	inFlight, err := s.d.Store.RunsInFlight(ctx)
+	inFlight, err := s.d.Store.RunsInFlight(ctx, s.d.Now().Add(-inFlightFreshness))
 	if err != nil {
 		s.d.Logger.Warn("fila de execuções indisponível; estimativa sem espera", slog.String("err", err.Error()))
 		inFlight = 0
