@@ -41,6 +41,7 @@ func (s *Service) Execute(ctx context.Context, orgID, runID uuid.UUID, lastAttem
 	}
 	log := s.d.Logger.With(slog.String("run_id", r.PublicID()))
 	resume := r.LastSeq > 0 || r.StartedAt != nil
+	a := &attempt{priorMs: r.Timing().ActiveMs}
 	p := r.Inputs.Principal(orgID)
 
 	v, err := s.d.Estimates.Validate(p, r.Inputs.Request)
@@ -103,6 +104,9 @@ func (s *Service) Execute(ctx context.Context, orgID, runID uuid.UUID, lastAttem
 	log.Info("execução iniciada no harness", slog.Bool("resume", resume), slog.Int("sources", len(req.Sources)), slog.Int("rules", len(pbRules)))
 	for {
 		ev, err := stream.Recv()
+		if err != nil {
+			s.touchActive(&r, a)
+		}
 		if errors.Is(err, io.EOF) {
 			return s.fail(ctx, &r, contracts.ErrInternalError, "o harness encerrou o fluxo sem um evento final")
 		}
@@ -115,11 +119,14 @@ func (s *Service) Execute(ctx context.Context, orgID, runID uuid.UUID, lastAttem
 			}
 			return s.streamFailure(ctx, &r, err, lastAttempt)
 		}
+		if a.begin.IsZero() {
+			a.begin = s.d.Clock()
+		}
 		if cur, ok, gerr := s.d.Store.GetRun(ctx, orgID, runID); gerr == nil && ok && (cur.CancelRequested || cur.Status == StatusCancelled) {
 			log.Info("execução cancelada pelo cliente; fluxo interrompido")
 			return nil
 		}
-		terminal, err := s.applyEvent(ctx, &r, p, ev)
+		terminal, err := s.applyEvent(ctx, &r, p, ev, a)
 		if err != nil {
 			return err
 		}
@@ -159,11 +166,12 @@ func (s *Service) fail(ctx context.Context, r *Run, code contracts.ErrorCode, de
 	r.Status, r.FinishedAt, r.ErrorCode = StatusFailed, &now, string(code)
 	r.Error = &RunError{Code: string(code), Message: code.Message(), Retryable: code.Retryable()}
 	s.release(ctx, r)
-	saved, err := s.d.Store.SaveRun(ctx, *r, nil)
+	saved, err := s.d.Store.SaveRun(ctx, *r, s.finishedHook(*r))
 	if err != nil {
 		return fmt.Errorf("runs: gravar falha: %w", err)
 	}
 	*r = saved
+	s.recordTiming(ctx, *r)
 	s.appendEvent(ctx, r, EventFailed, failedData{Error: *r.Error, CreditsSpent: r.CreditsSpent})
 	s.d.Logger.Error("execução falhou", slog.String("run_id", r.PublicID()), slog.String("code", string(code)), slog.String("detail", detail))
 	s.record(ctx, r.OrgID, workerActor, "run.failed", *r, map[string]any{"code": code, "credits_spent": r.CreditsSpent})
@@ -171,8 +179,9 @@ func (s *Service) fail(ctx context.Context, r *Run, code contracts.ErrorCode, de
 	return nil
 }
 
-// applyEvent persists one harness event and its side effects.
-func (s *Service) applyEvent(ctx context.Context, r *Run, p apix.Principal, ev *pb.RunEvent) (bool, error) {
+// applyEvent persists one harness event and its side effects; a carries the
+// active time of the attempt, saved with every event so a retry keeps it.
+func (s *Service) applyEvent(ctx context.Context, r *Run, p apix.Principal, ev *pb.RunEvent, a *attempt) (bool, error) {
 	seq := int64(min(ev.GetSeq(), 1<<62)) //nolint:gosec // bounded
 	if seq <= r.LastSeq {
 		return false, nil // replayed after a resume
@@ -273,13 +282,19 @@ func (s *Service) applyEvent(ctx context.Context, r *Run, p apix.Principal, ev *
 		return false, fmt.Errorf("runs: gravar evento %d: %w", seq, err)
 	}
 	r.LastSeq = seq
-	saved, err := s.d.Store.SaveRun(ctx, *r, nil)
+	s.touchActive(r, a)
+	var hook TxHook
+	if name == EventCompleted || name == EventFailed {
+		hook = s.finishedHook(*r)
+	}
+	saved, err := s.d.Store.SaveRun(ctx, *r, hook)
 	if err != nil {
 		return false, fmt.Errorf("runs: gravar estado: %w", err)
 	}
 	*r = saved
 	s.d.Broker.Notify(r.ID)
 	if terminal {
+		s.recordTiming(ctx, *r)
 		s.afterTerminal(ctx, *r, name)
 	}
 	return terminal, nil

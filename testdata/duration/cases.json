@@ -1,0 +1,24 @@
+{
+  "description": "Vetores compartilhados da duração aproximada (apps/web/src/lib/format.ts formatDuration, apps/android core Format.duration, apps/ios DocmatchKit Format.duration): os mesmos segundos dão o mesmo texto em todo cliente. Regras: minutos arredondados (meio para cima), no mínimo 1; abaixo de 1 h, minutos; de 1 h a 10 h, horas e minutos de 5 em 5; a partir de 10 h, horas inteiras. Textos de duration.* em packages/locales/pt-BR.json.",
+  "cases": [
+    { "seconds": -5, "text": "1 minuto" },
+    { "seconds": 0, "text": "1 minuto" },
+    { "seconds": 89, "text": "1 minuto" },
+    { "seconds": 90, "text": "2 minutos" },
+    { "seconds": 720, "text": "12 minutos" },
+    { "seconds": 3569, "text": "59 minutos" },
+    { "seconds": 3570, "text": "1 h" },
+    { "seconds": 3720, "text": "1 h" },
+    { "seconds": 3780, "text": "1 h 5 min" },
+    { "seconds": 4800, "text": "1 h 20 min" },
+    { "seconds": 4920, "text": "1 h 20 min" },
+    { "seconds": 4980, "text": "1 h 25 min" },
+    { "seconds": 7200, "text": "2 h" },
+    { "seconds": 35700, "text": "9 h 55 min" },
+    { "seconds": 35880, "text": "10 h" },
+    { "seconds": 37769, "text": "10 h" },
+    { "seconds": 37800, "text": "11 h" },
+    { "seconds": 180000, "text": "50 h" },
+    { "seconds": 3600000, "text": "1.000 h" }
+  ]
+}

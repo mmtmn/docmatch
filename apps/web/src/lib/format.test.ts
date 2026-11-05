@@ -1,7 +1,11 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   formatBytes,
   formatCurrency,
+  formatDuration,
   formatShortDate,
   formatTimestamp,
   truncateMiddle,
@@ -32,5 +36,24 @@ describe('format', () => {
     expect(short.length).toBeLessThanOrEqual(24);
     expect(short.endsWith('.xlsx')).toBe(true);
     expect(truncateMiddle('curto.csv')).toBe('curto.csv');
+  });
+});
+
+describe('shared duration cases (testdata/duration/cases.json)', () => {
+  const file = join(
+    dirname(fileURLToPath(import.meta.url)),
+    '../../../../testdata/duration/cases.json',
+  );
+  const { cases } = JSON.parse(readFileSync(file, 'utf8')) as {
+    cases: { seconds: number; text: string }[];
+  };
+
+  it.each(cases)('$seconds s → $text', ({ seconds, text }) => {
+    expect(formatDuration(seconds)).toBe(text);
+  });
+
+  it('treats what is not a number as the shortest duration', () => {
+    expect(formatDuration(Number.NaN)).toBe('1 minuto');
+    expect(formatDuration(Number.POSITIVE_INFINITY)).toBe('1 minuto');
   });
 });

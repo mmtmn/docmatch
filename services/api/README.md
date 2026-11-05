@@ -138,6 +138,17 @@ Ambiente local (`tools/dev/compose.yaml`): o S3 local é o RustFS (mesma API do 
   transação do dado e insere o job `email_send`; o worker entrega pelo `Sender` (Resend com
   `Idempotency-Key`, ou SMTP sem autenticação para o Mailpit de `tools/dev` com `DM_SMTP_ADDR`),
   com backoff e a varredura `email_outbox_sweep` para linhas órfãs.
+- **Tempo esperado.** Cada orçamento traz `expected_seconds` e `large`
+  (`internal/estimate/timing.go`): overhead + Σ quantidade × segundos por unidade de cada tipo
+  de entrada (MB de planilha, PDF, e-mail e ZIP; minutos de áudio e vídeo; mil tokens; ferramentas
+  novas; buscas) + a espera na fila (execuções na frente ÷ `queue.parallel_runs` × duração
+  típica). Os segundos por unidade são a mediana ponderada das execuções concluídas recentes
+  (`run_timings`, gravada pelo worker com o tempo ativo do harness) e, com histórico curto, os
+  padrões de `config/throughput.yaml` (`DM_THROUGHPUT_FILE`; vazia, o arquivo ao lado do
+  `DM_PRICING_FILE`; sem arquivo, orçamentos sem tempo). Quando uma execução grande, ou mais
+  longa que `notify_after_seconds`, termina ou falha, a mesma transação que a encerra grava o
+  e-mail no outbox com a chave `run_finished:<run_id>` (um e-mail por execução), só com a data
+  e o link `DM_PUBLIC_BASE_URL/resultados?run=<id>`, nunca o conteúdo dos documentos.
 - **Auditoria.** Login, cadastro, vínculo de provedor, refresh, logout, reuso de refresh,
   alteração de perfil, senha, pedido de exclusão, exclusão e exportação geram entradas na
   cadeia da organização (ou do sistema, na exclusão).

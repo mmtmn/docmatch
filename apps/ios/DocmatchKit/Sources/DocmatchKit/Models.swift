@@ -210,6 +210,10 @@ public struct Quote: Decodable, Sendable, Equatable {
     public let capCredits: Int64
     public let signature: String
     public let requiresApproval: Bool
+    /// How long the run should take, queue included; nil on older quotes.
+    public let expectedSeconds: Int64?
+    /// A large order: the confirmation says how long it takes and an e-mail follows.
+    public let large: Bool
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -218,13 +222,16 @@ public struct Quote: Decodable, Sendable, Equatable {
         capCredits = try c.decode(Int64.self, forKey: .capCredits)
         signature = try c.decode(String.self, forKey: .signature)
         requiresApproval = try c.value(.requiresApproval, false)
+        expectedSeconds = try c.decodeIfPresent(Int64.self, forKey: .expectedSeconds)
+        large = try c.value(.large, false)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, signature
+        case id, signature, large
         case expectedCredits = "expected_credits"
         case capCredits = "cap_credits"
         case requiresApproval = "requires_approval"
+        case expectedSeconds = "expected_seconds"
     }
 }
 

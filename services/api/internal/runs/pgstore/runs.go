@@ -45,6 +45,7 @@ func (s *Store) CreateRun(ctx context.Context, r runs.Run, hook runs.TxHook) (ru
 		row, err := q.InsertRun(ctx, sqlc.InsertRunParams{
 			ID: r.ID, OrgID: r.OrgID, WorkflowID: r.WorkflowID, UserID: r.UserID, ApiKeyID: r.APIKeyID, QuoteID: r.QuoteID, HoldID: r.HoldID,
 			Lane: r.Lane, EstimatedCredits: r.EstimatedCredits, CreditsHeld: r.CreditsHeld, Inputs: nonEmpty(jsonOrNil(r.Inputs)), ExpiresAt: r.ExpiresAt,
+			Stats: nonEmpty(r.Stats),
 		})
 		if err != nil {
 			return err

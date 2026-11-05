@@ -51,6 +51,37 @@ public enum Format {
         return texts.t("files.size_bytes", ["n": integer(bytes)])
     }
 
+    /// An approximate duration the site's way (testdata/duration/cases.json): minutes rounded half
+    /// up, at least one; under an hour, minutes ("12 minutos"); up to ten hours, hours and minutes
+    /// in steps of five ("1 h 20 min"); from ten hours on, whole hours ("11 h").
+    public static func duration(_ texts: Texts, _ seconds: Int64) -> String {
+        let s = max(seconds, 0)
+        var minutes = max(1, s / 60 + (s % 60 >= 30 ? 1 : 0))
+        if minutes < 60 {
+            return minutes == 1 ? texts.t("duration.minute") : texts.t("duration.minutes", ["minutes": minutes])
+        }
+        minutes = minutes < 600 ? (minutes + 2) / 5 * 5 : (minutes + 30) / 60 * 60
+        let hours = minutes / 60
+        let rest = minutes % 60
+        return rest == 0
+            ? texts.t("duration.hours", ["hours": hours])
+            : texts.t("duration.hours_minutes", ["hours": hours, "minutes": rest])
+    }
+
+    /// The confirmation line of a large order (app.confirm_large); nil for the others.
+    public static func largeNotice(_ texts: Texts, _ quote: Quote) -> String? {
+        guard quote.large, let seconds = quote.expectedSeconds, seconds > 0 else { return nil }
+        return texts.t("app.confirm_large", ["duration": duration(texts, seconds)])
+    }
+
+    /// The confirmation of a quote: the tokens (app.confirm_run) and, for a large order, its
+    /// expected duration on a paragraph of its own.
+    public static func confirmRun(_ texts: Texts, _ quote: Quote) -> String {
+        let tokens = texts.t("app.confirm_run", ["expected": quote.expectedCredits, "cap": quote.capCredits])
+        guard let notice = largeNotice(texts, quote) else { return tokens }
+        return tokens + "\n\n" + notice
+    }
+
     static func parseTimestamp(_ s: String) -> Date? {
         let plain = ISO8601DateFormatter()
         plain.formatOptions = [.withInternetDateTime]

@@ -100,9 +100,7 @@ struct NewRunView: View {
         } message: {
             if case .confirm(let prepared) = model.phase {
                 // After a failed start the same estimate is offered again, with the reason.
-                Text(
-                    texts.t("app.confirm_run", ["expected": prepared.quote.expectedCredits, "cap": prepared.quote.capCredits])
-                        + (model.error.map { "\n\n" + $0 } ?? ""))
+                Text(Format.confirmRun(texts, prepared.quote) + (model.error.map { "\n\n" + $0 } ?? ""))
             }
         }
         .onChange(of: model.started) { _, runId in

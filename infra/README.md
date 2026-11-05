@@ -124,7 +124,7 @@ por `aws iam get-user` e depois por `aws ec2 describe-security-groups`.
 6. **Aplicação**: `infra/scripts/deploy-app.sh --env prod` compila API, worker, migrações
    (`GOOS=linux GOARCH=arm64`) e o harness (`aarch64-unknown-linux-musl`, ligado pelo `rust-lld`,
    sem toolchain C cruzada), publica em `s3://<releases>/releases/<sha>/` com `SHA256SUMS` e
-   instala pela SSM Run Command: binários em `/opt/docmatch/bin`, `pricing.yaml` e `models.yaml`
+   instala pela SSM Run Command: binários em `/opt/docmatch/bin`, `pricing.yaml`, `models.yaml` e `throughput.yaml`
    em `/opt/docmatch/config`, `docmatch-migrate up`, reinício de harness, API e worker e checagem
    de `/v1/version`. Uma release é um commit (árvore limpa); `--release <sha> --skip-build`
    reinstala uma anterior (rollback).

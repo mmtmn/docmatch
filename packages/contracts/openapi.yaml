@@ -842,6 +842,9 @@ paths:
       description: |
         Devolve um orçamento assinado (`Quote`) com o custo esperado, o teto e o detalhamento.
         Não gasta créditos. O orçamento vale por `quote_ttl_minutes` (config/pricing.yaml).
+        Traz também a duração esperada (`expected_seconds`, fila incluída) e `large`: nenhum
+        pedido é recusado pelo tamanho; um pedido grande avisa quanto deve levar, e quem o iniciou
+        recebe um e-mail quando ele terminar.
       tags: [runs]
       requestBody:
         required: true

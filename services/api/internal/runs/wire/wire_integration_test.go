@@ -7,6 +7,8 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -277,5 +279,133 @@ func TestPipelineOnPostgres(t *testing.T) {
 	}
 	if !sawCompleted {
 		t.Fatalf("run.completed não está no outbox: %v", msgs)
+	}
+
+	// Timing: the quote carries the expected duration (throughput.yaml next
+	// to pricing.yaml), the finished run is in run_timings, and a small,
+	// quick run sends no e-mail.
+	if q.ExpectedSeconds <= 0 || q.Large {
+		t.Fatalf("orçamento sem tempo esperado: %+v", q)
+	}
+	var status string
+	var active float64
+	if err := d.Admin.QueryRow(ctx, "SELECT status, active_seconds FROM run_timings WHERE run_id = $1", run.ID).Scan(&status, &active); err != nil || status != "completed" || active < 0 {
+		t.Fatalf("run_timings: %q %v %v", status, active, err)
+	}
+	samples, err := sys.Store.RecentTimings(ctx, time.Now().Add(-time.Hour), 10)
+	if err != nil || len(samples) == 0 || samples[0].Units["table"] <= 0 {
+		t.Fatalf("histórico: %+v %v", samples, err)
+	}
+	if _, err := sys.Store.RunsInFlight(ctx, time.Now().Add(-time.Hour)); err != nil {
+		t.Fatalf("execuções em voo: %v", err)
+	}
+	var mails int
+	if err := d.Admin.QueryRow(ctx, "SELECT count(*) FROM outbox WHERE dedupe_key = $1", runs.MailKeyPrefix+run.PublicID()).Scan(&mails); err != nil || mails != 0 {
+		t.Fatalf("pedido pequeno não manda e-mail: %d %v", mails, err)
+	}
+}
+
+// TestLargeRunMailOnPostgres: with a throughput.yaml where every order is
+// large, a finished run leaves exactly one e-mail in the outbox for the person
+// who started it, written in the transaction that finished the run.
+func TestLargeRunMailOnPostgres(t *testing.T) {
+	d := testdb.Get(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	sock, cleanup, err := harnesstest.SocketPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(cleanup)
+	stop, err := harnesstest.Serve(sock, harnesstest.NewServer(harnesstest.MustLoadGolden(), harnesstest.Options{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(stop)
+	repo, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "..", "config", "throughput.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tpFile := filepath.Join(t.TempDir(), "throughput.yaml")
+	if err := os.WriteFile(tpFile, bytes.Replace(repo, []byte("large_after_seconds: 600"), []byte("large_after_seconds: 1"), 1), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	env := map[string]string{
+		config.VarEnv: "dev", config.VarPublicBaseURL: "http://localhost:4321", config.VarAPIBaseURL: "http://localhost:8080",
+		config.VarAPIListen: "127.0.0.1:18081", config.VarAdminListen: "127.0.0.1:18444", config.VarDatabaseURL: d.URL,
+		config.VarSessionSecret: strings.Repeat("s", 48), config.VarQuoteHMACKey: strings.Repeat("q", 32), config.VarAPIKeyPepper: strings.Repeat("p", 32),
+		config.VarWebhookSigningKey: strings.Repeat("w", 32), config.VarPricingFile: "config/pricing.yaml", config.VarThroughputFile: tpFile,
+		config.VarHarnessSocket: sock, config.VarMediaLocalDir: t.TempDir(), config.VarLLMMode: "off",
+	}
+	cfg, err := config.LoadFrom(func(k string) (string, bool) { v, ok := env[k]; return v, ok })
+	if err != nil {
+		t.Fatal(err)
+	}
+	org := seedOrg(t, d, "Grande")
+	user := seedUser(t, d, org)
+	me := apix.Principal{OrgID: org, UserID: &user, Plan: "pro"}
+	sys, err := wire.New(ctx, wire.Options{Config: cfg, Logger: logx.Discard(), Pool: d.App, Auth: func(*http.Request) (apix.Principal, error) { return me, nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(sys.Close)
+	sys.Jobs.Set(&jobargs.Recorder{})
+	if sys.Throughput == nil || sys.Throughput.LargeAfterSeconds != 1 {
+		t.Fatalf("DM_THROUGHPUT_FILE não foi lido: %+v", sys.Throughput)
+	}
+	if _, err := sys.Credits.Grant(ctx, org, credits.GrantParams{Kind: credits.GrantPlan, Amount: 5000, Source: "test"}); err != nil {
+		t.Fatal(err)
+	}
+	id, _ := uuid.NewV7()
+	u, err := sys.Store.CreateUpload(ctx, uploads.Upload{
+		ID: id, OrgID: org, UserID: &user, Kind: uploads.KindDocument, Store: "local", Role: "bank", FileName: "extrato.csv",
+		DeclaredMime: "text/csv", SizeBytes: 1000, SHA256: bytes.Repeat([]byte{2}, 32), StorageKey: "quarantine/bank", Status: uploads.StatusClean, CreatedAt: time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	u.Status, u.DetectedMime = uploads.StatusClean, "text/csv"
+	if _, err := sys.Store.UpdateUpload(ctx, u); err != nil {
+		t.Fatal(err)
+	}
+	req := estimate.Request{Sources: []estimate.SourceRef{{UploadID: u.PublicID(), Role: "bank"}}}
+	q, err := sys.Estimates.Estimate(ctx, me, req, func(u uploads.Upload) string { return "local://t/" + u.StorageKey })
+	if err != nil || !q.Large || q.ExpectedSeconds <= 1 {
+		t.Fatalf("orçamento grande esperado: %+v %v", q, err)
+	}
+	before, err := sys.Store.RunsInFlight(ctx, time.Now().Add(-time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, err := sys.Runs.Create(ctx, me, runs.CreateRequest{Request: req, QuoteID: q.ID, QuoteSignature: q.Signature})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := sys.Store.RunsInFlight(ctx, time.Now().Add(-time.Hour)); n != before+1 {
+		t.Fatalf("a execução criada deveria contar na fila: %d (antes %d)", n, before)
+	}
+	if n, _ := sys.Store.RunsInFlight(ctx, time.Now().Add(time.Minute)); n != 0 {
+		t.Fatalf("execuções sem toque desde o corte não contam na fila: %d", n)
+	}
+	stored, _ := sys.Runs.Get(ctx, org, run.ID)
+	if tm := stored.Timing(); !tm.Large || tm.ExpectedSeconds != q.ExpectedSeconds || tm.Units["table"] <= 0 {
+		t.Fatalf("timing gravado com a execução: %+v", tm)
+	}
+	for i := 0; i < 2; i++ {
+		if err := sys.Runs.Execute(ctx, org, run.ID, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var to, text, subject string
+	var mails int
+	key := runs.MailKeyPrefix + run.PublicID()
+	if err := d.Admin.QueryRow(ctx, "SELECT count(*), max(payload->>'to'), max(payload->>'text'), max(payload->>'subject') FROM outbox WHERE dedupe_key = $1 AND kind = 'email' AND org_id = $2", key, org).Scan(&mails, &to, &text, &subject); err != nil {
+		t.Fatal(err)
+	}
+	if mails != 1 || !strings.HasPrefix(to, "u-") || subject != "Sua conciliação terminou" || !strings.Contains(text, "http://localhost:4321/resultados?run="+run.PublicID()) {
+		t.Fatalf("e-mail: %d para %q: %q\n%s", mails, to, subject, text)
+	}
+	if strings.Contains(text, "extrato") || strings.Contains(text, "bank") {
+		t.Fatalf("o e-mail cita o documento: %s", text)
 	}
 }

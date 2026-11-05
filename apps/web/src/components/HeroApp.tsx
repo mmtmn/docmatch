@@ -7,7 +7,13 @@ import { apiConfigured } from '../lib/api';
 import { featureResults } from '../lib/env';
 import { t } from '../lib/i18n';
 import { mockQuoteProvider, mockRuleOptions } from '../lib/mock/quote';
-import { createRun, estimate, uploadFile, type RunOptionsInput } from '../lib/pipeline';
+import {
+  confirmText,
+  createRun,
+  estimate,
+  uploadFile,
+  type RunOptionsInput,
+} from '../lib/pipeline';
 import { currentUser, signInLocally } from '../lib/session';
 import { AuthDialog } from './AuthDialog';
 import { HeroForm, type RunRequest } from './HeroForm';
@@ -45,11 +51,7 @@ function LiveHero() {
     setStatus(t('app.estimating'));
     const opts = optionsOf(request);
     const quote = await estimate(ids, opts);
-    if (
-      !window.confirm(
-        t('app.confirm_run', { expected: quote.expected_credits, cap: quote.cap_credits }),
-      )
-    ) {
+    if (!window.confirm(confirmText(quote))) {
       setStatus(null);
       throw new Error(t('app.cancelled'));
     }
