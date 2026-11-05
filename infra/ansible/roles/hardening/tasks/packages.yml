@@ -58,15 +58,6 @@
     label: "{{ item.name }}"
   register: hardening_third_party_repos_added
 
-# The build runs `apt-get update` right before Ansible, so the cache_valid_time of the upgrade
-# below would skip the refresh and the new repositories would stay unknown: apt then took
-# Ubuntu's own caddy (without add-package) and found no postgresql-18. New sources always force
-# a refresh.
-- name: Refresh the apt cache with the third-party repositories
-  ansible.builtin.apt:
-    update_cache: true
-  when: hardening_third_party_repos_added is changed
-
 - name: Remove packages the image must not carry
   ansible.builtin.apt:
     name: "{{ hardening_removed_packages }}"
@@ -74,11 +65,14 @@
     purge: true
     autoremove: true
 
+# The build runs `apt-get update` right before Ansible, so a cache_valid_time of 600 would skip
+# the refresh and the repositories added above would stay unknown: apt then took Ubuntu's own
+# caddy (without add-package) and found no postgresql-18. New sources always force a refresh.
 - name: Upgrade the base image
   ansible.builtin.apt:
     update_cache: true
     upgrade: safe
-    cache_valid_time: 600
+    cache_valid_time: "{{ 0 if hardening_third_party_repos_added is changed else 600 }}"
 
 - name: Install the base packages
   ansible.builtin.apt:

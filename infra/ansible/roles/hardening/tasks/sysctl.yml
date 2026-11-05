@@ -1,9 +1,12 @@
 ---
+# The file sorts after every distribution file (systemd-sysctl applies them by name, across
+# /etc, /run and /usr/lib): Ubuntu's 99-protect-links.conf set fs.protected_fifos back to 1 at
+# every boot while the file was 90-*.
 - name: Apply kernel parameters
   ansible.posix.sysctl:
     name: "{{ item.key }}"
     value: "{{ item.value }}"
-    sysctl_file: /etc/sysctl.d/90-docmatch-hardening.conf
+    sysctl_file: /etc/sysctl.d/99-zz-docmatch-hardening.conf
     sysctl_set: true
     reload: false
   loop: "{{ hardening_sysctl | dict2items }}"
@@ -13,5 +16,8 @@
 
 - name: Remove the distribution defaults that conflict with the hardened values
   ansible.builtin.file:
-    path: /etc/sysctl.d/10-ptrace.conf
+    path: "{{ item }}"
     state: absent
+  loop:
+    - /etc/sysctl.d/10-ptrace.conf
+    - /etc/sysctl.d/90-docmatch-hardening.conf

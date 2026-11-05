@@ -14,3 +14,36 @@
     state: absent
   loop: "{{ hardening_blacklisted_modules }}"
   failed_when: false
+
+# USBGuard: the instance has no USB bus devices, so the policy generated at build time is empty
+# and the daemon blocks anything that would appear (usb-storage is also blacklisted above).
+- name: Install USBGuard
+  ansible.builtin.apt:
+    name: usbguard
+    state: present
+    install_recommends: false
+
+- name: Read the USBGuard policy
+  ansible.builtin.stat:
+    path: /etc/usbguard/rules.conf
+  register: hardening_usbguard_rules
+
+- name: Generate the USBGuard policy from the devices present at build time
+  ansible.builtin.shell:
+    cmd: set -o pipefail; usbguard generate-policy > /etc/usbguard/rules.conf
+    executable: /bin/bash
+  when: not hardening_usbguard_rules.stat.exists or hardening_usbguard_rules.stat.size == 0
+  changed_when: true
+
+- name: Restrict the USBGuard policy file
+  ansible.builtin.file:
+    path: /etc/usbguard/rules.conf
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Enable USBGuard
+  ansible.builtin.systemd_service:
+    name: usbguard
+    enabled: true
+    state: started

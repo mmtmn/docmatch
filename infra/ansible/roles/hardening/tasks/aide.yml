@@ -9,6 +9,12 @@
     group: root
     mode: "0644"
 
+- name: Use SHA-512 for every AIDE checksum
+  ansible.builtin.lineinfile:
+    path: /etc/aide/aide.conf
+    regexp: '^Checksums\s*='
+    line: Checksums = sha512
+
 - name: Mail the daily report to root and keep the database read-only to root
   ansible.builtin.lineinfile:
     path: /etc/default/aide
