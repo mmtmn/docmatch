@@ -149,7 +149,10 @@ type Store interface {
 	// CreateChallenge stores the challenge and the e-mail in one transaction.
 	CreateChallenge(ctx context.Context, ch Challenge, msg email.Message) error
 	ChallengeByID(ctx context.Context, id uuid.UUID) (Challenge, bool, error)
-	RecordChallengeAttempt(ctx context.Context, id uuid.UUID) (int, error)
+	// ClaimChallengeAttempt atomically spends one attempt while fewer than max
+	// were spent and the challenge is unconsumed; ok is false otherwise. The
+	// handler claims before comparing, so concurrent guesses cannot exceed max.
+	ClaimChallengeAttempt(ctx context.Context, id uuid.UUID, maxAttempts int) (int, bool, error)
 	// ConsumeChallenge marks the challenge used; ok is false when it was
 	// already consumed or expired (single use is decided by the store).
 	ConsumeChallenge(ctx context.Context, id uuid.UUID) (Challenge, bool, error)

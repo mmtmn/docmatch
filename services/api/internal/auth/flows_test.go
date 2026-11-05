@@ -518,7 +518,7 @@ func TestEmailLogin(t *testing.T) {
 	h.now = h.now.Add(time.Minute)
 	rec = h.post(EmailStartPath, `{"email":"bia@example.com"}`)
 	cid5 := decode(t, rec)["challenge_id"].(string)
-	for _, fail := range []string{"ChallengeByID", "RecordChallengeAttempt"} {
+	for _, fail := range []string{"ChallengeByID", "ClaimChallengeAttempt"} {
 		h.store.FailChallenge = fail
 		if rec := h.post(EmailVerifyPath, `{"challenge_id":"`+cid5+`","code":"000000"}`); rec.Code != 500 {
 			t.Fatalf("%s: %d", fail, rec.Code)

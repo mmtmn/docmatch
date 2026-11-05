@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -565,10 +566,16 @@ func (s *Store) ChallengeByID(ctx context.Context, id uuid.UUID) (auth.Challenge
 	return challengeFromRow(r), true, nil
 }
 
-// RecordChallengeAttempt implements auth.Store.
-func (s *Store) RecordChallengeAttempt(ctx context.Context, id uuid.UUID) (int, error) {
-	n, err := s.q.AuthRecordChallengeAttempt(ctx, id)
-	return int(n), err
+// ClaimChallengeAttempt implements auth.Store.
+func (s *Store) ClaimChallengeAttempt(ctx context.Context, id uuid.UUID, maxAttempts int) (int, bool, error) {
+	n, err := s.q.AuthClaimChallengeAttempt(ctx, sqlc.AuthClaimChallengeAttemptParams{ID: id, MaxAttempts: int32(min(maxAttempts, math.MaxInt32))}) //nolint:gosec // bounded above
+	if noRows(err) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, err
+	}
+	return int(n), true, nil
 }
 
 // ConsumeChallenge implements auth.Store.

@@ -203,8 +203,14 @@ func TestChallengesExportsAndErasure(t *testing.T) {
 	if err != nil || !ok || got.Email != u.Email || got.Attempts != 0 || got.IPPrefix != "203.0.113.0/24" {
 		t.Fatalf("ChallengeByID: %+v %v %v", got, ok, err)
 	}
-	if n, err := store.RecordChallengeAttempt(ctx, id); err != nil || n != 1 {
-		t.Fatalf("attempt: %d %v", n, err)
+	if n, ok, err := store.ClaimChallengeAttempt(ctx, id, 2); err != nil || !ok || n != 1 {
+		t.Fatalf("attempt: %d %v %v", n, ok, err)
+	}
+	if n, ok, err := store.ClaimChallengeAttempt(ctx, id, 2); err != nil || !ok || n != 2 {
+		t.Fatalf("attempt 2: %d %v %v", n, ok, err)
+	}
+	if _, ok, err := store.ClaimChallengeAttempt(ctx, id, 2); err != nil || ok {
+		t.Fatalf("teto de tentativas: %v %v", ok, err)
 	}
 	if c, ok, err := store.ConsumeChallenge(ctx, id); err != nil || !ok || c.ConsumedAt == nil {
 		t.Fatalf("consume: %+v %v %v", c, ok, err)

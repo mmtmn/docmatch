@@ -70,17 +70,20 @@ func (s *MemoryStore) ChallengeByID(_ context.Context, id uuid.UUID) (Challenge,
 	return ch, ok, nil
 }
 
-// RecordChallengeAttempt implements Store.
-func (s *MemoryStore) RecordChallengeAttempt(_ context.Context, id uuid.UUID) (int, error) {
-	if err := s.failing("RecordChallengeAttempt"); err != nil {
-		return 0, err
+// ClaimChallengeAttempt implements Store.
+func (s *MemoryStore) ClaimChallengeAttempt(_ context.Context, id uuid.UUID, maxAttempts int) (int, bool, error) {
+	if err := s.failing("ClaimChallengeAttempt"); err != nil {
+		return 0, false, err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	ch := s.Challenges[id]
+	ch, ok := s.Challenges[id]
+	if !ok || ch.ConsumedAt != nil || ch.Attempts >= maxAttempts {
+		return ch.Attempts, false, nil
+	}
 	ch.Attempts++
 	s.Challenges[id] = ch
-	return ch.Attempts, nil
+	return ch.Attempts, true, nil
 }
 
 // ConsumeChallenge implements Store.

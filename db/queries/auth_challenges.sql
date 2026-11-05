@@ -10,8 +10,12 @@ RETURNING *;
 -- name: AuthChallengeByID :one
 SELECT * FROM magic_links WHERE id = $1;
 
--- name: AuthRecordChallengeAttempt :one
-UPDATE magic_links SET attempts = attempts + 1 WHERE id = $1 RETURNING attempts;
+-- Reserva uma tentativa antes de comparar o código: só incrementa enquanto
+-- attempts < $2, então tentativas em paralelo nunca passam do teto.
+-- name: AuthClaimChallengeAttempt :one
+UPDATE magic_links SET attempts = attempts + 1
+WHERE id = $1 AND attempts < sqlc.arg(max_attempts)::int AND consumed_at IS NULL
+RETURNING attempts;
 
 -- Consome atomicamente: só a primeira chamada devolve a linha.
 -- name: AuthConsumeChallenge :one

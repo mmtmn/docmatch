@@ -18,6 +18,9 @@ type Querier interface {
 	// instrução; o chamador já segura o lock da linha da conta.
 	AppendCreditLedger(ctx context.Context, arg AppendCreditLedgerParams) (CreditLedger, error)
 	AuthChallengeByID(ctx context.Context, id uuid.UUID) (MagicLink, error)
+	// Reserva uma tentativa antes de comparar o código: só incrementa enquanto
+	// attempts < $2, então tentativas em paralelo nunca passam do teto.
+	AuthClaimChallengeAttempt(ctx context.Context, arg AuthClaimChallengeAttemptParams) (int32, error)
 	AuthClaimStaleOutbox(ctx context.Context, arg AuthClaimStaleOutboxParams) ([]Outbox, error)
 	// Consome atomicamente: só a primeira chamada devolve a linha.
 	AuthConsumeChallenge(ctx context.Context, id uuid.UUID) (MagicLink, error)
@@ -56,7 +59,6 @@ type Querier interface {
 	// linha pelo id; o varredor periódico reivindica as linhas antigas ainda não
 	// enviadas. Ambos em modo sistema (o outbox não tem RLS).
 	AuthOutboxByID(ctx context.Context, id uuid.UUID) (Outbox, error)
-	AuthRecordChallengeAttempt(ctx context.Context, id uuid.UUID) (int32, error)
 	// Agenda a exclusão (LGPD); devolve zero linhas quando já havia um pedido.
 	AuthRequestUserDeletion(ctx context.Context, arg AuthRequestUserDeletionParams) (User, error)
 	AuthRevokeSession(ctx context.Context, id uuid.UUID) (int64, error)

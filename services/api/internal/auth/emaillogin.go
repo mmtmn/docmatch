@@ -125,14 +125,20 @@ func (s *Service) emailVerify(w http.ResponseWriter, r *http.Request) {
 		apierr.Write(w, r, contracts.ErrTooManyAttempts)
 		return
 	}
+	// Spend one attempt atomically BEFORE comparing: a read-then-increment
+	// would let parallel guesses all pass the check above.
+	if _, claimed, err := s.d.Store.ClaimChallengeAttempt(r.Context(), id, ChallengeAttempts); err != nil {
+		apierr.Internal(w, r, err)
+		return
+	} else if !claimed {
+		w.Header().Set("Retry-After", strconv.Itoa(int(ch.ExpiresAt.Sub(now)/time.Second)+1))
+		apierr.Write(w, r, contracts.ErrTooManyAttempts)
+		return
+	}
 	// Both comparisons always run so the timing does not say which form was sent.
 	codeOK := crypto.Equal(s.codeMAC(id, req.Code), ch.CodeHash)
 	tokenOK := crypto.Equal(crypto.Digest(req.Code), ch.TokenHash)
 	if (!isCode || !codeOK) && (!isToken || !tokenOK) {
-		if _, err := s.d.Store.RecordChallengeAttempt(r.Context(), id); err != nil {
-			apierr.Internal(w, r, err)
-			return
-		}
 		apierr.Write(w, r, contracts.ErrEmailCodeInvalid)
 		return
 	}

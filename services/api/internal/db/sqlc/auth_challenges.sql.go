@@ -34,6 +34,26 @@ func (q *Queries) AuthChallengeByID(ctx context.Context, id uuid.UUID) (MagicLin
 	return i, err
 }
 
+const authClaimChallengeAttempt = `-- name: AuthClaimChallengeAttempt :one
+UPDATE magic_links SET attempts = attempts + 1
+WHERE id = $1 AND attempts < $2::int AND consumed_at IS NULL
+RETURNING attempts
+`
+
+type AuthClaimChallengeAttemptParams struct {
+	ID          uuid.UUID
+	MaxAttempts int32
+}
+
+// Reserva uma tentativa antes de comparar o código: só incrementa enquanto
+// attempts < $2, então tentativas em paralelo nunca passam do teto.
+func (q *Queries) AuthClaimChallengeAttempt(ctx context.Context, arg AuthClaimChallengeAttemptParams) (int32, error) {
+	row := q.db.QueryRow(ctx, authClaimChallengeAttempt, arg.ID, arg.MaxAttempts)
+	var attempts int32
+	err := row.Scan(&attempts)
+	return attempts, err
+}
+
 const authConsumeChallenge = `-- name: AuthConsumeChallenge :one
 UPDATE magic_links SET consumed_at = now()
 WHERE id = $1 AND consumed_at IS NULL AND expires_at > now()
@@ -115,15 +135,4 @@ func (q *Queries) AuthDeleteStaleChallenges(ctx context.Context, expiresAt time.
 		return 0, err
 	}
 	return result.RowsAffected(), nil
-}
-
-const authRecordChallengeAttempt = `-- name: AuthRecordChallengeAttempt :one
-UPDATE magic_links SET attempts = attempts + 1 WHERE id = $1 RETURNING attempts
-`
-
-func (q *Queries) AuthRecordChallengeAttempt(ctx context.Context, id uuid.UUID) (int32, error) {
-	row := q.db.QueryRow(ctx, authRecordChallengeAttempt, id)
-	var attempts int32
-	err := row.Scan(&attempts)
-	return attempts, err
 }
