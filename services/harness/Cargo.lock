@@ -1053,6 +1053,7 @@ dependencies = [
  "ego-tree",
  "encoding_rs",
  "hex",
+ "html5ever",
  "indexmap",
  "lopdf",
  "mailparse",

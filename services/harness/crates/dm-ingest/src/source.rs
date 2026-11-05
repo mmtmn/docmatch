@@ -35,6 +35,36 @@ pub struct ParsedSource {
     /// each parsed as its own source.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub entries: Vec<ParsedSource>,
+    /// The text of a document (DOCX, ODT, HTML) in parts, the data tables apart, when it has
+    /// data tables: [`ParsedSource::items`] leave them out, and a reader that decides a table
+    /// is not one it uses can read the document again with it ([`document_text`],
+    /// [`text_items`]).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub text_parts: Vec<TextPart>,
+}
+
+/// A piece of the text of a document: prose (paragraphs, layout tables) or the text of one of
+/// its data tables, named like the [`Table`] it became.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TextPart {
+    /// The table this is the text of; `None` for prose.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub table: Option<String>,
+    /// Lines, each ending in `\n`.
+    pub text: String,
+}
+
+/// The text of a document with the data tables `keep` accepts (by table name); every other
+/// table leaves a blank line.
+pub fn document_text(parts: &[TextPart], keep: impl Fn(&str) -> bool) -> String {
+    let mut out = String::new();
+    for part in parts {
+        match &part.table {
+            Some(name) if !keep(name) => out.push('\n'),
+            _ => out.push_str(&part.text),
+        }
+    }
+    out
 }
 
 impl ParsedSource {
@@ -102,6 +132,7 @@ fn parse_inner(
         items: Vec::new(),
         warnings: Vec::new(),
         entries: Vec::new(),
+        text_parts: Vec::new(),
     };
     let note = |out: &mut ParsedSource, e: IngestError| out.warnings.push(format!("{name}: {e}"));
     let extend = |out: &mut ParsedSource, warnings: Vec<String>| {
@@ -183,6 +214,7 @@ fn parse_inner(
                 Ok(d) => {
                     out.tables.extend(d.tables);
                     out.items = text_items(&d.text, &source_id, ctx);
+                    out.text_parts = d.parts;
                     extend(&mut out, d.warnings);
                 }
                 Err(e) => note(&mut out, e),
@@ -192,6 +224,7 @@ fn parse_inner(
             Ok(h) => {
                 out.tables.extend(h.tables);
                 out.items = text_items(&h.text, &source_id, ctx);
+                out.text_parts = h.parts;
                 extend(&mut out, h.warnings);
             }
             Err(e) => note(&mut out, e),
@@ -357,13 +390,14 @@ fn parse_msg(
                 .map(|w| format!("{entry_name}: {w}"))
                 .collect(),
             entries: Vec::new(),
+            text_parts: Vec::new(),
         });
     }
 }
 
 /// The text of a document read like a text dump: an e-mail thread or a chat becomes
 /// messages, anything else paragraphs.
-fn text_items(text: &str, source_id: &str, ctx: &InboxContext) -> Vec<Item> {
+pub fn text_items(text: &str, source_id: &str, ctx: &InboxContext) -> Vec<Item> {
     if text.trim().is_empty() {
         return Vec::new();
     }

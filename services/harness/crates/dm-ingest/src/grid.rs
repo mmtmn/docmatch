@@ -93,7 +93,9 @@ fn header_row(rows: &[Vec<String>], width: usize) -> Option<usize> {
     for (i, row) in rows.iter().take(window).enumerate() {
         let filled = row.iter().filter(|c| !c.trim().is_empty()).count();
         let textual = row.iter().filter(|c| is_textual(c)).count();
-        if filled >= 2 && textual == filled && filled * 2 >= width.max(2) {
+        // Shape alone is weak evidence: a two-column grid of words is a key/value block
+        // (favorecido, banco, agência, conta), not a table with a header.
+        if width >= 3 && filled >= 2 && textual == filled && filled * 2 >= width {
             return Some(i);
         }
     }
@@ -334,6 +336,34 @@ mod tests {
         )
         .is_none());
         assert!(table_from_rows("x", "s", Vec::new()).is_none());
+    }
+
+    #[test]
+    fn two_columns_of_words_need_header_words() {
+        // Bank details in a two-column box: words over words, not a header over data.
+        let details = rows(&[
+            &["Favorecido", "Caixas Boa Vista Ltda"],
+            &["Banco", "Itaú"],
+            &["Agência", "0987"],
+        ]);
+        assert!(table_from_rows("x", "s", details).is_none());
+        // The same shape with header words is a table.
+        let t = table_from_rows(
+            "x",
+            "s",
+            rows(&[&["Data", "Valor"], &["10/07/2026", "1,00"]]),
+        );
+        assert!(t.is_some_and(|t| t.columns[1].role == ColumnRole::Amount));
+        // Three columns of words over data: the shape is enough.
+        let t = table_from_rows(
+            "x",
+            "s",
+            rows(&[
+                &["Cliente", "Cidade", "Contato"],
+                &["Padaria", "Recife", "Ana"],
+            ]),
+        );
+        assert!(t.is_some_and(|t| t.len() == 1));
     }
 
     #[test]

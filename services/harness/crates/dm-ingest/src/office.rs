@@ -15,15 +15,20 @@ use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
 
 use crate::archive::{read_zip_member, ZipLimits};
+use crate::cancel::{Every, STOPPED};
 use crate::grid::{clean_cell, table_from_rows};
+use crate::source::TextPart;
 use crate::IngestError;
 
 /// Decompressed XML member, bytes.
 pub(crate) const MAX_XML: u64 = 64 << 20;
 /// Text kept, bytes.
 pub(crate) const MAX_TEXT: usize = 8 << 20;
-/// Table cells kept per document.
-const MAX_CELLS: usize = 500_000;
+/// Table cells kept per document, repetitions included.
+const MAX_CELLS: usize = 200_000;
+/// Bytes of table text kept per document, every copy of a repeated cell or row included: an
+/// ODT can repeat one cell 256 times in a row repeated 256 times.
+const MAX_CELL_BYTES: usize = 8 << 20;
 /// Element nesting followed.
 const MAX_DEPTH: usize = 512;
 /// Repetitions honoured for one ODT cell or row (`number-columns-repeated`).
@@ -34,17 +39,38 @@ const MAX_REPEAT: usize = 256;
 pub struct DocParsed {
     /// Tables with a recognizable header.
     pub tables: Vec<Table>,
-    /// Paragraphs (and layout tables), one line each.
+    /// Paragraphs and layout tables, one line each; a data table leaves a blank line (its
+    /// text is in [`DocParsed::parts`]).
     pub text: String,
+    /// The text in parts, data tables apart (empty when the document has none): see
+    /// [`crate::source::document_text`].
+    pub parts: Vec<TextPart>,
     /// Non-fatal problems, in pt-BR.
     pub warnings: Vec<String>,
 }
 
+/// A cell's paragraphs.
+type CellText = Vec<String>;
+
+/// How a cell takes part in a vertical merge.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum VMerge {
+    /// An ordinary cell: ends any merge running down its column.
+    None,
+    /// The top of a merge spanning this many more rows (`usize::MAX`: until the column has
+    /// an ordinary cell again, as in Word).
+    Restart(usize),
+    /// A covered cell: it shows the text of the top of the merge.
+    Continue,
+}
+
 #[derive(Default)]
 struct OpenTable {
-    rows: Vec<Vec<Vec<String>>>,
-    row: Option<Vec<Vec<String>>>,
-    cell: Option<Vec<String>>,
+    rows: Vec<Vec<CellText>>,
+    row: Option<Vec<CellText>>,
+    cell: Option<CellText>,
+    /// Running vertical merges, by column: rows left and the text carried down.
+    vspans: Vec<Option<(usize, CellText)>>,
 }
 
 enum Block {
@@ -52,15 +78,20 @@ enum Block {
     Table(usize),
 }
 
+fn cell_bytes(cell: &CellText) -> usize {
+    cell.iter().map(String::len).sum()
+}
+
 /// Builds blocks, paragraphs and tables from the structural events of either format.
 #[derive(Default)]
 struct Builder {
     blocks: Vec<Block>,
-    tables: Vec<Vec<Vec<Vec<String>>>>,
+    tables: Vec<Vec<Vec<CellText>>>,
     open: Vec<OpenTable>,
     paras: Vec<String>,
     text_bytes: usize,
     cells: usize,
+    cell_bytes: usize,
     text_cut: bool,
     cells_cut: bool,
 }
@@ -125,25 +156,72 @@ impl Builder {
         }
     }
 
+    /// Takes `cells` more cells and `bytes` more bytes of table text from the document's
+    /// budget; false (and the cut is reported) when they do not fit.
+    fn spend(&mut self, cells: usize, bytes: usize) -> bool {
+        if self.cells.saturating_add(cells) > MAX_CELLS
+            || self.cell_bytes.saturating_add(bytes) > MAX_CELL_BYTES
+        {
+            self.cells_cut = true;
+            return false;
+        }
+        self.cells += cells;
+        self.cell_bytes += bytes;
+        true
+    }
+
     /// Closes a cell: `repeat` copies of it, then `extra` empty cells (a horizontal merge).
-    fn end_cell(&mut self, repeat: usize, extra: usize) {
+    fn end_cell(&mut self, repeat: usize, extra: usize, vmerge: VMerge) {
         let Some(t) = self.open.last_mut() else {
             return;
         };
-        let Some(cell) = t.cell.take() else {
+        let Some(mut cell) = t.cell.take() else {
+            return;
+        };
+        let col = t.row.as_ref().map_or(0, Vec::len);
+        match vmerge {
+            VMerge::Continue => {
+                if let Some(slot) = t.vspans.get_mut(col) {
+                    if let Some((left, carried)) = slot.as_mut() {
+                        if cell.iter().all(|p| p.trim().is_empty()) {
+                            cell.clone_from(carried);
+                        }
+                        *left = left.saturating_sub(1);
+                        if *left == 0 {
+                            *slot = None;
+                        }
+                    }
+                }
+            }
+            VMerge::Restart(rows) => {
+                if t.vspans.len() <= col {
+                    t.vspans.resize(col + 1, None);
+                }
+                t.vspans[col] = Some((rows, cell.clone()));
+            }
+            VMerge::None => {
+                if let Some(slot) = t.vspans.get_mut(col) {
+                    *slot = None;
+                }
+            }
+        }
+        // Empty cells repeated thousands of times are padding: they cost a cell each, never
+        // bytes, and a few hundred are enough to keep the columns aligned.
+        let copies = repeat.clamp(1, MAX_REPEAT);
+        let bytes = cell_bytes(&cell).saturating_mul(copies);
+        let extra = extra.min(MAX_REPEAT);
+        if !self.spend(copies + extra, bytes) {
+            return;
+        }
+        let Some(t) = self.open.last_mut() else {
             return;
         };
         let row = t.row.get_or_insert_with(Vec::new);
-        let total = repeat.clamp(1, MAX_REPEAT) + extra.min(MAX_REPEAT);
-        if self.cells + total > MAX_CELLS {
-            self.cells_cut = true;
-            return;
-        }
-        self.cells += total;
-        for _ in 0..repeat.clamp(1, MAX_REPEAT) {
+        for _ in 1..copies {
             row.push(cell.clone());
         }
-        for _ in 0..extra.min(MAX_REPEAT) {
+        row.push(cell);
+        for _ in 0..extra {
             row.push(Vec::new());
         }
     }
@@ -153,7 +231,7 @@ impl Builder {
             return;
         };
         if t.cell.is_some() {
-            self.end_cell(1, 0);
+            self.end_cell(1, 0, VMerge::None);
         }
         let Some(t) = self.open.last_mut() else {
             return;
@@ -162,15 +240,30 @@ impl Builder {
             return;
         };
         let empty = row.iter().all(|c| c.iter().all(|p| p.trim().is_empty()));
-        // Trailing empty rows repeated thousands of times are formatting, not data.
-        let times = if empty {
+        // Trailing empty rows repeated thousands of times are formatting, not data; a
+        // repeated row with text costs every copy against the budget.
+        let mut times = if empty {
             1
         } else {
             repeat.clamp(1, MAX_REPEAT)
         };
-        for _ in 0..times {
+        let row_cells = row.len();
+        let row_bytes: usize = row.iter().map(cell_bytes).sum();
+        while times > 1
+            && !self.spend(
+                row_cells.saturating_mul(times - 1),
+                row_bytes.saturating_mul(times - 1),
+            )
+        {
+            times /= 2;
+        }
+        let Some(t) = self.open.last_mut() else {
+            return;
+        };
+        for _ in 1..times {
             t.rows.push(row.clone());
         }
+        t.rows.push(row);
     }
 
     fn end_table(&mut self) {
@@ -181,7 +274,7 @@ impl Builder {
             return;
         };
         if let Some(parent) = self.open.last_mut() {
-            // A table inside a cell: its text joins the enclosing cell.
+            // A table inside a cell: its text joins the enclosing cell (moved, not copied).
             if let Some(cell) = parent.cell.as_mut() {
                 for row in done.rows {
                     for c in row {
@@ -204,7 +297,8 @@ impl Builder {
             self.end_table();
         }
         let mut out = DocParsed::default();
-        let mut data_tables = vec![false; self.tables.len()];
+        let mut data_names: std::collections::BTreeMap<usize, String> =
+            std::collections::BTreeMap::new();
         for (i, rows) in self.tables.iter().enumerate() {
             let grid: Vec<Vec<String>> = rows
                 .iter()
@@ -213,31 +307,74 @@ impl Builder {
             let name = format!("{stem}:tabela {}", i + 1);
             if let Some(t) = table_from_rows(&name, source_id, grid) {
                 out.tables.push(t);
-                data_tables[i] = true;
+                data_names.insert(i, name);
             }
         }
-        let mut text = String::new();
-        for block in &self.blocks {
+        // Data tables are parts of their own: whether one is a ledger, a statement or neither
+        // is decided downstream, and the text of a table that is neither (installments, new
+        // bank details) belongs to what the document says. Layout tables are prose. A row of
+        // several cells is one line, tab-separated; every part shares the text budget.
+        let mut parts: Vec<TextPart> = Vec::new();
+        let mut prose = String::new();
+        let mut used = 0usize;
+        let mut push = |text: &mut String, line: &str| -> bool {
+            if used + line.len() + 1 > MAX_TEXT {
+                return false;
+            }
+            used += line.len() + 1;
+            text.push_str(line);
+            text.push('\n');
+            true
+        };
+        'blocks: for block in &self.blocks {
             match block {
                 Block::Para(p) => {
-                    text.push_str(p);
-                    text.push('\n');
+                    if !push(&mut prose, p) {
+                        self.text_cut = true;
+                        break;
+                    }
                 }
-                Block::Table(i) if data_tables[*i] => text.push('\n'),
                 Block::Table(i) => {
-                    for row in &self.tables[*i] {
-                        for cell in row {
-                            for p in cell.iter().filter(|p| !p.trim().is_empty()) {
-                                text.push_str(p.trim());
-                                text.push('\n');
+                    let mut table = String::new();
+                    let mut cut = false;
+                    'rows: for row in &self.tables[*i] {
+                        for line in row_lines(row) {
+                            if !push(&mut table, &line) {
+                                cut = true;
+                                break 'rows;
                             }
                         }
                     }
-                    text.push('\n');
+                    cut = cut || !push(&mut table, "");
+                    match data_names.get(i) {
+                        Some(name) => {
+                            parts.push(TextPart {
+                                table: None,
+                                text: std::mem::take(&mut prose),
+                            });
+                            parts.push(TextPart {
+                                table: Some(name.clone()),
+                                text: table,
+                            });
+                        }
+                        None => prose.push_str(&table),
+                    }
+                    if cut {
+                        self.text_cut = true;
+                        break 'blocks;
+                    }
                 }
             }
         }
-        out.text = text;
+        parts.push(TextPart {
+            table: None,
+            text: prose,
+        });
+        parts.retain(|p| p.table.is_some() || !p.text.is_empty());
+        out.text = crate::source::document_text(&parts, |_| false);
+        if parts.iter().any(|p| p.table.is_some()) {
+            out.parts = parts;
+        }
         if self.text_cut {
             out.warnings.push(format!(
                 "texto do {format} cortado em {} MB",
@@ -246,21 +383,63 @@ impl Builder {
         }
         if self.cells_cut {
             out.warnings.push(format!(
-                "tabelas do {format} cortadas em {MAX_CELLS} células"
+                "tabelas do {format} cortadas no limite de {MAX_CELLS} células ou {} MB de texto",
+                MAX_CELL_BYTES >> 20
             ));
         }
         out
     }
 }
 
+/// The lines of a table row: a one-cell row (a layout box) keeps its paragraphs, a row of
+/// several cells is one tab-separated line.
+fn row_lines(row: &[CellText]) -> Vec<String> {
+    if let [cell] = row {
+        return cell
+            .iter()
+            .filter(|p| !p.trim().is_empty())
+            .map(|p| p.trim().to_string())
+            .collect();
+    }
+    let cells: Vec<String> = row.iter().map(|c| clean_cell(&c.join(" "))).collect();
+    let line = cells.join("\t").trim_end().to_string();
+    if line.trim().is_empty() {
+        Vec::new()
+    } else {
+        vec![line]
+    }
+}
+
 fn attr(e: &BytesStart<'_>, local: &str) -> Option<String> {
+    // Without the duplicate check, which is quadratic in the number of attributes.
     e.attributes()
+        .with_checks(false)
         .flatten()
         .find(|a| a.key.local_name().as_ref() == local)
         .map(|a| {
             a.normalized_value(quick_xml::XmlVersion::Implicit1_0)
                 .map_or_else(|_| a.value.to_string(), std::borrow::Cow::into_owned)
         })
+}
+
+/// `w:vMerge`: `restart` opens a merge, no value (or `continue`) continues it.
+fn docx_vmerge(e: &BytesStart<'_>) -> VMerge {
+    match attr(e, "val").as_deref() {
+        Some("restart") => VMerge::Restart(usize::MAX),
+        _ => VMerge::Continue,
+    }
+}
+
+/// An ODT cell spanning rows opens a merge; a covered cell continues one (or is the right
+/// part of a horizontal span, which has no merge running and stays empty).
+fn odt_vmerge(local: &str, e: &BytesStart<'_>) -> VMerge {
+    if local == "covered-table-cell" {
+        return VMerge::Continue;
+    }
+    match count_attr(e, "number-rows-spanned") {
+        n if n > 1 => VMerge::Restart((n - 1).min(MAX_REPEAT)),
+        _ => VMerge::None,
+    }
 }
 
 fn count_attr(e: &BytesStart<'_>, local: &str) -> usize {
@@ -312,10 +491,17 @@ pub fn parse_docx(bytes: &[u8], stem: &str, source_id: &str) -> Result<DocParsed
     let mut depth = 0usize;
     let mut skip_from: Option<usize> = None;
     let mut in_t = false;
-    // Horizontal merge of the open cells (`w:gridSpan` inside `w:tcPr`).
+    // Horizontal and vertical merges of the open cells (`w:gridSpan` and `w:vMerge` inside
+    // `w:tcPr`).
     let mut spans: Vec<usize> = Vec::new();
+    let mut vmerges: Vec<VMerge> = Vec::new();
     let mut warnings = Vec::new();
+    let mut every = Every::default();
     loop {
+        if every.cancelled() {
+            warnings.push(STOPPED.to_string());
+            break;
+        }
         let event = match reader.read_event() {
             Ok(e) => e,
             Err(e) => {
@@ -351,6 +537,12 @@ pub fn parse_docx(bytes: &[u8], stem: &str, source_id: &str) -> Result<DocParsed
                     "tc" => {
                         b.start_cell();
                         spans.push(1);
+                        vmerges.push(VMerge::None);
+                    }
+                    "vMerge" => {
+                        if let Some(v) = vmerges.last_mut() {
+                            *v = docx_vmerge(&e);
+                        }
                     }
                     _ => {}
                 }
@@ -366,6 +558,11 @@ pub fn parse_docx(bytes: &[u8], stem: &str, source_id: &str) -> Result<DocParsed
                     "gridSpan" => {
                         if let Some(s) = spans.last_mut() {
                             *s = count_attr(&e, "val").min(MAX_REPEAT);
+                        }
+                    }
+                    "vMerge" => {
+                        if let Some(v) = vmerges.last_mut() {
+                            *v = docx_vmerge(&e);
                         }
                     }
                     "p" => {
@@ -389,7 +586,8 @@ pub fn parse_docx(bytes: &[u8], stem: &str, source_id: &str) -> Result<DocParsed
                     "t" => in_t = false,
                     "tc" => {
                         let span = spans.pop().unwrap_or(1);
-                        b.end_cell(1, span.saturating_sub(1));
+                        let vmerge = vmerges.pop().unwrap_or(VMerge::None);
+                        b.end_cell(1, span.saturating_sub(1), vmerge);
                     }
                     "tr" => b.end_row(1),
                     "tbl" => b.end_table(),
@@ -421,14 +619,20 @@ pub fn parse_odt(bytes: &[u8], stem: &str, source_id: &str) -> Result<DocParsed,
     let mut b = Builder::default();
     let mut depth = 0usize;
     let mut skip_from: Option<usize> = None;
-    // Repetition of the open cells and rows.
+    // Repetition and vertical merge of the open cells, repetition of the open rows.
     let mut cell_repeat: Vec<usize> = Vec::new();
+    let mut cell_merge: Vec<VMerge> = Vec::new();
     let mut row_repeat: Vec<usize> = Vec::new();
     let mut in_body = false;
     // Local names of the open elements: the body is the `text` child of `body`.
     let mut names: Vec<String> = Vec::new();
     let mut warnings = Vec::new();
+    let mut every = Every::default();
     loop {
+        if every.cancelled() {
+            warnings.push(STOPPED.to_string());
+            break;
+        }
         let event = match reader.read_event() {
             Ok(e) => e,
             Err(e) => {
@@ -468,6 +672,7 @@ pub fn parse_odt(bytes: &[u8], stem: &str, source_id: &str) -> Result<DocParsed,
                     "table-cell" | "covered-table-cell" if in_body => {
                         b.start_cell();
                         cell_repeat.push(count_attr(&e, "number-columns-repeated"));
+                        cell_merge.push(odt_vmerge(&local, &e));
                     }
                     _ => {}
                 }
@@ -487,9 +692,10 @@ pub fn parse_odt(bytes: &[u8], stem: &str, source_id: &str) -> Result<DocParsed,
                         b.start_para();
                         b.end_para();
                     }
-                    "table-cell" | "covered-table-cell" => {
+                    local @ ("table-cell" | "covered-table-cell") => {
+                        let vmerge = odt_vmerge(local, &e);
                         b.start_cell();
-                        b.end_cell(count_attr(&e, "number-columns-repeated"), 0);
+                        b.end_cell(count_attr(&e, "number-columns-repeated"), 0, vmerge);
                     }
                     _ => {}
                 }
@@ -512,7 +718,8 @@ pub fn parse_odt(bytes: &[u8], stem: &str, source_id: &str) -> Result<DocParsed,
                     "p" | "h" => b.end_para(),
                     "table-cell" | "covered-table-cell" => {
                         let repeat = cell_repeat.pop().unwrap_or(1);
-                        b.end_cell(repeat, 0);
+                        let vmerge = cell_merge.pop().unwrap_or(VMerge::None);
+                        b.end_cell(repeat, 0, vmerge);
                     }
                     "table-row" => {
                         let repeat = row_repeat.pop().unwrap_or(1);
@@ -676,5 +883,126 @@ pub(crate) mod tests {
             parse_odt(&zip_of(&[("mimetype", b"x")]), "d", "s"),
             Err(IngestError::Unrecognized(_))
         ));
+    }
+
+    #[test]
+    fn data_tables_are_text_parts_of_their_own() {
+        let body = format!(
+            "{}<w:tbl>{}{}</w:tbl>{}<w:tbl>{}{}</w:tbl>",
+            p("Segue o cronograma:"),
+            row(&["Vencimento", "Descrição", "Valor"]),
+            row(&["25/07/2026", "Parcela 1", "7.497,00"]),
+            p("Dados para depósito:"),
+            row(&["Banco", "341"]),
+            row(&["Agência", "0987"]),
+        );
+        let d = parse_docx(&docx_of(&body), "acordo", "s").unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(
+            d.tables.len(),
+            1,
+            "a two-column key/value grid is not a data table"
+        );
+        assert_eq!(
+            d.text,
+            "Segue o cronograma:\n\nDados para depósito:\nBanco\t341\nAgência\t0987\n\n"
+        );
+        assert_eq!(d.parts.len(), 3);
+        assert_eq!(d.parts[1].table.as_deref(), Some("acordo:tabela 1"));
+        assert_eq!(
+            crate::source::document_text(&d.parts, |t| t == "acordo:tabela 1"),
+            "Segue o cronograma:\nVencimento\tDescrição\tValor\n25/07/2026\tParcela 1\t7.497,00\n\nDados para depósito:\nBanco\t341\nAgência\t0987\n\n"
+        );
+        assert_eq!(crate::source::document_text(&d.parts, |_| false), d.text);
+    }
+
+    #[test]
+    fn vertical_merges_carry_the_value_down() {
+        let merged = |top: &str, rest: &str| {
+            format!("<w:tc><w:tcPr><w:vMerge{top}/></w:tcPr>{}</w:tc>", p(rest))
+        };
+        let plain = |t: &str| format!("<w:tc>{}</w:tc>", p(t));
+        let body = format!(
+            "<w:tbl>{}<w:tr>{}{}{}</w:tr><w:tr>{}{}{}</w:tr><w:tr>{}{}{}</w:tr></w:tbl>",
+            row(&["Data", "Histórico", "Valor"]),
+            merged(" w:val=\"restart\"", "10/07/2026"),
+            plain("PIX A"),
+            plain("1,00"),
+            merged("", ""),
+            plain("PIX B"),
+            plain("2,00"),
+            plain("11/07/2026"),
+            plain("TED"),
+            plain("3,00"),
+        );
+        let d = parse_docx(&docx_of(&body), "d", "s").unwrap_or_else(|e| panic!("{e}"));
+        let t = &d.tables[0];
+        assert_eq!(t.len(), 3);
+        assert_eq!(t.value(1, 0), t.value(0, 0));
+        assert_ne!(t.value(2, 0), t.value(0, 0));
+        // ODT: a cell spanning rows and the covered cells under it.
+        let cell = |t: &str| format!("<table:table-cell><text:p>{t}</text:p></table:table-cell>");
+        let odt_body = format!(
+            "<table:table><table:table-row>{}{}{}</table:table-row><table:table-row><table:table-cell table:number-rows-spanned=\"2\"><text:p>10/07/2026</text:p></table:table-cell>{}{}</table:table-row><table:table-row><table:covered-table-cell/>{}{}</table:table-row><table:table-row>{}{}{}</table:table-row></table:table>",
+            cell("Data"),
+            cell("Histórico"),
+            cell("Valor"),
+            cell("PIX A"),
+            cell("1,00"),
+            cell("PIX B"),
+            cell("2,00"),
+            cell("11/07/2026"),
+            cell("TED"),
+            cell("3,00"),
+        );
+        let d = parse_odt(&odt_of(&odt_body), "o", "s").unwrap_or_else(|e| panic!("{e}"));
+        let t = &d.tables[0];
+        assert_eq!(t.len(), 3);
+        assert_eq!(t.value(1, 0), t.value(0, 0));
+        assert_eq!(t.value(1, 1), Some(&Value::Text("PIX B".into())));
+        assert_ne!(t.value(2, 0), t.value(0, 0));
+    }
+
+    #[test]
+    fn repeated_rows_and_cells_spend_one_budget() {
+        // One cell of 1 KB repeated across 256 columns, in a row repeated 256 times: 64 MB
+        // of copies if every repetition were kept.
+        let text = "x".repeat(1024);
+        let body = format!(
+            "<table:table><table:table-row><table:table-cell><text:p>Cliente</text:p></table:table-cell><table:table-cell><text:p>Valor</text:p></table:table-cell><table:table-cell><text:p>Obs</text:p></table:table-cell></table:table-row><table:table-row table:number-rows-repeated=\"100000\"><table:table-cell table:number-columns-repeated=\"100000\"><text:p>{text}</text:p></table:table-cell></table:table-row></table:table>"
+        );
+        let started = std::time::Instant::now();
+        let d = parse_odt(&odt_of(&body), "o", "s").unwrap_or_else(|e| panic!("{e}"));
+        assert!(started.elapsed().as_secs() < 30, "{:?}", started.elapsed());
+        assert!(
+            d.warnings.iter().any(|w| w.contains("cortadas no limite")),
+            "{:?}",
+            d.warnings
+        );
+        let cells: usize = d.tables.iter().map(|t| t.len() * t.columns.len()).sum();
+        assert!(cells <= MAX_CELLS, "{cells}");
+        let bytes: usize = d
+            .tables
+            .iter()
+            .flat_map(|t| t.rows.iter())
+            .flat_map(|r| r.values.iter())
+            .map(|v| v.render().len())
+            .sum();
+        assert!(bytes <= MAX_CELL_BYTES, "{bytes}");
+        let all: usize = d.parts.iter().map(|p| p.text.len()).sum::<usize>() + d.text.len();
+        assert!(all <= 2 * MAX_TEXT + 16, "{all}");
+        // A layout table (no header) of repeated text is cut at the text budget.
+        let layout = format!(
+            "<table:table><table:table-row table:number-rows-repeated=\"100000\"><table:table-cell table:number-columns-repeated=\"100000\"><text:p>{text}</text:p></table:table-cell></table:table-row></table:table>"
+        );
+        let d = parse_odt(&odt_of(&layout), "o", "s").unwrap_or_else(|e| panic!("{e}"));
+        assert!(d.tables.is_empty());
+        assert!(d.text.len() <= MAX_TEXT, "{}", d.text.len());
+        assert!(
+            d.warnings
+                .iter()
+                .any(|w| w.contains("texto do documento cortado")),
+            "{:?}",
+            d.warnings
+        );
     }
 }

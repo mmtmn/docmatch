@@ -35,6 +35,7 @@ zip.workspace = true
 cfb.workspace = true
 sevenz-rust2.workspace = true
 scraper.workspace = true
+html5ever.workspace = true
 ego-tree.workspace = true
 serde-saphyr.workspace = true
 

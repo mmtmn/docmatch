@@ -3,13 +3,15 @@
 //! broken markup.
 //!
 //! Every `<table>` is a candidate grid (its own rows and cells; a nested table is a grid of its
-//! own) and goes through the spreadsheet header detection and role inference; a table with no
-//! header row is layout and stays in the text. The text is the page as a browser would copy
-//! it: one line per block element, a blank line after paragraphs, no scripts, styles, head or
-//! hidden elements, data tables left out. The DOM is walked iteratively (a deeply nested page
-//! cannot exhaust the stack) and the input is cut at [`MAX_HTML`] bytes.
+//! own; a cell spanning rows repeats its value down its columns) and goes through the
+//! spreadsheet header detection and role inference; a table with no header row is layout and
+//! stays in the text. The text is the page as a browser would copy it: one line per block
+//! element, a blank line after paragraphs, no scripts, styles, head or hidden elements; data
+//! tables are parts of their own ([`HtmlParsed::parts`]). The DOM is walked iteratively (a
+//! deeply nested page cannot exhaust the stack), the input is cut at [`MAX_HTML`] bytes and
+//! the parse stops where html5ever's tree gets too deep or too large ([`crate::html_limit`]).
 
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 
 use dm_core::Table;
 use ego_tree::iter::Edge;
@@ -18,25 +20,34 @@ use encoding_rs::{Encoding, UTF_16BE, UTF_16LE, UTF_8, WINDOWS_1252};
 use scraper::node::Element;
 use scraper::{Html, Node};
 
-use crate::grid::{clean_cell, table_from_rows};
+use crate::cancel::{Every, STOPPED};
+use crate::grid::{clean_cell, table_from_rows, MAX_CELL_CHARS};
+use crate::html_limit::{parse_bounded, Limit, MAX_DEPTH, MAX_NODES};
+use crate::source::{document_text, TextPart};
 use crate::IngestError;
 
 /// Bytes of markup read; the rest of a larger page is cut (with a warning).
 pub(crate) const MAX_HTML: usize = 8 << 20;
-/// Element nesting read (estimated before parsing; see [`too_deep_at`]).
-const MAX_NESTING: usize = 512;
 /// Columns one cell may span.
 const MAX_SPAN: usize = 64;
-/// Cells kept per page.
+/// Rows one cell may span (`rowspan="0"`, to the end of its row group, is this many).
+const MAX_ROWSPAN: usize = 1_000;
+/// Cells kept per page, the copies of spanning cells included.
 const MAX_CELLS: usize = 500_000;
+/// Bytes of cell text kept per page, the copies of cells spanning rows included.
+const MAX_CELL_BYTES: usize = 8 << 20;
+/// Bytes of text kept from one cell before it is cleaned.
+const MAX_RAW_CELL: usize = MAX_CELL_CHARS * 4;
 
 /// What an HTML page yielded.
 #[derive(Debug, Default)]
 pub struct HtmlParsed {
     /// Tables with a recognizable header.
     pub tables: Vec<Table>,
-    /// The text of the page, one line per block.
+    /// The text of the page, one line per block; a data table leaves a blank line.
     pub text: String,
+    /// The text in parts, data tables apart (empty when the page has none).
+    pub parts: Vec<TextPart>,
     /// Non-fatal problems, in pt-BR.
     pub warnings: Vec<String>,
 }
@@ -143,48 +154,160 @@ fn paragraph(name: &str) -> bool {
     )
 }
 
+/// Appends at most what keeps `s` within `cap` bytes.
+pub(crate) fn push_capped(s: &mut String, add: &str, cap: usize) {
+    let room = cap.saturating_sub(s.len());
+    if add.len() <= room {
+        s.push_str(add);
+    } else {
+        let mut end = room;
+        while !add.is_char_boundary(end) {
+            end -= 1;
+        }
+        s.push_str(&add[..end]);
+    }
+}
+
+/// The cells and bytes a page's grids may still take.
+struct CellBudget {
+    cells: usize,
+    bytes: usize,
+    cut: bool,
+}
+
+impl CellBudget {
+    fn take(&mut self, cells: usize, bytes: usize) -> bool {
+        if self.cells + cells > MAX_CELLS || self.bytes + bytes > MAX_CELL_BYTES {
+            self.cut = true;
+            return false;
+        }
+        self.cells += cells;
+        self.bytes += bytes;
+        true
+    }
+}
+
+/// A cell being read: its text and how many columns and rows it spans.
+struct OpenCell {
+    text: String,
+    cols: usize,
+    rows: usize,
+}
+
 #[derive(Default)]
 struct GridAcc {
     order: usize,
     node: Option<NodeId>,
     rows: Vec<Vec<String>>,
     row: Option<Vec<String>>,
-    cell: Option<(String, usize)>,
+    cell: Option<OpenCell>,
+    /// Cells of earlier rows still spanning down, by column: rows left and the value shown.
+    down: Vec<Option<(usize, String)>>,
 }
 
 impl GridAcc {
-    fn close_cell(&mut self, cells: &mut usize) {
-        if let Some((text, span)) = self.cell.take() {
-            let row = self.row.get_or_insert_with(Vec::new);
-            if *cells + span <= MAX_CELLS {
-                *cells += span;
-                row.push(text);
-                for _ in 1..span {
-                    row.push(String::new());
-                }
+    /// Fills the columns at the end of `row` that a cell above still covers.
+    fn fill_down(
+        row: &mut Vec<String>,
+        down: &mut [Option<(usize, String)>],
+        budget: &mut CellBudget,
+    ) {
+        while let Some(Some((left, value))) = down.get_mut(row.len()) {
+            if !budget.take(1, value.len()) {
+                return;
+            }
+            row.push(value.clone());
+            *left -= 1;
+            if *left == 0 {
+                down[row.len() - 1] = None;
             }
         }
     }
 
-    fn close_row(&mut self, cells: &mut usize) {
-        self.close_cell(cells);
-        if let Some(row) = self.row.take() {
-            self.rows.push(row);
+    fn close_cell(&mut self, budget: &mut CellBudget) {
+        let Some(cell) = self.cell.take() else {
+            return;
+        };
+        let row = self.row.get_or_insert_with(Vec::new);
+        Self::fill_down(row, &mut self.down, budget);
+        if !budget.take(cell.cols, cell.text.len() * cell.rows) {
+            return;
         }
+        let col = row.len();
+        if cell.rows > 1 {
+            if self.down.len() < col + cell.cols {
+                self.down.resize(col + cell.cols, None);
+            }
+            for (k, slot) in self.down[col..col + cell.cols].iter_mut().enumerate() {
+                let shown = if k == 0 {
+                    cell.text.clone()
+                } else {
+                    String::new()
+                };
+                *slot = Some((cell.rows - 1, shown));
+            }
+        }
+        row.push(cell.text);
+        for _ in 1..cell.cols {
+            row.push(String::new());
+        }
+    }
+
+    fn close_row(&mut self, budget: &mut CellBudget) {
+        self.close_cell(budget);
+        let Some(mut row) = self.row.take() else {
+            return;
+        };
+        // Columns past the last cell that cells above still cover.
+        loop {
+            Self::fill_down(&mut row, &mut self.down, budget);
+            let more = self.down[row.len().min(self.down.len())..]
+                .iter()
+                .any(Option::is_some);
+            if !more || budget.cut {
+                break;
+            }
+            row.push(String::new());
+        }
+        self.rows.push(row);
+    }
+
+    /// A row group (`thead`, `tbody`, `tfoot`) ends: spans stop at it.
+    fn close_group(&mut self, budget: &mut CellBudget) {
+        if self.row.is_some() || self.cell.is_some() {
+            self.close_row(budget);
+        }
+        self.down.clear();
+    }
+}
+
+fn span_attr(e: &Element, name: &str, max: usize, zero: usize) -> usize {
+    match e.attr(name).and_then(|s| s.trim().parse::<usize>().ok()) {
+        Some(0) => zero,
+        Some(n) => n.min(max),
+        None => 1,
     }
 }
 
 /// A table of the page: (document order, node, rows of cell texts).
 type Grid = (usize, NodeId, Vec<Vec<String>>);
 
-/// Every table of the document, in document order, and whether the cell limit cut them.
+/// Every table of the document, in document order, and whether the cell budget cut them.
 fn grids(doc: &Html) -> (Vec<Grid>, bool) {
     let mut stack: Vec<GridAcc> = Vec::new();
     let mut done = Vec::new();
     let mut opened = 0usize;
-    let mut cells = 0usize;
+    let mut budget = CellBudget {
+        cells: 0,
+        bytes: 0,
+        cut: false,
+    };
     let mut skip: Option<NodeId> = None;
+    let mut every = Every::default();
     for edge in doc.tree.root().traverse() {
+        if every.cancelled() {
+            break;
+        }
         match edge {
             Edge::Open(node) => {
                 if skip.is_some() {
@@ -206,38 +329,38 @@ fn grids(doc: &Html) -> (Vec<Grid>, bool) {
                                 });
                                 opened += 1;
                             }
+                            "thead" | "tbody" | "tfoot" => {
+                                if let Some(t) = stack.last_mut() {
+                                    t.close_group(&mut budget);
+                                }
+                            }
                             "tr" => {
                                 if let Some(t) = stack.last_mut() {
-                                    t.close_row(&mut cells);
+                                    t.close_row(&mut budget);
                                     t.row = Some(Vec::new());
                                 }
                             }
                             "td" | "th" => {
                                 if let Some(t) = stack.last_mut() {
-                                    t.close_cell(&mut cells);
-                                    let span = e
-                                        .attr("colspan")
-                                        .and_then(|s| s.trim().parse::<usize>().ok())
-                                        .unwrap_or(1)
-                                        .clamp(1, MAX_SPAN);
-                                    t.cell = Some((String::new(), span));
+                                    t.close_cell(&mut budget);
+                                    t.cell = Some(OpenCell {
+                                        text: String::new(),
+                                        cols: span_attr(e, "colspan", MAX_SPAN, 1),
+                                        rows: span_attr(e, "rowspan", MAX_ROWSPAN, MAX_ROWSPAN),
+                                    });
                                 }
                             }
                             "br" | "p" | "div" | "li" => {
-                                if let Some((text, _)) =
-                                    stack.last_mut().and_then(|t| t.cell.as_mut())
-                                {
-                                    text.push(' ');
+                                if let Some(c) = stack.last_mut().and_then(|t| t.cell.as_mut()) {
+                                    push_capped(&mut c.text, " ", MAX_RAW_CELL);
                                 }
                             }
                             _ => {}
                         }
                     }
                     Node::Text(t) => {
-                        if let Some((text, _)) = stack.last_mut().and_then(|g| g.cell.as_mut()) {
-                            if text.len() < crate::grid::MAX_CELL_CHARS * 4 {
-                                text.push_str(t);
-                            }
+                        if let Some(c) = stack.last_mut().and_then(|g| g.cell.as_mut()) {
+                            push_capped(&mut c.text, t, MAX_RAW_CELL);
                         }
                     }
                     _ => {}
@@ -254,17 +377,22 @@ fn grids(doc: &Html) -> (Vec<Grid>, bool) {
                     match e.name() {
                         "td" | "th" => {
                             if let Some(t) = stack.last_mut() {
-                                t.close_cell(&mut cells);
+                                t.close_cell(&mut budget);
                             }
                         }
                         "tr" => {
                             if let Some(t) = stack.last_mut() {
-                                t.close_row(&mut cells);
+                                t.close_row(&mut budget);
+                            }
+                        }
+                        "thead" | "tbody" | "tfoot" => {
+                            if let Some(t) = stack.last_mut() {
+                                t.close_group(&mut budget);
                             }
                         }
                         "table" => {
                             if let Some(mut t) = stack.pop() {
-                                t.close_row(&mut cells);
+                                t.close_row(&mut budget);
                                 if let Some(id) = t.node {
                                     done.push((
                                         t.order,
@@ -284,7 +412,7 @@ fn grids(doc: &Html) -> (Vec<Grid>, bool) {
         }
     }
     done.sort_by_key(|(order, _, _)| *order);
-    (done, cells >= MAX_CELLS)
+    (done, budget.cut)
 }
 
 fn ensure_newline(out: &mut String) {
@@ -293,12 +421,43 @@ fn ensure_newline(out: &mut String) {
     }
 }
 
-/// The text of the page, skipping the subtrees in `leave_out` (data tables).
-fn page_text(doc: &Html, leave_out: &BTreeSet<NodeId>) -> String {
+/// Lines trimmed, at most one blank line in a row, none at the start or the end.
+fn tidy(out: &str) -> String {
+    let mut text = String::with_capacity(out.len());
+    let mut blank = true;
+    for line in out.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            if !blank {
+                text.push('\n');
+            }
+            blank = true;
+        } else {
+            text.push_str(line);
+            text.push('\n');
+            blank = false;
+        }
+    }
+    while text.ends_with("\n\n") {
+        text.pop();
+    }
+    text
+}
+
+/// The text of the page in parts: prose, and each data table (`data`: node → table name) on
+/// its own.
+fn page_parts(doc: &Html, data: &BTreeMap<NodeId, String>) -> Vec<TextPart> {
+    let mut parts: Vec<TextPart> = Vec::new();
     let mut out = String::new();
+    let mut used = 0usize;
+    let mut table: Option<(NodeId, String)> = None;
     let mut skip: Option<NodeId> = None;
     let mut pre = 0usize;
+    let mut every = Every::default();
     for edge in doc.tree.root().traverse() {
+        if every.cancelled() {
+            break;
+        }
         match edge {
             Edge::Open(node) => {
                 if skip.is_some() {
@@ -307,11 +466,39 @@ fn page_text(doc: &Html, leave_out: &BTreeSet<NodeId>) -> String {
                 match node.value() {
                     Node::Element(e) => {
                         let name = e.name();
-                        if skipped(name) || hidden(e) || leave_out.contains(&node.id()) {
+                        if skipped(name) || hidden(e) {
                             skip = Some(node.id());
                             continue;
                         }
-                        if name == "br" {
+                        if table.is_none() {
+                            if let Some(t) = data.get(&node.id()) {
+                                used += out.len();
+                                parts.push(TextPart {
+                                    table: None,
+                                    text: tidy(&std::mem::take(&mut out)),
+                                });
+                                table = Some((node.id(), t.clone()));
+                            }
+                        }
+                        if table.is_some() {
+                            // A data table reads one row per line, cells tab-separated.
+                            match name {
+                                "tr" | "table" | "thead" | "tbody" | "tfoot" | "caption" => {
+                                    ensure_newline(&mut out);
+                                }
+                                "td" | "th" => {
+                                    if !out.is_empty() && !out.ends_with('\n') {
+                                        out.push('\t');
+                                    }
+                                }
+                                n if n == "br" || block(n) || paragraph(n) => {
+                                    if !out.ends_with([' ', '\t', '\n']) {
+                                        out.push(' ');
+                                    }
+                                }
+                                _ => {}
+                            }
+                        } else if name == "br" {
                             out.push('\n');
                         } else if block(name) || paragraph(name) {
                             ensure_newline(&mut out);
@@ -324,7 +511,7 @@ fn page_text(doc: &Html, leave_out: &BTreeSet<NodeId>) -> String {
                         if pre > 0 {
                             out.push_str(t);
                         } else {
-                            let mut last_space = out.ends_with([' ', '\n']) || out.is_empty();
+                            let mut last_space = out.ends_with([' ', '\t', '\n']) || out.is_empty();
                             for c in t.chars() {
                                 if c.is_whitespace() {
                                     if !last_space {
@@ -354,258 +541,74 @@ fn page_text(doc: &Html, leave_out: &BTreeSet<NodeId>) -> String {
                     if name == "pre" {
                         pre = pre.saturating_sub(1);
                     }
-                    if paragraph(name) {
+                    if table.is_some() {
+                        if matches!(
+                            name,
+                            "tr" | "table" | "thead" | "tbody" | "tfoot" | "caption"
+                        ) {
+                            ensure_newline(&mut out);
+                        }
+                    } else if paragraph(name) {
                         ensure_newline(&mut out);
                         out.push('\n');
                     } else if block(name) {
                         ensure_newline(&mut out);
                     }
                 }
-            }
-        }
-        if out.len() > crate::office::MAX_TEXT {
-            break;
-        }
-    }
-    // Lines trimmed, at most one blank line in a row, none at the start.
-    let mut text = String::with_capacity(out.len());
-    let mut blank = true;
-    for line in out.lines() {
-        let line = line.trim();
-        if line.is_empty() {
-            if !blank {
-                text.push('\n');
-            }
-            blank = true;
-        } else {
-            text.push_str(line);
-            text.push('\n');
-            blank = false;
-        }
-    }
-    while text.ends_with("\n\n") {
-        text.pop();
-    }
-    text
-}
-
-/// The text of an HTML fragment (an e-mail body), without tables detection.
-pub(crate) fn html_text(markup: &str) -> String {
-    let mut markup = &markup[..floor_char_boundary(markup, MAX_HTML)];
-    if let Some(cut) = too_deep_at(markup, MAX_NESTING) {
-        markup = &markup[..cut];
-    }
-    page_text(&Html::parse_document(markup), &BTreeSet::new())
-}
-
-/// Elements opened and closed implicitly by their neighbours (cells, rows, list items,
-/// paragraphs), which never deepen the tree on their own, and void elements.
-fn uncounted(name: &str) -> bool {
-    matches!(
-        name,
-        "html"
-            | "head"
-            | "body"
-            | "p"
-            | "li"
-            | "dt"
-            | "dd"
-            | "tr"
-            | "td"
-            | "th"
-            | "thead"
-            | "tbody"
-            | "tfoot"
-            | "option"
-            | "optgroup"
-            | "colgroup"
-            | "caption"
-            | "rb"
-            | "rt"
-            | "rp"
-            | "rtc"
-            | "area"
-            | "base"
-            | "br"
-            | "col"
-            | "embed"
-            | "hr"
-            | "img"
-            | "input"
-            | "link"
-            | "meta"
-            | "source"
-            | "track"
-            | "wbr"
-            | "param"
-            | "keygen"
-            | "basefont"
-            | "bgsound"
-            | "frame"
-    )
-}
-
-/// Elements whose content is raw text up to their end tag.
-fn raw_text(name: &str) -> bool {
-    matches!(
-        name,
-        "script"
-            | "style"
-            | "textarea"
-            | "title"
-            | "xmp"
-            | "iframe"
-            | "noembed"
-            | "noframes"
-            | "plaintext"
-    )
-}
-
-/// The byte offset where the element nesting of `markup`, estimated in one linear pass,
-/// first passes `max`; `None` when it never does.
-///
-/// The tree builder looks up the stack of open elements for most tags, so a page nested a
-/// million levels deep costs it time quadratic in the depth: such a page is cut where it
-/// gets too deep (browsers flatten the tree at 512 levels anyway). The estimate counts the
-/// elements that only close explicitly; cells, rows, list items and tables close what was
-/// left open inside them, as the tree builder does, so sloppy markup does not drift.
-#[allow(clippy::many_single_char_names)]
-fn too_deep_at(markup: &str, max: usize) -> Option<usize> {
-    #[derive(PartialEq)]
-    enum Mark {
-        Table,
-        Row,
-        Cell,
-        Item,
-    }
-    let b = markup.as_bytes();
-    let mut depth = 0usize;
-    let mut marks: Vec<(Mark, usize)> = Vec::new();
-    let mut i = 0usize;
-    while i < b.len() {
-        let Some(off) = b[i..].iter().position(|c| *c == b'<') else {
-            break;
-        };
-        let at = i + off;
-        let rest = &b[at..];
-        if rest.starts_with(b"<!--") {
-            i = find(b, at + 4, b"-->").map_or(b.len(), |e| e + 3);
-            continue;
-        }
-        if rest.starts_with(b"<!") || rest.starts_with(b"<?") {
-            i = find(b, at + 2, b">").map_or(b.len(), |e| e + 1);
-            continue;
-        }
-        let closing = rest.get(1) == Some(&b'/');
-        let name_start = at + 1 + usize::from(closing);
-        let name_len = b[name_start..]
-            .iter()
-            .take_while(|c| c.is_ascii_alphanumeric() || **c == b'-' || **c == b':')
-            .count();
-        if name_len == 0 || !b[name_start].is_ascii_alphabetic() {
-            i = at + 1;
-            continue;
-        }
-        let name = markup[name_start..name_start + name_len].to_ascii_lowercase();
-        // The end of the tag, skipping quoted attribute values.
-        let mut j = name_start + name_len;
-        let mut quote: Option<u8> = None;
-        while j < b.len() {
-            match (quote, b[j]) {
-                (None, b'"' | b'\'') => quote = Some(b[j]),
-                (Some(q), c) if c == q => quote = None,
-                (None, b'>') => break,
-                _ => {}
-            }
-            j += 1;
-        }
-        i = (j + 1).min(b.len());
-        let pop_to = |marks: &mut Vec<(Mark, usize)>, depth: &mut usize, target: &[Mark]| {
-            while let Some((m, d)) = marks.last() {
-                if *m == Mark::Table && !target.contains(&Mark::Table) {
-                    break;
-                }
-                let done = target.contains(m);
-                *depth = *d;
-                marks.pop();
-                if done {
-                    break;
-                }
-            }
-        };
-        if closing {
-            match name.as_str() {
-                "td" | "th" => pop_to(&mut marks, &mut depth, &[Mark::Cell]),
-                "tr" => pop_to(&mut marks, &mut depth, &[Mark::Row]),
-                "li" => pop_to(&mut marks, &mut depth, &[Mark::Item]),
-                "table" => pop_to(&mut marks, &mut depth, &[Mark::Table]),
-                n if uncounted(n) || raw_text(n) => {}
-                _ => {
-                    while marks.last().is_some_and(|(m, _)| *m == Mark::Item) {
-                        if let Some((_, d)) = marks.pop() {
-                            depth = d;
+                if table.as_ref().is_some_and(|(id, _)| *id == node.id()) {
+                    if let Some((_, name)) = table.take() {
+                        used += out.len();
+                        let mut text = tidy(&std::mem::take(&mut out));
+                        if !text.is_empty() {
+                            text.push('\n');
                         }
+                        parts.push(TextPart {
+                            table: Some(name),
+                            text,
+                        });
                     }
-                    depth = depth.saturating_sub(1);
                 }
-            }
-            continue;
-        }
-        match name.as_str() {
-            "td" | "th" => {
-                if marks.last().is_some_and(|(m, _)| *m == Mark::Cell) {
-                    pop_to(&mut marks, &mut depth, &[Mark::Cell]);
-                }
-                marks.push((Mark::Cell, depth));
-            }
-            "tr" => {
-                if marks
-                    .last()
-                    .is_some_and(|(m, _)| matches!(m, Mark::Cell | Mark::Row))
-                {
-                    pop_to(&mut marks, &mut depth, &[Mark::Row]);
-                }
-                marks.push((Mark::Row, depth));
-            }
-            "li" => {
-                if marks.last().is_some_and(|(m, _)| *m == Mark::Item) {
-                    pop_to(&mut marks, &mut depth, &[Mark::Item]);
-                }
-                marks.push((Mark::Item, depth));
-            }
-            "table" => {
-                marks.push((Mark::Table, depth));
-                depth += 1;
-            }
-            n if uncounted(n) => {}
-            n => {
-                if raw_text(n) {
-                    let end = format!("</{n}");
-                    i = find_ignore_case(b, i, end.as_bytes()).unwrap_or(b.len());
-                    continue;
-                }
-                depth += 1;
             }
         }
-        if depth > max {
-            return Some(at);
+        if used + out.len() > crate::office::MAX_TEXT {
+            break;
         }
     }
-    None
+    let text = tidy(&out);
+    match table {
+        Some((_, name)) => parts.push(TextPart {
+            table: Some(name),
+            text,
+        }),
+        None => parts.push(TextPart { table: None, text }),
+    }
+    parts.retain(|p| p.table.is_some() || !p.text.is_empty());
+    parts
 }
 
-fn find(hay: &[u8], from: usize, needle: &[u8]) -> Option<usize> {
-    hay.get(from..)?
-        .windows(needle.len())
-        .position(|w| w == needle)
-        .map(|p| from + p)
+/// The tree of `markup`, read up to where it got too deep or too large, and the warning when
+/// it was cut.
+fn parse_within_limits(markup: &str) -> (Html, Option<String>) {
+    let (html, limit) = parse_bounded(markup);
+    let warning = limit.map(|why| match why {
+        Limit::Depth => format!(
+            "página HTML aninhada demais (mais de {MAX_DEPTH} níveis): o restante não foi lido"
+        ),
+        Limit::Size => format!(
+            "página HTML com elementos demais (mais de {MAX_NODES}): o restante não foi lido"
+        ),
+        Limit::Cancelled => STOPPED.to_string(),
+    });
+    (html, warning)
 }
 
-fn find_ignore_case(hay: &[u8], from: usize, needle: &[u8]) -> Option<usize> {
-    hay.get(from..)?
-        .windows(needle.len())
-        .position(|w| w.eq_ignore_ascii_case(needle))
-        .map(|p| from + p)
+/// The text of an HTML fragment (an e-mail body), without tables detection, under the same
+/// limits as a page.
+pub(crate) fn html_text(markup: &str) -> String {
+    let markup = &markup[..floor_char_boundary(markup, MAX_HTML)];
+    let (doc, _) = parse_within_limits(markup);
+    let parts = page_parts(&doc, &BTreeMap::new());
+    tidy(&document_text(&parts, |_| true))
 }
 
 fn floor_char_boundary(s: &str, max: usize) -> usize {
@@ -616,7 +619,7 @@ fn floor_char_boundary(s: &str, max: usize) -> usize {
     end
 }
 
-/// Parses an HTML page: data tables and the rest of the text.
+/// Parses an HTML page: data tables and the text.
 pub fn parse_html(bytes: &[u8], stem: &str, source_id: &str) -> Result<HtmlParsed, IngestError> {
     if bytes.is_empty() {
         return Err(IngestError::Empty);
@@ -632,27 +635,31 @@ pub fn parse_html(bytes: &[u8], stem: &str, source_id: &str) -> Result<HtmlParse
             MAX_HTML >> 20
         ));
     }
-    if let Some(cut) = too_deep_at(markup, MAX_NESTING) {
-        markup = &markup[..cut];
-        out.warnings.push(format!(
-            "página HTML aninhada demais (mais de {MAX_NESTING} níveis): o restante não foi lido"
-        ));
-    }
-    let doc = Html::parse_document(markup);
+    let (doc, cut) = parse_within_limits(markup);
+    out.warnings.extend(cut);
     let (grids, cut) = grids(&doc);
     if cut {
-        out.warnings
-            .push(format!("tabelas da página cortadas em {MAX_CELLS} células"));
+        out.warnings.push(format!(
+            "tabelas da página cortadas no limite de {MAX_CELLS} células ou {} MB de texto",
+            MAX_CELL_BYTES >> 20
+        ));
     }
-    let mut leave_out = BTreeSet::new();
+    let mut data = BTreeMap::new();
     for (order, id, rows) in grids {
         let name = format!("{stem}:tabela {}", order + 1);
         if let Some(t) = table_from_rows(&name, source_id, rows) {
             out.tables.push(t);
-            leave_out.insert(id);
+            data.insert(id, name);
         }
     }
-    out.text = page_text(&doc, &leave_out);
+    let parts = page_parts(&doc, &data);
+    out.text = tidy(&document_text(&parts, |_| false));
+    if parts.iter().any(|p| p.table.is_some()) {
+        out.parts = parts;
+    }
+    if crate::cancel::cancelled() && !out.warnings.iter().any(|w| w == STOPPED) {
+        out.warnings.push(STOPPED.to_string());
+    }
     Ok(out)
 }
 
@@ -689,23 +696,93 @@ mod tests {
     }
 
     #[test]
-    fn nesting_estimate_follows_implicit_closes() {
-        // A long statement whose cells leave a <font> open: cells and rows close it.
-        let mut sloppy = String::from("<html><body><table>");
-        for i in 0..5_000 {
-            sloppy.push_str(&format!("<tr><td><font face=arial>{i}<td><span>x"));
+    fn data_tables_are_text_parts_of_their_own() {
+        let h = parse_html(PAGE.as_bytes(), "extrato", "src").unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(h.parts.len(), 3, "{:?}", h.parts);
+        assert_eq!(h.parts[1].table.as_deref(), Some("extrato:tabela 2"));
+        assert_eq!(
+            h.parts[1].text,
+            "Data\tHistórico\tDocumento\tValor (R$)\n10/07/2026\tLIQUIDACAO COBRANCA SIMPLES\t000098765001\t24.300,00\n15/07/2026\tTARIFA PACOTE\t\t-980,00\nSaldo\t23.320,00\n\n"
+        );
+        let all = document_text(&h.parts, |_| true);
+        assert!(
+            all.contains("TARIFA PACOTE") && all.contains("Dúvidas?"),
+            "{all}"
+        );
+        assert_eq!(tidy(&document_text(&h.parts, |_| false)), h.text);
+        let plain = parse_html(b"<p>Sem tabela</p>", "p", "s").unwrap_or_else(|e| panic!("{e}"));
+        assert!(plain.parts.is_empty());
+    }
+
+    #[test]
+    fn cells_spanning_rows_repeat_down_their_columns() {
+        let page = "<table><tr><th>Data</th><th>Histórico</th><th>Valor</th></tr>\
+            <tr><td rowspan=\"2\">10/07/2026</td><td>PIX A</td><td>1,00</td></tr>\
+            <tr><td>PIX B</td><td>2,00</td></tr>\
+            <tr><td>11/07/2026</td><td rowspan=\"0\" colspan=\"2\">TED</td></tr>\
+            <tr><td>12/07/2026</td></tr></table>";
+        let h = parse_html(page.as_bytes(), "x", "s").unwrap_or_else(|e| panic!("{e}"));
+        let t = &h.tables[0];
+        assert_eq!(t.len(), 4);
+        assert_eq!(t.value(1, 0), t.value(0, 0), "the date spans two rows");
+        assert_eq!(t.value(1, 1), Some(&Value::Text("PIX B".into())));
+        assert_eq!(t.value(3, 1), Some(&Value::Text("TED".into())));
+        assert_eq!(t.value(3, 2), Some(&Value::Null), "a colspan copy is empty");
+        // A row group ends the spans.
+        let groups = "<table><thead><tr><th>Data</th><th>Valor</th><th>Tipo</th></tr></thead>\
+            <tbody><tr><td rowspan=5>10/07/2026</td><td>1,00</td><td>C</td></tr></tbody>\
+            <tbody><tr><td>11/07/2026</td><td>2,00</td><td>D</td></tr></tbody></table>";
+        let h = parse_html(groups.as_bytes(), "x", "s").unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(h.tables[0].len(), 2);
+        assert_eq!(
+            h.tables[0].value(1, 1).and_then(Value::as_money),
+            Some(Money::from_centavos(200))
+        );
+    }
+
+    #[test]
+    fn copies_of_spanning_cells_are_bounded() {
+        // Every cell spans a thousand rows: copies cost cells and bytes from one budget.
+        let text = "x".repeat(4000);
+        let mut page = String::from("<table><tr><th>A</th><th>B</th><th>C</th></tr>");
+        for _ in 0..50 {
+            page.push_str(&format!(
+                "<tr><td rowspan=1000>{text}</td><td rowspan=1000>{text}</td><td rowspan=1000>{text}</td></tr>"
+            ));
         }
-        sloppy.push_str("</table><div><ul><li><b>a<li>b</ul></div>");
-        assert_eq!(too_deep_at(&sloppy, 64), None);
-        let script = format!("<script>{}</script><p>ok", "<div>".repeat(1000));
-        assert_eq!(too_deep_at(&script, 64), None);
-        let comment = format!("<!-- {} --><div title=\"a>b\">", "<div>".repeat(1000));
-        assert_eq!(too_deep_at(&comment, 64), None);
-        let deep = "<span>".repeat(100);
-        assert_eq!(too_deep_at(&deep, 64), Some(64 * 6));
-        assert_eq!(too_deep_at("<", 1), None);
-        assert_eq!(too_deep_at("</", 1), None);
-        assert_eq!(too_deep_at("<a b='", 0), Some(0));
+        page.push_str(&"<tr></tr>".repeat(2000));
+        page.push_str("</table>");
+        let h = parse_html(page.as_bytes(), "x", "s").unwrap_or_else(|e| panic!("{e}"));
+        assert!(
+            h.warnings.iter().any(|w| w.contains("cortadas")),
+            "{:?}",
+            h.warnings
+        );
+        let bytes: usize = h
+            .tables
+            .iter()
+            .flat_map(|t| t.rows.iter())
+            .flat_map(|r| r.values.iter())
+            .map(|v| v.render().len())
+            .sum();
+        assert!(bytes <= MAX_CELL_BYTES, "{bytes}");
+    }
+
+    #[test]
+    fn pages_past_the_tree_limits_are_cut_with_a_warning() {
+        let mut page = String::from("<p>Antes do corte</p>");
+        page.push_str(&"<span></i>".repeat(2_000));
+        page.push_str("depois");
+        let h = parse_html(page.as_bytes(), "p", "s").unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(h.text, "Antes do corte\n");
+        assert!(
+            h.warnings[0].contains("aninhada demais"),
+            "{:?}",
+            h.warnings
+        );
+        // A message body goes through the same limits.
+        let body = format!("<div>NF 12</div>{}", "<b><div></b>".repeat(2_000));
+        assert_eq!(html_text(&body), "NF 12\n");
     }
 
     #[test]

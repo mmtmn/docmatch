@@ -13,10 +13,12 @@
 #![forbid(unsafe_code)]
 
 pub mod archive;
+pub mod cancel;
 pub mod cnab;
 pub mod delimited;
 pub(crate) mod grid;
 pub mod html;
+pub(crate) mod html_limit;
 pub mod inbox;
 pub mod mail;
 pub mod mentions;
