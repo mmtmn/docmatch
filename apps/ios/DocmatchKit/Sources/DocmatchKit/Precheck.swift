@@ -5,7 +5,7 @@
 import Foundation
 
 public enum FileKind: String, Sendable, Equatable, CaseIterable {
-    case csv, txt, xlsx, pdf, zip, eml, ofx, image, audio, video
+    case csv, txt, xlsx, pdf, zip, eml, ofx, xml, image, audio, video
 
     /// Audio and video go up as media (a PUT of the file, no hash); everything else as a document.
     public var media: Bool { self == .audio || self == .video }
@@ -47,18 +47,20 @@ public enum Precheck {
         var out: [String: FileKind] = [:]
         for e in ["csv", "tsv"] { out[e] = .csv }
         for e in ["txt", "text", "md", "log", "ret", "rem", "cnab"] { out[e] = .txt }
-        for e in ["xlsx", "xlsm", "xls"] { out[e] = .xlsx }
+        for e in ["xlsx", "xlsm", "xls", "ods"] { out[e] = .xlsx }
         out["pdf"] = .pdf
         out["zip"] = .zip
         out["eml"] = .eml
+        out["mbox"] = .eml
         out["ofx"] = .ofx
+        out["xml"] = .xml
         for e in ["png", "jpg", "jpeg", "gif", "webp", "heic", "heif", "tif", "tiff", "bmp"] { out[e] = .image }
         for e in ["mp3", "wav", "m4a", "aac", "flac", "ogg", "oga", "opus", "weba"] { out[e] = .audio }
         for e in ["mp4", "m4v", "mov", "webm", "mkv", "avi"] { out[e] = .video }
         return out
     }()
 
-    private static let textKinds: Set<FileKind> = [.csv, .txt, .eml, .ofx]
+    private static let textKinds: Set<FileKind> = [.csv, .txt, .eml, .ofx, .xml]
     private static let audioMime = [
         "mp3": "audio/mpeg", "wav": "audio/wav", "m4a": "audio/mp4", "aac": "audio/aac", "flac": "audio/flac", "ogg": "audio/ogg",
         "oga": "audio/ogg", "opus": "audio/opus", "weba": "audio/webm",
@@ -102,10 +104,14 @@ public enum Precheck {
         switch kind {
         case .csv: return ext == "tsv" ? "text/tab-separated-values" : "text/csv"
         case .txt: return "text/plain"
-        case .xlsx: return ext == "xls" ? "application/vnd.ms-excel" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        case .xlsx:
+            if ext == "xls" { return "application/vnd.ms-excel" }
+            if ext == "ods" { return "application/vnd.oasis.opendocument.spreadsheet" }
+            return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         case .pdf: return "application/pdf"
         case .zip: return "application/zip"
-        case .eml: return "message/rfc822"
+        case .eml: return ext == "mbox" ? "application/mbox" : "message/rfc822"
+        case .xml: return "application/xml"
         case .ofx: return "application/x-ofx"
         case .audio: return ext.flatMap { audioMime[$0] } ?? "audio/mpeg"
         case .video: return ext.flatMap { videoMime[$0] } ?? "video/mp4"
@@ -268,6 +274,9 @@ public enum Precheck {
             let text = String(decoding: bytes, as: UTF8.self)
             if looksLikeEmail(text) { return .eml }
             if looksLikeOfx(text) { return .ofx }
+            // NF-e, CT-e and other XML: markup from the first character (after a BOM).
+            let markup = text.hasPrefix("\u{FEFF}") ? String(text.dropFirst()) : text
+            if extKind == .xml, markup.drop(while: { $0.isWhitespace }).hasPrefix("<") { return .xml }
             if extKind == .csv || extKind == .txt { return extKind }
             if extKind == nil, ext == nil { return .txt }
             if extKind == .eml || extKind == .ofx { return .txt }  // reported as a mismatch
