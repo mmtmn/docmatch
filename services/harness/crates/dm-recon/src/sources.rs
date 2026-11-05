@@ -2,10 +2,12 @@
 //! statement, inbox), extracts titles, bank lines, e-mails and chat messages, and resolves
 //! customers across ledgers into entities (tax id first, then name).
 //!
-//! Every format the ingest stage reads goes through the same classification: CSV and
-//! spreadsheets by their inferred columns, OFX and PDF statements as bank statements, CNAB
-//! collection files as receivables ledgers, ZIP entries as files of their own. A file that
-//! does not take part in the run is never dropped silently: the reason goes to
+//! Every format the ingest stage reads goes through the same classification: CSV,
+//! spreadsheets, tables of DOCX/ODT documents and HTML pages and records of JSON/XML files by
+//! their inferred columns, OFX and PDF statements as bank statements, CNAB collection files as
+//! receivables ledgers, e-mails and chats (text dumps, `.eml`, `.msg`, a thread pasted in a
+//! document) as the inbox, ZIP and 7z entries and `.msg` attachments as files of their own. A
+//! file that does not take part in the run is never dropped silently: the reason goes to
 //! [`Dataset::warnings`].
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -251,43 +253,38 @@ pub fn load_dir(dir: &Path, cfg: &EngineConfig) -> Result<Dataset, ReconError> {
             }
             ds.warnings.extend(src.warnings.iter().cloned());
             let kind = src.sniff.kind;
-            if kind == SourceKind::Zip {
+            if matches!(kind, SourceKind::Zip | SourceKind::SevenZ) {
                 // A container: its entries come next, each with its own outcome.
                 continue;
             }
             let mut used = false;
             let mut unused_tables: Vec<&str> = Vec::new();
-            if matches!(
-                kind,
-                SourceKind::TxtInbox | SourceKind::Text | SourceKind::Eml | SourceKind::Mbox
-            ) {
-                // Only e-mails and chat messages make an inbox; notes or a README do not.
-                if src.items.iter().any(is_message) {
-                    inbox_items.push((src.name.clone(), src.items.clone()));
-                    used = true;
-                }
-            } else {
-                for table in &src.tables {
-                    match classify_for(kind, table) {
-                        TableRole::Ledger => {
-                            // A CNAB collection file has one row per movement; the ledger
-                            // wants one per título.
-                            let table = if matches!(kind, SourceKind::Cnab240 | SourceKind::Cnab400)
-                            {
-                                dm_ingest::cnab::titles_view(table)
-                            } else {
-                                table.clone()
-                            };
-                            ledger_tables.push((src.name.clone(), table));
-                        }
-                        TableRole::Bank => bank_tables.push((src.name.clone(), table.clone())),
-                        TableRole::Unknown => {
-                            unused_tables.push(&table.name);
-                            continue;
-                        }
+            // Tables of any format (a DOCX or an HTML page has them next to its text).
+            for table in &src.tables {
+                match classify_for(kind, table) {
+                    TableRole::Ledger => {
+                        // A CNAB collection file has one row per movement; the ledger wants
+                        // one per título.
+                        let table = if matches!(kind, SourceKind::Cnab240 | SourceKind::Cnab400) {
+                            dm_ingest::cnab::titles_view(table)
+                        } else {
+                            table.clone()
+                        };
+                        ledger_tables.push((src.name.clone(), table));
                     }
-                    used = true;
+                    TableRole::Bank => bank_tables.push((src.name.clone(), table.clone())),
+                    TableRole::Unknown => {
+                        unused_tables.push(&table.name);
+                        continue;
+                    }
                 }
+                used = true;
+            }
+            // Only e-mails and chat messages make an inbox (a text dump, an .eml, an Outlook
+            // message, a document holding a pasted thread); notes or a README do not.
+            if src.items.iter().any(is_message) {
+                inbox_items.push((src.name.clone(), src.items.clone()));
+                used = true;
             }
             if used {
                 if !unused_tables.is_empty() {
@@ -362,14 +359,29 @@ pub fn load_dir(dir: &Path, cfg: &EngineConfig) -> Result<Dataset, ReconError> {
     mark_main_ledger(&mut ds);
     resolve_entities(&mut ds);
 
-    for (other, _) in inbox_items.iter().skip(1) {
-        if let Some((first, _)) = inbox_items.first() {
-            ds.warnings.push(format!(
-                "{other}: segunda caixa de entrada; só {first} entra nesta conciliação"
-            ));
+    // The inbox is the source with the most messages (ties go to file order): a single
+    // forwarded .msg next to the exported mailbox must not take its place.
+    let main_inbox = inbox_items
+        .iter()
+        .enumerate()
+        .max_by_key(|(i, (_, items))| {
+            (
+                items.iter().filter(|it| is_message(it)).count(),
+                std::cmp::Reverse(*i),
+            )
+        })
+        .map(|(i, _)| i);
+    if let Some(main) = main_inbox {
+        let first = &inbox_items[main].0;
+        for (i, (other, _)) in inbox_items.iter().enumerate() {
+            if i != main {
+                ds.warnings.push(format!(
+                    "{other}: segunda caixa de entrada; só {first} entra nesta conciliação"
+                ));
+            }
         }
     }
-    if let Some((file, items)) = inbox_items.first() {
+    if let Some((file, items)) = main_inbox.map(|i| &inbox_items[i]) {
         ds.sources.insert("ap_inbox".to_string(), file.clone());
         let year = ds.period.map_or(2000, |p| p.end.year());
         let (emails, raw_chat) = inbox(items);
