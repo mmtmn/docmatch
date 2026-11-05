@@ -69,3 +69,15 @@
     line: '\1\2,nodev\3'
     backrefs: true
   when: not ((hardening_fstab.content | b64decode) is regex('(?m)^\S+\s+/\s+\S+\s+\S*\bnodev\b'))
+
+# /tmp is a fresh tmpfs at every boot, and libpam-tmpdir refuses to work ("Failed to create safe
+# $TMPDIR") when the first PAM session of the boot was a service user's and left /tmp/user owned
+# by it. systemd-tmpfiles creates it as root before any session.
+- name: Create /tmp/user for libpam-tmpdir at boot
+  ansible.builtin.copy:
+    dest: /etc/tmpfiles.d/docmatch-pam-tmpdir.conf
+    content: |
+      d /tmp/user 0711 root root -
+    owner: root
+    group: root
+    mode: "0644"
