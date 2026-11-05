@@ -38,8 +38,21 @@ pub enum SourceKind {
     Sped,
     /// ZIP archive (not an Office/OpenDocument package).
     Zip,
+    /// 7z archive.
+    #[serde(rename = "sevenz")]
+    SevenZ,
+    /// Word document (`.docx`, Office Open XML).
+    Docx,
+    /// OpenDocument text (`.odt`).
+    Odt,
+    /// Outlook message (`.msg`, a Compound File Binary with MAPI properties).
+    Msg,
+    /// HTML page or fragment (saved statements, e-mail bodies).
+    Html,
     /// JSON document.
     Json,
+    /// JSON Lines: one JSON value per line.
+    Jsonl,
     /// Plain text with no recognizable structure.
     Text,
     /// Binary or empty.
@@ -63,7 +76,13 @@ impl SourceKind {
             SourceKind::Cnab400 => "CNAB 400",
             SourceKind::Sped => "SPED (EFD/ECD)",
             SourceKind::Zip => "arquivo ZIP",
+            SourceKind::SevenZ => "arquivo 7z",
+            SourceKind::Docx => "documento Word (DOCX)",
+            SourceKind::Odt => "documento OpenDocument (ODT)",
+            SourceKind::Msg => "e-mail do Outlook (MSG)",
+            SourceKind::Html => "página HTML",
             SourceKind::Json => "JSON",
+            SourceKind::Jsonl => "JSON Lines",
             SourceKind::Text => "texto simples",
             SourceKind::Unknown => "desconhecido",
         }
@@ -85,7 +104,13 @@ impl SourceKind {
             SourceKind::Cnab400 => "cnab400",
             SourceKind::Sped => "sped",
             SourceKind::Zip => "zip",
+            SourceKind::SevenZ => "sevenz",
+            SourceKind::Docx => "docx",
+            SourceKind::Odt => "odt",
+            SourceKind::Msg => "msg",
+            SourceKind::Html => "html",
             SourceKind::Json => "json",
+            SourceKind::Jsonl => "jsonl",
             SourceKind::Text => "text",
             SourceKind::Unknown => "unknown",
         }
@@ -285,8 +310,17 @@ fn binary_kind(bytes: &[u8]) -> Option<SourceKind> {
     if bytes.starts_with(b"PK\x03\x04") {
         return Some(zip_kind(bytes));
     }
+    if bytes.starts_with(crate::sevenz::MAGIC) {
+        return Some(SourceKind::SevenZ);
+    }
     if bytes.starts_with(b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1") {
-        return Some(SourceKind::Spreadsheet);
+        // Compound File Binary: an Outlook message carries MAPI property streams, anything
+        // else (a legacy workbook, or a damaged file) goes to the spreadsheet reader as before.
+        return Some(if crate::msg::is_msg(bytes) {
+            SourceKind::Msg
+        } else {
+            SourceKind::Spreadsheet
+        });
     }
     if crate::sped::looks_like_sped(bytes) {
         return Some(SourceKind::Sped);
@@ -299,10 +333,11 @@ fn binary_kind(bytes: &[u8]) -> Option<SourceKind> {
     None
 }
 
-/// A ZIP is a workbook when its own central directory says so (`xl/workbook.xml`, an ODS
-/// `mimetype`); scanning the bytes would also match an archive that merely *contains* a stored
-/// workbook. Other Office packages (`.docx`, `.pptx`) are not archives of sources. A damaged
-/// archive falls back to the local headers of its first entries.
+/// A ZIP is a workbook or a text document when its own central directory says so
+/// (`xl/workbook.xml`, `word/document.xml`, an OpenDocument `mimetype` first entry); scanning
+/// the bytes would also match an archive that merely *contains* a stored workbook. Other Office
+/// packages (`.pptx`) are not archives of sources. A damaged archive falls back to the local
+/// headers of its first entries.
 fn zip_kind(bytes: &[u8]) -> SourceKind {
     let head = &bytes[..bytes.len().min(4096)];
     if contains(
@@ -311,6 +346,9 @@ fn zip_kind(bytes: &[u8]) -> SourceKind {
     ) {
         return SourceKind::Spreadsheet;
     }
+    if contains(head, b"mimetypeapplication/vnd.oasis.opendocument.text") {
+        return SourceKind::Odt;
+    }
     if let Ok(archive) = zip::ZipArchive::new(std::io::Cursor::new(bytes)) {
         let names: Vec<&[u8]> = archive.file_names_raw().collect();
         return if names
@@ -318,11 +356,17 @@ fn zip_kind(bytes: &[u8]) -> SourceKind {
             .any(|n| *n == b"xl/workbook.xml" || *n == b"xl/workbook.bin")
         {
             SourceKind::Spreadsheet
+        } else if names.contains(&&b"word/document.xml"[..]) {
+            SourceKind::Docx
         } else if names.contains(&&b"[Content_Types].xml"[..]) {
+            // Other Office packages (`.pptx`, `.vsdx`) are not read.
             SourceKind::Unknown
         } else {
             SourceKind::Zip
         };
+    }
+    if contains(head, b"word/document.xml") {
+        return SourceKind::Docx;
     }
     let is_office = contains(head, b"[Content_Types].xml")
         || contains(head, b"xl/")
@@ -388,6 +432,9 @@ fn text_kind(text: &str, lines: &[&str]) -> Option<SourceKind> {
             end -= 1;
         }
         let upper = trimmed[..end].to_ascii_uppercase();
+        if looks_like_html(&upper) {
+            return Some(SourceKind::Html);
+        }
         if upper.contains("<NFEPROC")
             || upper.contains("<NFE")
             || upper.contains("<INFNFE")
@@ -399,13 +446,17 @@ fn text_kind(text: &str, lines: &[&str]) -> Option<SourceKind> {
         return Some(SourceKind::Xml);
     }
     if trimmed.starts_with('{') {
-        return Some(SourceKind::Json);
+        return Some(if looks_like_jsonl(lines) {
+            SourceKind::Jsonl
+        } else {
+            SourceKind::Json
+        });
     }
     if let Some(after_bracket) = trimmed.strip_prefix('[') {
-        // "[{" / "[\"" / "[]" are JSON; "[05/03 14:30]" is a chat line
+        // "[{" / "[\"" / "[]" / "[[" are JSON; "[05/03 14:30]" is a chat line
         if matches!(
             after_bracket.trim_start().chars().next(),
-            Some('{' | '"' | ']')
+            Some('{' | '"' | ']' | '[')
         ) {
             return Some(SourceKind::Json);
         }
@@ -428,6 +479,53 @@ fn text_kind(text: &str, lines: &[&str]) -> Option<SourceKind> {
         return Some(SourceKind::TxtInbox);
     }
     None
+}
+
+/// HTML when the first element (after an XML prolog, comments and a doctype) is an HTML
+/// element, or the doctype says `html`. `upper` is the uppercased sample, starting at `<`.
+fn looks_like_html(upper: &str) -> bool {
+    const HTML_ELEMENTS: [&str; 18] = [
+        "HTML", "HEAD", "BODY", "META", "TITLE", "TABLE", "DIV", "P", "SPAN", "BR", "FONT",
+        "STYLE", "CENTER", "H1", "H2", "H3", "B", "LINK",
+    ];
+    let mut rest = upper;
+    // At most a handful of prolog constructs before the first element.
+    for _ in 0..32 {
+        rest = rest.trim_start_matches(|c: char| c.is_whitespace() || c == '\u{feff}');
+        if let Some(after) = rest.strip_prefix("<?") {
+            match after.find("?>") {
+                Some(end) => rest = &after[end + 2..],
+                None => return false,
+            }
+        } else if let Some(after) = rest.strip_prefix("<!--") {
+            match after.find("-->") {
+                Some(end) => rest = &after[end + 3..],
+                None => return false,
+            }
+        } else if let Some(after) = rest.strip_prefix("<!DOCTYPE") {
+            return after.trim_start().starts_with("HTML");
+        } else if let Some(after) = rest.strip_prefix('<') {
+            let name: String = after
+                .chars()
+                .take_while(char::is_ascii_alphanumeric)
+                .collect();
+            return HTML_ELEMENTS.contains(&name.as_str());
+        } else {
+            return false;
+        }
+    }
+    false
+}
+
+/// JSON Lines: the first non-empty line is a whole JSON object and the next one starts another.
+fn looks_like_jsonl(lines: &[&str]) -> bool {
+    let mut non_empty = lines.iter().map(|l| l.trim()).filter(|l| !l.is_empty());
+    let Some(first) = non_empty.next() else {
+        return false;
+    };
+    first.ends_with('}')
+        && serde_json::from_str::<serde_json::Value>(first).is_ok_and(|v| v.is_object())
+        && non_empty.next().is_some_and(|l| l.starts_with('{'))
 }
 
 fn is_mail_header_line(line: &str) -> bool {
@@ -721,7 +819,53 @@ mod tests {
             ("[Content_Types].xml", stored),
             ("word/document.xml", stored),
         ]);
-        assert_eq!(sniff(&docx).kind, SourceKind::Unknown);
+        assert_eq!(sniff(&docx).kind, SourceKind::Docx);
+        let pptx = build(&[
+            ("[Content_Types].xml", stored),
+            ("ppt/presentation.xml", stored),
+        ]);
+        assert_eq!(sniff(&pptx).kind, SourceKind::Unknown);
+        let mut odt = b"PK\x03\x04\x14\x00\x00\x08\x00\x00".to_vec();
+        odt.extend_from_slice(b"mimetypeapplication/vnd.oasis.opendocument.text");
+        assert_eq!(sniff(&odt).kind, SourceKind::Odt);
+    }
+
+    #[test]
+    fn office_mail_and_data_kinds() {
+        assert_eq!(sniff(crate::sevenz::MAGIC).kind, SourceKind::SevenZ);
+        assert_eq!(
+            sniff(&crate::msg::tests::sample_msg()).kind,
+            SourceKind::Msg
+        );
+        assert_eq!(
+            sniff(b"<!DOCTYPE html><html><body>x</body></html>").kind,
+            SourceKind::Html
+        );
+        assert_eq!(
+            sniff(
+                b"\xEF\xBB\xBF  <?xml version=\"1.0\"?>\n<!-- salvo -->\n<html xmlns=\"x\"></html>"
+            )
+            .kind,
+            SourceKind::Html
+        );
+        assert_eq!(
+            sniff(b"<table><tr><td>1</td></tr></table>").kind,
+            SourceKind::Html
+        );
+        assert_eq!(
+            sniff(b"<?xml version=\"1.0\"?><lancamentos/>").kind,
+            SourceKind::Xml
+        );
+        assert_eq!(sniff(b"<!DOCTYPE note><note/>").kind, SourceKind::Xml);
+        assert_eq!(sniff(b"{\"a\": 1}\n{\"a\": 2}\n").kind, SourceKind::Jsonl);
+        assert_eq!(sniff(b"{\n  \"a\": 1\n}\n").kind, SourceKind::Json);
+        assert_eq!(sniff(b"[[\"data\", \"valor\"]]").kind, SourceKind::Json);
+        assert_eq!(sniff(b"{\"a\": 1}\n").kind, SourceKind::Json);
+        assert_eq!(SourceKind::SevenZ.id(), "sevenz");
+        assert_eq!(
+            serde_json::to_string(&SourceKind::SevenZ).unwrap_or_default(),
+            "\"sevenz\""
+        );
     }
 
     #[test]

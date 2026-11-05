@@ -1,0 +1,57 @@
+{
+  "pagina": 1,
+  "total_de_paginas": 1,
+  "registros": 5,
+  "titulos": [
+    {
+      "customer": {
+        "name": "MOINHO AZUL COM LTDA",
+        "tax_id": "90123456000134"
+      },
+      "invoice_ref": "FAT-2026-0411",
+      "due_date": "2026-07-20",
+      "amount": 27850.0,
+      "paid_flag": "N"
+    },
+    {
+      "customer": {
+        "name": "NORTE PAES EIRELI",
+        "tax_id": "35791357000190"
+      },
+      "invoice_ref": "FAT-2026-0412",
+      "due_date": "2026-07-14",
+      "amount": 10450.0,
+      "paid_flag": "N"
+    },
+    {
+      "customer": {
+        "name": "COLINA VERDE MERCEARIA S/A",
+        "tax_id": "78901234000101"
+      },
+      "invoice_ref": "FAT-2026-0415",
+      "due_date": "2026-07-16",
+      "amount": 2900.0,
+      "paid_flag": "N"
+    },
+    {
+      "customer": {
+        "name": "GRAOS DO NORTE LTDA",
+        "tax_id": "46802468000112"
+      },
+      "invoice_ref": "FAT-2026-0420",
+      "due_date": "2026-07-24",
+      "amount": 4380.0,
+      "paid_flag": "N"
+    },
+    {
+      "customer": {
+        "name": "NORTE PAES EIRELI",
+        "tax_id": "35791357000190"
+      },
+      "invoice_ref": "FAT-2026-0421",
+      "due_date": "2026-07-28",
+      "amount": 7650.0,
+      "paid_flag": "N"
+    }
+  ]
+}

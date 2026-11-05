@@ -1,0 +1,40 @@
+{
+  "empresa": {
+    "nome": "Exemplo Sintético Ltda",
+    "cnpj": "11.222.333/0001-81"
+  },
+  "pagina": 1,
+  "titulos": [
+    {
+      "cliente": {
+        "nome": "MOINHO AZUL COM LTDA",
+        "cnpj": "90123456000134"
+      },
+      "documento": "FAT-2026-0411",
+      "vencimento": "2026-07-20",
+      "valor": 27850.0,
+      "pago": false,
+      "tags": [
+        "royalty",
+        "sul"
+      ],
+      "parcelas": [
+        {
+          "numero": 1,
+          "valor": 27850.0
+        }
+      ]
+    },
+    {
+      "cliente": {
+        "nome": "NORTE PAES EIRELI",
+        "cnpj": "35791357000190"
+      },
+      "documento": "FAT-2026-0412",
+      "vencimento": "2026-07-14",
+      "valor": 10450,
+      "pago": true,
+      "observacao": null
+    }
+  ]
+}

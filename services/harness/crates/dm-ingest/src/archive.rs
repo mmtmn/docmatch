@@ -52,7 +52,7 @@ pub struct ZipEntry {
 }
 
 /// Entries that are noise in every archive made on a Mac or by a file manager.
-fn is_noise(path: &str) -> bool {
+pub(crate) fn is_noise(path: &str) -> bool {
     path.starts_with("__MACOSX/")
         || path
             .rsplit('/')
@@ -64,7 +64,7 @@ fn refuse(reason: String) -> IngestError {
     IngestError::Unrecognized(format!("arquivo zip recusado: {reason}"))
 }
 
-fn safe_path(name: &str) -> Option<String> {
+pub(crate) fn safe_path(name: &str) -> Option<String> {
     let unified = name.replace('\\', "/");
     // The same test as the upload scanner (`..` or absolute): nothing is written to disk, so
     // a drive letter is just part of a name.
@@ -192,6 +192,64 @@ pub fn read_zip(
     }
     entries.sort_by(|a, b| a.path.cmp(&b.path));
     Ok((entries, warnings))
+}
+
+/// Reads one member of a ZIP package (the `word/document.xml` of a DOCX, the `content.xml` of
+/// an ODT) under the shared limits: entry count, compression ratio and at most `max_bytes`
+/// (declared and actually read). `Ok(None)` when the package has no such member.
+pub fn read_zip_member(
+    bytes: &[u8],
+    path: &str,
+    max_bytes: u64,
+    lim: &ZipLimits,
+) -> Result<Option<Vec<u8>>, IngestError> {
+    let mut archive = ZipArchive::new(Cursor::new(bytes)).map_err(|e| IngestError::Parse {
+        format: "zip",
+        detail: format!("pacote zip ilegível ({e})"),
+    })?;
+    if archive.len() > lim.max_entries {
+        return Err(refuse(format!(
+            "{} entradas (máximo {})",
+            archive.len(),
+            lim.max_entries
+        )));
+    }
+    let mut file = match archive.by_name(path) {
+        Ok(f) => f,
+        Err(zip::result::ZipError::FileNotFound) => return Ok(None),
+        Err(e) => {
+            return Err(IngestError::Parse {
+                format: "zip",
+                detail: format!("{path}: {e}"),
+            })
+        }
+    };
+    let declared = file.size();
+    let max_mb = (max_bytes >> 20).max(1);
+    if declared > max_bytes {
+        return Err(refuse(format!("{path} acima de {max_mb} MB")));
+    }
+    let compressed = file.compressed_size();
+    if compressed > 0 && declared / compressed > lim.max_ratio {
+        return Err(refuse(format!(
+            "razão de compressão acima de {}x",
+            lim.max_ratio
+        )));
+    }
+    let mut buf = Vec::with_capacity(usize::try_from(declared.min(16 << 20)).unwrap_or(0));
+    match (&mut file)
+        .take(declared.saturating_add(1))
+        .read_to_end(&mut buf)
+    {
+        Ok(n) if n as u64 > declared => {
+            Err(refuse(format!("{path}: conteúdo maior que o declarado")))
+        }
+        Ok(_) => Ok(Some(buf)),
+        Err(e) => Err(IngestError::Parse {
+            format: "zip",
+            detail: format!("{path}: não foi possível descompactar ({e})"),
+        }),
+    }
 }
 
 #[cfg(test)]

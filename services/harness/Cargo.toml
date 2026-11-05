@@ -82,6 +82,12 @@ rust_xlsxwriter = "0.102.0"
 # default features pull bzip2/zstd (C) and would break the musl release.
 lopdf = { version = "0.47.0", default-features = false }
 zip = { version = "9.3.0", default-features = false, features = ["deflate"] }
+# Outlook .msg (Compound File Binary), 7z (LZMA/LZMA2 only: no AES, bzip2 or PPMd, which pull
+# C code or extra crates) and HTML (html5ever DOM through scraper, no CLI or CSS extras).
+cfb = "0.16.0"
+sevenz-rust2 = { version = "0.24.2", default-features = false }
+scraper = { version = "0.29.0", default-features = false }
+ego-tree = "0.11.1"
 
 # algorithms, hashing
 pathfinding = "4.16.0"
