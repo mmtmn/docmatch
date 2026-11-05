@@ -787,10 +787,12 @@ dependencies = [
  "chrono",
  "clap",
  "dm-core",
+ "dm-eval",
  "dm-guard",
  "dm-ingest",
  "dm-match",
  "dm-normalize",
+ "dm-recon",
  "dm-report",
  "dm-sandbox",
  "dm-validators",
@@ -831,10 +833,11 @@ dependencies = [
 name = "dm-eval"
 version = "0.1.0"
 dependencies = [
- "dm-core",
- "serde",
- "serde-saphyr",
- "serde_json",
+ "dm-normalize",
+ "dm-recon",
+ "encoding_rs",
+ "hex",
+ "sha2",
  "tempfile",
  "thiserror",
 ]
@@ -925,6 +928,7 @@ dependencies = [
  "dm-validators",
  "indexmap",
  "pathfinding",
+ "proptest",
  "rust_decimal",
  "serde",
  "strsim",
@@ -962,6 +966,29 @@ version = "0.1.0"
 dependencies = [
  "dm-core",
  "serde",
+ "thiserror",
+]
+
+[[package]]
+name = "dm-recon"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "dm-core",
+ "dm-guard",
+ "dm-ingest",
+ "dm-match",
+ "dm-normalize",
+ "dm-validators",
+ "encoding_rs",
+ "hex",
+ "regex",
+ "rust_decimal",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "sha2",
+ "tempfile",
  "thiserror",
 ]
 

@@ -1,0 +1,131 @@
+# Configuração do motor determinístico de conciliação (dm-recon).
+# Estes são os padrões do código; um teste garante que este arquivo e o código não divergem.
+# `dm run <pasta> --config <arquivo>` aceita uma cópia com apenas os campos que mudarem.
+# Padrões de texto são comparados com o texto "dobrado": maiúsculas, sem acentos, espaços simples.
+
+# Palavras que abrem o histórico do extrato antes do nome do pagador (removidas, as mais longas primeiro).
+descriptor_prefixes:
+  - LIQUIDACAO COBRANCA SIMPLES
+  - LIQUIDACAO COBRANCA
+  - LIQUIDACAO
+  - PIX RECEBIDO
+  - PIX RECEB
+  - PIX
+  - TED RECEBIDA
+  - TED
+  - DOC RECEBIDO
+  - DOC
+  - TRANSFERENCIA RECEBIDA
+  - TRANSFERENCIA
+  - TRANSF
+  - DEPOSITO
+  - DEP
+  - CREDITO
+  - CRED
+  - RECEBIMENTO
+  - CNPJ
+  - CPF
+
+# Trechos que o banco usa para depositante não identificado.
+unidentified_markers:
+  - NAO IDENTIFICADO
+  - NAO IDENTIFICADA
+  - NAO IDENTIF
+  - SEM IDENTIFICACAO
+
+# Palavras comuns demais para identificar um cliente sozinhas.
+generic_name_tokens:
+  - COMERCIO
+  - COMERCIAL
+  - ALIMENTOS
+  - INDUSTRIA
+  - INDUSTRIAL
+  - SERVICOS
+  - DISTRIBUIDORA
+  - PRODUTOS
+  - EMPREENDIMENTOS
+  - PARTICIPACOES
+  - COMPANHIA
+  - GRUPO
+  - HOLDING
+  - BRASIL
+  - NACIONAL
+  - INTERNACIONAL
+
+# Débitos que são tarifas bancárias (palavra inteira; com 5 letras ou mais, também prefixo).
+fee_patterns: [TARIFA, TAR, IOF, MANUTENCAO, PACOTE, CESTA, ENCARGO, ANUIDADE, TAXA]
+
+# Tipos de título que são serviço (candidatos a retenção de tributo).
+service_kinds: [SERVICO, SERVICOS, SERVICE, SERV]
+
+# Alíquotas de retenção tentadas em notas de serviço (%): IRRF 1,5; ISS 2 a 5; PIS/COFINS/CSLL 4,65; ambos 6,15.
+withholding_rates_pct: [1.5, 2, 3, 4.65, 5, 6.15]
+
+# Multa contratual por atraso (%) e juros de mora ao mês (%), pro rata por dia corrido.
+fine_rate_pct: 2
+interest_month_pct: 1
+
+# Dias que a liquidação de boleto pode cair depois do vencimento sem configurar atraso para encargos (D+1).
+boleto_credit_lag_days: 1
+
+# Tolerância para valores "iguais", em centavos.
+amount_tolerance_centavos: 1
+
+# A partir deste encargo não cobrado (R$), um título pago com atraso ganha achado próprio;
+# abaixo, entra só no achado agregado de encargos não cobrados.
+late_fee_materiality_brl: 500
+
+# Máximo de títulos abertos de um cliente na busca do subconjunto que soma o pagamento.
+subset_max_titles: 12
+
+# Nomes de ERPs e sistemas reconhecidos no nome dos arquivos (viram a chave da fonte).
+known_systems:
+  - protheus
+  - omie
+  - sap
+  - totvs
+  - datasul
+  - bling
+  - tiny
+  - contaazul
+  - sankhya
+  - senior
+  - oracle
+  - netsuite
+  - quickbooks
+  - xero
+  - winthor
+  - nibo
+  - linx
+
+# Contas a pagar: caixa de entrada e grupo de aprovação.
+ap:
+  # Trechos de e-mail de cobrança ou recobrança.
+  dunning_patterns:
+    - NAO IDENTIFICAMOS O PAGAMENTO
+    - COBRANCA EM ABERTO
+    - EM ABERTO
+    - REENVIO O BOLETO
+    - SEGUNDA VIA
+    - VALOR ATUALIZADO
+  # Expressões regulares de pergunta "já pagamos?" no grupo.
+  already_paid_question_patterns:
+    - '\bJA\s+(PAGAMOS|PAGARAM|PAGOU|FOI\s+PAG[OA])\b'
+    - '\bFOI\s+PAG[OA]\s*\?'
+    - '\bPAGAMOS\s*\?'
+  # Expressões regulares de aprovação.
+  approval_patterns:
+    - '\bAPROVAD[OA]\b'
+    - '\bPODE\s+PAGAR\b'
+    - '\bLIBERAD[OA]\b'
+  # Expressões regulares de resposta incerta ("acho que sim").
+  hedge_patterns:
+    - '\bACHO\s+QUE\b'
+    - '\bACHO\s+Q\b'
+    - '\bTALVEZ\b'
+    - '\bNAO\s+SEI\b'
+    - '\bPROVAVELMENTE\b'
+    - '\bCREIO\s+QUE\b'
+    - '\bDEVE\s+TER\b'
+  # Diferença máxima (dias) entre o vencimento codificado no boleto e o informado no e-mail.
+  max_boleto_due_gap_days: 30
