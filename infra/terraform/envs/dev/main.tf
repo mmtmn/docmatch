@@ -29,6 +29,8 @@ locals {
     "STRIPE_WEBHOOK_SECRET",
     "STRIPE_PUBLISHABLE_KEY",
     "RESEND_API_KEY",
+    # Shared with the burst workers (docs/escala.md); __EMPTY__ while the pool is off.
+    "DM_BURST_POOL_SECRET",
   ]
 }
 
@@ -52,6 +54,7 @@ module "network" {
   s3_bucket_name_prefix = "${local.name}-"
   enable_flow_logs      = var.enable_flow_logs
   flow_logs_bucket_arn  = module.storage.logs_bucket_arn
+  burst_internal_port   = var.burst_internal_port
 }
 
 module "iam_guardrails" {
@@ -131,6 +134,12 @@ module "secrets" {
     DM_ALERT_EMAIL            = var.alert_email
     DM_EGRESS_ALLOWLIST       = join(" ", var.egress_allowlist)
     DM_BACKUPS_PGBACKREST_KEY = "pgbackrest"
+    # Pool of on-demand workers (docs/escala.md). SSM refuses empty values: __EMPTY__ renders as "".
+    DM_BURST_ENABLED       = var.burst_enabled ? "1" : "0"
+    DM_BURST_LISTEN        = var.burst_enabled ? "0.0.0.0:${var.burst_internal_port}" : "__EMPTY__"
+    DM_BURST_ASG_NAME      = "${local.name}-worker"
+    DM_BURST_MAX_INSTANCES = tostring(var.burst_max_instances)
+    DM_BURST_MONTHLY_HOURS = tostring(var.burst_monthly_hours)
   }, module.sandbox.enabled ? { DM_SCAN_QUEUE_URL = module.sandbox.verdict_queue_url } : {})
 }
 
@@ -158,6 +167,9 @@ module "compute" {
   log_group_arn           = module.observability.app_log_group_arn
   guardrail_policy_arns   = module.iam_guardrails.role_policy_arns
   worker_desired_capacity = var.worker_desired_capacity
+  worker_max_size         = var.burst_max_instances
+  burst_security_group_id = module.network.burst_security_group_id
+  burst_internal_port     = var.burst_internal_port
   create_packer_profile   = true
 }
 
@@ -171,6 +183,7 @@ module "observability" {
   cloudtrail_name            = local.cloudtrail_name
   alert_email                = var.alert_email
   mrr_usd                    = var.mrr_usd
+  burst_budget_usd           = var.burst_enabled ? var.burst_budget_usd : 0
   app_alarms_enabled         = module.compute.app_enabled
   app_autoscaling_group_name = module.compute.app_autoscaling_group_name
   lambda_function_names      = module.sandbox.enabled ? values(module.sandbox.function_names) : []

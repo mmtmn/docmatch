@@ -94,6 +94,14 @@ func run() error {
 	}
 	sys.Jobs.Set(jobargs.RiverEnqueuer{Client: queue})
 	go func() { _ = sys.ListenEvents(ctx) }()
+	// Internal endpoint of the pool of on-demand workers (DM_BURST_LISTEN,
+	// VPC only). A failure here leaves heavy runs on the main box (the pool
+	// falls back), never the API down.
+	go func() {
+		if err := sys.ServeBurst(ctx); err != nil {
+			log.Error("endpoint interno do pool sob demanda parou; execuções pesadas ficam na máquina principal", slog.String("err", err.Error()))
+		}
+	}()
 
 	handler := api.NewHandler(api.Deps{
 		Config: cfg, Logger: log, Limits: limits.Must(), DB: pool,

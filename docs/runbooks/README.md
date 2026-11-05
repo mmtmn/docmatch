@@ -12,6 +12,7 @@ verificação, reversão e uma tabela de registro das execuções passadas.
 | [incidente.md](incidente.md) | Qualquer evento de segurança ou indisponibilidade: severidade, primeiros 15 minutos, contenção, comunicação, pós-incidente. |
 | [trocar-modelo.md](trocar-modelo.md) | Trocar o modelo de um papel em `config/models.yaml`, com portões de qualidade e custo. |
 | [kill-switches.md](kill-switches.md) | Desligar uma capacidade (gastos, cadastros, modelos, mídia, toolsmith, API, manutenção) sem implantar código. |
+| [burst.md](burst.md) | Ligar, verificar, subir e descer à mão, diagnosticar e desligar o pool de trabalhadores sob demanda (Spot). |
 
 ## Convenções
 
@@ -55,7 +56,8 @@ aws ssm start-session --target "$INSTANCE_ID"
 | `docmatch-env.service` | Renderiza o `.env` do SSM em `/run/docmatch` (tmpfs) | — | 1 |
 | `postgresql.service` | Banco | 5 | 2 |
 | `docmatch-harness.service` | Motor de conciliação (socket Unix) | 3 | 3 |
-| `docmatch-worker.service` | Fila | 1 (drena) | 4 |
+| `docmatch-worker.service` | Fila e escalonador do pool sob demanda | 1 (drena) | 4 |
+| `docmatch-burst.service` | Só nas instâncias do pool: pega trabalhos do endpoint interno ([burst.md](burst.md)) | 1 | 4 |
 | `docmatch-api.service` | API pública e admin | 2 | 5 |
 | `caddy.service` | TLS, limites, bouncer | 4 | 6 |
 | `crowdsec.service`, `falco.service`, `aide` (timer), `clamav-freshclam` | Detecção | nunca | sempre |

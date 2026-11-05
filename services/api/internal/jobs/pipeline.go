@@ -18,9 +18,12 @@ import (
 
 // Pipeline timeouts and the outbox schedule.
 const (
-	ScanTimeout    = 10 * time.Minute
-	LearnTimeout   = 10 * time.Minute
-	RunTimeoutPad  = 15 * time.Minute
+	ScanTimeout   = 10 * time.Minute
+	LearnTimeout  = 10 * time.Minute
+	RunTimeoutPad = 15 * time.Minute
+	// RequeueDelay is how soon a run interrupted on the pool is tried again
+	// (snoozed: the attempt is not spent).
+	RequeueDelay   = 5 * time.Second
 	OutboxInterval = 30 * time.Second
 	OutboxBatch    = 50
 	// OutboxMaxAttempts is when a message stops being retried (it stays
@@ -63,7 +66,8 @@ type Pipeline struct {
 	Runs      *runs.Service
 	Outbox    OutboxStore
 	Deliverer Deliverer
-	// RunDeadline sizes the run job timeout (runs.DefaultRunDeadline + pad).
+	// RunDeadline fixes the run job timeout (deadline + pad); zero sizes it
+	// per job from its expected time with the deadline policy of Runs.
 	RunDeadline time.Duration
 }
 
@@ -100,13 +104,24 @@ type RunWorker struct {
 	deps Deps
 }
 
-// Timeout bounds a run: the harness deadline plus a margin for persistence.
-func (w *RunWorker) Timeout(*river.Job[jobargs.RunArgs]) time.Duration {
-	d := runs.DefaultRunDeadline
-	if w.deps.Pipeline != nil && w.deps.Pipeline.RunDeadline > 0 {
-		d = w.deps.Pipeline.RunDeadline
+// Timeout bounds a run: its deadline (scaled with the expected time the job
+// carries), the wait for a pool worker and a margin for persistence. The
+// River rescuer reads the same value, so a long run is never rescued while
+// it is still working.
+func (w *RunWorker) Timeout(job *river.Job[jobargs.RunArgs]) time.Duration {
+	p := w.deps.Pipeline
+	if p != nil && p.RunDeadline > 0 {
+		return p.RunDeadline + RunTimeoutPad
 	}
-	return d + RunTimeoutPad
+	var expected int64
+	if job != nil {
+		expected = job.Args.ExpectedSeconds
+	}
+	policy := runs.DefaultDeadlines
+	if p != nil && p.Runs != nil {
+		policy = p.Runs.Deadlines()
+	}
+	return policy.JobTimeout(expected, RunTimeoutPad)
 }
 
 // Work implements river.Worker. A transient harness failure returns an
@@ -116,7 +131,18 @@ func (w *RunWorker) Work(ctx context.Context, job *river.Job[jobargs.RunArgs]) e
 		return ErrPipelineNotWired
 	}
 	lastAttempt := job.Attempt >= job.MaxAttempts
-	if err := w.deps.Pipeline.Runs.Execute(ctx, job.Args.OrgID, job.Args.RunID, lastAttempt); err != nil {
+	return w.result(job.Args.RunID.String(), w.deps.Pipeline.Runs.Execute(ctx, job.Args.OrgID, job.Args.RunID, lastAttempt))
+}
+
+// result maps the outcome of Execute for River: a run handed back by the
+// pool (an instance was lost) runs again soon from its checkpoint without
+// spending an attempt (runs.MaxInterruptions bounds the loop).
+func (w *RunWorker) result(runID string, err error) error {
+	if errors.Is(err, runs.ErrRequeue) {
+		w.deps.Logger.Warn("execução devolvida à fila", slog.String("run_id", runID), slog.String("err", err.Error()))
+		return river.JobSnooze(RequeueDelay)
+	}
+	if err != nil {
 		return fmt.Errorf("run_execute: %w", err)
 	}
 	return nil

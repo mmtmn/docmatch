@@ -37,7 +37,7 @@ COVER_DIR := coverage
 # Pacotes que só existem para falar com o banco (internal/db, pgstore, sqlc) e
 # o harness de testes são medidos no ci-full, com os testes de integração.
 UNIT_EXCLUDES := -exclude internal/db -exclude internal/db/pgstore -exclude internal/db/sqlc -exclude internal/testdb \
-                 -exclude internal/harness/pb -exclude internal/runs/pgstore -exclude internal/account/accountpg -exclude internal/email/emailpg -exclude internal/session/sessionpg
+                 -exclude internal/harness/pb -exclude internal/runs/pgstore -exclude internal/burst/burstpg -exclude internal/account/accountpg -exclude internal/email/emailpg -exclude internal/session/sessionpg
 FULL_EXCLUDES := -exclude internal/db/sqlc -exclude internal/testdb -exclude internal/harness/pb
 FLOORS        := -floor 85 -pkg internal/credits=95 -pkg internal/config=95 -pkg internal/auth=90 -pkg internal/session=90
 

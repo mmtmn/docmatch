@@ -106,3 +106,27 @@ func TestParseValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestBurstSection(t *testing.T) {
+	t.Parallel()
+	ok, err := Parse([]byte(strings.Replace(valid, "kinds:\n", "burst: { speed_factor: 0.5, boot_seconds: 120, base_memory_mb: 64 }\nkinds:\n", 1)))
+	if err != nil || ok.BurstSpeed() != 0.5 || ok.Burst.BootSeconds != 120 {
+		t.Fatalf("burst = %+v %v", ok, err)
+	}
+	if plain, _ := Parse([]byte(valid)); plain.BurstSpeed() != 1 {
+		t.Fatal("sem seção, o pool não acelera")
+	}
+	for name, section := range map[string]string{
+		"fator > 1":     "burst: { speed_factor: 1.5 }",
+		"boot negativo": "burst: { boot_seconds: -1 }",
+		"memória":       "burst: { base_memory_mb: -1 }",
+	} {
+		if _, err := Parse([]byte(strings.Replace(valid, "kinds:\n", section+"\nkinds:\n", 1))); err == nil || !strings.Contains(err.Error(), "burst.") {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	neg := strings.Replace(valid, "seconds_per_unit: 20 }", "seconds_per_unit: 20, memory_mb_per_unit: -1 }", 1)
+	if _, err := Parse([]byte(neg)); err == nil || !strings.Contains(err.Error(), "memory_mb_per_unit") {
+		t.Fatalf("memória por unidade negativa: %v", err)
+	}
+}

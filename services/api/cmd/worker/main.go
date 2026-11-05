@@ -37,6 +37,18 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "burst" {
+		if err := runBurst(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "worker burst:", err)
+			var ve *config.ValidationError
+			if errors.As(err, &ve) {
+				fmt.Fprintln(os.Stderr, "Consulte .env.example na raiz do repositório (DM_BURST_*).")
+				os.Exit(2)
+			}
+			os.Exit(1)
+		}
+		return
+	}
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "worker:", err)
 		var ve *config.ValidationError
@@ -109,6 +121,12 @@ func run() error {
 		return err
 	} else if ok {
 		go func() { _ = consume(ctx) }()
+	}
+	// The pool of on-demand workers: leases, caps and the Auto Scaling group.
+	if scaler, err := sys.BurstScaler(ctx); err != nil {
+		return err
+	} else if scaler != nil {
+		go func() { _ = scaler.Run(ctx) }()
 	}
 	log.Info("worker pronto", slog.String("host", host))
 

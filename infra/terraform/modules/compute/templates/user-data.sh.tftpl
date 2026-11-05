@@ -13,6 +13,11 @@ SSM_PATH="${ssm_path_prefix}"
 DATA_VOLUME_ID="${data_volume_id}"
 EIP_ALLOCATION_ID="${eip_allocation_id}"
 DATA_MOUNT="${data_mount_point}"
+# Pool of on-demand workers (docs/escala.md): the internal endpoint port, the SSM parameter the
+# application publishes its address in, and the only parameters a burst worker may read.
+INTERNAL_PORT="${internal_port}"
+BURST_API_PARAM="${burst_api_param}"
+BURST_NAMES="${burst_names}"
 
 LOG=/var/log/docmatch-userdata.log
 touch "$LOG" && chmod 0640 "$LOG"
@@ -50,9 +55,35 @@ DM_SSM_PATH=$SSM_PATH
 DM_INSTANCE_ID=$INSTANCE_ID
 DM_AVAILABILITY_ZONE=$AZ
 EOF
+if [[ "$ROLE" == "worker" ]]; then
+  # render-env reads exactly these names (GetParameters): the burst role may read no other.
+  echo "DM_SSM_NAMES=$BURST_NAMES" >> /etc/docmatch/instance.env
+fi
 chmod 0640 /etc/docmatch/instance.env
 chown root:docmatch /etc/docmatch/instance.env
 hostnamectl set-hostname "$NAME-$ROLE-$${INSTANCE_ID#i-}"
+
+# 1b. Internal endpoint of the pool. nftables rules of this role in tmpfs (the image includes
+#     /run/docmatch-nft/*.nft and jumps to the empty internal chains): the application admits the
+#     subnet on the port, a burst worker may reach it as the docmatch user. The security groups
+#     admit exactly the burst group on top of this.
+MAC="$(imds mac)"
+SUBNET_CIDR="$(imds "network/interfaces/macs/$MAC/subnet-ipv4-cidr-block")"
+PRIVATE_IP="$(imds local-ipv4)"
+if [[ "$ROLE" == "app" ]]; then
+  nft_chain="internal_in"
+  nft_rule="tcp dport $INTERNAL_PORT ip saddr $SUBNET_CIDR accept"
+else
+  nft_chain="internal_out"
+  nft_rule="ip daddr $SUBNET_CIDR tcp dport $INTERNAL_PORT meta skuid \"docmatch\" accept"
+fi
+if grep -q 'chain internal_in' /etc/nftables.conf; then
+  install -d -m 0750 -o root -g root /run/docmatch-nft
+  printf 'table inet docmatch {\n\tchain %s {\n\t\t%s\n\t}\n}\n' "$nft_chain" "$nft_rule" > /run/docmatch-nft/30-internal.nft
+  nft -f /etc/nftables.conf
+else
+  echo "AMI sem as cadeias internas do nftables: o pool sob demanda espera a próxima AMI"
+fi
 
 if [[ "$ROLE" == "app" ]]; then
   # 2. Elastic IP: the CloudFront origin record points at it.
@@ -80,6 +111,23 @@ if [[ "$ROLE" == "app" ]]; then
   systemctl enable --now var-lib-postgresql.mount
 fi
 
+# 3b. The application publishes the address of its internal endpoint for the burst workers.
+if [[ "$ROLE" == "app" && -n "$BURST_API_PARAM" ]]; then
+  publish_endpoint() { "$AWS" ssm put-parameter --name "$BURST_API_PARAM" --type String --overwrite --value "https://$PRIVATE_IP:$INTERNAL_PORT" >/dev/null; }
+  retry 12 5 publish_endpoint || echo "não foi possível publicar o endpoint interno em $BURST_API_PARAM"
+fi
+
+# 3c. A burst worker gives the harness the instance's memory (the image budget is the t4g.small's):
+#     runtime drop-ins in /run, never in /etc. The OS, the security agents and the Go worker keep 1 GiB.
+if [[ "$ROLE" == "worker" ]]; then
+  total_mb=$(( $(awk '/^MemTotal:/ {print $2}' /proc/meminfo) / 1024 ))
+  harness_mb=$(( total_mb > 2048 ? total_mb - 1024 : 1024 ))
+  install -d -m 0755 /run/systemd/system/docmatch-harness.service.d /run/systemd/system/docmatch.slice.d
+  printf '[Service]\nMemoryMax=%sM\nMemoryHigh=%sM\n' "$harness_mb" "$(( harness_mb * 9 / 10 ))" > /run/systemd/system/docmatch-harness.service.d/50-burst.conf
+  printf '[Slice]\nMemoryMax=%sM\nMemoryHigh=%sM\n' "$(( harness_mb + 256 ))" "$(( harness_mb + 192 ))" > /run/systemd/system/docmatch.slice.d/50-burst.conf
+  systemctl daemon-reload
+fi
+
 # 4. Secrets and configuration: SSM Parameter Store -> /run/docmatch/env (tmpfs, 0400, docmatch).
 #    The unit refuses to finish while a secret still holds the Terraform placeholder.
 systemctl enable --now docmatch-env.service
@@ -100,8 +148,11 @@ if [[ "$ROLE" == "app" ]]; then
   systemctl enable --now docmatch-harness.service docmatch-api.service docmatch-worker.service
   systemctl enable --now caddy.service
   systemctl enable --now pgbackrest-backup.timer
+elif systemctl cat docmatch-burst.service >/dev/null 2>&1; then
+  # Burst worker: the harness and the claim loop; never the main worker (it needs the database).
+  systemctl enable --now docmatch-harness.service docmatch-burst.service
 else
-  systemctl enable --now docmatch-harness.service docmatch-worker.service
+  echo "AMI sem docmatch-burst.service: este trabalhador não pega trabalho até a próxima AMI"
 fi
 
 install -d -m 0750 -o docmatch -g docmatch /var/lib/docmatch

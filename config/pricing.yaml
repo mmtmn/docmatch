@@ -85,3 +85,13 @@ estimates:
   new_tool_usd: 0.89
   scan_file_usd: 0.0008
   web_search_request_usd: 0.012
+  # Um minuto de instância do pool sob demanda, no pior caso: c7g.large sob demanda (US$ 0,0725/h),
+  # 16 GiB gp3 e o IPv4 público (US$ 0,005/h). A Spot costuma sair por menos da metade.
+  instance_minute_usd: 0.0013
+
+# Trabalhadores sob demanda (docs/escala.md). Com charge_instance_minutes, os minutos que uma execução
+# pesada passa numa instância do pool entram no preço dela (somados ao item do trabalho pesado:
+# documentos, vídeo, áudio ou quadros, com uma nota no orçamento). Desligado, as instâncias saem da
+# parcela de infraestrutura (rates.infra), como a máquina principal.
+burst:
+  charge_instance_minutes: false

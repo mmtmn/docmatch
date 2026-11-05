@@ -9,9 +9,13 @@
 # newline in a value (PEM keys) becomes the two characters \n, which is the format .env.example
 # documents for APPLE_PRIVATE_KEY. See render() for the exact order of the escapes.
 #
-# Uso: render-env.sh [--path /docmatch/prod] [--out /run/docmatch/env] [--owner docmatch]
-#                    [--allow-placeholders]
-# Lê DM_SSM_PATH e AWS_REGION de /etc/docmatch/instance.env quando não informados.
+# With DM_SSM_NAMES (or --names A,B,C) only those parameters under the path are read, with
+# GetParameters: the burst workers' role may read exactly that list (no DATABASE_URL, no other
+# secret), so a GetParametersByPath on the whole path would be refused anyway.
+#
+# Uso: render-env.sh [--path /docmatch/prod] [--names A,B] [--out /run/docmatch/env]
+#                    [--owner docmatch] [--allow-placeholders]
+# Lê DM_SSM_PATH, DM_SSM_NAMES e AWS_REGION de /etc/docmatch/instance.env quando não informados.
 set -euo pipefail
 umask 077
 
@@ -34,6 +38,33 @@ render() {
     | "\($k)=\"\($v)\""' <<<"$params"
 }
 
+# fetch_params <path> [names]: one JSON document {"Parameters": [...]} with every parameter under
+# the path (GetParametersByPath, paginated by the CLI) or only the listed names (GetParameters, ten
+# per call, the API's limit). A listed name that does not exist fails: a worker without one of its
+# parameters must not start half configured.
+fetch_params() {
+  local path="$1" names="${2:-}" out part missing i n
+  local -a list chunk
+  if [[ -z "$names" ]]; then
+    aws ssm get-parameters-by-path --path "$path" --recursive --with-decryption --output json
+    return
+  fi
+  read -r -a list <<<"${names//,/ }"
+  out='{"Parameters":[]}'
+  for ((i = 0; i < ${#list[@]}; i += 10)); do
+    chunk=()
+    for n in "${list[@]:i:10}"; do
+      [[ "$n" =~ ^[A-Z][A-Z0-9_]{0,127}$ ]] || die "nome inválido em DM_SSM_NAMES: $n"
+      chunk+=("$path/$n")
+    done
+    part="$(aws ssm get-parameters --names "${chunk[@]}" --with-decryption --output json)"
+    missing="$(jq -r '(.InvalidParameters // [])[]' <<<"$part" | paste -sd ' ' -)"
+    [[ -z "$missing" ]] || die "parâmetros inexistentes: $missing"
+    out="$(jq -c --argjson p "$part" '{Parameters: (.Parameters + ($p.Parameters // []))}' <<<"$out")"
+  done
+  printf '%s\n' "$out"
+}
+
 write_atomic() { # write_atomic <path> <owner> <content>
   local path="$1" who="$2" content="$3" tmp
   tmp="$(mktemp "$(dirname "$path")/.env.XXXXXX")"
@@ -44,9 +75,10 @@ write_atomic() { # write_atomic <path> <owner> <content>
 }
 
 main() {
-  local out owner placeholder allow_placeholders instance_env count unset_keys empty_keys
+  local out owner placeholder allow_placeholders instance_env count unset_keys empty_keys ssm_names
   local spec sub_user sub_file sub_keys keys_json
   ssm_path="${DM_SSM_PATH:-}"
+  ssm_names="${DM_SSM_NAMES:-}"
   out="/run/docmatch/env"
   owner="docmatch"
   placeholder="${DM_PLACEHOLDER:-__UNSET__}"
@@ -62,11 +94,12 @@ main() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --path) ssm_path="$2"; shift ;;
+      --names) ssm_names="$2"; shift ;;
       --out) out="$2"; shift ;;
       --owner) owner="$2"; shift ;;
       --subset) subsets+=("$2"); shift ;;
       --allow-placeholders) allow_placeholders=1 ;;
-      -h|--help) sed -n '2,14p' "$0"; exit 0 ;;
+      -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
       *) die "argumento desconhecido: $1" ;;
     esac
     shift
@@ -76,6 +109,7 @@ main() {
     # shellcheck disable=SC1090
     source "$instance_env"
     ssm_path="${ssm_path:-${DM_SSM_PATH:-}}"
+    ssm_names="${ssm_names:-${DM_SSM_NAMES:-}}"
   fi
   [[ -n "$ssm_path" ]] || die "caminho SSM indefinido (--path ou DM_SSM_PATH em $instance_env)"
   [[ -n "${AWS_REGION:-}" ]] || die "AWS_REGION indefinida"
@@ -87,8 +121,8 @@ main() {
   run_dir="$(dirname "$out")"
   install -d -m 0750 -o root -g "$owner" "$run_dir"
 
-  # One JSON document with every parameter under the path (the CLI paginates on its own).
-  params="$(aws ssm get-parameters-by-path --path "$ssm_path" --recursive --with-decryption --output json)"
+  # One JSON document with the parameters of this instance (all under the path, or the list).
+  params="$(fetch_params "$ssm_path" "$ssm_names")"
   count="$(jq -r '.Parameters | length' <<<"$params")"
   [[ "$count" -gt 0 ]] || die "nenhum parâmetro em $ssm_path (terraform apply ainda não rodou?)"
 

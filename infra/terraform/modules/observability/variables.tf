@@ -67,6 +67,29 @@ variable "budget_project_tag" {
   default     = "docmatch"
 }
 
+variable "burst_budget_usd" {
+  description = "Monthly budget in USD of the pool of on-demand workers (0 creates none). Size it from DM_BURST_MONTHLY_HOURS times the on-demand price of the largest pool type."
+  type        = number
+  default     = 0
+
+  validation {
+    condition     = var.burst_budget_usd >= 0
+    error_message = "burst_budget_usd must be zero or positive."
+  }
+}
+
+variable "burst_tag_key" {
+  description = "Cost allocation tag key that marks the pool's resources (module compute)."
+  type        = string
+  default     = "docmatch:pool"
+}
+
+variable "burst_tag_value" {
+  description = "Value of burst_tag_key on the pool's resources."
+  type        = string
+  default     = "burst"
+}
+
 # The switches below are booleans known at plan time; the names and ids they guard may be
 # unknown until apply (a count derived from `id != ""` fails the first plan).
 variable "app_alarms_enabled" {

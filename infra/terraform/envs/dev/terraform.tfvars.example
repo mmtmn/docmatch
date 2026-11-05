@@ -23,5 +23,12 @@ wait_for_certificate_validation = false
 dnssec_enabled                  = false
 
 worker_desired_capacity = 0
+
+# Pool of on-demand Spot workers (docs/escala.md). Turn on after the AMI with docmatch-burst.service
+# is in ami_id and DM_BURST_POOL_SECRET holds 32+ random characters in SSM.
+burst_enabled       = false
+burst_max_instances = 2
+burst_monthly_hours = 60
+burst_budget_usd    = 5
 enable_flow_logs        = false
 llm_mode                = "off"

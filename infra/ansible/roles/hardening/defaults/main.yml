@@ -39,6 +39,8 @@ hardening_api_listen: "127.0.0.1:8080"
 hardening_admin_listen: "127.0.0.1:8443"
 hardening_harness_socket: /run/docmatch-harness/harness.sock
 hardening_https_port: 443
+# Runtime nftables includes (tmpfs): user-data writes the role's internal rules there at boot.
+hardening_nft_runtime_dir: /run/docmatch-nft
 
 # Egress proxy (tinyproxy on loopback). The allowlist comes from DM_EGRESS_ALLOWLIST at boot.
 hardening_proxy_port: 8118

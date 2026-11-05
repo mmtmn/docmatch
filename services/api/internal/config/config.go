@@ -169,6 +169,10 @@ type Config struct {
 	Billing  Billing
 	Email    Email
 	Signing  Signing
+	// Burst configures the pool of on-demand workers (burst.go).
+	Burst Burst
+	// Deadline scales the deadline of a run with its expected time (burst.go).
+	Deadline Deadline
 }
 
 // Harness holds the connection to the reconciliation engine.
@@ -385,6 +389,8 @@ func LoadFrom(lookup Lookup) (*Config, error) {
 	cfg.Signing.APIKeyPepper = r.key(VarAPIKeyPepper)
 	cfg.Signing.WebhookSigningKey = r.key(VarWebhookSigningKey)
 
+	r.readBurst(cfg)
+
 	if err := r.err(); err != nil {
 		return nil, err
 	}
@@ -470,7 +476,7 @@ func (c *Config) redacted() [][2]string {
 	if len(c.Auth.SessionSecret) > 0 {
 		sessionSecret = Redacted
 	}
-	return [][2]string{
+	return slices.Concat([][2]string{
 		{VarEnv, c.Env},
 		{VarPublicBaseURL, urlString(c.PublicBaseURL)},
 		{VarAPIBaseURL, urlString(c.APIBaseURL)},
@@ -530,7 +536,7 @@ func (c *Config) redacted() [][2]string {
 		{VarQuoteHMACKey, presence(c.Signing.QuoteHMACKey)},
 		{VarAPIKeyPepper, presence(c.Signing.APIKeyPepper)},
 		{VarWebhookSigningKey, presence(c.Signing.WebhookSigningKey)},
-	}
+	}, c.burstRedacted())
 }
 
 // Problem is one invalid or missing variable.
@@ -861,10 +867,11 @@ func (r *reader) address(name string) *mail.Address {
 	return a
 }
 
-// KnownVars lists every variable Load reads, in .env.example order plus the
-// migration-time extras. The package tests check it against .env.example.
+// KnownVars lists every variable Load (and LoadBurstWorker) reads, in
+// .env.example order plus the migration-time extras. The package tests check
+// it against .env.example.
 func KnownVars() []string {
-	return []string{
+	return append([]string{
 		VarEnv, VarPublicBaseURL, VarAPIBaseURL, VarAPIListen, VarAdminListen, VarOriginSecret, VarOriginSecretHeader, VarVantaraPath,
 		VarKillFlags, VarMaintenance,
 		VarDatabaseURL, VarDBAppRole, VarAWSRegion, VarAWSAccessKeyID, VarAWSSecretKey, VarS3UploadsBucket, VarS3BackupsBucket, VarS3Endpoint,
@@ -877,7 +884,7 @@ func KnownVars() []string {
 		VarTargetMargin, VarIncomeTaxRate, VarPaymentRate, VarInfraRate, VarOpenRouterFee, VarPricingFile, VarThroughputFile,
 		VarResendAPIKey, VarEmailFrom, VarSecurityContact, VarSMTPAddr,
 		VarQuoteHMACKey, VarAPIKeyPepper, VarWebhookSigningKey,
-	}
+	}, burstVars()...)
 }
 
 // ExtraVars are variables read by this service that .env.example does not

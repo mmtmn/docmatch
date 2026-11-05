@@ -211,6 +211,76 @@ resource "aws_vpc_security_group_egress_rule" "app_http_v6" {
   tags = merge(var.tags, { Name = "${var.name}-app-egress-http-v6" })
 }
 
+# Pool of on-demand (burst) workers (docs/escala.md): no ingress at all; egress like the
+# application (HTTPS and HTTP, tight on the box through nftables) plus the internal endpoint of the
+# application instance, which admits exactly this group on that port.
+resource "aws_security_group" "burst" {
+  name        = "${var.name}-burst"
+  description = "docmatch burst workers: no ingress, HTTPS out, the app internal endpoint"
+  vpc_id      = aws_vpc.this.id
+
+  tags = merge(var.tags, { Name = "${var.name}-burst" })
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_vpc_security_group_egress_rule" "burst_https_v4" {
+  security_group_id = aws_security_group.burst.id
+  description       = "HTTPS egress (S3 presigned downloads, AWS APIs, egress proxy targets)"
+  ip_protocol       = "tcp"
+  from_port         = 443
+  to_port           = 443
+  cidr_ipv4         = "0.0.0.0/0"
+
+  tags = merge(var.tags, { Name = "${var.name}-burst-egress-https-v4" })
+}
+
+resource "aws_vpc_security_group_egress_rule" "burst_https_v6" {
+  security_group_id = aws_security_group.burst.id
+  description       = "HTTPS egress over IPv6"
+  ip_protocol       = "tcp"
+  from_port         = 443
+  to_port           = 443
+  cidr_ipv6         = "::/0"
+
+  tags = merge(var.tags, { Name = "${var.name}-burst-egress-https-v6" })
+}
+
+resource "aws_vpc_security_group_egress_rule" "burst_http_v4" {
+  security_group_id = aws_security_group.burst.id
+  description       = "HTTP egress for apt mirrors and OCSP (through the egress proxy only, enforced by nftables)"
+  ip_protocol       = "tcp"
+  from_port         = 80
+  to_port           = 80
+  cidr_ipv4         = "0.0.0.0/0"
+
+  tags = merge(var.tags, { Name = "${var.name}-burst-egress-http-v4" })
+}
+
+resource "aws_vpc_security_group_egress_rule" "burst_to_app_internal" {
+  security_group_id            = aws_security_group.burst.id
+  description                  = "Internal endpoint of the application instance (job manifests, events)"
+  ip_protocol                  = "tcp"
+  from_port                    = var.burst_internal_port
+  to_port                      = var.burst_internal_port
+  referenced_security_group_id = aws_security_group.app.id
+
+  tags = merge(var.tags, { Name = "${var.name}-burst-egress-internal" })
+}
+
+resource "aws_vpc_security_group_ingress_rule" "app_internal_from_burst" {
+  security_group_id            = aws_security_group.app.id
+  description                  = "Internal endpoint for the burst workers only"
+  ip_protocol                  = "tcp"
+  from_port                    = var.burst_internal_port
+  to_port                      = var.burst_internal_port
+  referenced_security_group_id = aws_security_group.burst.id
+
+  tags = merge(var.tags, { Name = "${var.name}-app-internal-burst" })
+}
+
 # Sandbox Lambda functions: no ingress at all, egress only to the S3 gateway endpoint.
 resource "aws_security_group" "sandbox" {
   name        = "${var.name}-sandbox"

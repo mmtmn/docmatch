@@ -211,6 +211,13 @@ func TestS3PresignOffline(t *testing.T) {
 	if _, err := st.PresignPut(context.Background(), "../x", 1, "", time.Minute); err == nil {
 		t.Fatal("chave inválida")
 	}
+	get, err := st.PresignGet(context.Background(), "media/x", time.Minute)
+	if err != nil || !strings.Contains(get, "/media/media/x") || !strings.Contains(get, "X-Amz-Expires=60") {
+		t.Fatalf("get = %q %v", get, err)
+	}
+	if _, err := st.PresignGet(context.Background(), "../x", time.Minute); err == nil {
+		t.Fatal("chave inválida no GET")
+	}
 	if _, err := NewS3(context.Background(), S3Options{}); err == nil {
 		t.Fatal("bucket vazio")
 	}

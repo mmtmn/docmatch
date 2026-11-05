@@ -110,6 +110,47 @@ resource "aws_budgets_budget" "monthly" {
   depends_on = [aws_sns_topic_policy.alerts]
 }
 
+# Pool of on-demand workers (docs/escala.md): its own monthly budget, on the instances, volumes
+# and addresses tagged docmatch:pool=burst. The pool also caps itself (DM_BURST_MONTHLY_HOURS,
+# counted in the database); this alarm is the account's view of the same money. The tag key must
+# be activated once as a cost allocation tag (infra/README.md, docs/runbooks/burst.md).
+resource "aws_budgets_budget" "burst" {
+  count = var.burst_budget_usd > 0 ? 1 : 0
+
+  name         = "${var.name}-pool-sob-demanda"
+  budget_type  = "COST"
+  time_unit    = "MONTHLY"
+  limit_amount = format("%.2f", var.burst_budget_usd)
+  limit_unit   = "USD"
+
+  cost_filter {
+    name   = "TagKeyValue"
+    values = [format("user:%s$%s", var.burst_tag_key, var.burst_tag_value)]
+  }
+
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 80
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "ACTUAL"
+    subscriber_email_addresses = [var.alert_email]
+    subscriber_sns_topic_arns  = [aws_sns_topic.alerts.arn]
+  }
+
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 100
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "FORECASTED"
+    subscriber_email_addresses = [var.alert_email]
+    subscriber_sns_topic_arns  = [aws_sns_topic.alerts.arn]
+  }
+
+  tags = merge(var.tags, { Name = "${var.name}-pool-sob-demanda" })
+
+  depends_on = [aws_sns_topic_policy.alerts]
+}
+
 # ------------------------------------------------------------------------------- alarms
 resource "aws_cloudwatch_metric_alarm" "app_status_check" {
   count = var.app_alarms_enabled ? 1 : 0

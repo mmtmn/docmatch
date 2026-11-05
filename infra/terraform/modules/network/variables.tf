@@ -72,6 +72,17 @@ variable "flow_logs_bucket_arn" {
   default     = ""
 }
 
+variable "burst_internal_port" {
+  description = "TCP port of the application's internal endpoint for the burst workers (DM_BURST_LISTEN)."
+  type        = number
+  default     = 8444
+
+  validation {
+    condition     = var.burst_internal_port > 1024 && var.burst_internal_port < 65536 && var.burst_internal_port != 8443
+    error_message = "burst_internal_port must be an unprivileged port other than the admin port (8443)."
+  }
+}
+
 variable "tags" {
   description = "Extra tags merged into every resource."
   type        = map(string)

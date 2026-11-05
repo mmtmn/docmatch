@@ -107,3 +107,13 @@ output "security_contact_email" {
   description = "Contact published in /.well-known/security.txt."
   value       = var.security_contact_email
 }
+
+output "burst_asg_name" {
+  description = "Auto Scaling group of the pool of on-demand workers (infra/scripts/burst.sh, DM_BURST_ASG_NAME)."
+  value       = module.compute.worker_asg_name
+}
+
+output "burst_api_url_parameter" {
+  description = "SSM parameter with the application's internal endpoint, written at boot."
+  value       = module.compute.burst_api_url_parameter
+}

@@ -33,6 +33,16 @@ output "app_security_group_id" {
   value       = aws_security_group.app.id
 }
 
+output "burst_security_group_id" {
+  description = "Security group of the burst workers (no ingress; reaches the app's internal endpoint)."
+  value       = aws_security_group.burst.id
+}
+
+output "app_subnet_cidr" {
+  description = "IPv4 CIDR of the application subnet (the burst workers live there too)."
+  value       = aws_subnet.app.cidr_block
+}
+
 output "sandbox_security_group_id" {
   description = "Security group of the sandbox Lambda functions."
   value       = aws_security_group.sandbox.id

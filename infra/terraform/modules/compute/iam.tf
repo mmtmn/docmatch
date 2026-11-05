@@ -42,10 +42,12 @@ data "aws_iam_policy_document" "session_manager" {
 
 locals {
   ssm_parameter_arn = "arn:aws:ssm:${var.region}:${var.account_id}:parameter${var.ssm_path_prefix}"
-  upload_prefixes   = ["quarantine", "clean", "derived"]
-  eip_arn           = "arn:aws:ec2:${var.region}:${var.account_id}:elastic-ip/${aws_eip.app.allocation_id}"
-  instances_arn     = "arn:aws:ec2:${var.region}:${var.account_id}:instance/*"
-  enis_arn          = "arn:aws:ec2:${var.region}:${var.account_id}:network-interface/*"
+  # The pool's group by name (the ARN embeds a generated id): exactly that group, known before it exists.
+  worker_asg_arn  = "arn:aws:autoscaling:${var.region}:${var.account_id}:autoScalingGroup:*:autoScalingGroupName/${local.worker_asg_name}"
+  upload_prefixes = ["quarantine", "clean", "derived"]
+  eip_arn         = "arn:aws:ec2:${var.region}:${var.account_id}:elastic-ip/${aws_eip.app.allocation_id}"
+  instances_arn   = "arn:aws:ec2:${var.region}:${var.account_id}:instance/*"
+  enis_arn        = "arn:aws:ec2:${var.region}:${var.account_id}:network-interface/*"
 }
 
 # Shared by the application and worker roles: parameters, uploads, verdict queue, sandbox calls.
@@ -151,6 +153,47 @@ data "aws_iam_policy_document" "workload" {
   }
 }
 
+# Burst workers (docs/escala.md): the named parameters (no DATABASE_URL, no store or provider
+# credential beyond the model key), the release they install at boot and the log group. No
+# uploads, no queue, no sandbox: the inputs of a run come as presigned URLs in its manifest.
+data "aws_iam_policy_document" "burst" {
+  statement {
+    sid       = "ReadBurstParameters"
+    effect    = "Allow"
+    actions   = ["ssm:GetParameters", "ssm:GetParameter"]
+    resources = [for n in local.burst_param_names : "${local.ssm_parameter_arn}/${n}"]
+  }
+
+  statement {
+    sid       = "ReadReleases"
+    effect    = "Allow"
+    actions   = ["s3:GetObject"]
+    resources = ["${var.releases_bucket_arn}/releases/*"]
+  }
+
+  statement {
+    sid       = "ListReleases"
+    effect    = "Allow"
+    actions   = ["s3:ListBucket"]
+    resources = [var.releases_bucket_arn]
+    condition {
+      test     = "StringLike"
+      variable = "s3:prefix"
+      values   = ["releases/*"]
+    }
+  }
+
+  dynamic "statement" {
+    for_each = var.log_group_arn != "" ? [1] : []
+    content {
+      sid       = "ShipLogs"
+      effect    = "Allow"
+      actions   = ["logs:CreateLogStream", "logs:PutLogEvents", "logs:DescribeLogStreams"]
+      resources = ["${var.log_group_arn}:*"]
+    }
+  }
+}
+
 # Application instance only: data volume, Elastic IP, backups and the ACME DNS-01 challenge.
 data "aws_iam_policy_document" "app_only" {
   statement {
@@ -238,6 +281,30 @@ data "aws_iam_policy_document" "app_only" {
     actions   = ["route53:GetChange"]
     resources = ["arn:aws:route53:::change/*"]
   }
+
+  # The main worker sizes the pool and protects the busy instances (docs/escala.md): that group only.
+  statement {
+    sid       = "ScaleBurstPool"
+    effect    = "Allow"
+    actions   = ["autoscaling:SetDesiredCapacity", "autoscaling:SetInstanceProtection"]
+    resources = [local.worker_asg_arn]
+  }
+
+  # Describe has no resource-level permission; it reads, never changes.
+  statement {
+    sid       = "DescribeBurstPool"
+    effect    = "Allow"
+    actions   = ["autoscaling:DescribeAutoScalingGroups"]
+    resources = ["*"]
+  }
+
+  # The application publishes its internal endpoint for the burst workers at boot.
+  statement {
+    sid       = "PublishBurstEndpoint"
+    effect    = "Allow"
+    actions   = ["ssm:PutParameter"]
+    resources = ["${local.ssm_parameter_arn}/DM_BURST_API_URL"]
+  }
 }
 
 # --------------------------------------------------------------------------------- app role
@@ -296,10 +363,11 @@ resource "aws_iam_role_policy" "worker_session_manager" {
   policy = data.aws_iam_policy_document.session_manager.json
 }
 
-resource "aws_iam_role_policy" "worker_workload" {
-  name   = "workload"
+# The worker role is the burst pool's: the narrow policy above, not the application's workload.
+resource "aws_iam_role_policy" "worker_burst" {
+  name   = "burst"
   role   = aws_iam_role.worker.id
-  policy = data.aws_iam_policy_document.workload.json
+  policy = data.aws_iam_policy_document.burst.json
 }
 
 resource "aws_iam_role_policy_attachment" "worker_guardrails" {

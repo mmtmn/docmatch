@@ -62,6 +62,18 @@ type Config struct {
 	History            History         `yaml:"history"`
 	Queue              Queue           `yaml:"queue"`
 	Kinds              map[string]Kind `yaml:"kinds"`
+	// Burst times a run on the pool of on-demand workers (docs/escala.md).
+	Burst Burst `yaml:"burst"`
+}
+
+// Burst models a run on the pool of on-demand workers: the work takes
+// SpeedFactor of its main-box time, plus BootSeconds when no instance is warm.
+// BaseMemoryMB and Kind.MemoryMBPerUnit estimate the memory of a run, which
+// routes it to the pool when the main box cannot hold it.
+type Burst struct {
+	SpeedFactor  float64 `yaml:"speed_factor"`
+	BootSeconds  float64 `yaml:"boot_seconds"`
+	BaseMemoryMB float64 `yaml:"base_memory_mb"`
 }
 
 // History bounds the finished runs the per-kind rates are learned from.
@@ -84,6 +96,8 @@ type Kind struct {
 	// MBPerMinute converts the size of a media file whose duration is
 	// unknown into minutes (audio and video only).
 	MBPerMinute float64 `yaml:"mb_per_minute"`
+	// MemoryMBPerUnit is the harness memory one unit of the kind needs.
+	MemoryMBPerUnit float64 `yaml:"memory_mb_per_unit"`
 }
 
 // Load reads and validates the file.
@@ -145,6 +159,16 @@ func (c *Config) Validate() error {
 		if k.Unit == UnitMinutes && (k.MBPerMinute <= 0 || !finite(k.MBPerMinute)) {
 			problems = append(problems, fmt.Errorf("kinds.%s.mb_per_minute precisa ser positivo", name))
 		}
+		if k.MemoryMBPerUnit < 0 || !finite(k.MemoryMBPerUnit) {
+			problems = append(problems, fmt.Errorf("kinds.%s.memory_mb_per_unit precisa ser >= 0", name))
+		}
+	}
+	b := c.Burst
+	if b.SpeedFactor < 0 || b.SpeedFactor > 1 || !finite(b.SpeedFactor) {
+		problems = append(problems, errors.New("burst.speed_factor precisa estar entre 0 e 1 (0 = 1)"))
+	}
+	if b.BootSeconds < 0 || !finite(b.BootSeconds) || b.BaseMemoryMB < 0 || !finite(b.BaseMemoryMB) {
+		problems = append(problems, errors.New("burst.boot_seconds e burst.base_memory_mb precisam ser >= 0"))
 	}
 	for name := range c.Kinds {
 		if _, ok := kindUnits[name]; !ok {
@@ -162,6 +186,15 @@ func (c *Config) Default(kind string) float64 { return c.Kinds[kind].SecondsPerU
 
 // Window is how far back the history goes.
 func (c *Config) Window() time.Duration { return time.Duration(c.History.WindowDays) * 24 * time.Hour }
+
+// BurstSpeed is the share of its main-box time a run takes on the pool (1
+// when the file does not say).
+func (c *Config) BurstSpeed() float64 {
+	if c.Burst.SpeedFactor <= 0 {
+		return 1
+	}
+	return c.Burst.SpeedFactor
+}
 
 // Large reports whether an expected duration makes a large order.
 func (c *Config) Large(expectedSeconds int64) bool { return expectedSeconds > c.LargeAfterSeconds }

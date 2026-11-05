@@ -65,9 +65,44 @@ variable "lambda_image_tag" {
 }
 
 variable "worker_desired_capacity" {
-  description = "Desired number of spot workers (0 at the tiny stage)."
+  description = "Desired number of burst workers when the group is created (0); the main worker owns it afterwards."
   type        = number
   default     = 0
+}
+
+variable "burst_enabled" {
+  description = "Route heavy runs to the pool of on-demand Spot workers (DM_BURST_ENABLED) and open the internal endpoint. Needs the AMI with docmatch-burst.service and DM_BURST_POOL_SECRET set."
+  type        = bool
+  default     = false
+}
+
+variable "burst_max_instances" {
+  description = "Maximum number of burst workers at once (ASG max_size and DM_BURST_MAX_INSTANCES)."
+  type        = number
+  default     = 2
+
+  validation {
+    condition     = var.burst_max_instances >= 0 && var.burst_max_instances <= 20
+    error_message = "burst_max_instances must be between 0 and 20."
+  }
+}
+
+variable "burst_monthly_hours" {
+  description = "Instance-hour budget of the pool per calendar month (DM_BURST_MONTHLY_HOURS); past it every run stays on the main box."
+  type        = number
+  default     = 60
+}
+
+variable "burst_budget_usd" {
+  description = "AWS Budgets limit in USD for the pool (alarm at 80% actual and 100% forecast); 60 h of c7g.large on demand is about US$ 4.35."
+  type        = number
+  default     = 5
+}
+
+variable "burst_internal_port" {
+  description = "Port of the application's internal endpoint for the burst workers."
+  type        = number
+  default     = 8444
 }
 
 variable "wait_for_certificate_validation" {

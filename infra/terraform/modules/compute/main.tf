@@ -1,11 +1,17 @@
 # Compute: one on-demand t4g.small in an Auto Scaling group of exactly one (self-healing, rolling
 # AMI refresh), a persistent gp3 data volume re-attached by user-data, an Elastic IP that is the
-# CloudFront origin, and a stage-1 spot group for workers that starts at zero.
+# CloudFront origin, and the pool of on-demand (burst) Spot workers that sits at zero: the main
+# worker on the application instance sizes it (docs/escala.md), never Terraform.
 
 locals {
   app_enabled      = var.ami_id != ""
   data_mount_point = "/var/lib/postgresql"
   common_tags      = merge(var.tags, { "docmatch:env" = var.env })
+  # Fixed name: the main worker finds the group by it (DM_BURST_ASG_NAME, module secrets).
+  worker_asg_name   = "${var.name}-worker"
+  burst_sg          = var.burst_security_group_id != "" ? var.burst_security_group_id : var.security_group_id
+  burst_api_param   = "${var.ssm_path_prefix}/DM_BURST_API_URL"
+  burst_param_names = distinct(concat(var.burst_parameter_names, ["DM_BURST_API_URL"]))
 
   user_data_app = templatefile("${path.module}/templates/user-data.sh.tftpl", {
     role              = "app"
@@ -17,6 +23,9 @@ locals {
     eip_allocation_id = aws_eip.app.allocation_id
     data_mount_point  = local.data_mount_point
     releases_bucket   = var.releases_bucket_name
+    internal_port     = var.burst_internal_port
+    burst_api_param   = local.burst_api_param
+    burst_names       = ""
   })
 
   user_data_worker = templatefile("${path.module}/templates/user-data.sh.tftpl", {
@@ -29,7 +38,27 @@ locals {
     eip_allocation_id = ""
     data_mount_point  = local.data_mount_point
     releases_bucket   = var.releases_bucket_name
+    internal_port     = var.burst_internal_port
+    burst_api_param   = ""
+    burst_names       = join(",", local.burst_param_names)
   })
+}
+
+# Address of the application's internal endpoint (https://<private IP>:<port>), written by the
+# application's user-data at every boot; the burst workers read it (DM_BURST_API_URL). Terraform
+# creates it and never resets it.
+resource "aws_ssm_parameter" "burst_api_url" {
+  name        = local.burst_api_param
+  description = "docmatch ${var.env}: internal endpoint of the application for the burst workers (written at boot)"
+  type        = "String"
+  tier        = "Standard"
+  value       = "https://127.0.0.1:${var.burst_internal_port}"
+
+  tags = merge(local.common_tags, { Name = "${var.name}-dm-burst-api-url", "docmatch:secret" = "false" })
+
+  lifecycle {
+    ignore_changes = [value]
+  }
 }
 
 # --------------------------------------------------------------------------- persistent data
@@ -175,7 +204,7 @@ resource "aws_launch_template" "worker" {
   count = local.app_enabled ? 1 : 0
 
   name                   = "${var.name}-worker"
-  description            = "docmatch ${var.env} spot worker"
+  description            = "docmatch ${var.env} burst (spot) worker"
   image_id               = var.ami_id
   ebs_optimized          = true
   update_default_version = true
@@ -189,7 +218,7 @@ resource "aws_launch_template" "worker" {
     device_index                = 0
     associate_public_ip_address = true
     ipv6_address_count          = 1
-    security_groups             = [var.security_group_id]
+    security_groups             = [local.burst_sg]
     delete_on_termination       = true
   }
 
@@ -229,15 +258,20 @@ resource "aws_launch_template" "worker" {
 resource "aws_autoscaling_group" "worker" {
   count = local.app_enabled ? 1 : 0
 
-  name                      = "${var.name}-worker"
+  name                      = local.worker_asg_name
   min_size                  = 0
   max_size                  = var.worker_max_size
   desired_capacity          = var.worker_desired_capacity
   vpc_zone_identifier       = [var.subnet_id]
   health_check_type         = "EC2"
   health_check_grace_period = 180
-  capacity_rebalance        = true
+  # Jobs, not a fleet: a rebalance would replace an instance in the middle of a run. A Spot
+  # interruption gives its two-minute notice and the run is requeued from its checkpoint.
+  capacity_rebalance        = false
   wait_for_capacity_timeout = "0"
+  # New instances start unprotected; the scaler protects the ones holding a job, so scaling in
+  # never takes a busy instance.
+  protect_from_scale_in = false
 
   mixed_instances_policy {
     instances_distribution {
@@ -269,13 +303,22 @@ resource "aws_autoscaling_group" "worker" {
     }
   }
 
+  # Group metrics are free: instance-minutes of the pool on the CloudWatch console.
+  enabled_metrics     = ["GroupInServiceInstances", "GroupDesiredCapacity", "GroupPendingInstances", "GroupTerminatingInstances"]
+  metrics_granularity = "1Minute"
+
   dynamic "tag" {
-    for_each = merge(local.common_tags, { Name = "${var.name}-worker", "docmatch:role" = "worker" })
+    for_each = merge(local.common_tags, { Name = "${var.name}-worker", "docmatch:role" = "worker", "docmatch:pool" = "burst" })
     content {
       key                 = tag.key
       value               = tag.value
       propagate_at_launch = true
     }
+  }
+
+  # The main worker sizes the pool (and burst.sh by hand): an apply must not reset it.
+  lifecycle {
+    ignore_changes = [desired_capacity]
   }
 }
 

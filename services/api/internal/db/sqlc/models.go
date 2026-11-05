@@ -127,6 +127,46 @@ type BlogTopic struct {
 	CreatedAt     time.Time
 }
 
+type BurstEvent struct {
+	JobID     uuid.UUID
+	OrgID     uuid.UUID
+	Seq       int64
+	Event     []byte
+	CreatedAt time.Time
+}
+
+type BurstInstance struct {
+	InstanceID   string
+	InstanceType string
+	Lifecycle    string
+	FirstSeenAt  time.Time
+	LastSeenAt   time.Time
+}
+
+type BurstJob struct {
+	ID              uuid.UUID
+	OrgID           uuid.UUID
+	RunID           uuid.UUID
+	State           string
+	Request         []byte
+	DeadlineSeconds int64
+	InstanceID      *string
+	TokenHash       []byte
+	ClaimedAt       *time.Time
+	LeaseExpiresAt  *time.Time
+	FinishedAt      *time.Time
+	Reason          string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+type BurstPool struct {
+	ID             int16
+	FailedClaims   int32
+	UnhealthyUntil *time.Time
+	UpdatedAt      time.Time
+}
+
 type CreditAccount struct {
 	OrgID     uuid.UUID
 	Balance   int64

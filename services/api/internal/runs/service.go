@@ -80,8 +80,14 @@ type Deps struct {
 	Clock func() time.Time
 	// URI renders the storage URI of an upload for the harness.
 	URI func(u uploads.Upload) string
-	// RunDeadline overrides DefaultRunDeadline.
+	// RunDeadline fixes the deadline of every run (tests); zero scales it
+	// with the expected time through Deadlines.
 	RunDeadline time.Duration
+	// Deadlines scales the deadline of a run (zero: DefaultDeadlines).
+	Deadlines Deadlines
+	// Remote runs heavy runs on the pool of on-demand workers; nil keeps
+	// every run on the main box.
+	Remote Remote
 }
 
 // Service implements the run operations.
@@ -115,9 +121,10 @@ func New(d Deps) (*Service, error) {
 	if d.URI == nil {
 		d.URI = func(u uploads.Upload) string { return estimate.SourceURI(u, d.Uploads.StoreFor(u).URI) }
 	}
-	if d.RunDeadline <= 0 {
-		d.RunDeadline = DefaultRunDeadline
+	if d.RunDeadline > 0 {
+		d.Deadlines = Deadlines{Min: d.RunDeadline, Max: d.RunDeadline, Factor: 1, Wait: d.Deadlines.Wait}
 	}
+	d.Deadlines = d.Deadlines.normalized()
 	return &Service{d: d}, nil
 }
 
@@ -194,9 +201,16 @@ func (s *Service) Create(ctx context.Context, p apix.Principal, req CreateReques
 	}
 	// The run keeps the timing of its initial quote: an approval later swaps
 	// QuoteID for an additional quote that carries none.
-	run.SetTiming(Timing{ExpectedSeconds: rec.Quote.ExpectedSeconds, Large: rec.Quote.Large, Units: s.d.Estimates.Units(loaded, rec.Quote.Breakdown.Items)})
+	units := s.d.Estimates.Units(loaded, rec.Quote.Breakdown.Items)
+	timing := Timing{ExpectedSeconds: rec.Quote.ExpectedSeconds, Large: rec.Quote.Large, Units: units}
+	if rec.Quote.ExpectedSeconds > 0 {
+		// The main-box time the run falls back to (the quote shows the time
+		// where it will execute); deadlines scale with the larger.
+		timing.LocalSeconds = s.d.Estimates.Timing(ctx, units).LocalSeconds
+	}
+	run.SetTiming(timing)
 	created, err := s.d.Store.CreateRun(ctx, run, func(ctx context.Context, tx pgx.Tx) error {
-		return s.d.Jobs.EnqueueTx(ctx, tx, jobargs.RunArgs{OrgID: p.OrgID, RunID: id})
+		return s.d.Jobs.EnqueueTx(ctx, tx, jobargs.RunArgs{OrgID: p.OrgID, RunID: id, ExpectedSeconds: timing.Budget()})
 	})
 	if err != nil {
 		if _, rerr := s.d.Credits.Release(ctx, p.OrgID, hold.ID); rerr != nil {
@@ -373,7 +387,7 @@ func (s *Service) Approve(ctx context.Context, p apix.Principal, id uuid.UUID, r
 	r.QuoteID, r.PendingQuoteID = &quoteID, nil
 	r.Status = StatusQueued
 	saved, err := s.d.Store.SaveRun(ctx, r, func(ctx context.Context, tx pgx.Tx) error {
-		return s.d.Jobs.EnqueueTx(ctx, tx, jobargs.RunArgs{OrgID: p.OrgID, RunID: id, Resume: true})
+		return s.d.Jobs.EnqueueTx(ctx, tx, jobargs.RunArgs{OrgID: p.OrgID, RunID: id, Resume: true, ExpectedSeconds: r.Timing().Budget()})
 	})
 	if err != nil {
 		if _, rerr := s.d.Credits.Release(ctx, p.OrgID, hold.ID); rerr != nil {
