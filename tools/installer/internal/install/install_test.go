@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -171,7 +172,17 @@ func TestDemoSkippedAndCloneWithoutRepo(t *testing.T) {
 }
 
 func TestSourceRevision(t *testing.T) {
+	// Inside a git hook GIT_DIR points at the repository being pushed; -C must still win.
+	if out, err := exec.Command("git", "rev-parse", "--absolute-git-dir").Output(); err == nil {
+		t.Setenv("GIT_DIR", strings.TrimSpace(string(out)))
+	}
 	if SourceRevision(context.Background(), "") != "" || SourceRevision(context.Background(), t.TempDir()) != "" {
 		t.Fatal("fora de um checkout não há revisão")
+	}
+	if Remote(context.Background(), t.TempDir()) != "" {
+		t.Fatal("fora de um checkout não há remoto")
+	}
+	if cmd := gitCommand(context.Background(), "status"); strings.Contains(strings.Join(cmd.Env, "\n"), "GIT_DIR=") {
+		t.Fatal("GIT_DIR não pode chegar ao git")
 	}
 }

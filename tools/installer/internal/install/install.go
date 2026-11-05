@@ -380,8 +380,8 @@ func (in *Installer) clone(ctx context.Context, r *flow.Reporter) error {
 		if in.Opts.RepoRef != "" {
 			args = append(args, "--branch", in.Opts.RepoRef)
 		}
-		cmd := exec.CommandContext(ctx, "git", append(args, in.Opts.RepoURL, dest)...) //nolint:gosec // our own arguments
-		cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+		cmd := gitCommand(ctx, append(args, in.Opts.RepoURL, dest)...)
+		cmd.Env = append(cmd.Env, "GIT_TERMINAL_PROMPT=0")
 		if err := streamCmd(cmd, r.Log); err != nil {
 			return fmt.Errorf("%w: git clone %s: %w", ErrNoSource, in.Opts.RepoURL, err)
 		}
@@ -606,18 +606,40 @@ func FindSource(starts ...string) string {
 	return ""
 }
 
+// gitLocationVars point git at a repository regardless of -C (git sets them for hooks): they
+// would make the installer read, or clone over, the wrong repository.
+var gitLocationVars = []string{"GIT_DIR=", "GIT_WORK_TREE=", "GIT_INDEX_FILE=", "GIT_COMMON_DIR=", "GIT_PREFIX=", "GIT_OBJECT_DIRECTORY="}
+
+// gitCommand runs git without the location variables of the environment.
+func gitCommand(ctx context.Context, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, "git", args...) //nolint:gosec // our own arguments
+	for _, kv := range os.Environ() {
+		keep := true
+		for _, prefix := range gitLocationVars {
+			if strings.HasPrefix(kv, prefix) {
+				keep = false
+				break
+			}
+		}
+		if keep {
+			cmd.Env = append(cmd.Env, kv)
+		}
+	}
+	return cmd
+}
+
 // SourceRevision is the short commit of the checkout, with "-dirty" when it has local changes;
 // "" without git or outside a checkout.
 func SourceRevision(ctx context.Context, dir string) string {
 	if dir == "" {
 		return ""
 	}
-	out, err := exec.CommandContext(ctx, "git", "-C", dir, "rev-parse", "--short=12", "HEAD").Output() //nolint:gosec // our own arguments
+	out, err := gitCommand(ctx, "-C", dir, "rev-parse", "--short=12", "HEAD").Output()
 	if err != nil {
 		return ""
 	}
 	rev := strings.TrimSpace(string(out))
-	status, err := exec.CommandContext(ctx, "git", "-C", dir, "status", "--porcelain", "--untracked-files=no").Output() //nolint:gosec // our own arguments
+	status, err := gitCommand(ctx, "-C", dir, "status", "--porcelain", "--untracked-files=no").Output()
 	if err == nil && strings.TrimSpace(string(status)) != "" {
 		rev += "-dirty"
 	}
@@ -672,7 +694,7 @@ func Remote(ctx context.Context, dir string) string {
 	if dir == "" {
 		return ""
 	}
-	out, err := exec.CommandContext(ctx, "git", "-C", dir, "remote", "get-url", "origin").Output() //nolint:gosec // our own arguments
+	out, err := gitCommand(ctx, "-C", dir, "remote", "get-url", "origin").Output()
 	if err != nil {
 		return ""
 	}
