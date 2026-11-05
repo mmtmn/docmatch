@@ -41,8 +41,8 @@ UNIT_EXCLUDES := -exclude internal/db -exclude internal/db/pgstore -exclude inte
 FULL_EXCLUDES := -exclude internal/db/sqlc -exclude internal/testdb -exclude internal/harness/pb
 FLOORS        := -floor 85 -pkg internal/credits=95 -pkg internal/config=95 -pkg internal/auth=90 -pkg internal/session=90
 
-.PHONY: help setup tools generate proto sync sync-check sqlc-check fmt lint vet test test-integration \ release
-        vuln ci ci-full build dev migrate run-api run-worker clean
+.PHONY: help setup tools generate proto sync sync-check sqlc-check fmt lint vet test test-integration \
+        vuln ci ci-full build release dev migrate run-api run-worker clean
 
 help: ## lista os alvos
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'

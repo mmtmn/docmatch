@@ -62,12 +62,16 @@ if [[ "$all" != "1" ]]; then
 fi
 
 for s in "${subsystems[@]}"; do
-  if [[ -f "$s/Makefile" ]] && make -C "$s" -n "$target" >/dev/null 2>&1; then
-    if [[ "$all" == "1" ]] || grep -q "^$s/" <<<"$changed"; then
-      run_step "$s" make -C "$s" "$target"
-    else
-      names+=("$s"); statuses+=("pulado (sem mudanças)"); times+=("0s")
-    fi
+  [[ -f "$s/Makefile" ]] || continue
+  # Skip only a subsystem without the target. A Makefile that does not parse still declares it,
+  # so the step runs and fails loudly instead of disappearing from the summary.
+  if ! make -C "$s" -n "$target" >/dev/null 2>&1 && ! grep -qE "^${target}:" "$s/Makefile"; then
+    continue
+  fi
+  if [[ "$all" == "1" ]] || grep -q "^$s/" <<<"$changed"; then
+    run_step "$s" make -C "$s" "$target"
+  else
+    names+=("$s"); statuses+=("pulado (sem mudanças)"); times+=("0s")
   fi
 done
 
