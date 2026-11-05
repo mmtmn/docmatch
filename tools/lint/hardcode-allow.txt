@@ -9,6 +9,10 @@ path:testdata/
 # Cópia literal do gêmeo da Vantara (testdata/golden/vantara-twin) embarcada no instalador; o
 # `make -C tools/installer sync-check` garante que é idêntica à original.
 path:tools/installer/internal/assets/twin/
+# Fórmula do Homebrew e manifestos do winget que o tools/installer/release.sh gera de cada versão:
+# manifestos de pacotes, com os endereços de download da versão (os moldes em packaging/templates
+# não têm endereço nenhum e continuam sob o lint).
+path:tools/installer/packaging/(homebrew|winget)/
 path:\.env\.example$
 path:.*terraform\.tfvars\.example$
 path:tools/lint/

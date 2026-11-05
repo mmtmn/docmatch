@@ -20,8 +20,12 @@ var urlWithHost = regexp.MustCompile(`https?://[A-Za-z0-9]`)
 // its arguments). tamper changes the binary after its checksum was written.
 func serveRelease(t *testing.T, tamper bool) string {
 	t.Helper()
-	name := "docmatch-" + runtime.GOOS + "-" + runtime.GOARCH + ".bin"
-	bin := []byte("#!/bin/sh\necho \"docmatch falso: $*\"\n")
+	return serveFile(t, "docmatch-"+runtime.GOOS+"-"+runtime.GOARCH+".bin", []byte("#!/bin/sh\necho \"docmatch falso: $*\"\n"), tamper)
+}
+
+// serveFile serves SHA256SUMS.txt (with name and another binary) and name with bin under /install.
+func serveFile(t *testing.T, name string, bin []byte, tamper bool) string {
+	t.Helper()
 	sum := sha256.Sum256(bin)
 	sums := hex.EncodeToString(sum[:]) + "  " + name + "\n" + strings.Repeat("0", 64) + "  docmatch-outro-amd64.bin\n"
 	if tamper {
@@ -93,5 +97,71 @@ func TestScriptsKeepThePlaceholder(t *testing.T) {
 		if !strings.Contains(string(data), "__DOCMATCH_INSTALL_BASE__") || urlWithHost.Match(data) {
 			t.Errorf("%s: a base fica só no placeholder (o release.sh a grava)", f)
 		}
+	}
+}
+
+// install.ps1 under PowerShell 7 (pwsh): Windows runs it in CI; anywhere else it runs when pwsh is
+// installed, pretending to be an x64 Windows.
+func runPS1(t *testing.T, env ...string) (string, error) {
+	t.Helper()
+	pwsh, err := exec.LookPath("pwsh")
+	if err != nil {
+		t.Skip("sem pwsh")
+	}
+	cmd := exec.Command(pwsh, "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", "install.ps1")
+	cmd.Env = append(os.Environ(), env...)
+	if runtime.GOOS != "windows" {
+		cmd.Env = append(cmd.Env, "PROCESSOR_ARCHITECTURE=AMD64")
+	}
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
+func windowsAsset() string {
+	if runtime.GOOS == "windows" && runtime.GOARCH == "arm64" {
+		return "docmatch-windows-arm64.exe"
+	}
+	return "docmatch-windows-amd64.exe"
+}
+
+var ansi = regexp.MustCompile(`\x1b\[[0-9;?]*[A-Za-z]`)
+
+var fakeExe = []byte("MZ docmatch falso para o install.ps1\n")
+
+func TestInstallPS1VerifiesAndInstalls(t *testing.T) {
+	base := serveFile(t, windowsAsset(), fakeExe, false)
+	binDir := filepath.Join(t.TempDir(), "bin")
+	out, err := runPS1(t, "DOCMATCH_INSTALL_BASE="+base, "DOCMATCH_BIN_DIR="+binDir, "DOCMATCH_NO_RUN=1")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if !strings.Contains(out, "checksum SHA-256 conferido") {
+		t.Fatalf("saída:\n%s", out)
+	}
+	got, err := os.ReadFile(filepath.Join(binDir, "docmatch.exe"))
+	if err != nil || string(got) != string(fakeExe) {
+		t.Fatalf("docmatch.exe não instalado como baixado: %v", err)
+	}
+}
+
+func TestInstallPS1RefusesTamperedBinary(t *testing.T) {
+	base := serveFile(t, windowsAsset(), fakeExe, true)
+	binDir := filepath.Join(t.TempDir(), "bin")
+	out, err := runPS1(t, "DOCMATCH_INSTALL_BASE="+base, "DOCMATCH_BIN_DIR="+binDir, "DOCMATCH_NO_RUN=1")
+	// PowerShell wraps and colors the error and the console may re-encode the accents: compare
+	// the ASCII words with the escapes, the gutter and the spacing taken out.
+	flat := strings.NewReplacer(" ", "", "\n", "", "\r", "", "|", "").Replace(ansi.ReplaceAllString(out, ""))
+	if err == nil || !strings.Contains(flat, "nadafoiinstalado") {
+		t.Fatalf("devia recusar:\n%s", out)
+	}
+	if _, err := os.Stat(filepath.Join(binDir, "docmatch.exe")); err == nil {
+		t.Fatal("nada pode ser instalado com checksum errado")
+	}
+}
+
+func TestInstallPS1NeedsABase(t *testing.T) {
+	out, err := runPS1(t, "DOCMATCH_INSTALL_BASE=", "DOCMATCH_NO_RUN=1")
+	if err == nil || !strings.Contains(out, "DOCMATCH_INSTALL_BASE") {
+		t.Fatalf("sem base devia falhar:\n%s", out)
 	}
 }

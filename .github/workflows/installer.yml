@@ -1,0 +1,78 @@
+# O instalador (tools/installer) no Windows e no macOS, onde o `make ci` local (Linux) não roda:
+# os testes, os seis binários, um teste de fumaça do binário (--version, version, doctor) e a
+# conferência de checksum dos scripts de instalação (o install.ps1 no pwsh, o install.sh no sh,
+# pelos testes Go). Ninguém espera por este workflow; o portão é local.
+name: installer
+
+on:
+  pull_request:
+    paths:
+      - tools/installer/**
+  workflow_dispatch:
+
+concurrency:
+  group: installer-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  installer:
+    name: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+        working-directory: tools/installer
+    steps:
+      # Os quadros de referência e os arquivos embarcados são comparados byte a byte com os do Linux.
+      - name: finais de linha como no repositório
+        working-directory: ${{ github.workspace }}
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/installer/go.mod
+          cache-dependency-path: tools/installer/go.sum
+
+      - name: testes
+        run: go test -count=1 ./...
+
+      - name: os seis binários
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          out="$(cd "$RUNNER_TEMP" && pwd)/cross"
+          for t in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
+            GOOS="${t%/*}" GOARCH="${t#*/}" go build -trimpath -o "$out/docmatch-${t%/*}-${t#*/}" .
+            echo "$t ok"
+          done
+          rm -rf "$out"
+
+      - name: fumaça do binário
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          bin="$(cd "$RUNNER_TEMP" && pwd)/bin"
+          mkdir -p "$bin"
+          go build -trimpath -o "$bin/" .
+          exe="$bin/docmatch"
+          [ -f "$exe.exe" ] && exe="$exe.exe"
+          test "$("$exe" --version)" = "docmatch dev"
+          test "$("$exe" version)" = "docmatch dev"
+          # Sem Docker rodando no runner o doctor sai com 1; 2 (uso) ou um travamento é erro.
+          code=0
+          "$exe" --plain doctor > doctor.txt 2>&1 || code=$?
+          cat doctor.txt
+          [ "$code" -le 1 ] || { echo "doctor saiu com $code"; exit 1; }
+          grep -q '^docmatch dev - ' doctor.txt
+          grep -q '==> Verificando esta m' doctor.txt
+          grep -Eq '^  \[(ok|!!|xx|--)\] ' doctor.txt
