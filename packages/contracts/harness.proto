@@ -320,6 +320,10 @@ message RunSummary {
   double matched_ratio = 8;
   repeated string new_tool_ids = 9;
   repeated string proposed_rule_ids = 10;
+  // Problems with the input files, in pt-BR, each naming the file: a format the harness could
+  // not read, a scanned PDF without text, a CNAB layout read only with the common fields, a
+  // file that did not take part in the run. Empty when every file was used as read.
+  repeated string source_warnings = 11;
 }
 
 message Failed {

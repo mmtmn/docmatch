@@ -2512,8 +2512,12 @@ type RunSummary struct {
 	MatchedRatio    float64  `protobuf:"fixed64,8,opt,name=matched_ratio,json=matchedRatio,proto3" json:"matched_ratio,omitempty"`
 	NewToolIds      []string `protobuf:"bytes,9,rep,name=new_tool_ids,json=newToolIds,proto3" json:"new_tool_ids,omitempty"`
 	ProposedRuleIds []string `protobuf:"bytes,10,rep,name=proposed_rule_ids,json=proposedRuleIds,proto3" json:"proposed_rule_ids,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// Problems with the input files, in pt-BR, each naming the file: a format the harness could
+	// not read, a scanned PDF without text, a CNAB layout read only with the common fields, a
+	// file that did not take part in the run. Empty when every file was used as read.
+	SourceWarnings []string `protobuf:"bytes,11,rep,name=source_warnings,json=sourceWarnings,proto3" json:"source_warnings,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *RunSummary) Reset() {
@@ -2612,6 +2616,13 @@ func (x *RunSummary) GetNewToolIds() []string {
 func (x *RunSummary) GetProposedRuleIds() []string {
 	if x != nil {
 		return x.ProposedRuleIds
+	}
+	return nil
+}
+
+func (x *RunSummary) GetSourceWarnings() []string {
+	if x != nil {
+		return x.SourceWarnings
 	}
 	return nil
 }
@@ -4284,7 +4295,7 @@ const file_harness_proto_rawDesc = "" +
 	"\tCompleted\x129\n" +
 	"\asummary\x18\x01 \x01(\v2\x1f.docmatch.harness.v1.RunSummaryR\asummary\x12#\n" +
 	"\rcredits_spent\x18\x02 \x01(\x04R\fcreditsSpent\x12)\n" +
-	"\x10credits_refunded\x18\x03 \x01(\x04R\x0fcreditsRefunded\"\x85\x04\n" +
+	"\x10credits_refunded\x18\x03 \x01(\x04R\x0fcreditsRefunded\"\xae\x04\n" +
 	"\n" +
 	"RunSummary\x12%\n" +
 	"\x0efindings_total\x18\x01 \x01(\rR\rfindingsTotal\x12i\n" +
@@ -4299,7 +4310,8 @@ const file_harness_proto_rawDesc = "" +
 	"\fnew_tool_ids\x18\t \x03(\tR\n" +
 	"newToolIds\x12*\n" +
 	"\x11proposed_rule_ids\x18\n" +
-	" \x03(\tR\x0fproposedRuleIds\x1aE\n" +
+	" \x03(\tR\x0fproposedRuleIds\x12'\n" +
+	"\x0fsource_warnings\x18\v \x03(\tR\x0esourceWarnings\x1aE\n" +
 	"\x17FindingsBySeverityEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xac\x01\n" +
