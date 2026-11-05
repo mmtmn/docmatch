@@ -127,6 +127,9 @@ tower = { version = "0.5.3", features = ["util"] }
 proptest = "1.12.0"
 wiremock = "0.6.5"
 tempfile = "3.27.0"
+# A global allocator that counts and caps what is allocated (the bounded-memory tests; the
+# workspace forbids the unsafe code a counting allocator needs).
+cap = { version = "0.1.2", features = ["stats"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

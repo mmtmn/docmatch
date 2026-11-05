@@ -40,6 +40,7 @@ ego-tree.workspace = true
 serde-saphyr.workspace = true
 
 [dev-dependencies]
+cap.workspace = true
 proptest.workspace = true
 rust_xlsxwriter.workspace = true
 tempfile.workspace = true

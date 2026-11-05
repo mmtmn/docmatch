@@ -21,7 +21,7 @@ use scraper::node::Element;
 use scraper::{Html, Node};
 
 use crate::cancel::{Every, STOPPED};
-use crate::grid::{clean_cell, table_from_rows, MAX_CELL_CHARS};
+use crate::grid::{clean_cell, grid_records, table_from_records, MAX_CELL_CHARS};
 use crate::html_limit::{parse_bounded, Limit, MAX_DEPTH, MAX_NODES};
 use crate::source::{document_text, TextPart};
 use crate::IngestError;
@@ -33,7 +33,7 @@ const MAX_SPAN: usize = 64;
 /// Rows one cell may span (`rowspan="0"`, to the end of its row group, is this many).
 const MAX_ROWSPAN: usize = 1_000;
 /// Cells kept per page, the copies of spanning cells included.
-const MAX_CELLS: usize = 500_000;
+const MAX_CELLS: usize = 300_000;
 /// Bytes of cell text kept per page, the copies of cells spanning rows included.
 const MAX_CELL_BYTES: usize = 8 << 20;
 /// Bytes of text kept from one cell before it is cleaned.
@@ -644,15 +644,24 @@ pub fn parse_html(bytes: &[u8], stem: &str, source_id: &str) -> Result<HtmlParse
             MAX_CELL_BYTES >> 20
         ));
     }
+    // Which grids are tables is known before they are typed: the text is read and the tree
+    // dropped first, so the tree and the typed tables are never in memory together.
     let mut data = BTreeMap::new();
+    let mut records = Vec::new();
     for (order, id, rows) in grids {
-        let name = format!("{stem}:tabela {}", order + 1);
-        if let Some(t) = table_from_rows(&name, source_id, rows) {
-            out.tables.push(t);
-            data.insert(id, name);
+        if let Some(r) = grid_records(rows) {
+            let name = format!("{stem}:tabela {}", order + 1);
+            data.insert(id, name.clone());
+            records.push((name, r));
         }
     }
     let parts = page_parts(&doc, &data);
+    drop(doc);
+    for (name, (headers, rows)) in records {
+        if let Some(t) = table_from_records(&name, source_id, &headers, &headers, rows) {
+            out.tables.push(t);
+        }
+    }
     out.text = tidy(&document_text(&parts, |_| false));
     if parts.iter().any(|p| p.table.is_some()) {
         out.parts = parts;

@@ -236,7 +236,7 @@ pub(crate) const MAX_RECORD_CELLS: usize = 2_000_000;
 /// Bytes of text kept per XML element (text and each attribute value).
 const MAX_XML_TEXT: usize = crate::grid::MAX_CELL_CHARS * 4;
 /// Attributes kept per XML document.
-const MAX_XML_ATTRS: usize = 1_000_000;
+const MAX_XML_ATTRS: usize = 500_000;
 /// Levels of nested objects flattened into dotted columns.
 const MAX_FLATTEN_DEPTH: usize = 4;
 /// Levels searched for record arrays.
@@ -461,10 +461,12 @@ fn table_name(stem: &str, path: &str) -> String {
     }
 }
 
-fn json_text(bytes: &[u8]) -> String {
+/// The text of a JSON document: borrowed when it is UTF-8 already (a 64 MB file is not
+/// copied), decoded after a byte-order mark otherwise.
+fn json_text(bytes: &[u8]) -> std::borrow::Cow<'_, str> {
     let (encoding, rest) =
         Encoding::for_bom(bytes).map_or((encoding_rs::UTF_8, bytes), |(e, n)| (e, &bytes[n..]));
-    encoding.decode_without_bom_handling(rest).0.into_owned()
+    encoding.decode_without_bom_handling(rest).0
 }
 
 fn cut_input(bytes: &[u8], warnings: &mut Vec<String>, what: &str) -> usize {
@@ -714,12 +716,13 @@ struct XNode {
     children: Vec<usize>,
 }
 
-fn xml_decoded(bytes: &[u8]) -> String {
+/// The text of an XML document: borrowed when it is UTF-8 (no copy of a large file).
+fn xml_decoded(bytes: &[u8]) -> std::borrow::Cow<'_, str> {
     if let Some((enc, n)) = Encoding::for_bom(bytes) {
-        return enc.decode_without_bom_handling(&bytes[n..]).0.into_owned();
+        return enc.decode_without_bom_handling(&bytes[n..]).0;
     }
     if let Ok(s) = std::str::from_utf8(bytes) {
-        return s.to_string();
+        return std::borrow::Cow::Borrowed(s);
     }
     // The declaration names the encoding of a non-UTF-8 document.
     let head = String::from_utf8_lossy(&bytes[..bytes.len().min(256)]).to_ascii_lowercase();
@@ -732,7 +735,7 @@ fn xml_decoded(bytes: &[u8]) -> String {
             Encoding::for_label(label.as_bytes())
         })
         .unwrap_or(encoding_rs::WINDOWS_1252);
-    enc.decode_without_bom_handling(bytes).0.into_owned()
+    enc.decode_without_bom_handling(bytes).0
 }
 
 /// The attributes of an element, at most [`MAX_COLUMNS`]: they become columns, and quick-xml's

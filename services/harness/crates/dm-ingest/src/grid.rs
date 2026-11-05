@@ -22,6 +22,9 @@ pub(crate) const MAX_COLUMNS: usize = 256;
 pub(crate) const MAX_ROWS: usize = 200_000;
 /// Characters kept per cell.
 pub(crate) const MAX_CELL_CHARS: usize = 4_096;
+/// Cells of one table once every row has the table's width: a grid with one wide row and
+/// many short ones is padded to rows times width, so the rows are cut to fit.
+pub(crate) const MAX_GRID_CELLS: usize = 1_000_000;
 
 /// One cell before typing.
 #[derive(Clone, Debug, PartialEq)]
@@ -110,6 +113,13 @@ pub(crate) fn table_from_rows(
     source_id: &str,
     rows: Vec<Vec<String>>,
 ) -> Option<Table> {
+    let (headers, data) = grid_records(rows)?;
+    table_from_records(name, source_id, &headers, &headers, data)
+}
+
+/// The header and the data rows of a document grid ([`table_from_rows`] without typing), or
+/// `None` when it is not a table; at most [`MAX_GRID_CELLS`] cells once padded.
+pub(crate) fn grid_records(rows: Vec<Vec<String>>) -> Option<(Vec<String>, Vec<Vec<Cell>>)> {
     // Trailing columns empty in every row are formatting (an ODT row repeats empty cells).
     let width = rows
         .iter()
@@ -126,7 +136,7 @@ pub(crate) fn table_from_rows(
     }
     let rows: Vec<Vec<String>> = rows
         .into_iter()
-        .take(MAX_ROWS + HEADER_SEARCH_ROWS)
+        .take((MAX_ROWS + HEADER_SEARCH_ROWS).min(MAX_GRID_CELLS / width))
         .map(|mut r| {
             r.truncate(width);
             r.resize(width, String::new());
@@ -135,24 +145,27 @@ pub(crate) fn table_from_rows(
         .collect();
     let h = header_row(&rows, width)?;
     let headers = rows[h].clone();
-    let data: Vec<Vec<Cell>> = rows[h + 1..]
-        .iter()
+    // The cells move into the records: no copy of the grid.
+    let data: Vec<Vec<Cell>> = rows
+        .into_iter()
+        .skip(h + 1)
         // Tables split across pages repeat their header row.
-        .filter(|r| **r != headers)
+        .filter(|r| *r != headers)
         .map(|r| {
-            r.iter()
+            r.into_iter()
                 .map(|c| {
                     if c.trim().is_empty() {
                         Cell::Empty
                     } else {
-                        Cell::Text(c.clone())
+                        Cell::Text(c)
                     }
                 })
                 .collect()
         })
         .collect();
-    let role_headers = headers.clone();
-    table_from_records(name, source_id, &headers, &role_headers, data)
+    data.iter()
+        .any(|r| r.iter().any(|c| !c.is_empty()))
+        .then_some((headers, data))
 }
 
 /// Records with known column names (`headers`, written to [`dm_core::Column::header`]) typed
@@ -172,7 +185,7 @@ pub(crate) fn table_from_records(
     let rows: Vec<Vec<Cell>> = rows
         .into_iter()
         .filter(|r| r.iter().any(|c| !c.is_empty()))
-        .take(MAX_ROWS)
+        .take(MAX_ROWS.min(MAX_GRID_CELLS / width))
         .map(|mut r| {
             r.truncate(width);
             r.resize(width, Cell::Empty);
