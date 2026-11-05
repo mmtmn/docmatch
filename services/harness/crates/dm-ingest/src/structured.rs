@@ -7,9 +7,12 @@
 //! inside a record become text. A JSON array of arrays is a grid with a header row. A document
 //! with no record array but scalar fields is one record. Roles are inferred from the last key
 //! of each path, so `cliente.cnpj` is a tax id. Memory and time are bounded: the input is
-//! read only up to [`MAX_INPUT`] bytes, JSON nests at most 128 levels (serde_json's limit),
-//! XML at most [`MAX_XML_DEPTH`] levels and [`MAX_XML_NODES`] elements, and tables keep at
-//! most [`crate::grid::MAX_ROWS`] rows and [`crate::grid::MAX_COLUMNS`] columns.
+//! read only up to [`MAX_INPUT`] bytes; a JSON document (or JSON Lines line) up to
+//! [`MAX_JSON_DOCUMENT`] bytes and [`MAX_JSON_COST`] bytes of estimated memory, nesting at
+//! most 128 levels (serde_json's limit); XML at most [`MAX_XML_DEPTH`] levels,
+//! [`MAX_XML_NODES`] elements and [`MAX_XML_ATTRS`] attributes, with the text of an element
+//! cut at [`MAX_XML_TEXT`] bytes; records at most [`MAX_RECORD_CELLS`] cells per file, and
+//! tables at most [`crate::grid::MAX_ROWS`] rows and [`crate::grid::MAX_COLUMNS`] columns.
 
 use dm_core::Table;
 use encoding_rs::Encoding;
@@ -26,7 +29,7 @@ enum Json {
     Number(serde_json::Number),
     String(String),
     Array(Vec<Json>),
-    Object(IndexMap<String, Json>),
+    Object(Box<IndexMap<String, Json>>),
 }
 
 impl Json {
@@ -75,69 +78,147 @@ impl std::fmt::Display for Json {
     }
 }
 
-impl<'de> serde::Deserialize<'de> for Json {
-    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Json, D::Error> {
-        d.deserialize_any(JsonVisitor)
+/// Memory a JSON value may take once read, estimated: a node per value, the bytes of every
+/// string, a map per object and a slot per key. It bounds the tree whatever the document
+/// looks like on disk (`[{},{},...]` costs a hundred bytes of memory per three of input).
+pub(crate) const MAX_JSON_COST: usize = 96 << 20;
+/// A value's node.
+const VALUE_COST: usize = std::mem::size_of::<Json>();
+/// An object's boxed map and the base of its index.
+const OBJECT_COST: usize = 128;
+/// A key's slot (string, hash and index entry), besides its bytes.
+const ENTRY_COST: usize = 64;
+
+/// Message of the error a [`Budget`] raises when it runs out.
+const BUDGET_EXCEEDED: &str = "limite de memória do JSON excedido";
+
+/// The memory left to a value and everything nested in it.
+struct Budget {
+    left: std::cell::Cell<usize>,
+    every: std::cell::Cell<u32>,
+    exhausted: std::cell::Cell<bool>,
+}
+
+impl Budget {
+    fn new(n: usize) -> Budget {
+        Budget {
+            left: std::cell::Cell::new(n),
+            every: std::cell::Cell::new(0),
+            exhausted: std::cell::Cell::new(false),
+        }
+    }
+
+    fn take<E: serde::de::Error>(&self, cost: usize) -> Result<(), E> {
+        let n = self.every.get().wrapping_add(1);
+        self.every.set(n);
+        if n.is_multiple_of(4096) && crate::cancel::cancelled() {
+            return Err(E::custom(crate::cancel::STOPPED));
+        }
+        if let Some(left) = self.left.get().checked_sub(cost) {
+            self.left.set(left);
+            Ok(())
+        } else {
+            self.exhausted.set(true);
+            Err(E::custom(BUDGET_EXCEEDED))
+        }
+    }
+
+    fn exhausted(&self) -> bool {
+        self.exhausted.get()
     }
 }
 
-struct JsonVisitor;
+/// Deserializes one value under a budget.
+struct Seed<'a>(&'a Budget);
 
-impl<'de> serde::de::Visitor<'de> for JsonVisitor {
+impl<'de> serde::de::DeserializeSeed<'de> for Seed<'_> {
+    type Value = Json;
+
+    fn deserialize<D: serde::Deserializer<'de>>(self, d: D) -> Result<Json, D::Error> {
+        d.deserialize_any(JsonVisitor(self.0))
+    }
+}
+
+struct JsonVisitor<'a>(&'a Budget);
+
+impl<'de> serde::de::Visitor<'de> for JsonVisitor<'_> {
     type Value = Json;
 
     fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("um valor JSON")
     }
 
-    fn visit_unit<E>(self) -> Result<Json, E> {
+    fn visit_unit<E: serde::de::Error>(self) -> Result<Json, E> {
+        self.0.take(VALUE_COST)?;
         Ok(Json::Null)
     }
 
-    fn visit_none<E>(self) -> Result<Json, E> {
+    fn visit_none<E: serde::de::Error>(self) -> Result<Json, E> {
+        self.0.take(VALUE_COST)?;
         Ok(Json::Null)
     }
 
-    fn visit_bool<E>(self, v: bool) -> Result<Json, E> {
+    fn visit_bool<E: serde::de::Error>(self, v: bool) -> Result<Json, E> {
+        self.0.take(VALUE_COST)?;
         Ok(Json::Bool(v))
     }
 
-    fn visit_i64<E>(self, v: i64) -> Result<Json, E> {
+    fn visit_i64<E: serde::de::Error>(self, v: i64) -> Result<Json, E> {
+        self.0.take(VALUE_COST)?;
         Ok(Json::Number(v.into()))
     }
 
-    fn visit_u64<E>(self, v: u64) -> Result<Json, E> {
+    fn visit_u64<E: serde::de::Error>(self, v: u64) -> Result<Json, E> {
+        self.0.take(VALUE_COST)?;
         Ok(Json::Number(v.into()))
     }
 
-    fn visit_f64<E>(self, v: f64) -> Result<Json, E> {
+    fn visit_f64<E: serde::de::Error>(self, v: f64) -> Result<Json, E> {
+        self.0.take(VALUE_COST)?;
         Ok(serde_json::Number::from_f64(v).map_or(Json::Null, Json::Number))
     }
 
-    fn visit_str<E>(self, v: &str) -> Result<Json, E> {
+    fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Json, E> {
+        self.0.take(VALUE_COST + v.len())?;
         Ok(Json::String(v.to_string()))
     }
 
-    fn visit_string<E>(self, v: String) -> Result<Json, E> {
+    fn visit_string<E: serde::de::Error>(self, v: String) -> Result<Json, E> {
+        self.0.take(VALUE_COST + v.len())?;
         Ok(Json::String(v))
     }
 
     fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> Result<Json, A::Error> {
+        self.0.take(VALUE_COST)?;
         let mut items = Vec::new();
-        while let Some(item) = seq.next_element::<Json>()? {
+        while let Some(item) = seq.next_element_seed(Seed(self.0))? {
             items.push(item);
         }
+        items.shrink_to_fit();
         Ok(Json::Array(items))
     }
 
     fn visit_map<A: serde::de::MapAccess<'de>>(self, mut map: A) -> Result<Json, A::Error> {
+        self.0.take(VALUE_COST + OBJECT_COST)?;
         let mut fields: IndexMap<String, Json> = IndexMap::new();
-        while let Some((k, v)) = map.next_entry::<String, Json>()? {
+        while let Some(k) = map.next_key::<String>()? {
+            self.0.take(ENTRY_COST + k.len())?;
+            let v = map.next_value_seed(Seed(self.0))?;
             // A repeated key keeps its first position and its last value, like serde_json.
             fields.insert(k, v);
         }
-        Ok(Json::Object(fields))
+        fields.shrink_to_fit();
+        Ok(Json::Object(Box::new(fields)))
     }
+}
+
+/// One JSON value from text under `budget`; the error keeps serde_json's classification.
+fn parse_value(text: &str, budget: &Budget) -> Result<Json, serde_json::Error> {
+    use serde::de::DeserializeSeed;
+    let mut de = serde_json::Deserializer::from_str(text);
+    let v = Seed(budget).deserialize(&mut de)?;
+    de.end()?;
+    Ok(v)
 }
 
 use crate::grid::{clean_cell, table_from_records, table_from_rows, Cell, MAX_COLUMNS, MAX_ROWS};
@@ -145,6 +226,17 @@ use crate::IngestError;
 
 /// Bytes of a JSON or XML document read; JSON Lines are read line by line up to the same size.
 pub(crate) const MAX_INPUT: usize = 64 << 20;
+/// Bytes of a whole JSON document, and of one JSON Lines line (each is materialized before
+/// its records are found).
+pub(crate) const MAX_JSON_DOCUMENT: usize = 8 << 20;
+/// Cells of records kept per document (every table, JSON Lines and XML included), counted
+/// as written and once more as a full grid: a file whose records each bring new keys would
+/// otherwise become a grid of rows times every key.
+pub(crate) const MAX_RECORD_CELLS: usize = 2_000_000;
+/// Bytes of text kept per XML element (text and each attribute value).
+const MAX_XML_TEXT: usize = crate::grid::MAX_CELL_CHARS * 4;
+/// Attributes kept per XML document.
+const MAX_XML_ATTRS: usize = 1_000_000;
 /// Levels of nested objects flattened into dotted columns.
 const MAX_FLATTEN_DEPTH: usize = 4;
 /// Levels searched for record arrays.
@@ -155,8 +247,9 @@ const MAX_NESTED_TEXT: usize = 500;
 const MAX_TABLES: usize = 64;
 /// Element nesting followed in XML.
 const MAX_XML_DEPTH: usize = 256;
-/// Elements kept in memory from one XML document.
-const MAX_XML_NODES: usize = 1_000_000;
+/// Elements kept in memory from one XML document (each one keeps its name, attributes and
+/// text: about 200 bytes plus its strings).
+const MAX_XML_NODES: usize = 300_000;
 
 /// What a structured document yielded.
 #[derive(Debug, Default)]
@@ -167,47 +260,73 @@ pub struct StructuredParsed {
     pub warnings: Vec<String>,
 }
 
-/// Records with their columns in first-seen order.
+/// Records with their columns in first-seen order; a row keeps the cells it has, by column.
 #[derive(Default)]
 struct Records {
     columns: IndexMap<String, ()>,
-    rows: Vec<IndexMap<String, Cell>>,
+    rows: Vec<Vec<(u16, Cell)>>,
+    cells: usize,
     dropped_columns: bool,
+    /// The cell budget stopped the reading.
+    cut: bool,
 }
 
 impl Records {
-    fn push(&mut self, record: IndexMap<String, Cell>) {
+    /// Adds a record; false once the rows or the cells of the document are spent.
+    fn push(&mut self, record: IndexMap<String, Cell>, budget: &mut usize) -> bool {
         if self.rows.len() >= MAX_ROWS {
-            return;
+            return false;
         }
-        let mut kept = IndexMap::new();
+        if record.len() > *budget {
+            self.cut = true;
+            return false;
+        }
+        *budget -= record.len();
+        let mut kept = Vec::with_capacity(record.len());
         for (k, v) in record {
-            if !self.columns.contains_key(&k) {
+            let i = if let Some(i) = self.columns.get_index_of(&k) {
+                i
+            } else {
                 if self.columns.len() >= MAX_COLUMNS {
                     self.dropped_columns = true;
                     continue;
                 }
-                self.columns.insert(k.clone(), ());
-            }
-            kept.insert(k, v);
+                self.columns.insert(k, ());
+                self.columns.len() - 1
+            };
+            kept.push((i as u16, v));
         }
+        self.cells += kept.len();
         self.rows.push(kept);
+        true
     }
 
-    fn into_table(self, name: &str, source_id: &str) -> Option<Table> {
+    /// The table, as many rows as a full grid of them fits in `budget`.
+    fn into_table(self, name: &str, source_id: &str, budget: &mut usize) -> Option<Table> {
         let headers: Vec<String> = self.columns.keys().cloned().collect();
         let roles: Vec<String> = headers.iter().map(|h| role_word(h)).collect();
+        let width = headers.len().max(1);
+        let fit = (*budget / width).min(self.rows.len());
+        *budget -= fit * width;
         let rows: Vec<Vec<Cell>> = self
             .rows
             .into_iter()
-            .map(|mut r| {
-                headers
-                    .iter()
-                    .map(|h| r.swap_remove(h).unwrap_or(Cell::Empty))
-                    .collect()
+            .take(fit)
+            .map(|r| {
+                let mut row = vec![Cell::Empty; headers.len()];
+                for (i, c) in r {
+                    row[usize::from(i)] = c;
+                }
+                row
             })
             .collect();
         table_from_records(name, source_id, &headers, &roles, rows)
+    }
+
+    /// Rows the grid budget leaves out of the table.
+    fn rows_over(&self, budget: usize) -> usize {
+        let width = self.columns.len().max(1);
+        self.rows.len().saturating_sub(budget / width)
     }
 }
 
@@ -248,7 +367,7 @@ fn scalar(v: &Json) -> Option<Cell> {
 fn flatten_json(prefix: &str, v: &Json, depth: usize, out: &mut IndexMap<String, Cell>) {
     match v {
         Json::Object(map) if depth < MAX_FLATTEN_DEPTH => {
-            for (k, child) in map {
+            for (k, child) in map.iter() {
                 let key = if prefix.is_empty() {
                     k.clone()
                 } else {
@@ -321,7 +440,7 @@ fn find_tables<'a>(path: &str, v: &'a Json, depth: usize, out: &mut Vec<(String,
             }
         }
         Json::Object(map) => {
-            for (k, child) in map {
+            for (k, child) in map.iter() {
                 let p = if path.is_empty() {
                     k.clone()
                 } else {
@@ -360,7 +479,7 @@ fn cut_input(bytes: &[u8], warnings: &mut Vec<String>, what: &str) -> usize {
     }
 }
 
-fn record_warnings(records: &Records, name: &str, warnings: &mut Vec<String>) {
+fn record_warnings(records: &Records, name: &str, budget: usize, warnings: &mut Vec<String>) {
     if records.dropped_columns {
         warnings.push(format!(
             "{name}: mais de {MAX_COLUMNS} campos; os excedentes ficaram de fora"
@@ -369,6 +488,12 @@ fn record_warnings(records: &Records, name: &str, warnings: &mut Vec<String>) {
     if records.rows.len() >= MAX_ROWS {
         warnings.push(format!(
             "{name}: só os primeiros {MAX_ROWS} registros foram lidos"
+        ));
+    }
+    let over = records.rows_over(budget);
+    if records.cut || over > 0 {
+        warnings.push(format!(
+            "{name}: registros cortados no limite de {MAX_RECORD_CELLS} células por arquivo"
         ));
     }
 }
@@ -383,18 +508,30 @@ pub fn parse_json(
         return Err(IngestError::Empty);
     }
     let mut out = StructuredParsed::default();
-    if bytes.len() > MAX_INPUT {
+    if bytes.len() > MAX_JSON_DOCUMENT {
         return Err(IngestError::Unrecognized(format!(
             "JSON acima de {} MB não é lido (use JSON Lines para arquivos grandes)",
-            MAX_INPUT >> 20
+            MAX_JSON_DOCUMENT >> 20
         )));
     }
     let text = json_text(bytes);
-    let doc: Json = match serde_json::from_str(&text) {
+    let budget = Budget::new(MAX_JSON_COST);
+    let doc: Json = match parse_value(&text, &budget) {
         Ok(d) => d,
         // One object per line: JSON Lines whose first line was too long to sniff.
         Err(e) if e.is_syntax() && e.to_string().contains("trailing characters") => {
             return parse_jsonl(bytes, stem, source_id);
+        }
+        Err(_) if budget.exhausted() => {
+            return Err(IngestError::Unrecognized(format!(
+                "JSON com valores demais para ler inteiro (mais de {} MB na memória); use JSON Lines para arquivos grandes",
+                MAX_JSON_COST >> 20
+            )));
+        }
+        Err(e) if e.to_string().contains(crate::cancel::STOPPED) => {
+            return Err(IngestError::Unrecognized(
+                crate::cancel::STOPPED.to_string(),
+            ));
         }
         Err(e) => {
             return Err(IngestError::Parse {
@@ -404,6 +541,7 @@ pub fn parse_json(
         }
     };
     let mut found = Vec::new();
+    let mut cells = MAX_RECORD_CELLS;
     find_tables("", &doc, 0, &mut found);
     for (path, v) in &found {
         let name = table_name(stem, path);
@@ -426,6 +564,14 @@ pub fn parse_json(
                         .unwrap_or_default()
                 })
                 .collect();
+            let width = rows
+                .iter()
+                .map(Vec::len)
+                .max()
+                .unwrap_or(1)
+                .clamp(1, MAX_COLUMNS);
+            let rows: Vec<Vec<String>> = rows.into_iter().take(cells / width).collect();
+            cells -= rows.len() * width;
             if let Some(t) = table_from_rows(&name, source_id, rows) {
                 out.tables.push(t);
             }
@@ -433,20 +579,23 @@ pub fn parse_json(
         }
         let mut records = Records::default();
         let mut skipped = 0usize;
+        let mut sparse = cells;
         for item in items {
             if item.is_object() {
-                records.push(record_of(item));
+                if !records.push(record_of(item), &mut sparse) {
+                    break;
+                }
             } else {
                 skipped += 1;
             }
         }
-        record_warnings(&records, &name, &mut out.warnings);
+        record_warnings(&records, &name, cells, &mut out.warnings);
         if skipped > 0 {
             out.warnings.push(format!(
                 "{name}: {skipped} item(ns) que não são objetos foram ignorados"
             ));
         }
-        if let Some(t) = records.into_table(&name, source_id) {
+        if let Some(t) = records.into_table(&name, source_id, &mut cells) {
             out.tables.push(t);
         }
     }
@@ -455,8 +604,9 @@ pub fn parse_json(
             let record = record_of(&doc);
             if record.len() >= 2 {
                 let mut records = Records::default();
-                records.push(record);
-                if let Some(t) = records.into_table(stem, source_id) {
+                let mut sparse = cells;
+                records.push(record, &mut sparse);
+                if let Some(t) = records.into_table(stem, source_id, &mut cells) {
                     out.tables.push(t);
                 }
             }
@@ -490,20 +640,51 @@ pub fn parse_jsonl(
     let text = json_text(&bytes[..end]);
     let mut records = Records::default();
     let mut invalid: Vec<usize> = Vec::new();
+    let mut too_big: Vec<usize> = Vec::new();
+    let mut sparse = MAX_RECORD_CELLS;
+    let mut stopped = false;
     for (i, line) in text.lines().enumerate() {
+        if i % 1024 == 0 && crate::cancel::cancelled() {
+            stopped = true;
+            break;
+        }
         let line = line.trim();
         if line.is_empty() {
             continue;
         }
-        if records.rows.len() >= MAX_ROWS {
+        if records.rows.len() >= MAX_ROWS || records.cut {
             break;
         }
-        match serde_json::from_str::<Json>(line) {
-            Ok(v) if v.is_object() => records.push(record_of(&v)),
+        // Each line is a document of its own, under the same bounds.
+        if line.len() > MAX_JSON_DOCUMENT {
+            too_big.push(i + 1);
+            continue;
+        }
+        let budget = Budget::new(MAX_JSON_COST);
+        match parse_value(line, &budget) {
+            Ok(v) if v.is_object() => {
+                if !records.push(record_of(&v), &mut sparse) {
+                    break;
+                }
+            }
+            Err(_) if budget.exhausted() => too_big.push(i + 1),
             _ => invalid.push(i + 1),
         }
     }
-    record_warnings(&records, stem, &mut out.warnings);
+    record_warnings(&records, stem, MAX_RECORD_CELLS, &mut out.warnings);
+    if !too_big.is_empty() {
+        let shown: Vec<String> = too_big.iter().take(10).map(ToString::to_string).collect();
+        out.warnings.push(format!(
+            "{} linha(s) grandes demais (mais de {} MB ou valores demais) foram ignoradas: {}{}",
+            too_big.len(),
+            MAX_JSON_DOCUMENT >> 20,
+            shown.join(", "),
+            if too_big.len() > 10 { "…" } else { "" }
+        ));
+    }
+    if stopped {
+        out.warnings.push(crate::cancel::STOPPED.to_string());
+    }
     if !invalid.is_empty() {
         let shown: Vec<String> = invalid.iter().take(10).map(ToString::to_string).collect();
         out.warnings.push(format!(
@@ -513,9 +694,10 @@ pub fn parse_jsonl(
             if invalid.len() > 10 { "…" } else { "" }
         ));
     }
-    if let Some(t) = records.into_table(stem, source_id) {
+    let mut cells = MAX_RECORD_CELLS;
+    if let Some(t) = records.into_table(stem, source_id, &mut cells) {
         out.tables.push(t);
-    } else if invalid.is_empty() {
+    } else if invalid.is_empty() && too_big.is_empty() {
         out.warnings
             .push("JSON Lines sem nenhum objeto".to_string());
     }
@@ -553,19 +735,24 @@ fn xml_decoded(bytes: &[u8]) -> String {
     enc.decode_without_bom_handling(bytes).0.into_owned()
 }
 
+/// The attributes of an element, at most [`MAX_COLUMNS`]: they become columns, and quick-xml's
+/// duplicate check is quadratic in their number, so it is off and the list is cut.
 fn attrs_of(e: &BytesStart<'_>) -> Vec<(String, String)> {
     e.attributes()
+        .with_checks(false)
         .flatten()
         .filter(|a| {
             let key = a.key.as_ref();
             key != "xmlns" && !key.starts_with("xmlns:")
         })
+        .take(MAX_COLUMNS)
         .map(|a| {
-            (
-                a.key.local_name().as_ref().to_string(),
-                a.normalized_value(quick_xml::XmlVersion::Implicit1_0)
-                    .map_or_else(|_| a.value.to_string(), std::borrow::Cow::into_owned),
-            )
+            let value = a
+                .normalized_value(quick_xml::XmlVersion::Implicit1_0)
+                .map_or_else(|_| a.value.to_string(), std::borrow::Cow::into_owned);
+            let mut kept = String::new();
+            crate::html::push_capped(&mut kept, &value, MAX_XML_TEXT);
+            (a.key.local_name().as_ref().to_string(), kept)
         })
         .collect()
 }
@@ -575,7 +762,19 @@ fn xml_tree(text: &str, warnings: &mut Vec<String>) -> Result<Vec<XNode>, Ingest
     let mut reader = Reader::from_str(text);
     let mut nodes: Vec<XNode> = vec![XNode::default()];
     let mut stack: Vec<usize> = vec![0];
+    let mut attrs = 0usize;
+    let mut every = crate::cancel::Every::default();
     loop {
+        if every.cancelled() {
+            warnings.push(crate::cancel::STOPPED.to_string());
+            break;
+        }
+        if attrs > MAX_XML_ATTRS {
+            warnings.push(format!(
+                "XML com mais de {MAX_XML_ATTRS} atributos; o restante não foi lido"
+            ));
+            break;
+        }
         let event = match reader.read_event() {
             Ok(e) => e,
             Err(e) => {
@@ -605,9 +804,11 @@ fn xml_tree(text: &str, warnings: &mut Vec<String>) -> Result<Vec<XNode>, Ingest
                     break;
                 }
                 let id = nodes.len();
+                let a = attrs_of(&e);
+                attrs += a.len();
                 nodes.push(XNode {
                     name: e.local_name().as_ref().to_string(),
-                    attrs: attrs_of(&e),
+                    attrs: a,
                     ..XNode::default()
                 });
                 if let Some(parent) = stack.last() {
@@ -617,9 +818,11 @@ fn xml_tree(text: &str, warnings: &mut Vec<String>) -> Result<Vec<XNode>, Ingest
             }
             Event::Empty(e) => {
                 let id = nodes.len();
+                let a = attrs_of(&e);
+                attrs += a.len();
                 nodes.push(XNode {
                     name: e.local_name().as_ref().to_string(),
-                    attrs: attrs_of(&e),
+                    attrs: a,
                     ..XNode::default()
                 });
                 if let Some(parent) = stack.last() {
@@ -634,16 +837,16 @@ fn xml_tree(text: &str, warnings: &mut Vec<String>) -> Result<Vec<XNode>, Ingest
             Event::Text(t) => {
                 if let Some(top) = stack.last() {
                     let node = &mut nodes[*top];
-                    if node.text.len() < crate::grid::MAX_CELL_CHARS * 4 {
-                        node.text.push_str(&t.xml10_content());
+                    if node.text.len() < MAX_XML_TEXT {
+                        crate::html::push_capped(&mut node.text, &t.xml10_content(), MAX_XML_TEXT);
                     }
                 }
             }
             Event::CData(t) => {
                 if let Some(top) = stack.last() {
                     let node = &mut nodes[*top];
-                    if node.text.len() < crate::grid::MAX_CELL_CHARS * 4 {
-                        node.text.push_str(&t.xml10_content());
+                    if node.text.len() < MAX_XML_TEXT {
+                        crate::html::push_capped(&mut node.text, &t.xml10_content(), MAX_XML_TEXT);
                     }
                 }
             }
@@ -656,7 +859,7 @@ fn xml_tree(text: &str, warnings: &mut Vec<String>) -> Result<Vec<XNode>, Ingest
                         quick_xml::escape::resolve_predefined_entity(&name)
                             .map_or_else(|| format!("&{name};"), ToString::to_string)
                     };
-                    nodes[*top].text.push_str(&s);
+                    crate::html::push_capped(&mut nodes[*top].text, &s, MAX_XML_TEXT);
                 }
             }
             Event::Eof => break,
@@ -804,16 +1007,20 @@ pub fn parse_xml(
     let text = xml_decoded(&bytes[..end]);
     let nodes = xml_tree(&text, &mut out.warnings)?;
     let groups = xml_groups(&nodes);
+    let mut cells = MAX_RECORD_CELLS;
     for (path, ids) in &groups {
         let name = table_name(stem, path);
         let mut records = Records::default();
+        let mut sparse = cells;
         for &id in ids {
             let mut r = IndexMap::new();
             flatten_xml(&nodes, id, "", 0, &mut r);
-            records.push(r);
+            if !records.push(r, &mut sparse) {
+                break;
+            }
         }
-        record_warnings(&records, &name, &mut out.warnings);
-        if let Some(t) = records.into_table(&name, source_id) {
+        record_warnings(&records, &name, cells, &mut out.warnings);
+        if let Some(t) = records.into_table(&name, source_id, &mut cells) {
             out.tables.push(t);
         }
     }
@@ -824,8 +1031,9 @@ pub fn parse_xml(
             flatten_xml(&nodes, root, "", 0, &mut r);
             if r.len() >= 2 {
                 let mut records = Records::default();
-                records.push(r);
-                if let Some(t) = records.into_table(stem, source_id) {
+                let mut sparse = cells;
+                records.push(r, &mut sparse);
+                if let Some(t) = records.into_table(stem, source_id, &mut cells) {
                     out.tables.push(t);
                 }
             }
@@ -970,5 +1178,81 @@ mod tests {
             "{:?}",
             p.warnings
         );
+    }
+
+    #[test]
+    fn json_documents_are_bounded_in_size_and_memory() {
+        let big = format!("[{}\"x\"]", "\"x\",".repeat(MAX_JSON_DOCUMENT / 4));
+        assert!(matches!(
+            parse_json(big.as_bytes(), "b", "s"),
+            Err(IngestError::Unrecognized(m)) if m.contains("acima de 8 MB")
+        ));
+        // Small on disk, large in memory: an empty object is a boxed map.
+        let objects = format!("[{}{{}}]", "{},".repeat(MAX_JSON_DOCUMENT / 3 - 10));
+        assert!(objects.len() <= MAX_JSON_DOCUMENT);
+        assert!(matches!(
+            parse_json(objects.as_bytes(), "o", "s"),
+            Err(IngestError::Unrecognized(m)) if m.contains("valores demais")
+        ));
+    }
+
+    #[test]
+    fn json_lines_bound_each_line_and_the_records() {
+        let mut lines = String::from(
+            "{\"data\": \"10/07/2026\", \"valor\": \"1,00\", \"historico\": \"PIX\"}\n",
+        );
+        lines.push_str(&format!(
+            "{{\"x\": \"{}\"}}\n",
+            "a".repeat(MAX_JSON_DOCUMENT)
+        ));
+        lines.push_str("{\"data\": \"11/07/2026\", \"valor\": \"2,00\", \"historico\": \"TED\"}\n");
+        let p = parse_jsonl(lines.as_bytes(), "l", "s").unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(p.tables[0].len(), 2);
+        assert!(
+            p.warnings
+                .iter()
+                .any(|w| w.contains("grandes demais") && w.ends_with(": 2")),
+            "{:?}",
+            p.warnings
+        );
+        // Every line brings new keys: the grid of rows times keys is what is bounded.
+        let mut wide = String::new();
+        for i in 0..40_000 {
+            wide.push_str(&format!("{{\"k{}\": 1, \"n\": {i}}}\n", i % 256));
+        }
+        let p = parse_jsonl(wide.as_bytes(), "w", "s").unwrap_or_else(|e| panic!("{e}"));
+        let t = &p.tables[0];
+        assert_eq!(t.columns.len(), 256);
+        assert!(t.len() * t.columns.len() <= MAX_RECORD_CELLS, "{}", t.len());
+        assert!(
+            p.warnings.iter().any(|w| w.contains("células por arquivo")),
+            "{:?}",
+            p.warnings
+        );
+    }
+
+    #[test]
+    fn xml_attributes_and_entity_text_are_capped() {
+        let mut attrs = String::new();
+        for i in 0..1000 {
+            attrs.push_str(&format!(" a{i}=\"{i}\""));
+        }
+        let xml = format!("<r><item{attrs}/><item{attrs}/></r>");
+        let p = parse_xml(xml.as_bytes(), "x", "s").unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(p.tables[0].columns.len(), MAX_COLUMNS);
+        let refs = format!(
+            "<r><item><n>1</n><t>{}</t></item><item><n>2</n><t>{}</t></item></r>",
+            "&amp;".repeat(100_000),
+            "x".repeat(100_000)
+        );
+        let mut warnings = Vec::new();
+        let nodes = xml_tree(&refs, &mut warnings).unwrap_or_else(|e| panic!("{e}"));
+        assert!(nodes.iter().all(|n| n.text.len() <= MAX_XML_TEXT));
+        assert!(nodes.iter().all(|n| n.attrs.len() <= MAX_COLUMNS));
+        let long_value = format!("<r><i v=\"{}\"/><i v=\"1\"/></r>", "y".repeat(100_000));
+        let nodes = xml_tree(&long_value, &mut warnings).unwrap_or_else(|e| panic!("{e}"));
+        assert!(nodes
+            .iter()
+            .all(|n| n.attrs.iter().all(|(_, v)| v.len() <= MAX_XML_TEXT)));
     }
 }
