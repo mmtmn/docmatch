@@ -61,7 +61,8 @@ if [[ -d "$dist/_astro" ]]; then
   aws s3 sync "$dist/_astro" "s3://$bucket/_astro" "${extra[@]}" \
     --cache-control "public, max-age=31536000, immutable" --size-only --no-progress | cat
 fi
-aws s3 sync "$dist" "s3://$bucket" "${extra[@]}" --exclude "_astro/*" --delete --exact-timestamps \
+# install/ belongs to tools/installer/release.sh (the one-line installer): never deleted here.
+aws s3 sync "$dist" "s3://$bucket" "${extra[@]}" --exclude "_astro/*" --exclude "install/*" --delete --exact-timestamps \
   --cache-control "public, max-age=300, must-revalidate" --no-progress | cat
 
 if [[ $invalidate -eq 1 && $dry_run -eq 0 ]]; then

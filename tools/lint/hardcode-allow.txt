@@ -6,6 +6,9 @@
 path:docs/
 path:.*\.md$
 path:testdata/
+# Cópia literal do gêmeo da Vantara (testdata/golden/vantara-twin) embarcada no instalador; o
+# `make -C tools/installer sync-check` garante que é idêntica à original.
+path:tools/installer/internal/assets/twin/
 path:\.env\.example$
 path:.*terraform\.tfvars\.example$
 path:tools/lint/

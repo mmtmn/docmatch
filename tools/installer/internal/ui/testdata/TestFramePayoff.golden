@@ -1,0 +1,25 @@
+
+  docmatch 0.1.0                    modo · verificações · escolhas · instalação · pronto
+
+  ✓ docmatch no ar, sem chave e sem login · 3:41
+
+  ╭────────────────────────────────────────────────────────────────────────────────────╮
+  │ Gêmeo da Vantara conciliado                                                        │
+  │ 23 achados · R$ 183.368,89 em risco · placar 23/23 do gabarito                     │
+  │ “Pagamento parcial de exatamente 50%” — Linha 7 do extrato: 16/07/2026 ·           │
+  │ LIQUIDACAO COBRANCA SIMPLES · R$ 49.000,00                                         │
+  │ Resultados no app: http://localhost:4321/resultados?run=run_01TESTE                │
+  ╰────────────────────────────────────────────────────────────────────────────────────╯
+
+    site     http://localhost:4321/app  aberto no navegador, já com o login local
+    API      http://localhost:8080/v1/version
+    Mailpit  http://localhost:8025
+
+  Próximos comandos
+    docmatch status   o que está rodando
+    docmatch logs     logs dos serviços
+    docmatch demo     concilia o gêmeo de novo
+    docmatch down     para tudo (os dados ficam)
+
+  Enter sair · o abrir no navegador
+

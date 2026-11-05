@@ -14,7 +14,11 @@ use tonic::transport::{Channel, Endpoint, Uri};
 use tower::service_fn;
 
 fn twin_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../testdata/golden/vantara-twin")
+    Path::new(
+        &std::env::var("CARGO_MANIFEST_DIR")
+            .expect("cargo define CARGO_MANIFEST_DIR ao rodar os testes"),
+    )
+    .join("../../../../testdata/golden/vantara-twin")
 }
 
 /// A short directory for the socket (Unix socket paths are limited to ~108 bytes).

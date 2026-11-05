@@ -1,0 +1,196 @@
+# docmatch inteira no Docker, sem chave de provedor e sem login: o modo Experimentar do instalador
+# (tools/installer). Reproduz o `make local` (tools/dev/local.sh): Postgres com pgvector, Mailpit,
+# migrações, harness, API, worker e site, com DM_ENV=dev, o login local (DM_DEV_LOGIN=1), modelo
+# desligado por padrão e uploads numa pasta local servida pela API.
+#
+# O instalador gera o .env (segredos locais, portas, imagens) e roda, por exemplo:
+#   docker compose -p docmatch-local -f compose.yaml --env-file .env up -d --wait
+#
+# Imagens: ${DM_IMAGE_REGISTRY}/docmatch-{api,harness,web}:${DM_IMAGE_TAG}. Quando o registro não
+# tem a imagem, o instalador compila a partir do código (DM_SOURCE_DIR, a raiz do repositório),
+# com os Dockerfiles desta pasta. Só portas em 127.0.0.1 são publicadas.
+name: docmatch-local
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+# Ambiente comum da API, do worker e das migrações (o mesmo que o local.sh exporta).
+x-app-env: &app-env
+  DM_ENV: dev
+  DM_DEV_LOGIN: "1"
+  DM_PUBLIC_BASE_URL: http://localhost:${DM_WEB_PORT:-4321}
+  DM_API_BASE_URL: http://localhost:${DM_API_PORT:-8080}
+  DM_API_LISTEN: 0.0.0.0:8080
+  DM_ADMIN_LISTEN: 127.0.0.1:8443
+  DATABASE_URL: postgres://docmatch:${DM_PG_PASSWORD:?rode o instalador (docmatch) para gerar o .env}@postgres:5432/docmatch?sslmode=disable
+  DM_SESSION_SECRET: ${DM_SESSION_SECRET:?rode o instalador (docmatch) para gerar o .env}
+  DM_QUOTE_HMAC_KEY: ${DM_QUOTE_HMAC_KEY:?rode o instalador (docmatch) para gerar o .env}
+  DM_APIKEY_PEPPER: ${DM_APIKEY_PEPPER:?rode o instalador (docmatch) para gerar o .env}
+  DM_WEBHOOK_SIGNING_KEY: ${DM_WEBHOOK_SIGNING_KEY:?rode o instalador (docmatch) para gerar o .env}
+  DM_LLM_MODE: ${DM_LLM_MODE:-off}
+  DM_LOCAL_LLM_BASE_URL: ${DM_LOCAL_LLM_BASE_URL:-}
+  OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+  DM_MEDIA_LOCAL_DIR: /data/media
+  DM_HARNESS_SOCKET: /run/docmatch/harness.sock
+  DM_LLM_CACHE_DIR: /tmp/docmatch-llm
+  DM_SMTP_ADDR: mailpit:1025
+  DM_EMAIL_FROM: docmatch <no-reply@example.com>
+  DM_SECURITY_CONTACT: security@example.com
+
+x-build-args: &build-args
+  VERSION: ${DM_IMAGE_TAG:-dev}
+  REVISION: ${DM_SOURCE_REVISION:-unknown}
+
+services:
+  postgres:
+    image: ${DM_POSTGRES_IMAGE:-pgvector/pgvector:pg18}
+    environment:
+      POSTGRES_USER: docmatch
+      POSTGRES_PASSWORD: ${DM_PG_PASSWORD:?rode o instalador (docmatch) para gerar o .env}
+      POSTGRES_DB: docmatch
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - timezone=UTC
+    ports:
+      - "127.0.0.1:${DM_PG_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docmatch -d docmatch"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+    restart: on-failure
+    logging: *logging
+
+  mailpit:
+    image: ${DM_MAILPIT_IMAGE:-axllent/mailpit:latest}
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    ports:
+      - "127.0.0.1:${DM_MAILPIT_PORT:-8025}:8025"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8025/livez"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: on-failure
+    logging: *logging
+
+  # Aplica as migrações e termina; API e worker só sobem depois dele.
+  migrate:
+    image: ${DM_IMAGE_REGISTRY:-docmatch}/docmatch-api:${DM_IMAGE_TAG:-dev}
+    command: ["docmatch-migrate", "up"]
+    environment: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *logging
+
+  harness:
+    image: ${DM_IMAGE_REGISTRY:-docmatch}/docmatch-harness:${DM_IMAGE_TAG:-dev}
+    build:
+      context: ${DM_SOURCE_DIR:-../..}
+      dockerfile: deploy/local/harness.Dockerfile
+      args: *build-args
+    environment:
+      DM_HARNESS_SOCKET: /run/docmatch/harness.sock
+      DM_MEDIA_LOCAL_DIR: /data/media
+      DM_LLM_MODE: ${DM_LLM_MODE:-off}
+      DM_LOCAL_LLM_BASE_URL: ${DM_LOCAL_LLM_BASE_URL:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+    volumes:
+      - sockets:/run/docmatch
+      - media:/data/media
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "test -S /run/docmatch/harness.sock"]
+      interval: 1s
+      timeout: 3s
+      retries: 60
+    restart: on-failure
+    logging: *logging
+
+  api:
+    image: ${DM_IMAGE_REGISTRY:-docmatch}/docmatch-api:${DM_IMAGE_TAG:-dev}
+    build:
+      context: ${DM_SOURCE_DIR:-../..}
+      dockerfile: deploy/local/api.Dockerfile
+      args: *build-args
+    command: ["docmatch-api"]
+    environment: *app-env
+    ports:
+      - "127.0.0.1:${DM_API_PORT:-8080}:8080"
+    volumes:
+      - sockets:/run/docmatch
+      - media:/data/media
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      harness:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+    restart: on-failure
+    logging: *logging
+
+  worker:
+    image: ${DM_IMAGE_REGISTRY:-docmatch}/docmatch-api:${DM_IMAGE_TAG:-dev}
+    command: ["docmatch-worker"]
+    environment: *app-env
+    volumes:
+      - sockets:/run/docmatch
+      - media:/data/media
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      harness:
+        condition: service_healthy
+    restart: on-failure
+    logging: *logging
+
+  web:
+    image: ${DM_IMAGE_REGISTRY:-docmatch}/docmatch-web:${DM_IMAGE_TAG:-dev}
+    build:
+      context: ${DM_SOURCE_DIR:-../..}
+      dockerfile: deploy/local/web.Dockerfile
+      args: *build-args
+    environment:
+      DM_PUBLIC_BASE_URL: http://localhost:${DM_WEB_PORT:-4321}
+      DM_API_BASE_URL: http://localhost:${DM_API_PORT:-8080}
+      DM_WEB_LISTEN: 0.0.0.0:4321
+    ports:
+      - "127.0.0.1:${DM_WEB_PORT:-4321}:4321"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:4321/"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: on-failure
+    logging: *logging
+
+volumes:
+  postgres-data:
+  media:
+  sockets:

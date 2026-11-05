@@ -1,0 +1,30 @@
+
+  docmatch 0.1.0                    modo · verificações · escolhas · instalação · pronto
+
+  Instalando a docmatch
+
+  ✓ Preparar a pasta                     /home/ana/.local/share/docmatch/local     0,1 s
+  · Compilar as imagens da docmatch                                                 1:23
+      compilando a partir de /home/ana/docmatch (as próximas vezes usam o cache)
+      api       █████████████████░░░░░ 12/16  RUN go build
+      harness   ███████░░░░░░░░░░░░░░░ 2/6  RUN cargo build
+      web       ░░░░░░░░░░░░░░░░░░░░░░
+
+  log
+  ╭────────────────────────────────────────────────────────────────────────────────────╮
+  │ #12 [harness build 6/6] Compiling dm-core v0.1.0 (r)                               │
+  │ #12 [harness build 6/6] Compiling dm-core v0.1.0 (s)                               │
+  │ #12 [harness build 6/6] Compiling dm-core v0.1.0 (t)                               │
+  │ #12 [harness build 6/6] Compiling dm-core v0.1.0 (u)                               │
+  │ #12 [harness build 6/6] Compiling dm-core v0.1.0 (v)                               │
+  │ #12 [harness build 6/6] Compiling dm-core v0.1.0 (w)                               │
+  │ #12 [harness build 6/6] Compiling dm-core v0.1.0 (x)                               │
+  │ #12 [harness build 6/6] Compiling dm-core v0.1.0 (y)                               │
+  │ #12 [harness build 6/6] Compiling dm-core v0.1.0 (z)                               │
+  │ #12 [harness build 6/6] Compiling dm-core v0.1.0 (a)                               │
+  │ #12 [harness build 6/6] Compiling dm-core v0.1.0 (b)                               │
+  │ #12 [harness build 6/6] Compiling dm-core v0.1.0 (c)                               │
+  │ #12 [harness build 6/6] Compiling dm-core v0.1.0 (d)                               │
+  ╰────────────────────────────────────────────────────────────────────────────────────╯
+  l esconder o log · q cancelar
+

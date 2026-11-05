@@ -1,0 +1,23 @@
+# Context of web.Dockerfile: the pnpm workspace manifests, the site and what its build reads, and
+# the dm-web server from the installer module.
+*
+!package.json
+!pnpm-workspace.yaml
+!pnpm-lock.yaml
+!.npmrc
+!apps/web
+apps/web/node_modules
+apps/web/dist
+apps/web/.astro
+apps/web/coverage
+apps/web/test-results
+apps/web/playwright-report
+!packages/locales
+!packages/design-tokens
+packages/*/node_modules
+!packages/contracts/limits.yaml
+!config/pricing.yaml
+!tools/installer/go.mod
+!tools/installer/go.sum
+!tools/installer/internal/webserve
+!tools/installer/cmd/dm-web

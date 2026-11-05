@@ -11,8 +11,11 @@ use dm_eval::{find_golden_dirs, find_twin_dir, load, run_golden};
 use dm_recon::{run_dir, EngineConfig, Golden};
 
 fn twin() -> PathBuf {
-    find_twin_dir(Path::new(env!("CARGO_MANIFEST_DIR")))
-        .unwrap_or_else(|| panic!("testdata/golden/vantara-twin não encontrado"))
+    find_twin_dir(Path::new(
+        &std::env::var("CARGO_MANIFEST_DIR")
+            .expect("cargo define CARGO_MANIFEST_DIR ao rodar os testes"),
+    ))
+    .unwrap_or_else(|| panic!("testdata/golden/vantara-twin não encontrado"))
 }
 
 fn variant() -> PathBuf {
@@ -75,7 +78,11 @@ fn variant_keeps_the_twin_answer_key_and_inputs() {
             "{name} difere do gêmeo"
         );
     }
-    assert!(find_golden_dirs(Path::new(env!("CARGO_MANIFEST_DIR"))).contains(&variant()));
+    assert!(find_golden_dirs(Path::new(
+        &std::env::var("CARGO_MANIFEST_DIR")
+            .expect("cargo define CARGO_MANIFEST_DIR ao rodar os testes")
+    ))
+    .contains(&variant()));
 }
 
 fn twin_inputs() -> BTreeMap<String, Vec<u8>> {

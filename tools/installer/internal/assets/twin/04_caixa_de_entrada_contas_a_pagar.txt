@@ -1,0 +1,65 @@
+========================================================================
+ARQUIVO 04 — AMOSTRA DA CAIXA DE ENTRADA DE CONTAS A PAGAR (pagar@exemplo-sintetico.com.br)
+Amostra de 3 itens de uma media de ~340 e-mails/mes. Formatos preservados.
+========================================================================
+
+--- E-MAIL 1 ---------------------------------------------------------
+De: financeiro@caixasboavista.com.br
+Para: pagar@exemplo-sintetico.com.br
+Data: 06/07/2026 09:14
+Assunto: NF 55120 - Fatura de embalagens
+
+Bom dia,
+
+Segue em anexo a NF 55120 referente ao pedido de caixas (PC 7310).
+Valor: R$ 14.700,00 - vencimento 20/07.
+Dados bancarios: Banco 341 / ag 0987 / cc 12345-6
+Qualquer duvida estou a disposicao.
+
+Att,
+Ana
+
+[anexo: NF55120.pdf]
+
+
+--- E-MAIL 2 ---------------------------------------------------------
+De: ana.lima@caixasboavista.com.br
+Para: pagar@exemplo-sintetico.com.br; compras@exemplo-sintetico.com.br
+Data: 18/07/2026 16:52
+Assunto: RE: cobranca em aberto - Caixas Boa Vista
+
+Pessoal, nao identificamos o pagamento da nota abaixo. Reenvio o boleto
+atualizado com juros.
+
+Nota fiscal 055120 - emissao 06/07/2026
+Valor original R$ 14.700,00
+Valor atualizado R$ 14.994,00 (venc. 25/07/2026)
+Linha digitavel: 03399.11223 34400.556677 88990.011223 8 91230000014994
+
+Obs: o pedido PC 7310 foi entregue parcialmente (9 de 12 volumes), o
+restante sai na proxima semana.
+
+[anexo: boleto_55120_atualizado.pdf]
+
+
+--- E-MAIL 3 ---------------------------------------------------------
+De: contato@transportadoravianorte.com.br
+Para: pagar@exemplo-sintetico.com.br
+Data: 09/07/2026 07:41
+Assunto: Faturas semana 27
+
+Segue planilha com as 38 CT-e da semana. Total R$ 29.480,15.
+Vencimento 5 dias apos o recebimento conforme contrato.
+Favor confirmar recebimento.
+
+[anexo: fretes_sem27.xlsx]
+
+
+--- TRECHO DO GRUPO DE WHATSAPP "APROVACOES FIN" ----------------------
+[06/07 11:02] Compras - Diego: pessoal, NF 55120 Caixas Boa Vista, 14.700, ok pra pagar?
+[06/07 11:40] Controladoria - Lucia: entrou o material completo?
+[06/07 14:18] Compras - Diego: acho que sim, o Pedro confirmou
+[06/07 14:19] Controladoria - Lucia: ok, aprovado
+[19/07 08:33] Fin - Renata: gente a Boa Vista cobrando de novo a 55120, ja pagamos?
+[19/07 08:35] Fin - Renata: achei, pagou dia 20. era outra nota entao?
+[19/07 09:02] Controladoria - Lucia: nao sei, alguem confere?

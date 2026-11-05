@@ -1,0 +1,10 @@
+{"id":"a","text":"Pulling"}
+{"id":"63e7e49699e8","parent_id":"a","text":"Pulling fs layer"}
+{"id":"63e7e49699e8","parent_id":"a","text":"Download complete","percent":100}
+{"id":"63e7e49699e8","parent_id":"a","text":"Extracting","status":"1 s","current":1}
+{"id":"63e7e49699e8","parent_id":"a","text":"Pull complete","percent":100}
+{"id":"bd33abf3b3d2","parent_id":"a","text":"Downloading","status":"[=========================>                         ]  40.19kB/80.38kB","current":40188,"total":80375,"percent":50}
+{"id":"bd33abf3b3d2","parent_id":"a","text":"Downloading","status":"[==================================================>]  80.38kB/80.38kB","current":80375,"total":80375,"percent":100}
+{"id":"19cb8e950651","parent_id":"a","text":"Download complete","percent":100}
+{"id":"bd33abf3b3d2","parent_id":"a","text":"Download complete","percent":100}
+{"id":"a","text":"Pulled"}

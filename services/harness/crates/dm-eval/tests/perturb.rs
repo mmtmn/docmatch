@@ -14,8 +14,11 @@ struct Case {
 }
 
 fn twin() -> Case {
-    let dir = find_twin_dir(Path::new(env!("CARGO_MANIFEST_DIR")))
-        .unwrap_or_else(|| panic!("gêmeo não encontrado"));
+    let dir = find_twin_dir(Path::new(
+        &std::env::var("CARGO_MANIFEST_DIR")
+            .expect("cargo define CARGO_MANIFEST_DIR ao rodar os testes"),
+    ))
+    .unwrap_or_else(|| panic!("gêmeo não encontrado"));
     let mut files = BTreeMap::new();
     for entry in std::fs::read_dir(&dir).unwrap_or_else(|e| panic!("{e}")) {
         let path = entry.unwrap_or_else(|e| panic!("{e}")).path();

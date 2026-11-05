@@ -1,0 +1,848 @@
+{
+  "meta": {
+    "site_name": "docmatch",
+    "default_title": "docmatch — Concilie qualquer documento",
+    "default_description": "Solte extratos, planilhas, notas e e-mails. A docmatch encontra cada divergência e mostra a prova.",
+    "title_template": "{title} · docmatch"
+  },
+  "nav": {
+    "skip_to_content": "Pular para o conteúdo",
+    "how_it_works": "Como funciona",
+    "plans": "Planos",
+    "security": "Segurança",
+    "blog": "Blog",
+    "contact": "Contato",
+    "app": "Abrir o app",
+    "main_navigation": "Navegação principal",
+    "footer_navigation": "Links do rodapé",
+    "logo_label": "docmatch — página inicial",
+    "menu_open": "Abrir menu",
+    "account": "Minha conta"
+  },
+  "landing": {
+    "title": "Concilie qualquer documento.",
+    "subtitle": "Solte extratos, planilhas, notas e e-mails. A docmatch encontra cada divergência e mostra a prova.",
+    "hero_region": "Nova conciliação"
+  },
+  "form": {
+    "rules_label": "Regras (opcional)",
+    "rules_placeholder": "Ex.: ignorar centavos; tarifa bancária entra como despesa; juros só com nota.",
+    "rules_help": "Escreva em português, uma regra por linha. Sem regras, a docmatch descobre as regras sozinha.",
+    "use_rules": "Usar regras",
+    "web_search": "Pesquisar na web",
+    "submit": "Conciliar",
+    "submitting": "Conciliando…",
+    "estimate": "≈ {expected} tokens (máx. {cap})",
+    "estimate_loading": "Calculando o orçamento…",
+    "disabled_no_files": "Adicione ao menos um arquivo para conciliar.",
+    "disabled_submitting": "A conciliação já está em andamento.",
+    "disabled_offline": "Sem conexão. Reconecte para conciliar.",
+    "submit_unavailable": "A conciliação será liberada em breve. Seu rascunho fica salvo só neste navegador.",
+    "draft_restored": "Rascunho restaurado deste navegador.",
+    "draft_clear": "Descartar rascunho",
+    "draft_cleared": "Rascunho descartado.",
+    "draft_unavailable": "Este navegador não permite guardar rascunhos. Nada se perde enquanto a aba estiver aberta.",
+    "counter": "{count} de {max} caracteres",
+    "counter_limit": "Limite de {max} caracteres atingido.",
+    "rules_disabled_hint": "As regras estão desligadas: a docmatch descobre as regras sozinha a partir dos dados."
+  },
+  "tooltips": {
+    "use_rules": "Desligado: a docmatch descobre as regras sozinha a partir dos dados",
+    "web_search": "Busca normas e layouts na web. Consome mais tokens docmatch",
+    "more_info": "Mais informações"
+  },
+  "dropzone": {
+    "label": "Área para soltar arquivos",
+    "title": "Solte os arquivos aqui",
+    "hint": "ou clique para escolher. Você também pode colar.",
+    "hint_short": "Toque para escolher arquivos",
+    "accepted": "Extratos, planilhas, PDFs, notas fiscais (XML), ZIPs, e-mails, imagens, áudios e vídeos",
+    "add_more": "Adicionar mais",
+    "files_count_one": "1 arquivo",
+    "files_count_many": "{count} arquivos",
+    "total_size": "{size} no total",
+    "remove_file": "Remover {name}",
+    "list_label": "Arquivos selecionados",
+    "rejected_title": "Arquivos recusados",
+    "dismiss_rejection": "Dispensar aviso sobre {name}",
+    "drag_active": "Solte para adicionar",
+    "pasted": "Conteúdo colado adicionado como {name}",
+    "paste_name": "colado-{n}.txt",
+    "kind_csv": "Planilha CSV",
+    "kind_txt": "Texto",
+    "kind_xlsx": "Planilha Excel",
+    "kind_pdf": "PDF",
+    "kind_zip": "Arquivo ZIP",
+    "kind_eml": "E-mail",
+    "kind_image": "Imagem",
+    "kind_audio": "Áudio",
+    "kind_video": "Vídeo",
+    "kind_ofx": "Extrato OFX",
+    "kind_xml": "Nota fiscal (XML)"
+  },
+  "picker": {
+    "label": "Regras salvas",
+    "trigger": "Regras salvas",
+    "trigger_with_count": "Regras salvas ({count})",
+    "search_placeholder": "Buscar regra",
+    "search_label": "Buscar nas regras salvas",
+    "group_recent": "Usadas antes",
+    "group_all": "Todas",
+    "no_results": "Nenhuma regra encontrada.",
+    "selected_count": "{count} selecionada(s)",
+    "clear": "Limpar seleção",
+    "close": "Fechar lista",
+    "listbox_label": "Regras disponíveis"
+  },
+  "files": {
+    "size_bytes": "{n} B",
+    "size_kb": "{n} KB",
+    "size_mb": "{n} MB",
+    "size_gb": "{n} GB"
+  },
+  "errors": {
+    "file_type_unknown": "{name}: formato não reconhecido. Aceitamos CSV, TXT, XLSX, ODS, PDF, XML de NF-e, ZIP, EML, MBOX, OFX, imagens, áudios e vídeos.",
+    "file_extension_mismatch": "{name}: o conteúdo não corresponde à extensão .{ext}.",
+    "file_empty": "{name}: o arquivo está vazio.",
+    "file_too_large": "{name}: maior que o limite de {max}.",
+    "file_name_too_long": "{name}: nome com mais de {max} bytes.",
+    "file_duplicate": "{name}: já está na lista.",
+    "too_many_files": "Limite de {max} arquivos por conciliação.",
+    "run_too_large": "Os documentos somam mais que o limite de {max} por conciliação.",
+    "media_run_too_large": "Os áudios e vídeos somam mais que o limite de {max} por conciliação.",
+    "read_failed": "{name}: não foi possível ler o arquivo.",
+    "required": "Campo obrigatório.",
+    "invalid_email": "Informe um e-mail válido.",
+    "network": "Falha de conexão. Tente de novo.",
+    "timeout": "O servidor demorou demais para responder. Tente de novo.",
+    "server": "O servidor respondeu com erro ({status}).",
+    "unknown": "Algo deu errado. Tente de novo.",
+    "not_found_title": "Página não encontrada",
+    "not_found_text": "O endereço pode ter mudado ou nunca existiu.",
+    "back_home": "Voltar ao início"
+  },
+  "results": {
+    "title": "Resultado da conciliação",
+    "subtitle": "{exceptions} divergência(s) e {clean} conciliações limpas em {files} arquivos.",
+    "demo_notice": "Dados de demonstração: esta tela ainda não está ligada à API.",
+    "exceptions_heading": "Divergências",
+    "sorted_by_risk": "Ordenadas por valor em risco",
+    "clean_summary": "{count} conciliações limpas",
+    "clean_show": "Mostrar",
+    "clean_hide": "Ocultar",
+    "clean_empty": "Nenhuma conciliação limpa.",
+    "exceptions_empty": "Nenhuma divergência. Tudo bateu.",
+    "amount_at_risk": "Valor em risco",
+    "sources": "Fontes",
+    "col_finding": "Achado",
+    "col_amount": "Valor em risco",
+    "col_confidence": "Confiança",
+    "col_status": "Situação",
+    "confidence_high": "Alta",
+    "confidence_medium": "Média",
+    "confidence_low": "Baixa",
+    "confidence_label": "Confiança {level}",
+    "status_open": "Em aberto",
+    "status_accepted": "Aceito",
+    "status_rejected": "Rejeitado",
+    "status_edited": "Editado",
+    "accept": "Aceitar",
+    "reject": "Rejeitar",
+    "edit": "Editar",
+    "undo": "Desfazer",
+    "edit_label": "Correção ou observação",
+    "edit_placeholder": "Descreva o que está errado ou o valor correto.",
+    "edit_save": "Salvar edição",
+    "edit_cancel": "Cancelar",
+    "export_heading": "Exportar",
+    "export_csv": "Exportar CSV",
+    "export_xlsx": "Exportar XLSX",
+    "export_pdf": "Exportar PDF",
+    "export_soon": "Exportação em {format} disponível quando a API estiver conectada.",
+    "export_done": "Arquivo {name} gerado.",
+    "drawer_close": "Fechar detalhe",
+    "evidence_heading": "Evidência",
+    "evidence_side_by_side": "Comparação lado a lado",
+    "evidence_row_highlighted": "Linha citada",
+    "evidence_media_at": "Trecho a partir de {time}",
+    "evidence_media_unsupported": "Seu navegador não reproduz este formato.",
+    "evidence_seek": "Ir para {time}",
+    "explanation": "Explicação",
+    "rule_applied": "Regra aplicada",
+    "verified_by": "Verificado por código e por um segundo modelo",
+    "match_type_missing": "Sem contrapartida",
+    "match_type_amount": "Valor diferente",
+    "match_type_date": "Data diferente",
+    "match_type_duplicate": "Duplicidade",
+    "col_date": "Data",
+    "col_description": "Descrição",
+    "col_value": "Valor",
+    "col_document": "Documento",
+    "feedback_saved": "Decisão registrada.",
+    "back_to_form": "Nova conciliação",
+    "live_loading": "Carregando a conciliação…",
+    "live_running": "Conciliando: {message}",
+    "live_failed": "A conciliação falhou: {message}",
+    "live_missing": "Nenhuma conciliação selecionada.",
+    "live_unconfigured": "Esta instalação não está ligada a uma API.",
+    "source_warnings_title": "Alguns arquivos não entraram na conciliação:"
+  },
+  "auth": {
+    "sign_in": "Entrar",
+    "sign_out": "Sair",
+    "sign_in_google": "Entrar com Google",
+    "sign_in_apple": "Entrar com Apple",
+    "sign_in_email": "Entrar com e-mail",
+    "email_label": "E-mail",
+    "password_label": "Senha",
+    "password_help": "Entre {min} e {max} caracteres.",
+    "magic_link_sent": "Enviamos um link de acesso para {email}.",
+    "account": "Minha conta",
+    "signed_in_as": "Conectado como {name}",
+    "dialog_title": "Entre para conciliar",
+    "dialog_text": "Seus arquivos e regras continuam guardados neste navegador.",
+    "or": "ou",
+    "send_code": "Enviar código",
+    "code_label": "Código de 6 dígitos",
+    "code_sent": "Enviamos um código e um link de acesso para {email}. Eles valem por 15 minutos.",
+    "verify": "Entrar",
+    "change_email": "Usar outro e-mail",
+    "google_unavailable": "O login com Google ainda não está disponível.",
+    "dev_sign_in": "Entrar sem conta (ambiente local)",
+    "dev_signing_in": "Entrando no ambiente local…",
+    "none_available": "O login ainda não está disponível nesta instalação. Tente de novo mais tarde.",
+    "apple_unavailable": "O login com Apple ainda não está disponível.",
+    "login_title": "Entrar na docmatch",
+    "login_text": "A mesma conta vale no site e nos apps Android e iOS.",
+    "magic_title": "Confirmando seu acesso…",
+    "magic_failed": "Não foi possível confirmar o link: {message}",
+    "magic_back": "Voltar para o login",
+    "error_oauth_state_mismatch": "O login expirou ou foi aberto em outra aba. Tente de novo.",
+    "error_oauth_provider_error": "O provedor recusou o login. Tente de novo.",
+    "error_oauth_email_unverified": "Seu e-mail nesse provedor não está verificado.",
+    "error_account_suspended": "Esta conta está suspensa.",
+    "error_account_deletion_pending": "Esta conta está em processo de exclusão.",
+    "error_service_unavailable": "Esse login ainda não está disponível.",
+    "error_generic": "Não foi possível entrar. Tente de novo."
+  },
+  "account": {
+    "title": "Minha conta",
+    "loading": "Carregando sua conta…",
+    "profile": "Perfil",
+    "name_label": "Nome",
+    "email_label": "E-mail",
+    "credits": "Créditos",
+    "credits_available": "{available} tokens disponíveis",
+    "devices": "Aparelhos conectados",
+    "devices_text": "Cada navegador e cada app em que você entrou, todos na mesma conta. Encerre os que você não reconhece.",
+    "this_device": "Este aparelho",
+    "last_seen": "Último acesso: {when}",
+    "revoke": "Encerrar",
+    "revoke_label": "Encerrar a sessão de {name}",
+    "revoked": "Sessão encerrada.",
+    "sign_out": "Sair deste aparelho",
+    "signed_out": "Você saiu. Entre de novo para ver sua conta."
+  },
+  "app": {
+    "uploading": "Enviando {done} de {total} arquivo(s)…",
+    "scanning": "Verificando {name}…",
+    "estimating": "Calculando o orçamento…",
+    "confirm_run": "Esta conciliação deve usar cerca de {expected} tokens (no máximo {cap}). Continuar?",
+    "confirm_large": "Pedido grande: deve levar cerca de {duration}. Avisamos por e-mail quando terminar.",
+    "starting": "Iniciando a conciliação…",
+    "rejected": "{name} foi recusado pela verificação de segurança ({reason}).",
+    "cancelled": "Conciliação não iniciada."
+  },
+  "duration": {
+    "minute": "1 minuto",
+    "minutes": "{minutes} minutos",
+    "hours": "{hours} h",
+    "hours_minutes": "{hours} h {minutes} min"
+  },
+  "how": {
+    "heading": "Como funciona",
+    "lead": "Código primeiro, modelo depois. Cada achado vem com a linha que o prova.",
+    "steps": [
+      {
+        "title": "1. Solte os arquivos",
+        "text": "Extratos, planilhas, PDFs, e-mails, áudios ou vídeos. A docmatch reconhece o formato e, se nunca viu, constrói uma ferramenta nova em sandbox."
+      },
+      {
+        "title": "2. Regras viram hipóteses",
+        "text": "Chaves, tolerâncias e somas explicam a maior parte das linhas sem gastar um token. Cada regra proposta é testada contra os dados e só fica se explica dinheiro sem falsos positivos."
+      },
+      {
+        "title": "3. Cada divergência com prova",
+        "text": "Um segundo modelo reconfere cada achado contra as linhas citadas e o código recalcula cada número. Achado sem evidência é descartado."
+      }
+    ]
+  },
+  "plans": {
+    "heading": "Planos",
+    "lead": "Tokens docmatch pagam só o que a conciliação consome. Sem surpresa no fim do mês.",
+    "price": "US$ {price}/mês",
+    "tokens": "{tokens} tokens por mês",
+    "starter_name": "Starter",
+    "pro_name": "Pro",
+    "business_name": "Business",
+    "starter_tagline": "Para fechar o mês de uma empresa pequena.",
+    "pro_tagline": "Para escritórios contábeis e times financeiros.",
+    "business_tagline": "Para volume alto, API prioritária e retenção longa.",
+    "cta": "Começar com {plan}",
+    "most_popular": "Mais escolhido",
+    "feature_heading": "O que inclui",
+    "feature_document_files_per_run": "Arquivos por conciliação",
+    "feature_document_file_mb": "Tamanho máximo por arquivo",
+    "feature_document_run_mb": "Tamanho máximo por conciliação",
+    "feature_media_files_per_run": "Áudios e vídeos por conciliação",
+    "feature_media_run_gb": "Mídia por conciliação",
+    "feature_media_run_hours": "Horas de mídia por conciliação",
+    "feature_concurrent_runs": "Conciliações simultâneas",
+    "feature_api_keys": "Chaves de API",
+    "feature_api_lanes": "Filas da API",
+    "feature_auto_rule_learning": "Aprendizado automático de regras",
+    "feature_ui_customizations_per_month": "Personalizações de tela por mês",
+    "feature_escalation_model": "Modelo de escalonamento",
+    "feature_retention_days": "Retenção dos dados",
+    "value_files": "{n} arquivos",
+    "value_mb": "{n} MB",
+    "value_gb": "{n} GB",
+    "value_hours": "{n} horas",
+    "value_days": "{n} dias",
+    "value_count": "{n}",
+    "value_unlimited": "Ilimitado",
+    "value_yes": "Incluído",
+    "value_no": "Não incluído",
+    "lane_app": "app",
+    "lane_api_batch": "lote",
+    "lane_api_standard": "padrão",
+    "lane_api_priority": "prioritária",
+    "footnote": "Tokens do plano valem por um ciclo extra; recargas valem por {months} meses. Preços em dólar, cobrados pela Stripe."
+  },
+  "security": {
+    "heading": "Segurança e privacidade",
+    "lead": "Seus documentos são de terceiros. Tratamos cada arquivo como se fosse o nosso balanço.",
+    "items": [
+      {
+        "title": "LGPD por padrão",
+        "text": "Você é o controlador; a docmatch é operadora. Os dados ficam só pelo prazo de retenção do seu plano e são apagados sob pedido, com registro de auditoria."
+      },
+      {
+        "title": "Provedores sem retenção",
+        "text": "Modelos de linguagem só recebem o resíduo que o código não explicou, por provedores com retenção zero e sem treinamento com seus dados."
+      },
+      {
+        "title": "Criptografia ponta a ponta no trajeto",
+        "text": "TLS em todo caminho, discos cifrados, rascunhos cifrados no seu navegador com uma chave que nunca sai dele."
+      },
+      {
+        "title": "Código aberto e auditável",
+        "text": "O motor, a API e os apps são AGPL. Qualquer um pode ler o que acontece com um arquivo depois do upload."
+      },
+      {
+        "title": "Sandbox para ferramentas novas",
+        "text": "Quando a docmatch escreve uma ferramenta para um formato novo, ela roda isolada, com testes e revisão por um segundo modelo."
+      },
+      {
+        "title": "Relate uma vulnerabilidade",
+        "text": "Publicamos security.txt e pagamos recompensa por relatório válido. Nada de dados de outros clientes no teste."
+      }
+    ],
+    "security_txt": "Ver security.txt"
+  },
+  "blog": {
+    "heading": "Últimas do blog",
+    "lead": "Notas sobre conciliação, formatos brasileiros e o que aprendemos construindo a docmatch.",
+    "all_posts": "Todos os artigos",
+    "published_on": "Publicado em {date}",
+    "reading_time": "{minutes} min de leitura",
+    "index_title": "Blog",
+    "index_description": "Artigos da docmatch sobre conciliação, formatos e produto.",
+    "empty": "Ainda não há artigos publicados.",
+    "back_to_list": "Voltar ao blog",
+    "by": "Por {author}"
+  },
+  "faq": {
+    "heading": "Perguntas frequentes",
+    "items": [
+      {
+        "q": "Que formatos a docmatch aceita?",
+        "a": "CSV, TXT, XLSX, PDF, ZIP, e-mails (.eml), extratos OFX, imagens, áudios e vídeos. Formatos novos são reconhecidos por ferramentas construídas em sandbox."
+      },
+      {
+        "q": "O que são tokens docmatch?",
+        "a": "A unidade de cobrança. Cada conciliação recebe um orçamento antes de rodar: um valor esperado e um teto. Você nunca paga acima do teto."
+      },
+      {
+        "q": "Preciso escrever regras?",
+        "a": "Não. Sem regras, a docmatch descobre as regras sozinha a partir dos dados e mostra cada uma como hipótese que você pode aceitar ou rejeitar."
+      },
+      {
+        "q": "Meus dados treinam algum modelo?",
+        "a": "Não. Usamos só provedores com retenção zero e proibição de treinamento. O código que explica a maior parte das linhas nem chega a um modelo."
+      },
+      {
+        "q": "Posso rodar no meu servidor?",
+        "a": "Sim. O projeto é AGPL e sobe em outra conta e domínio editando só variáveis de ambiente."
+      },
+      {
+        "q": "Como funciona a cobrança?",
+        "a": "Planos mensais em dólar pela Stripe, com tokens que valem por um ciclo extra. Recargas avulsas valem por {months} meses."
+      }
+    ]
+  },
+  "contact": {
+    "title": "Contato",
+    "description": "Fale com a equipe da docmatch.",
+    "lead": "Dúvidas, parcerias ou um formato que não reconhecemos: escreva para a gente.",
+    "name_label": "Nome",
+    "email_label": "E-mail",
+    "message_label": "Mensagem",
+    "message_help": "Nada de documentos aqui: anexos só pelo app, cifrados.",
+    "submit": "Enviar mensagem",
+    "sending": "Enviando…",
+    "success": "Mensagem enviada. Respondemos em até dois dias úteis.",
+    "security_hint": "Vulnerabilidades: use o canal descrito em security.txt, não este formulário.",
+    "api_unconfigured": "O envio ainda não está configurado neste ambiente."
+  },
+  "legal": {
+    "last_updated": "Última atualização: {date}",
+    "terms": {
+      "title": "Termos de uso",
+      "description": "Condições para usar a docmatch.",
+      "sections": [
+        {
+          "title": "1. Aceitação",
+          "paragraphs": [
+            "Ao criar uma conta ou enviar um arquivo, você concorda com estes termos e com a política de privacidade. Se usa a docmatch em nome de uma empresa, declara ter poderes para aceitá-los por ela."
+          ]
+        },
+        {
+          "title": "2. O serviço",
+          "paragraphs": [
+            "A docmatch concilia documentos: compara as fontes enviadas, aponta divergências e apresenta a evidência de cada achado. O resultado é apoio à decisão e não substitui a conferência de um profissional responsável.",
+            "O serviço pode mudar. Avisamos com antecedência sobre mudanças que reduzam funcionalidades contratadas."
+          ]
+        },
+        {
+          "title": "3. Conta e segurança",
+          "paragraphs": [
+            "Você é responsável pelo que acontece na sua conta e pelas chaves de API que gerar. Avise imediatamente sobre qualquer acesso não autorizado."
+          ]
+        },
+        {
+          "title": "4. Conteúdo enviado",
+          "paragraphs": [
+            "Os documentos continuam seus. Você garante ter o direito de enviá-los e nos autoriza a processá-los só para prestar o serviço, dentro do prazo de retenção do plano.",
+            "Não envie conteúdo ilegal, malicioso ou de terceiros sem autorização."
+          ]
+        },
+        {
+          "title": "5. Tokens e cobrança",
+          "paragraphs": [
+            "Planos são mensais, cobrados em dólar pela Stripe. Cada conciliação recebe um orçamento com valor esperado e teto; nunca cobramos acima do teto apresentado.",
+            "Tokens do plano valem pelo ciclo contratado e por um ciclo extra. Recargas avulsas valem por {months} meses. Não há reembolso de tokens consumidos."
+          ]
+        },
+        {
+          "title": "6. Uso aceitável",
+          "paragraphs": [
+            "É proibido tentar acessar dados de outros clientes, degradar o serviço, contornar limites ou usar o serviço para treinar modelos concorrentes com a saída da docmatch."
+          ]
+        },
+        {
+          "title": "7. Software livre",
+          "paragraphs": [
+            "O código da docmatch é publicado sob a licença AGPL-3.0; os SDKs, sob Apache-2.0. Estes termos regem o serviço hospedado, não o código."
+          ]
+        },
+        {
+          "title": "8. Garantias e responsabilidade",
+          "paragraphs": [
+            "O serviço é fornecido como está. Fazemos o melhor para que cada achado venha com prova, mas não garantimos ausência de erros. Nossa responsabilidade total limita-se ao valor pago nos doze meses anteriores ao evento."
+          ]
+        },
+        {
+          "title": "9. Encerramento",
+          "paragraphs": [
+            "Você pode encerrar a conta a qualquer momento; os dados são apagados conforme a política de privacidade. Podemos suspender contas que violem estes termos, com aviso quando possível."
+          ]
+        },
+        {
+          "title": "10. Lei e foro",
+          "paragraphs": [
+            "Estes termos seguem a lei brasileira no que diz respeito à proteção de dados e ao direito do consumidor. Disputas serão resolvidas preferencialmente por negociação direta."
+          ]
+        }
+      ]
+    },
+    "privacy": {
+      "title": "Política de privacidade",
+      "description": "Como a docmatch trata dados pessoais, conforme a LGPD.",
+      "sections": [
+        {
+          "title": "1. Papéis",
+          "paragraphs": [
+            "Para os documentos que você envia, você é o controlador e a docmatch é a operadora: processamos só conforme suas instruções e para prestar o serviço. Para os dados da sua conta, a docmatch é a controladora."
+          ]
+        },
+        {
+          "title": "2. Dados que tratamos",
+          "paragraphs": [
+            "Dados de conta: nome, e-mail, empresa, forma de pagamento (guardada pela Stripe, nunca por nós). Dados de uso: registros técnicos, orçamentos e consumo de tokens. Documentos: o conteúdo enviado para conciliação e os achados gerados."
+          ]
+        },
+        {
+          "title": "3. Finalidade e base legal",
+          "paragraphs": [
+            "Tratamos dados para executar o contrato, cumprir obrigações legais e, com base no legítimo interesse, manter a segurança do serviço. Não vendemos dados nem usamos documentos para treinar modelos."
+          ]
+        },
+        {
+          "title": "4. Modelos de linguagem",
+          "paragraphs": [
+            "Só o resíduo que o código não explica chega a um modelo, por provedores com retenção zero e sem treinamento. Com o modo local, nada sai da sua infraestrutura."
+          ]
+        },
+        {
+          "title": "5. Retenção",
+          "paragraphs": [
+            "Documentos e achados ficam pelo prazo do seu plano e são apagados depois. Rascunhos no navegador são cifrados localmente e expiram em 30 dias. Registros técnicos ficam por até 12 meses."
+          ]
+        },
+        {
+          "title": "6. Compartilhamento",
+          "paragraphs": [
+            "Compartilhamos dados só com operadores necessários ao serviço: infraestrutura em nuvem, provedores de modelos com retenção zero, processadora de pagamento e serviço de e-mail. Cada um está sob contrato de confidencialidade."
+          ]
+        },
+        {
+          "title": "7. Transferência internacional",
+          "paragraphs": [
+            "A infraestrutura pode estar fora do Brasil. A transferência segue as hipóteses da LGPD, com cláusulas contratuais e medidas técnicas equivalentes."
+          ]
+        },
+        {
+          "title": "8. Seus direitos",
+          "paragraphs": [
+            "Você pode confirmar o tratamento, acessar, corrigir, anonimizar, portar ou apagar seus dados e revogar consentimento. Pedidos pelo formulário de contato são atendidos em até 15 dias."
+          ]
+        },
+        {
+          "title": "9. Segurança",
+          "paragraphs": [
+            "Criptografia em trânsito e em repouso, acesso mínimo, registros de auditoria, imagens de servidor endurecidas e programa de recompensa por vulnerabilidades. Incidentes relevantes são comunicados à autoridade e aos titulares conforme a lei."
+          ]
+        },
+        {
+          "title": "10. Encarregado",
+          "paragraphs": [
+            "O contato do encarregado de proteção de dados e o canal de segurança estão publicados em security.txt."
+          ]
+        }
+      ]
+    }
+  },
+  "footer": {
+    "tagline": "Motor de conciliação de código aberto.",
+    "terms": "Termos de uso",
+    "privacy": "Privacidade",
+    "security": "Segurança",
+    "contact": "Contato",
+    "source": "Código-fonte",
+    "status": "Status",
+    "copyright": "© {year} docmatch. AGPL-3.0.",
+    "made_in": "Feito no Brasil, em português."
+  },
+  "common": {
+    "close": "Fechar",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar",
+    "yes": "Sim",
+    "no": "Não",
+    "optional": "opcional",
+    "app_title": "Nova conciliação"
+  },
+  "mobile": {
+    "tab_new": "Conciliar",
+    "tab_history": "Histórico",
+    "tab_account": "Conta",
+    "new_title": "Nova conciliação",
+    "new_text": "Escolha extratos, planilhas, notas e e-mails. A docmatch encontra cada divergência e mostra a prova.",
+    "pick_files": "Escolher arquivos",
+    "confirm_title": "Confirmar a conciliação",
+    "run_title": "Conciliação",
+    "run_waiting": "Na fila…",
+    "run_findings": "{count} achado(s)",
+    "run_at_risk": "Em risco: {amount}",
+    "history_empty": "Nenhuma conciliação ainda. Comece pela aba Conciliar.",
+    "history_item": "{date} · {count} arquivo(s)",
+    "status_queued": "Na fila",
+    "status_running": "Conciliando",
+    "status_needs_approval": "Aguardando aprovação",
+    "status_completed": "Concluída",
+    "status_failed": "Falhou",
+    "status_cancelled": "Cancelada",
+    "finding_decided": "Decisão registrada. Ela aparece no site e nos outros aparelhos.",
+    "export": "Exportar",
+    "export_failed": "Não foi possível exportar: {message}",
+    "retry": "Tentar de novo",
+    "loading": "Carregando…",
+    "server": "Servidor: {url}",
+    "code_sent": "Enviamos um código para {email}. Digite-o aqui.",
+    "image_unsupported": "{name}: o app ainda não concilia imagens. Envie o PDF ou a planilha.",
+    "load_more": "Carregar mais",
+    "load_more_failed": "Não foi possível carregar mais conciliações. Tente de novo.",
+    "google_no_account": "Nenhuma conta Google neste aparelho. Adicione uma nas configurações ou entre com o código por e-mail.",
+    "approve_title": "Aprovação necessária",
+    "approve_text": "A conciliação parou porque precisa de mais tokens: até {cap} tokens docmatch (estimativa de {expected}).",
+    "approve": "Aprovar e continuar",
+    "delete_account": "Excluir conta",
+    "delete_title": "Excluir a conta?",
+    "delete_text": "A conta e todos os dados dela (conciliações, achados, regras e créditos) são excluídos em 7 dias, em todos os aparelhos. Até lá ninguém entra nela, e o suporte ainda pode cancelar o pedido.",
+    "delete_confirm": "Excluir a conta",
+    "delete_done": "Exclusão agendada para {date}. Você saiu em todos os aparelhos."
+  },
+  "installer": {
+    "tagline": "concilie qualquer documento · instalação local, sem chave",
+    "splash": {
+      "start": "começar",
+      "quit": "sair"
+    },
+    "nav": {
+      "mode": "modo",
+      "checks": "verificações",
+      "choices": "escolhas",
+      "install": "instalação",
+      "done": "pronto"
+    },
+    "hint": {
+      "continue": "continuar",
+      "quit": "sair",
+      "exit": "sair"
+    },
+    "mode": {
+      "title": "Como você quer rodar a docmatch?",
+      "try_name": "Experimentar",
+      "try_text": "Só precisa do Docker. Usa as imagens prontas (ou compila a partir do código), sobe tudo e concilia o gêmeo da Vantara.",
+      "dev_name": "Desenvolver",
+      "dev_text": "Go, Rust, Node e pnpm nesta máquina: roda o make local, o mesmo ambiente de quem contribui com o código.",
+      "dev_windows": "No Windows, o modo Desenvolver roda no WSL2: abra o Ubuntu do WSL e rode o instalador de lá. O Experimentar funciona direto com o Docker Desktop.",
+      "resume": "Instalação anterior em {dir} (última etapa concluída: {step}). Escolha o modo e o instalador continua de onde parou.",
+      "hint_move": "escolher",
+      "hint_pick": "confirmar"
+    },
+    "preflight": {
+      "title": "Verificando esta máquina",
+      "os": "Sistema",
+      "disk": "Espaço em disco",
+      "docker": "Docker",
+      "docker_running": "Docker rodando",
+      "compose": "Docker Compose",
+      "source": "Código da docmatch",
+      "port": "Porta {port} ({name})",
+      "os_unsupported": "{os} não tem versão do instalador",
+      "disk_detail": "{free} livres em {path}",
+      "daemon_detail": "servidor {version}",
+      "daemon_down": "instalado, mas não está rodando",
+      "daemon_permission": "sem permissão para falar com o Docker",
+      "not_found": "não encontrado",
+      "found": "encontrado",
+      "needs_docker": "depende do Docker",
+      "source_none": "não encontrado; as imagens virão do registro",
+      "git_optional": "não encontrado (opcional: o código já está aqui)",
+      "port_free": "livre",
+      "port_ours": "em uso por esta instalação",
+      "port_busy": "em uso por outro programa",
+      "summary_fail": "{count} verificação(ões) precisam de atenção antes de instalar.",
+      "hint_retry": "verificar de novo",
+      "fix_os": "Há versões para Linux, macOS e Windows, em amd64 e arm64.",
+      "fix_wsl": "No Windows, o modo Desenvolver roda no WSL2 (wsl --install, depois o instalador dentro do Ubuntu); ou escolha Experimentar.",
+      "fix_disk": "São necessários uns {need}. Libere espaço (docker system prune remove imagens sem uso) ou escolha outra pasta.",
+      "fix_docker_linux": "Instale o Docker Engine com o plugin Compose (docs.docker.com/engine/install) e rode o instalador de novo.",
+      "fix_docker_mac": "Instale o Docker Desktop (docs.docker.com/desktop) ou o Colima: brew install colima docker docker-compose && colima start.",
+      "fix_docker_windows": "Instale o Docker Desktop com o backend WSL2 (docs.docker.com/desktop), abra-o uma vez e rode o instalador de novo.",
+      "fix_docker_wsl": "Ligue a integração com o WSL no Docker Desktop (Settings > Resources > WSL integration) ou instale o Docker Engine dentro do WSL.",
+      "fix_daemon_linux": "Inicie o serviço com sudo systemctl start docker (o instalador nunca usa sudo por você) e tente de novo.",
+      "fix_daemon_desktop": "Abra o Docker Desktop (ou rode colima start), espere ele ficar pronto e tente de novo.",
+      "fix_permission": "Adicione seu usuário ao grupo docker (sudo usermod -aG docker $USER), entre de novo na sessão e tente outra vez.",
+      "fix_compose": "Instale o Docker Compose v2: o comando docker compose version precisa funcionar.",
+      "fix_compose_old": "Compose {version} é antigo; atualize para {min} ou mais novo.",
+      "fix_port": "Escolha outra porta na próxima tela (sugestão: {suggest}) ou use {flag} {suggest}.",
+      "fix_git": "Instale o git (git-scm.com/downloads).",
+      "fix_source_try": "Tudo bem: o instalador baixa as imagens prontas. Se o registro não as tiver, clona o repositório e compila.",
+      "fix_source_dev": "O modo Desenvolver roda dentro do repositório: clone-o e rode o docmatch na pasta dele.",
+      "fix_make": "Instale o make (Linux: build-essential; macOS: xcode-select --install).",
+      "fix_go": "Instale o Go 1.22 ou mais novo (go.dev/dl); a versão do go.mod vem sozinha.",
+      "fix_cargo": "Instale o Rust com o rustup (rustup.rs); a versão do rust-toolchain.toml vem sozinha.",
+      "fix_node": "Instale o Node 22 (nodejs.org, ou fnm/nvm com o .nvmrc do repositório).",
+      "fix_pnpm": "Ative o pnpm com o corepack: corepack enable && corepack prepare pnpm@11.5.3 --activate.",
+      "fix_openssl": "Instale o openssl (ele gera os segredos locais do .env).",
+      "fix_curl": "Instale o curl."
+    },
+    "ports": {
+      "web": "site",
+      "api": "API",
+      "postgres": "Postgres",
+      "mailpit": "Mailpit"
+    },
+    "form": {
+      "title": "Suas escolhas",
+      "llm_title": "Modelo de linguagem",
+      "llm_desc": "O gêmeo da Vantara concilia 100% sem modelo nenhum. Ligue um só se quiser a parte que lê texto livre.",
+      "llm_off": "Desligado (recomendado)",
+      "llm_local": "Ollama ou outro servidor local compatível com a API da OpenAI",
+      "llm_openrouter": "OpenRouter, com a sua chave",
+      "ollama_title": "Endereço do servidor local",
+      "ollama_desc": "Dentro do Docker, localhost vira host.docker.internal. No Linux, o Ollama precisa ouvir em 0.0.0.0 (OLLAMA_HOST=0.0.0.0).",
+      "openrouter_title": "Chave da OpenRouter",
+      "openrouter_desc": "Fica só no .env desta instalação (permissão 600) e nunca sai desta máquina.",
+      "ports_title": "Portas",
+      "ports_desc": "Publicadas só em 127.0.0.1. Uma porta ocupada já vem trocada pela próxima livre.",
+      "dir_title": "Pasta da instalação",
+      "dir_desc": "Guarda o compose.yaml, o .env com os segredos locais, o estado (para retomar) e os logs.",
+      "dev_title": "make local",
+      "dev_text": "Roda em {dir}, com as portas e o modelo do .env do repositório (criado a partir do .env.example quando não existe).",
+      "err_port": "use um número entre 1024 e 65535",
+      "err_port_dup": "porta repetida",
+      "err_port_busy": "porta em uso por outro programa",
+      "err_url": "use um endereço http(s), ex.: http://localhost:11434/v1",
+      "err_key": "a chave não pode ficar vazia",
+      "err_dir": "escolha uma pasta",
+      "key_next": "próximo",
+      "key_back": "voltar",
+      "key_install": "instalar",
+      "key_suggestion": "aceitar sugestão",
+      "key_up": "acima",
+      "key_down": "abaixo"
+    },
+    "steps": {
+      "prepare": "Preparar a pasta",
+      "base_images": "Imagens do Postgres e do Mailpit",
+      "images": "Imagens da docmatch",
+      "images_build": "Compilar as imagens da docmatch",
+      "database": "Banco de dados e e-mail local",
+      "migrate": "Migrações",
+      "services": "Harness, API, worker e site",
+      "dev_local": "make local",
+      "verify": "Conferir API e site",
+      "demo": "Conciliar o gêmeo da Vantara",
+      "cloning": "Baixar o código da docmatch",
+      "ready": "pronta",
+      "secrets_generated": "segredos locais gerados no .env: {names}",
+      "pulling_from": "baixando de {registry}",
+      "pull_failed": "o registro não tem as imagens ({error}); compilando a partir do código",
+      "building_from": "compilando a partir de {dir} (as próximas vezes usam o cache)",
+      "images_present": "já compiladas a partir de {revision}",
+      "images_pulled_before": "já baixadas",
+      "images_pulled": "baixadas de {registry}",
+      "verified": "API {version} e site no ar",
+      "demo_skipped": "pulado (--no-demo)",
+      "demo_login": "entrando com o login local",
+      "demo_files": "arquivos",
+      "demo_run": "execução",
+      "demo_running": "conciliando"
+    },
+    "progress": {
+      "title": "Instalando a docmatch",
+      "log_title": "log",
+      "log_show": "mostrar o log",
+      "log_hide": "esconder o log",
+      "cancel": "cancelar",
+      "cancelled": "Instalação cancelada",
+      "failed": "Falhou: {step}",
+      "failed_generic": "A instalação falhou",
+      "failed_hint": "Log completo em {path}. Rode o docmatch de novo para retomar de onde parou; docmatch doctor ajuda a achar a causa.",
+      "log_tail": "Últimas linhas do log:"
+    },
+    "payoff": {
+      "title": "docmatch no ar, sem chave e sem login",
+      "twin_title": "Gêmeo da Vantara conciliado",
+      "findings": "{count} achados · {amount} em risco",
+      "score": "placar {got}/{want} do gabarito",
+      "evidence": "“{title}” — {evidence}",
+      "results": "Resultados no app: {url}",
+      "demo_failed": "O gêmeo não conciliou: {error}. O site já funciona; docmatch demo tenta de novo.",
+      "demo_skipped": "Gêmeo pulado (--no-demo); docmatch demo concilia quando você quiser.",
+      "site": "site",
+      "api": "API",
+      "mailpit": "Mailpit",
+      "signed_in": "já entra com o login local",
+      "opened": "aberto no navegador, já com o login local",
+      "open_failed": "abra no navegador",
+      "open_again": "abrir no navegador",
+      "next_title": "Próximos comandos",
+      "next_status": "o que está rodando",
+      "next_logs": "logs dos serviços",
+      "next_demo": "concilia o gêmeo de novo",
+      "next_down": "para tudo (os dados ficam)",
+      "next_e2e": "o fluxo real no Playwright",
+      "log": "Log da instalação: {path}"
+    },
+    "plain": {
+      "mode": "Modo {mode}, pasta {dir}",
+      "port_moved": "usando a porta {port}, a próxima livre",
+      "preflight_failed": "Corrija o que está marcado com [xx] e rode de novo."
+    },
+    "cli": {
+      "help": [
+        "uso: docmatch [comando] [opções]",
+        "",
+        "comandos:",
+        "  (nenhum)   instala (ou retoma a instalação) e abre a docmatch",
+        "  up         sobe a instalação",
+        "  down       para tudo (--volumes apaga também os dados)",
+        "  status     o que está rodando",
+        "  logs       logs dos serviços (ex.: docmatch logs api -f)",
+        "  doctor     verifica a máquina e a instalação",
+        "  demo       concilia o gêmeo da Vantara",
+        "  version    versão do instalador",
+        "",
+        "opções da instalação:",
+        "  --mode experimentar|desenvolver   pula a tela de modo",
+        "  --dir PASTA                       pasta da instalação (ou DOCMATCH_HOME)",
+        "  --project NOME                    projeto do Docker Compose (padrão docmatch-local)",
+        "  --port-web N, --port-api N, --port-postgres N, --port-mailpit N",
+        "  --ports web=N,api=N,postgres=N,mailpit=N",
+        "  --llm off|local|openrouter        modelo de linguagem (padrão off)",
+        "  --ollama-url URL                  servidor local (padrão http://localhost:11434/v1)",
+        "  --openrouter-key CHAVE            ou a variável OPENROUTER_API_KEY",
+        "  --registry REGISTRO, --tag TAG    de onde vêm as imagens (ou DOCMATCH_REGISTRY, DOCMATCH_TAG)",
+        "  --source PASTA                    código para compilar as imagens (ou DOCMATCH_SOURCE)",
+        "  --build, --no-build               sempre compilar, nunca compilar",
+        "  --no-demo, --no-browser           sem o gêmeo, sem abrir o navegador",
+        "  --yes, -y                         sem perguntas (aceita os padrões)",
+        "",
+        "saída:",
+        "  --plain          linhas simples (automático sem terminal, em CI e com NO_COLOR)",
+        "  --no-animation   sem animações (ou DOCMATCH_NO_ANIMATION=1)",
+        "  --ascii          só caracteres ASCII",
+        "  --verbose        com --plain, mostra cada linha do log"
+      ],
+      "unknown_command": "comando desconhecido: {cmd}",
+      "not_installed": "nenhuma instalação em {dir}; rode docmatch para instalar (ou use --dir)",
+      "not_source": "{dir} não é a raiz do repositório da docmatch",
+      "up_starting": "subindo a docmatch ({project})",
+      "up_hint": "Se as imagens não existem mais, rode docmatch para instalar de novo.",
+      "up_done": "docmatch no ar: {url}",
+      "down_confirm": "Apagar também o banco e os arquivos enviados? [s/N] ",
+      "down_kept": "os dados ficam",
+      "down_done": "docmatch parada; os dados ficam nos volumes do Docker (docmatch down --volumes apaga)",
+      "down_wiped": "docmatch parada e dados apagados",
+      "status_header": "{mode} · projeto {project} · {dir}",
+      "status_none": "nenhum contêiner (docmatch up sobe tudo)",
+      "status_api": "API {version} no ar · {url}",
+      "status_api_down": "API fora do ar em {url}",
+      "logs_dev": "No modo Desenvolver os logs ficam em {dir}",
+      "doctor_install": "Instalação",
+      "doctor_state": "{mode} · projeto {project} · {dir}",
+      "doctor_images": "imagens de {registry} (tag {tag}, {how})",
+      "demo_start": "conciliando o gêmeo da Vantara em {url}",
+      "demo_phase_login": "login local",
+      "demo_phase_upload": "enviando",
+      "demo_phase_estimate": "estimativa",
+      "demo_phase_run": "executando",
+      "demo_phase_findings": "lendo os achados"
+    }
+  }
+}

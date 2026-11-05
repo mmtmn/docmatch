@@ -1,0 +1,58 @@
+# golangci-lint v2, o mesmo conjunto do services/api (gosec, errcheck, staticcheck...).
+# Rode `make lint` em tools/installer.
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - gosec
+    - bodyclose
+    - copyloopvar
+    - errorlint
+    - gocritic
+    # misspell fica de fora: os textos são em pt-BR.
+    - nilerr
+    - noctx
+    - prealloc
+    - revive
+    - unconvert
+    - unparam
+    - usestdlibvars
+  settings:
+    gosec:
+      excludes:
+        - G104 # errcheck já cobre erros ignorados
+        - G204 # o instalador roda docker, git e make com argumentos próprios
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+    gocritic:
+      disabled-checks:
+        - ifElseChain
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - gosec
+          - noctx
+          - bodyclose
+          - unparam
+      # envfile declara os NOMES das variáveis com segredos (DM_SESSION_SECRET...).
+      - path: internal/envfile/
+        linters:
+          - gosec
+        text: G101
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/mmtmn/docmatch

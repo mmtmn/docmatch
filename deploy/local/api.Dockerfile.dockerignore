@@ -1,0 +1,9 @@
+# Context of api.Dockerfile: only what the Go build and the runtime read.
+*
+!config/models.yaml
+!config/pricing.yaml
+!packages/contracts/gen/go.mod
+!packages/contracts/gen/*.go
+!services/api
+services/api/bin
+services/api/coverage

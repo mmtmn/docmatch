@@ -23,6 +23,8 @@ export const RESERVED_KEYS = [
   'auth.',
   // Used by the Android and iOS apps (apps/android, apps/ios), not by the web.
   'mobile.',
+  // Used by the terminal installer (tools/installer), not by the web.
+  'installer.',
   'common.cancel',
   'common.confirm',
   'common.yes',

@@ -1,0 +1,5 @@
+{"id":"b","text":"Pulling"}
+{"id":"a","text":"Pulling"}
+{"id":"a","text":"Error","status":"error from registry: denied\ndenied"}
+{"id":"b","status":"Interrupted"}
+{"error":true,"message":"Error response from daemon: error from registry: denied\ndenied"}

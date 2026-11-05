@@ -217,8 +217,12 @@ mod tests {
 
     #[test]
     fn shipped_yaml_matches_defaults() {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../config/recon.yaml");
-        let text = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("{path}: {e}"));
+        let path = format!(
+            "{}/../../config/recon.yaml",
+            std::env::var("CARGO_MANIFEST_DIR")
+                .expect("cargo define CARGO_MANIFEST_DIR ao rodar os testes")
+        );
+        let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
         let cfg = EngineConfig::from_yaml(&text).unwrap_or_else(|e| panic!("{e}"));
         assert_eq!(
             cfg,

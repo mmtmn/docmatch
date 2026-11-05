@@ -19,6 +19,7 @@ subsystems=(
   sdks/rust
   apps/android
   apps/ios
+  tools/installer
 )
 
 declare -a names statuses times

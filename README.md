@@ -43,6 +43,8 @@ make e2e-local              # o mesmo + Playwright no fluxo real (envio, estimat
 make local-down             # para tudo (o banco fica no volume do Docker)
 ```
 
+Só com Docker, sem toolchains: o instalador de uma linha ([tools/installer](tools/installer/README.md)) sobe tudo e concilia o gêmeo da Vantara.
+
 `make local` cria o `.env` a partir do `.env.example` (gerando só os segredos locais), sobe o
 Postgres e o Mailpit no Docker, aplica as migrações e roda o harness, a API, o worker e o site. O
 site entra sozinho pelo login local (`DM_DEV_LOGIN`, que a API recusa fora de `DM_ENV=dev`), e a

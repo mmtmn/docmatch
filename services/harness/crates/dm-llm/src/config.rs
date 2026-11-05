@@ -344,7 +344,9 @@ mod tests {
 
     #[test]
     fn loads_the_repository_file() {
-        let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let manifest = std::env::var("CARGO_MANIFEST_DIR")
+            .expect("cargo define CARGO_MANIFEST_DIR ao rodar os testes");
+        let crate_dir = Path::new(&manifest);
         let found =
             find_models_file_from(crate_dir, None).expect("config/models.yaml acima do crate");
         let c = load_models_config_from(&found).unwrap();
