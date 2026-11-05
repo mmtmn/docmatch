@@ -26,6 +26,9 @@ type Build struct {
 	Version  string // "0.1.0"; "dev" for local builds
 	Registry string // default image registry ("ghcr.io/owner"); "" derives it from the checkout
 	RepoURL  string // where to clone the code when the registry lacks the images
+	// InstallBase is the download base of install.sh (<site>/install): `docmatch update` reads
+	// VERSION.txt, SHA256SUMS.txt and the binaries from it. DOCMATCH_INSTALL_BASE overrides it.
+	InstallBase string
 }
 
 // DefaultProject is the compose project of an installation.
