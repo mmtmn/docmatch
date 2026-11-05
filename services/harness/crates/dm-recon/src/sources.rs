@@ -210,14 +210,7 @@ pub fn load_dir(dir: &Path, cfg: &EngineConfig) -> Result<Dataset, ReconError> {
         .filter_map(Result::ok)
         .map(|e| e.path())
         .filter(|p| p.is_file())
-        .filter(|p| {
-            let name = p.file_name().and_then(|n| n.to_str()).unwrap_or_default();
-            let lower = name.to_ascii_lowercase();
-            let markdown = p.extension().and_then(|x| x.to_str()).is_some_and(|x| {
-                x.eq_ignore_ascii_case("md") || x.eq_ignore_ascii_case("markdown")
-            });
-            !name.starts_with('.') && !SKIPPED_FILES.contains(&lower.as_str()) && !markdown
-        })
+        .filter(|p| is_input_name(p.file_name().and_then(|n| n.to_str()).unwrap_or_default()))
         .collect();
     paths.sort();
 
@@ -250,6 +243,12 @@ pub fn load_dir(dir: &Path, cfg: &EngineConfig) -> Result<Dataset, ReconError> {
             }
         };
         for src in flatten(parsed) {
+            // Entries of an archive follow the same rules as the files of the folder: a
+            // zipped case folder brings its README and answer key along.
+            let base = src.name.rsplit('/').next().unwrap_or(&src.name);
+            if src.name.contains('/') && !is_input_name(base) {
+                continue;
+            }
             ds.warnings.extend(src.warnings.iter().cloned());
             let kind = src.sniff.kind;
             if kind == SourceKind::Zip {
@@ -257,25 +256,47 @@ pub fn load_dir(dir: &Path, cfg: &EngineConfig) -> Result<Dataset, ReconError> {
                 continue;
             }
             let mut used = false;
+            let mut unused_tables: Vec<&str> = Vec::new();
             if matches!(
                 kind,
                 SourceKind::TxtInbox | SourceKind::Text | SourceKind::Eml | SourceKind::Mbox
             ) {
-                if !src.items.is_empty() {
+                // Only e-mails and chat messages make an inbox; notes or a README do not.
+                if src.items.iter().any(is_message) {
                     inbox_items.push((src.name.clone(), src.items.clone()));
                     used = true;
                 }
             } else {
                 for table in &src.tables {
                     match classify_for(kind, table) {
-                        TableRole::Ledger => ledger_tables.push((src.name.clone(), table.clone())),
+                        TableRole::Ledger => {
+                            // A CNAB collection file has one row per movement; the ledger
+                            // wants one per título.
+                            let table = if matches!(kind, SourceKind::Cnab240 | SourceKind::Cnab400)
+                            {
+                                dm_ingest::cnab::titles_view(table)
+                            } else {
+                                table.clone()
+                            };
+                            ledger_tables.push((src.name.clone(), table));
+                        }
                         TableRole::Bank => bank_tables.push((src.name.clone(), table.clone())),
-                        TableRole::Unknown => continue,
+                        TableRole::Unknown => {
+                            unused_tables.push(&table.name);
+                            continue;
+                        }
                     }
                     used = true;
                 }
             }
             if used {
+                if !unused_tables.is_empty() {
+                    ds.warnings.push(format!(
+                        "{}: tabela(s) {} não reconhecida(s) como títulos a receber ou extrato bancário; ficaram fora desta conciliação",
+                        src.name,
+                        unused_tables.join(", ")
+                    ));
+                }
                 continue;
             }
             if !src.tables.is_empty() || !src.items.is_empty() {
@@ -297,10 +318,15 @@ pub fn load_dir(dir: &Path, cfg: &EngineConfig) -> Result<Dataset, ReconError> {
     if let Some((file, table)) = bank_tables.first() {
         ds.lines = bank_lines(table);
         ds.sources.insert("bank".to_string(), file.clone());
-        for (other, _) in bank_tables.iter().skip(1) {
-            ds.warnings.push(format!(
-                "{other}: segundo extrato bancário; só {file} entra nesta conciliação"
-            ));
+        for (other, other_table) in bank_tables.iter().skip(1) {
+            ds.warnings.push(if other == file {
+                format!(
+                    "{other}: a tabela {} é um segundo extrato bancário; só a tabela {} entra nesta conciliação",
+                    other_table.name, table.name
+                )
+            } else {
+                format!("{other}: segundo extrato bancário; só {file} entra nesta conciliação")
+            });
         }
     }
     ds.period = period_of(&ds.lines, &ledger_tables);
@@ -309,19 +335,27 @@ pub fn load_dir(dir: &Path, cfg: &EngineConfig) -> Result<Dataset, ReconError> {
     let mut used_prefixes = BTreeSet::new();
     for (i, (file, table)) in ledger_tables.iter().enumerate() {
         let key = ledger_key(file, cfg, &used_keys, i);
-        used_keys.insert(key.clone());
         let prefix = ledger_prefix(&key, &used_prefixes);
-        used_prefixes.insert(prefix.clone());
-        ds.sources.insert(key.clone(), file.clone());
-        ds.ledgers.push(Ledger {
+        let ledger = Ledger {
             label: ledger_label(file, &key),
-            key,
+            key: key.clone(),
             file: file.clone(),
-            prefix,
+            prefix: prefix.clone(),
             main: false,
-        });
-        let ledger_index = ds.ledgers.len() - 1;
-        let (titles, open_total) = ledger_titles(table, ledger_index, &ds.ledgers[ledger_index]);
+        };
+        let (titles, open_total) = ledger_titles(table, ds.ledgers.len(), &ledger);
+        if titles.is_empty() {
+            // A ledger of settled titles (a CNAB return of liquidations, an export of paid
+            // invoices) has nothing open to reconcile; it must not become the main ledger.
+            ds.warnings.push(format!(
+                "{file}: nenhum título em aberto (todos pagos, liquidados, baixados ou rejeitados); o arquivo não entrou como carteira nesta conciliação"
+            ));
+            continue;
+        }
+        used_keys.insert(key.clone());
+        used_prefixes.insert(prefix);
+        ds.sources.insert(key, file.clone());
+        ds.ledgers.push(ledger);
         ds.ledger_open.push(open_total);
         ds.titles.extend(titles);
     }
@@ -354,6 +388,22 @@ pub fn load_dir(dir: &Path, cfg: &EngineConfig) -> Result<Dataset, ReconError> {
             .collect();
     }
     Ok(ds)
+}
+
+/// True for a file (or archive entry) that is an input of the case: not hidden, not the
+/// answer key, a previous result or a Markdown note.
+fn is_input_name(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    let markdown = std::path::Path::new(name)
+        .extension()
+        .and_then(|x| x.to_str())
+        .is_some_and(|x| x.eq_ignore_ascii_case("md") || x.eq_ignore_ascii_case("markdown"));
+    !name.starts_with('.') && !SKIPPED_FILES.contains(&lower.as_str()) && !markdown
+}
+
+/// An e-mail or a chat message (what [`inbox`] reads), as opposed to a plain paragraph.
+fn is_message(item: &Item) -> bool {
+    item.fields.contains_key("from") || item.fields.contains_key("sender")
 }
 
 /// A parsed file and the files inside it (ZIP entries), in order.

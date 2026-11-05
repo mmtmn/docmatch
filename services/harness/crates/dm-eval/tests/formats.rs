@@ -106,6 +106,20 @@ fn twin_inside_a_zip_scores_100() {
         let mut w = zip::ZipWriter::new(&mut buf);
         let opts = zip::write::SimpleFileOptions::default()
             .compression_method(zip::CompressionMethod::Deflated);
+        // A zipped case folder brings its notes, README and answer key along: none of them
+        // is an input (and the notes, sorted first, must not take the inbox's place).
+        let extras: [(&str, &[u8]); 3] = [
+            ("julho/00_LEIA-ME.md", b"# Caso de julho\n"),
+            (
+                "julho/00_notas.txt",
+                b"Pasta do fechamento de julho. Conferir com a controladoria antes de enviar.\n",
+            ),
+            ("julho/expected.yaml", b"version: 1\n"),
+        ];
+        for (name, bytes) in extras {
+            w.start_file(name, opts).unwrap_or_else(|e| panic!("{e}"));
+            w.write_all(bytes).unwrap_or_else(|e| panic!("{e}"));
+        }
         for (name, bytes) in twin_inputs() {
             w.start_file(format!("julho/{name}"), opts)
                 .unwrap_or_else(|e| panic!("{e}"));
@@ -130,6 +144,13 @@ fn twin_inside_a_zip_scores_100() {
         run.scorecard.report()
     );
     assert!(run.identical);
+    let ds = run_dir(dir.path(), &EngineConfig::default())
+        .unwrap_or_else(|e| panic!("{e}"))
+        .dataset;
+    assert_eq!(
+        ds.warnings,
+        vec!["pacote.zip/julho/00_notas.txt: lido (texto simples), mas nada foi reconhecido como títulos a receber, extrato bancário ou caixa de entrada; o arquivo não entrou nesta conciliação".to_string()]
+    );
 }
 
 /// Unusable files next to the twin change nothing in the answer and each one is named in the
@@ -159,6 +180,10 @@ fn unusable_files_are_reported_and_change_nothing() {
             "cnab240/retorno_pagamentos.ret",
             "07_retorno_pagamentos.ret",
         ),
+        (
+            "cnab400/retorno_bradesco_237.ret",
+            "10_retorno_bradesco_237.ret",
+        ),
     ] {
         std::fs::copy(golden.join(from), dir.path().join(to)).unwrap_or_else(|e| panic!("{e}"));
     }
@@ -184,6 +209,7 @@ fn unusable_files_are_reported_and_change_nothing() {
         ("07_retorno_pagamentos.ret", "segmento ou tipo 'O'"),
         ("08_vazio.csv", "arquivo vazio"),
         ("09_binario.bin", "formato não reconhecido"),
+        ("10_retorno_bradesco_237.ret", "nenhum título em aberto"),
     ] {
         assert!(
             ds.warnings

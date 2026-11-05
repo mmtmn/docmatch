@@ -215,7 +215,14 @@ pub fn sniff(bytes: &[u8]) -> Sniff {
     let (text, _, _) = encoding.decode(&bytes[..bytes.len().min(SAMPLE_BYTES)]);
     let text = text.trim_start_matches('\u{feff}');
     out.crlf = text.contains("\r\n");
-    let lines: Vec<&str> = text.lines().take(SAMPLE_LINES).collect();
+    // The sample window cuts the last line of a longer file: only whole lines are sampled,
+    // or a 400-position CNAB of a few hundred records would fail the record-length test.
+    let whole = if bytes.len() > SAMPLE_BYTES {
+        text.rfind('\n').map_or(text, |i| &text[..i])
+    } else {
+        text
+    };
+    let lines: Vec<&str> = whole.lines().take(SAMPLE_LINES).collect();
     out.sampled_lines = lines.len();
     if lines.iter().all(|l| l.trim().is_empty()) {
         out.kind = SourceKind::Text;
@@ -276,21 +283,7 @@ fn binary_kind(bytes: &[u8]) -> Option<SourceKind> {
         return Some(SourceKind::Zip);
     }
     if bytes.starts_with(b"PK\x03\x04") {
-        let head = &bytes[..bytes.len().min(4096)];
-        let is_office = contains(head, b"[Content_Types].xml")
-            || contains(head, b"xl/")
-            || contains(head, b"_rels/");
-        let is_ods = contains(
-            head,
-            b"mimetypeapplication/vnd.oasis.opendocument.spreadsheet",
-        );
-        return Some(
-            if is_office || is_ods || contains(bytes, b"xl/workbook.xml") {
-                SourceKind::Spreadsheet
-            } else {
-                SourceKind::Zip
-            },
-        );
+        return Some(zip_kind(bytes));
     }
     if bytes.starts_with(b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1") {
         return Some(SourceKind::Spreadsheet);
@@ -304,6 +297,41 @@ fn binary_kind(bytes: &[u8]) -> Option<SourceKind> {
         return Some(SourceKind::Unknown);
     }
     None
+}
+
+/// A ZIP is a workbook when its own central directory says so (`xl/workbook.xml`, an ODS
+/// `mimetype`); scanning the bytes would also match an archive that merely *contains* a stored
+/// workbook. Other Office packages (`.docx`, `.pptx`) are not archives of sources. A damaged
+/// archive falls back to the local headers of its first entries.
+fn zip_kind(bytes: &[u8]) -> SourceKind {
+    let head = &bytes[..bytes.len().min(4096)];
+    if contains(
+        head,
+        b"mimetypeapplication/vnd.oasis.opendocument.spreadsheet",
+    ) {
+        return SourceKind::Spreadsheet;
+    }
+    if let Ok(archive) = zip::ZipArchive::new(std::io::Cursor::new(bytes)) {
+        let names: Vec<&[u8]> = archive.file_names_raw().collect();
+        return if names
+            .iter()
+            .any(|n| *n == b"xl/workbook.xml" || *n == b"xl/workbook.bin")
+        {
+            SourceKind::Spreadsheet
+        } else if names.contains(&&b"[Content_Types].xml"[..]) {
+            SourceKind::Unknown
+        } else {
+            SourceKind::Zip
+        };
+    }
+    let is_office = contains(head, b"[Content_Types].xml")
+        || contains(head, b"xl/")
+        || contains(head, b"_rels/");
+    if is_office {
+        SourceKind::Spreadsheet
+    } else {
+        SourceKind::Zip
+    }
 }
 
 fn contains(haystack: &[u8], needle: &[u8]) -> bool {
@@ -640,6 +668,13 @@ mod tests {
         assert_eq!(sniff(b"%PDF-1.7\n...").kind, SourceKind::Pdf);
         assert_eq!(sniff(b"PK\x03\x04garbage").kind, SourceKind::Zip);
         assert_eq!(sniff(b"PK\x05\x06\x00\x00").kind, SourceKind::Zip);
+        // A CNAB 400 longer than the sample window: the cut last line is not sampled.
+        let mut long = String::new();
+        while long.len() <= SAMPLE_BYTES + 1000 {
+            long.push_str(&"1".repeat(400));
+            long.push_str("\r\n");
+        }
+        assert_eq!(sniff(long.as_bytes()).kind, SourceKind::Cnab400);
         assert_eq!(
             sniff(b"PK\x03\x04\x00\x00[Content_Types].xml").kind,
             SourceKind::Spreadsheet
@@ -648,6 +683,45 @@ mod tests {
             sniff(b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1rest").kind,
             SourceKind::Spreadsheet
         );
+    }
+
+    #[test]
+    fn zip_kinds_come_from_the_central_directory() {
+        use std::io::Write;
+        let build = |entries: &[(&str, zip::CompressionMethod)]| {
+            let mut w = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+            for (name, method) in entries {
+                let opts = zip::write::SimpleFileOptions::default().compression_method(*method);
+                w.start_file(*name, opts).unwrap();
+                w.write_all(b"<x/>").unwrap();
+            }
+            w.finish().unwrap().into_inner()
+        };
+        let stored = zip::CompressionMethod::Stored;
+        let workbook = build(&[("[Content_Types].xml", stored), ("xl/workbook.xml", stored)]);
+        assert_eq!(sniff(&workbook).kind, SourceKind::Spreadsheet);
+        // An archive that stores a workbook (with its xl/workbook.xml bytes in the clear) is
+        // still an archive.
+        let mut outer_entries = vec![("leia-me.txt", stored)];
+        outer_entries.push(("planilha.xlsx", stored));
+        let mut w = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        for (name, method) in &outer_entries {
+            let opts = zip::write::SimpleFileOptions::default().compression_method(*method);
+            w.start_file(*name, opts).unwrap();
+            w.write_all(if *name == "planilha.xlsx" {
+                &workbook
+            } else {
+                b"oi"
+            })
+            .unwrap();
+        }
+        let outer = w.finish().unwrap().into_inner();
+        assert_eq!(sniff(&outer).kind, SourceKind::Zip);
+        let docx = build(&[
+            ("[Content_Types].xml", stored),
+            ("word/document.xml", stored),
+        ]);
+        assert_eq!(sniff(&docx).kind, SourceKind::Unknown);
     }
 
     #[test]

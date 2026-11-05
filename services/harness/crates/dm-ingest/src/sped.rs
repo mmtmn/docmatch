@@ -224,12 +224,15 @@ fn field_names(flavor: SpedFlavor, reg: &str) -> &'static [&'static str] {
     }
 }
 
-/// Parent register of the child records whose lines are linked (`LINHA_PAI`).
-fn parent_of(reg: &str) -> Option<&'static str> {
-    match reg {
-        "C170" | "C190" => Some("C100"),
-        "I250" => Some("I200"),
-        "E110" => Some("E100"),
+/// Parent register of the child records whose lines are linked (`LINHA_PAI`). In EFD
+/// Contribuições C190 is a consolidation under C010, not a child of C100.
+fn parent_of(book: SpedFlavor, reg: &str) -> Option<&'static str> {
+    match (book, reg) {
+        (SpedFlavor::EfdIcmsIpi | SpedFlavor::EfdContribuicoes, "C170")
+        | (SpedFlavor::EfdIcmsIpi, "C190") => Some("C100"),
+        (SpedFlavor::EfdContribuicoes, "C190") => Some("C010"),
+        (SpedFlavor::EfdIcmsIpi, "E110") => Some("E100"),
+        (SpedFlavor::Ecd, "I250") => Some("I200"),
         _ => None,
     }
 }
@@ -441,7 +444,7 @@ pub fn parse_sped(
         if reg == "9999" {
             closed = true;
         }
-        let parent = parent_of(&reg).and_then(|p| last_line_of.get(p).copied());
+        let parent = parent_of(book, &reg).and_then(|p| last_line_of.get(p).copied());
         last_line_of.insert(reg.clone(), line_no);
         // Block openings and closings (X001, X990) and block 9 are control records; their
         // counts are checked below and they carry nothing to reconcile.
@@ -496,7 +499,7 @@ pub fn parse_sped(
     let mut tables = Vec::new();
     for (reg, data) in registers {
         let mut columns = vec![Column::new("LINHA", ColumnRole::Unknown).with_subrole("line")];
-        let has_parent = parent_of(&reg).is_some();
+        let has_parent = parent_of(book, &reg).is_some();
         if has_parent {
             columns.push(Column::new("LINHA_PAI", ColumnRole::Unknown).with_subrole("parent_line"));
         }

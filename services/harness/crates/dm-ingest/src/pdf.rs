@@ -39,6 +39,13 @@ const MAX_STREAM: usize = 64 * 1024 * 1024;
 const MAX_GLYPHS: usize = 250_000;
 /// Nesting of form XObjects.
 const MAX_FORM_DEPTH: usize = 4;
+/// Form XObjects drawn per page (a form that draws itself would otherwise multiply).
+const MAX_FORMS_PER_PAGE: usize = 256;
+/// Content operations interpreted per page, forms included.
+const MAX_OPS_PER_PAGE: usize = 2_000_000;
+/// Decompressed content interpreted in the whole document, bytes: 2,000 pages can share one
+/// content stream, so the per-page limit alone does not bound a small file.
+const MAX_DOC_CONTENT: usize = 256 * 1024 * 1024;
 
 /// True when the bytes carry the PDF magic header.
 pub fn is_pdf(bytes: &[u8]) -> bool {
@@ -209,6 +216,7 @@ impl<'a> FontInfo<'a> {
                     info.default_width = dw;
                 }
                 info.cid_widths = cid_widths(&array_of(doc, descendant, b"W"));
+                info.cid_widths.sort_by_key(|(lo, _, _)| *lo);
             }
         }
         info
@@ -216,10 +224,12 @@ impl<'a> FontInfo<'a> {
 
     fn width(&self, code: u32, ch: char) -> f32 {
         if self.two_byte {
-            return self
-                .cid_widths
-                .iter()
-                .find(|(lo, hi, _)| (*lo..=*hi).contains(&code))
+            // Ranges sorted by their first code: the last one starting at or before `code`.
+            let i = self.cid_widths.partition_point(|(lo, _, _)| *lo <= code);
+            return i
+                .checked_sub(1)
+                .and_then(|i| self.cid_widths.get(i))
+                .filter(|(_, hi, _)| code <= *hi)
                 .map_or(self.default_width, |(_, _, w)| *w);
         }
         let idx = i64::from(code) - self.first_char;
@@ -358,6 +368,12 @@ struct Interpreter<'a> {
     images: usize,
     undecodable_fonts: usize,
     undecodable_chars: usize,
+    /// Operations left on this page.
+    ops_left: usize,
+    /// Form XObjects left on this page.
+    forms_left: usize,
+    /// Decompressed content left in the document.
+    content_left: usize,
 }
 
 impl<'a> Interpreter<'a> {
@@ -377,6 +393,10 @@ impl<'a> Interpreter<'a> {
         let Some(fi) = gs.font else {
             return;
         };
+        if self.glyphs.len() >= MAX_GLYPHS {
+            self.truncated = true;
+            return;
+        }
         let step = if self.fonts[fi].two_byte { 2 } else { 1 };
         for code_bytes in bytes.chunks(step) {
             let font = &self.fonts[fi];
@@ -430,15 +450,28 @@ impl<'a> Interpreter<'a> {
         }
     }
 
+    /// Interprets one content stream, operation by operation (never the whole stream decoded
+    /// at once), within the page and document budgets.
     fn run(&mut self, content: &[u8], scope: &Scope<'a>, base: GState, depth: usize) {
-        let Ok(content) = Content::decode(content) else {
+        if content.len() > self.content_left {
+            self.content_left = 0;
+            self.truncated = true;
             return;
-        };
+        }
+        self.content_left -= content.len();
         let mut gs = base;
         let mut stack: Vec<GState> = Vec::new();
         let mut tm = Matrix::IDENTITY;
         let mut tlm = Matrix::IDENTITY;
-        for op in &content.operations {
+        for op in Content::decode_iter(content) {
+            let Ok(op) = op else {
+                break;
+            };
+            if self.ops_left == 0 {
+                self.truncated = true;
+                break;
+            }
+            self.ops_left -= 1;
             let o = &op.operands;
             let f = |i: usize| o.get(i).and_then(num);
             match op.operator.as_str() {
@@ -558,6 +591,11 @@ impl<'a> Interpreter<'a> {
         if subtype != b"Form" || depth >= MAX_FORM_DEPTH {
             return;
         }
+        if self.forms_left == 0 {
+            self.truncated = true;
+            return;
+        }
+        self.forms_left -= 1;
         let Ok(content) = stream.get_plain_content_with_limit(MAX_PAGE_CONTENT) else {
             return;
         };
@@ -868,6 +906,8 @@ fn is_balance_or_total(folded: &str) -> bool {
         || squashed.starts_with("TOTAL")
         || squashed.starts_with("SUBTOTAL")
         || squashed.starts_with("LIMITE")
+        || squashed.starts_with("RESUMO")
+        || folded.contains("NO PERIODO")
         || folded.contains("SALDO ANTERIOR")
         || folded.contains("SALDO DO DIA")
         || folded.contains("SALDO FINAL")
@@ -946,7 +986,13 @@ struct Row {
     /// Balance before this row, from a "saldo anterior" line.
     opening: Option<i64>,
     line: Line,
+    /// Continuation lines merged into the description.
+    extra: Vec<Line>,
+    /// True when the row prints its own date (not carried from the row above).
+    dated: bool,
     desc_x0: f32,
+    /// Baseline of the last line of the row (its own or a continuation).
+    bottom: f32,
 }
 
 #[derive(Default)]
@@ -971,11 +1017,13 @@ fn signed(amount: i64, sign: Sign) -> i64 {
 }
 
 impl Statement {
+    /// Years written before the first row (the period of the statement): the first one is
+    /// the year of rows printed as `dd/mm`. Footers and emission dates later on never change it.
     fn see_years(&mut self, line: &Line) {
         for cell in &line.cells {
             for token in cell.text.split_whitespace() {
                 if let Some(((_, _, Some(y)), _)) = leading_date(token) {
-                    self.current_year = Some(y);
+                    self.current_year.get_or_insert(y);
                     self.first_year.get_or_insert(y);
                 }
             }
@@ -1113,17 +1161,23 @@ impl Statement {
         let date = if let Some(d) = date {
             d
         } else {
-            // A dated row before, on a statement: the bank prints the date once per day.
+            // A dated row before, on a statement: the bank prints the date once per day. The
+            // line must start right of the date column, or it is a summary at the margin.
             let last = self.last_date?;
-            if self.header.is_none() {
-                // Without a header, the line must start right of the date column.
-                let date_x1 = self.rows.last()?.line.cells[0].x1;
-                if line.x0 < date_x1 {
-                    return None;
-                }
+            let date_x1 = if let Some(h) = &self.header {
+                h.iter()
+                    .find(|(c, _, _)| *c == HeaderCol::Date)
+                    .map(|(_, _, x1)| *x1)?
+            } else {
+                let prev = self.rows.iter().rev().find(|r| r.dated)?;
+                prev.line.cells[0].x1
+            };
+            if line.x0 < date_x1 {
+                return None;
             }
             last
         };
+        let dated = date_cell;
         // Document: by header column, else a numeric cell set apart from the description.
         let mut document = String::new();
         let mut desc_cells: Vec<&Cell> = Vec::new();
@@ -1151,7 +1205,23 @@ impl Statement {
             .collect::<Vec<_>>()
             .join(" ");
         let desc_x0 = desc_cells.first().map_or(line.x0, |c| c.x0);
-        let date = (date.0, date.1, date.2.or(self.current_year));
+        let date = if date.2.is_some() {
+            date
+        } else {
+            // `dd/mm` rows: the statement year, moving to the next one when the months go
+            // back (a December to January statement).
+            let mut year = self.current_year;
+            if let (Some(y), Some(last)) = (year, self.last_date) {
+                if last.1 > date.1 + 6 {
+                    year = Some(y + 1);
+                }
+            }
+            (date.0, date.1, year)
+        };
+        if let Some(y) = date.2 {
+            self.current_year = Some(y);
+            self.first_year.get_or_insert(y);
+        }
         self.last_date = Some(date);
         let opening = self.last_balance.take();
         Some(Row {
@@ -1164,7 +1234,10 @@ impl Statement {
             balance,
             opening,
             line: line.clone(),
+            extra: Vec::new(),
+            dated,
             desc_x0,
+            bottom: line.top,
         })
     }
 
@@ -1179,7 +1252,9 @@ impl Statement {
                 last_row_on_page = None;
                 continue;
             }
-            self.see_years(&line);
+            if self.rows.is_empty() {
+                self.see_years(&line);
+            }
             if let Some(row) = self.row(&line) {
                 self.rows.push(row);
                 last_row_on_page = Some(self.rows.len() - 1);
@@ -1188,9 +1263,9 @@ impl Statement {
             // Continuation of the previous row's description.
             if let Some(i) = last_row_on_page {
                 let prev = &self.rows[i];
-                let close = line.top - prev.line.top <= 1.6 * line.size.max(prev.line.size);
+                let close = line.top - prev.bottom <= 1.6 * line.size.max(prev.line.size);
                 let indented = line.x0 >= prev.desc_x0 - 0.5 * line.size
-                    && line.x0 > prev.line.cells[0].x0 + 0.5 * line.size;
+                    && (!prev.dated || line.x0 > prev.line.cells[0].x0 + 0.5 * line.size);
                 let plain = !line.cells.iter().any(|c| parse_amount(&c.text).is_some())
                     && leading_date(&line.cells[0].text).is_none();
                 if close && indented && plain {
@@ -1198,7 +1273,8 @@ impl Statement {
                     let row = &mut self.rows[i];
                     row.description.push(' ');
                     row.description.push_str(&text);
-                    row.line.top = line.top;
+                    row.bottom = line.top;
+                    row.extra.push(line);
                     continue;
                 }
             }
@@ -1223,10 +1299,13 @@ impl Statement {
         for r in &mut self.rows {
             let before = r.opening.or(prev_balance);
             if r.sign == Sign::None {
-                if let (Some(b0), Some(b1)) = (before, r.balance) {
-                    if b1 - b0 == -r.amount {
+                if let Some(delta) = before
+                    .zip(r.balance)
+                    .and_then(|(b0, b1)| b1.checked_sub(b0))
+                {
+                    if delta == -r.amount {
                         r.sign = Sign::Debit;
-                    } else if b1 - b0 == r.amount {
+                    } else if delta == r.amount {
                         r.sign = Sign::Credit;
                     }
                 }
@@ -1234,7 +1313,7 @@ impl Statement {
             if r.balance.is_some() {
                 prev_balance = r.balance;
             } else if let Some(b0) = before {
-                prev_balance = Some(b0 + signed(r.amount, r.sign));
+                prev_balance = Some(b0.saturating_add(signed(r.amount, r.sign)));
             }
         }
         let header = self.header.is_some();
@@ -1276,6 +1355,18 @@ fn statement_table(name: &str, source_id: &str, rows: &[Row]) -> (Table, usize) 
         ]);
     }
     (table, bad_dates)
+}
+
+/// Rows of a PDF that is not a statement go back to the text, continuation lines included,
+/// in reading order.
+fn demote(rows: Vec<Row>, leftovers: &mut [(u32, (f32, f32), Leftover)]) {
+    for r in rows {
+        if let Some(entry) = leftovers.iter_mut().find(|(p, _, _)| *p == r.page) {
+            entry.2.push(r.line);
+            entry.2.extend(r.extra);
+            entry.2.sort_by(|a, b| a.top.total_cmp(&b.top));
+        }
+    }
 }
 
 /// Groups leftover lines into blocks (paragraphs) and turns them into items.
@@ -1388,10 +1479,25 @@ pub fn parse_pdf(bytes: &[u8], name: &str, source_id: &str) -> Result<PdfParsed,
     let mut statement = Statement::default();
     let mut leftovers: Vec<(u32, (f32, f32), Leftover)> = Vec::new();
     let mut without_text: Vec<u32> = Vec::new();
-    let mut undecodable_fonts = 0usize;
-    let mut undecodable_chars = 0usize;
+    let mut scanned_pages: Vec<u32> = Vec::new();
     let mut truncated_pages: Vec<u32> = Vec::new();
+    // One font cache for the whole document: a long statement repeats the same fonts on
+    // every page, and each ToUnicode map is parsed once.
+    let mut interp = Interpreter {
+        doc: &doc,
+        fonts: Vec::new(),
+        font_index: BTreeMap::new(),
+        glyphs: Vec::new(),
+        truncated: false,
+        images: 0,
+        undecodable_fonts: 0,
+        undecodable_chars: 0,
+        ops_left: 0,
+        forms_left: 0,
+        content_left: MAX_DOC_CONTENT,
+    };
     let mut unreadable_pages: Vec<u32> = Vec::new();
+    let mut stopped_at: Option<u32> = None;
     for (&number, &page_id) in pages.iter().take(MAX_PAGES) {
         let mbox = media_box(&doc, page_id);
         let resources = resource_dicts(&doc, page_id);
@@ -1403,28 +1509,26 @@ pub fn parse_pdf(bytes: &[u8], name: &str, source_id: &str) -> Result<PdfParsed,
             unreadable_pages.push(number);
             continue;
         };
-        let mut interp = Interpreter {
-            doc: &doc,
-            fonts: Vec::new(),
-            font_index: BTreeMap::new(),
-            glyphs: Vec::new(),
-            truncated: false,
-            images: 0,
-            undecodable_fonts: 0,
-            undecodable_chars: 0,
-        };
+        if interp.content_left == 0 {
+            stopped_at = Some(number);
+            break;
+        }
+        interp.truncated = false;
+        interp.images = 0;
+        interp.ops_left = MAX_OPS_PER_PAGE;
+        interp.forms_left = MAX_FORMS_PER_PAGE;
         interp.run(&content, &scope, GState::default(), 0);
         drop(content);
-        undecodable_fonts += interp.undecodable_fonts;
-        undecodable_chars += interp.undecodable_chars;
         if interp.truncated {
             truncated_pages.push(number);
         }
-        let images = interp.images;
         let glyphs = std::mem::take(&mut interp.glyphs);
         if glyphs.iter().all(|g| g.ch.is_whitespace()) {
             without_text.push(number);
-            let _ = images;
+            // A blank separator page is not a scanned one.
+            if interp.images > 0 {
+                scanned_pages.push(number);
+            }
             continue;
         }
         let lines = build_lines(glyphs, number, mbox);
@@ -1444,18 +1548,12 @@ pub fn parse_pdf(bytes: &[u8], name: &str, source_id: &str) -> Result<PdfParsed,
         let (table, bad) = statement_table(name, source_id, &rows);
         if bad > 0 {
             out.warnings.push(format!(
-                "{bad} linha(s) do extrato sem ano na data foram ignoradas"
+                "{bad} linha(s) do extrato sem ano na data ou com data inválida foram ignoradas"
             ));
         }
         out.table = Some(table);
     } else {
-        // Too few dated amounts to be a statement: they are plain text.
-        for r in rows {
-            if let Some(entry) = leftovers.iter_mut().find(|(p, _, _)| *p == r.page) {
-                entry.2.push(r.line);
-                entry.2.sort_by(|a, b| a.top.total_cmp(&b.top));
-            }
-        }
+        demote(rows, &mut leftovers);
     }
     for (page, size, lines) in &leftovers {
         items_from(lines, *page, *size, source_id, &ctx, &mut out.items);
@@ -1467,16 +1565,22 @@ pub fn parse_pdf(bytes: &[u8], name: &str, source_id: &str) -> Result<PdfParsed,
         out.warnings.push(
             "PDF sem camada de texto (digitalizado ou só imagens): o OCR ainda não está disponível, nenhum conteúdo foi lido".to_string(),
         );
-    } else if !without_text.is_empty() {
+    } else if !scanned_pages.is_empty() {
         out.warnings.push(format!(
             "página(s) sem texto, provavelmente digitalizada(s): {}; o OCR ainda não está disponível",
-            pages_list(&without_text)
+            pages_list(&scanned_pages)
         ));
     }
     if pages.len() > MAX_PAGES {
         out.warnings.push(format!(
             "só as primeiras {MAX_PAGES} de {} páginas foram lidas",
             pages.len()
+        ));
+    }
+    if let Some(page) = stopped_at {
+        out.warnings.push(format!(
+            "leitura interrompida na página {page}: o conteúdo do PDF passou do limite de {} MB",
+            MAX_DOC_CONTENT >> 20
         ));
     }
     if !unreadable_pages.is_empty() {
@@ -1487,13 +1591,14 @@ pub fn parse_pdf(bytes: &[u8], name: &str, source_id: &str) -> Result<PdfParsed,
     }
     if !truncated_pages.is_empty() {
         out.warnings.push(format!(
-            "texto cortado em {MAX_GLYPHS} caracteres na(s) página(s) {}",
+            "texto cortado no limite de processamento ({MAX_GLYPHS} caracteres, {MAX_FORMS_PER_PAGE} formulários ou {MAX_OPS_PER_PAGE} operações) na(s) página(s) {}",
             pages_list(&truncated_pages)
         ));
     }
-    if undecodable_chars > 0 || undecodable_fonts > 0 {
+    if interp.undecodable_chars > 0 {
         out.warnings.push(format!(
-            "{undecodable_chars} caractere(s) em fonte sem mapa Unicode (ToUnicode) não lido(s)"
+            "{} caractere(s) em fonte sem mapa Unicode (ToUnicode) não lido(s)",
+            interp.undecodable_chars
         ));
     }
     Ok(out)
@@ -1712,6 +1817,121 @@ mod tests {
         );
         assert_eq!(table.value(1, 5).unwrap().as_text(), Some("D"));
         assert_eq!(table.value(2, 4), Some(&Value::Null));
+    }
+
+    #[test]
+    fn summaries_at_the_margin_are_not_rows_and_years_roll_over() {
+        let mut st = Statement::default();
+        let lines = vec![
+            line(1, 40.0, &[(40.0, "Período: 01/12/2025 a 31/01/2026")]),
+            line(
+                1,
+                60.0,
+                &[
+                    (40.0, "Data"),
+                    (100.0, "Histórico"),
+                    (400.0, "Valor"),
+                    (520.0, "Saldo"),
+                ],
+            ),
+            line(
+                1,
+                72.0,
+                &[(40.0, "05/12"), (100.0, "PIX RECEBIDO"), (400.0, "10,00 C")],
+            ),
+            line(
+                1,
+                84.0,
+                &[(40.0, "Créditos no período"), (400.0, "10.000,00")],
+            ),
+            line(1, 96.0, &[(40.0, "Rendimentos"), (400.0, "1,23")]),
+            line(
+                1,
+                108.0,
+                &[(40.0, "03/01"), (100.0, "TARIFA"), (400.0, "2,00 D")],
+            ),
+            line(1, 300.0, &[(40.0, "Emitido em 02/02/2026")]),
+        ];
+        let left = st.page(lines);
+        let (rows, _, _) = st.finish();
+        assert_eq!(rows.len(), 2, "{rows:#?}");
+        assert_eq!(rows[0].date, (5, 12, Some(2025)));
+        assert_eq!(rows[1].date, (3, 1, Some(2026)));
+        assert_eq!(left.len(), 5);
+    }
+
+    #[test]
+    fn huge_amounts_do_not_overflow() {
+        let mut st = Statement::default();
+        let big = "999999999999999,99";
+        let mut lines = vec![line(
+            1,
+            50.0,
+            &[
+                (40.0, "01/07/2026"),
+                (100.0, "SALDO ANTERIOR"),
+                (500.0, big),
+            ],
+        )];
+        for i in 0..120 {
+            #[allow(clippy::cast_precision_loss)]
+            let top = 60.0 + i as f32 * 10.0;
+            lines.push(line(
+                1,
+                top,
+                &[(40.0, "02/07/2026"), (100.0, "TED"), (400.0, big)],
+            ));
+        }
+        lines.push(line(
+            1,
+            2000.0,
+            &[
+                (40.0, "03/07/2026"),
+                (100.0, "PIX"),
+                (400.0, big),
+                (500.0, "-999999999999999,99"),
+            ],
+        ));
+        let _ = st.page(lines);
+        let (rows, _, _) = st.finish();
+        assert_eq!(rows.len(), 121);
+    }
+
+    #[test]
+    fn demoted_rows_keep_their_continuation_lines() {
+        let mut st = Statement::default();
+        let lines = vec![
+            line(
+                1,
+                50.0,
+                &[
+                    (40.0, "05/07/2026"),
+                    (110.0, "Parcela única"),
+                    (400.0, "17.380,00"),
+                ],
+            ),
+            line(1, 60.0, &[(110.0, "referente ao pedido 7310")]),
+            line(1, 200.0, &[(40.0, "Atenciosamente")]),
+        ];
+        let left = st.page(lines);
+        let (rows, _, header) = st.finish();
+        assert!(!header);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(
+            rows[0].description,
+            "Parcela única referente ao pedido 7310"
+        );
+        let mut leftovers = vec![(1, (595.0, 842.0), left)];
+        demote(rows, &mut leftovers);
+        let texts: Vec<String> = leftovers[0].2.iter().map(Line::text).collect();
+        assert_eq!(
+            texts,
+            vec![
+                "05/07/2026 Parcela única 17.380,00",
+                "referente ao pedido 7310",
+                "Atenciosamente"
+            ]
+        );
     }
 
     #[test]

@@ -14,7 +14,7 @@ mod c240;
 mod c400;
 
 use chrono::NaiveDate;
-use dm_core::{Column, ColumnRole, Money, Table, Value};
+use dm_core::{Column, ColumnRole, Money, Record as TableRecord, Table, Value};
 use serde::{Deserialize, Serialize};
 
 use crate::IngestError;
@@ -63,6 +63,88 @@ pub fn is_collection_table(table: &Table) -> bool {
             .columns
             .iter()
             .any(|c| c.role == ColumnRole::Name && c.subrole.as_deref() == Some("customer"))
+}
+
+/// The collection table with one row per título instead of one per movement: a return that
+/// confirms an entry (02) and then changes its due date (14), or a liquidation followed by its
+/// fee record (28), describes one título. Rows are grouped by nosso número (seu número when the
+/// layout has none). A título liquidated, written off or rejected in any movement takes that
+/// row; otherwise the last movement wins, so a changed due date is the one kept. Fee records
+/// never make a título on their own. Each kept row keeps its original row number, so evidence
+/// still points to the line of the file.
+pub fn titles_view(table: &Table) -> Table {
+    let col = |name: &str| table.column_index(name);
+    let (Some(nosso), Some(seu), Some(situation)) =
+        (col("nosso_numero"), col("seu_numero"), col("situacao"))
+    else {
+        return table.clone();
+    };
+    let text = |r: &TableRecord, c: usize| {
+        r.values
+            .get(c)
+            .and_then(Value::as_text)
+            .unwrap_or_default()
+            .to_string()
+    };
+    let mut groups: Vec<(String, Vec<&TableRecord>)> = Vec::new();
+    for r in &table.rows {
+        let key = match (text(r, nosso), text(r, seu)) {
+            (n, _) if !n.is_empty() => format!("n:{n}"),
+            (_, s) if !s.is_empty() => format!("s:{s}"),
+            _ => format!("row:{}", r.row),
+        };
+        match groups.iter_mut().find(|(k, _)| *k == key) {
+            Some((_, rows)) => rows.push(r),
+            None => groups.push((key, vec![r])),
+        }
+    }
+    let mut out = Table::new(
+        table.name.clone(),
+        table.source_id.clone(),
+        table.columns.clone(),
+    );
+    for (_, rows) in groups {
+        let movements: Vec<&TableRecord> = rows
+            .iter()
+            .copied()
+            .filter(|r| text(r, situation) != Situation::Tarifa.label())
+            .collect();
+        let closed = [Situation::Liquidado, Situation::Baixado]
+            .map(Situation::label)
+            .to_vec();
+        let pick = movements
+            .iter()
+            .rev()
+            .find(|r| closed.contains(&text(r, situation).as_str()))
+            .or_else(|| {
+                movements
+                    .iter()
+                    .rev()
+                    .find(|r| text(r, situation) != Situation::Rejeitado.label())
+            })
+            .or_else(|| movements.last());
+        let Some(pick) = pick else {
+            continue;
+        };
+        let mut values = pick.values.clone();
+        // A later movement may leave payer fields blank: fill them from earlier rows.
+        for (c, v) in values.iter_mut().enumerate() {
+            if v.is_null() {
+                if let Some(earlier) = rows
+                    .iter()
+                    .rev()
+                    .find_map(|r| r.values.get(c).filter(|x| !x.is_null()).cloned())
+                {
+                    *v = earlier;
+                }
+            }
+        }
+        out.rows.push(TableRecord {
+            row: pick.row,
+            values,
+        });
+    }
+    out
 }
 
 /// CNAB files are ASCII in practice; anything else is read as windows-1252 (a superset of the
@@ -509,6 +591,61 @@ mod tests {
             Some("12345678909".to_string())
         );
         assert_eq!(inscription('0', "000000000000000"), None);
+    }
+
+    #[test]
+    fn titles_view_keeps_one_row_per_titulo() {
+        let row = |nosso: &str, situation: Situation, due: u32, paid: Option<i64>| CollectionRow {
+            nosso_numero: nosso.to_string(),
+            seu_numero: format!("NF {nosso}"),
+            payer: if due == 10 {
+                "PADARIA".to_string()
+            } else {
+                String::new()
+            },
+            due: NaiveDate::from_ymd_opt(2026, 7, due),
+            face_value: Some(Money::from_centavos(1_000)),
+            paid: paid.map(Money::from_centavos),
+            situation: Some(situation),
+            ..CollectionRow::default()
+        };
+        let t = collection_table(
+            "x",
+            "s",
+            &[
+                row("1", Situation::Aberto, 10, None),
+                row("1", Situation::Aberto, 20, None),
+                row("2", Situation::Aberto, 10, None),
+                row("2", Situation::Liquidado, 11, Some(1_000)),
+                row("2", Situation::Tarifa, 11, None),
+                row("3", Situation::Tarifa, 10, None),
+                row("4", Situation::Rejeitado, 10, None),
+            ],
+        );
+        let v = titles_view(&t);
+        assert_eq!(v.len(), 3);
+        let col = |n: &str| v.column_index(n).unwrap();
+        // Título 1: the changed due date wins and the payer comes from the first movement.
+        assert_eq!(v.rows[0].row, 1);
+        assert_eq!(
+            v.value(0, col("vencimento")).and_then(Value::as_date),
+            NaiveDate::from_ymd_opt(2026, 7, 20)
+        );
+        assert_eq!(
+            v.value(0, col("sacado")).unwrap().as_text(),
+            Some("PADARIA")
+        );
+        // Título 2: liquidated; the fee record does not make another título.
+        assert_eq!(
+            v.value(1, col("situacao")).unwrap().as_text(),
+            Some("Liquidado")
+        );
+        assert_eq!(v.rows[1].row, 3);
+        // Título 3 had only a fee record; título 4 stays, rejected.
+        assert_eq!(
+            v.value(2, col("situacao")).unwrap().as_text(),
+            Some("Rejeitado")
+        );
     }
 
     #[test]

@@ -66,10 +66,9 @@ fn refuse(reason: String) -> IngestError {
 
 fn safe_path(name: &str) -> Option<String> {
     let unified = name.replace('\\', "/");
-    if unified.starts_with('/')
-        || unified.split('/').any(|part| part == "..")
-        || unified.as_bytes().get(1) == Some(&b':')
-    {
+    // The same test as the upload scanner (`..` or absolute): nothing is written to disk, so
+    // a drive letter is just part of a name.
+    if unified.starts_with('/') || unified.split('/').any(|part| part == "..") {
         return None;
     }
     Some(unified.trim_start_matches("./").to_string())
@@ -104,11 +103,13 @@ pub fn read_zip(
     let max_mb = lim.max_uncompressed >> 20;
     // First pass: the declared sizes and names, exactly as the upload scanner checks them.
     let mut declared_total: u64 = 0;
-    for i in 0..count {
+    let mut encrypted = vec![false; count];
+    for (i, flag) in encrypted.iter_mut().enumerate() {
         let file = archive.by_index_raw(i).map_err(|e| IngestError::Parse {
             format: "zip",
             detail: e.to_string(),
         })?;
+        *flag = file.encrypted();
         declared_total = declared_total.saturating_add(file.size());
         if declared_total > lim.max_uncompressed {
             return Err(refuse(format!("descompactado acima de {max_mb} MB")));
@@ -139,7 +140,20 @@ pub fn read_zip(
     let mut entries = Vec::new();
     let mut warnings = Vec::new();
     let mut read_total: u64 = 0;
-    for i in 0..count {
+    for (i, locked) in encrypted.into_iter().enumerate() {
+        if locked {
+            // The zip crate refuses to open it without the password; say so in pt-BR.
+            let name = archive
+                .by_index_raw(i)
+                .map(|f| entry_name(&f))
+                .unwrap_or_default();
+            if !is_noise(&name) && !name.ends_with('/') {
+                warnings.push(format!(
+                    "{name}: entrada protegida por senha não foi aberta"
+                ));
+            }
+            continue;
+        }
         let mut file = match archive.by_index(i) {
             Ok(f) => f,
             Err(e) => {
@@ -154,12 +168,6 @@ pub fn read_zip(
             continue;
         };
         if is_noise(&path) {
-            continue;
-        }
-        if file.encrypted() {
-            warnings.push(format!(
-                "{path}: entrada protegida por senha não foi aberta"
-            ));
             continue;
         }
         let declared = file.size();
@@ -277,11 +285,42 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn encrypted_entries_are_skipped_with_a_warning() {
+        let mut z = zip_of(&[("a.csv", b"a;b\n1;2\n"), ("segredo.csv", b"x;y\n")]);
+        // Set the "encrypted" flag (bit 0 of the general purpose flags) of the second entry,
+        // in its local header and in the central directory.
+        let mut seen_local = 0;
+        let mut seen_central = 0;
+        let mut i = 0;
+        while i + 10 < z.len() {
+            if z[i..].starts_with(b"PK\x03\x04") {
+                seen_local += 1;
+                if seen_local == 2 {
+                    z[i + 6] |= 1;
+                }
+            } else if z[i..].starts_with(b"PK\x01\x02") {
+                seen_central += 1;
+                if seen_central == 2 {
+                    z[i + 8] |= 1;
+                }
+            }
+            i += 1;
+        }
+        let (entries, warnings) = read_zip(&z, &ZipLimits::default()).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].path, "a.csv");
+        assert_eq!(
+            warnings,
+            vec!["segredo.csv: entrada protegida por senha não foi aberta".to_string()]
+        );
+    }
+
+    #[test]
     fn path_safety() {
         assert_eq!(safe_path("a/b.csv").as_deref(), Some("a/b.csv"));
         assert_eq!(safe_path("./a.csv").as_deref(), Some("a.csv"));
         assert_eq!(safe_path("a\\b.csv").as_deref(), Some("a/b.csv"));
-        assert_eq!(safe_path("C:/x.csv"), None);
+        assert_eq!(safe_path("C:/x.csv").as_deref(), Some("C:/x.csv"));
         assert_eq!(safe_path("a/../../x"), None);
         assert!(is_noise("__MACOSX/x"));
         assert!(is_noise("pasta/.hidden"));
