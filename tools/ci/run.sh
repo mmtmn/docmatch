@@ -20,6 +20,7 @@ subsystems=(
   apps/android
   apps/ios
   tools/installer
+  tools/media
 )
 
 declare -a names statuses times

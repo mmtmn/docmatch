@@ -1,0 +1,13 @@
+{
+  "comment": "Terminal das gravações (media render). background, foreground e bar são os tokens escuros bg.canvas, text.primary e bg.surface de packages/design-tokens/tokens.json (um teste confere); bar_title é text.muted. ansi são as 16 cores do terminal, 0-7 e as brilhantes 8-15.",
+  "background": "#0B1220",
+  "foreground": "#F1F5F9",
+  "cursor": "#93C5FD",
+  "bar": "#121A2B",
+  "bar_title": "#97A3B4",
+  "dots": ["#FF5F57", "#FEBC2E", "#28C840"],
+  "ansi": [
+    "#1E293B", "#F87171", "#4ADE80", "#FACC15", "#60A5FA", "#C084FC", "#22D3EE", "#CBD5E1",
+    "#64748B", "#FCA5A5", "#86EFAC", "#FDE047", "#93C5FD", "#D8B4FE", "#67E8F9", "#F8FAFC"
+  ]
+}
