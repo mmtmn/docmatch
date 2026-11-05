@@ -93,7 +93,15 @@ por `aws iam get-user` e depois por `aws ec2 describe-security-groups`.
    políticas de guardrail viajam em mapas com chaves fixas e os alarmes têm interruptores booleanos).
 3. **AMI**: copie `packer/example.pkrvars.hcl` para `packer/build.auto.pkrvars.hcl` com os três
    outputs acima e rode `make -C infra packer-build` (exige o `session-manager-plugin` da AWS na
-   máquina de build). O Packer entra pela SSM (nada de porta 22),
+   máquina de build). Sem o plugin: `ssh_interface = "public_ip"`, `security_group_id = ""` e
+   `ansible_use_proxy = true`; o Packer cria um grupo de segurança temporário que só admite SSH
+   do IP público da máquina de build e o apaga com a instância, e o Ansible passa pela única
+   conexão do Packer (o nftables do papel mantém conexões estabelecidas). A AMI sai igual, sem
+   OpenSSH. Com a CLI autenticada por `aws login`, o SDK do plugin do Packer não lê essas
+   credenciais: use um perfil com
+   `credential_process = aws configure export-credentials --format process` (num
+   `AWS_CONFIG_FILE` à parte, com `AWS_SDK_LOAD_CONFIG=1`), que renova as credenciais
+   temporárias durante a construção inteira. O Packer entra pela SSM (nada de porta 22),
    aplica o papel `hardening`, roda o portão do Lynis (índice ≥ 90, senão a AMI não é criada),
    remove o OpenSSH e inicializa o AIDE. O id da AMI fica em `packer/manifest.json`. O papel
    termina com asserções que derrubam a construção se as regras do auditd não carregaram inteiras

@@ -43,10 +43,15 @@ source "amazon-ebs" "docmatch" {
   encrypt_boot            = true
   deprecate_at            = timeadd(timestamp(), "${var.deprecate_after_days * 24}h")
 
-  subnet_id                   = var.subnet_id
-  security_group_ids          = [var.security_group_id]
-  associate_public_ip_address = true
-  iam_instance_profile        = var.iam_instance_profile
+  subnet_id = var.subnet_id
+  # With a security group (the app one: no ingress) Packer reaches the box through the SSM tunnel.
+  # Without one (ssh_interface = "public_ip", for a build machine without the Session Manager
+  # plugin) Packer creates a temporary group that admits SSH only from this machine's public IP
+  # and deletes it with the instance; the image itself ships without OpenSSH either way.
+  security_group_ids                        = var.security_group_id != "" ? [var.security_group_id] : []
+  temporary_security_group_source_public_ip = var.security_group_id == ""
+  associate_public_ip_address               = true
+  iam_instance_profile                      = var.iam_instance_profile
 
   ssh_username  = "ubuntu"
   ssh_interface = var.ssh_interface

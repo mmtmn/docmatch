@@ -26,8 +26,9 @@ variable "subnet_id" {
 }
 
 variable "security_group_id" {
-  description = "Security group of the build instance (Terraform output app_security_group_id): no ingress needed, SSM tunnel only."
+  description = "Security group of the build instance (Terraform output app_security_group_id): no ingress needed, SSM tunnel only. Empty with ssh_interface = \"public_ip\": a temporary group admits SSH from this machine's public IP only."
   type        = string
+  default     = ""
 }
 
 variable "iam_instance_profile" {
