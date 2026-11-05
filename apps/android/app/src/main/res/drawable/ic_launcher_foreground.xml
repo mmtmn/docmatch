@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Two overlapping sheets with a check: documents that match. Brand blue on white. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#DBEAFE"
+        android:pathData="M34,30h28a4,4 0,0 1,4 4v38a4,4 0,0 1,-4 4H34a4,4 0,0 1,-4 -4V34a4,4 0,0 1,4 -4z" />
+    <path
+        android:fillColor="#1D4ED8"
+        android:pathData="M46,36h28a4,4 0,0 1,4 4v38a4,4 0,0 1,-4 4H46a4,4 0,0 1,-4 -4V40a4,4 0,0 1,4 -4z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M51,60l7,7l12,-14" />
+</vector>
