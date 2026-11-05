@@ -432,7 +432,7 @@ func runUp(ctx context.Context, w world, args []string, b Build) (int, error) {
 	inst := install.New(r.opts, r.st)
 	outln(w.stdout, text.T("cli.up_starting", "project", r.opts.Project))
 	if r.opts.Mode == state.ModeDev {
-		return makeTarget(ctx, w, r.opts.SourceDir, "local")
+		return makeTarget(ctx, w, r.opts.SourceDir, "local", w.devEnviron(ctx, r.opts))
 	}
 	if err := inst.Prepare(); err != nil {
 		return exitFailed, err
@@ -460,7 +460,7 @@ func runDown(ctx context.Context, w world, args []string, b Build) (int, error) 
 		return exitFailed, err
 	}
 	if r.opts.Mode == state.ModeDev {
-		return makeTarget(ctx, w, r.opts.SourceDir, "local-down")
+		return makeTarget(ctx, w, r.opts.SourceDir, "local-down", w.devEnviron(ctx, r.opts))
 	}
 	if volumes && !c.y {
 		out(w.stdout, text.T("cli.down_confirm"))
@@ -649,9 +649,19 @@ func runDemo(ctx context.Context, w world, args []string, b Build) (int, error) 
 	return exitOK, nil
 }
 
+// devEnviron is the environment of every make of the Desenvolver mode outside the installation
+// (docmatch up, down, uninstall): the toolchain folders the installation may have added to
+// PATH, and GOTOOLCHAIN as during the installation.
+func (w world) devEnviron(ctx context.Context, opts install.Options) []string {
+	d := &devTools{w: w}
+	d.refreshPath(w.toolchainEnv(opts.SourceDir), toolchain.ReadRequirements(opts.SourceDir))
+	return install.New(opts, nil).DevEnviron(ctx)
+}
+
 // makeTarget runs `make <target>` in the repository (Desenvolver installs).
-func makeTarget(ctx context.Context, w world, dir, target string) (int, error) {
+func makeTarget(ctx context.Context, w world, dir, target string, env []string) (int, error) {
 	cmd := commandIn(ctx, dir, "make", target)
+	cmd.Env = env
 	cmd.Stdout, cmd.Stderr, cmd.Stdin = w.stdout, w.stderr, w.stdin
 	if err := cmd.Run(); err != nil {
 		return exitFailed, err

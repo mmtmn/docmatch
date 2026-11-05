@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 )
 
@@ -21,11 +20,11 @@ func (e Env) ExtraPaths(req Requirements) (first, rest []string) {
 	case "windows":
 		local := e.Getenv.Get("LOCALAPPDATA")
 		if local == "" {
-			local = filepath.Join(home, "AppData", "Local")
+			local = e.join(home, "AppData", "Local")
 		}
-		rest = append(rest, filepath.Join(local, "Microsoft", "WinGet", "Links"))
+		rest = append(rest, e.join(local, "Microsoft", "WinGet", "Links"))
 		if pf := e.Getenv.Get("ProgramFiles"); pf != "" {
-			rest = append(rest, filepath.Join(pf, "Docker", "Docker", "resources", "bin"))
+			rest = append(rest, e.join(pf, "Docker", "Docker", "resources", "bin"))
 		}
 		return first, rest
 	case "darwin":
@@ -36,44 +35,55 @@ func (e Env) ExtraPaths(req Requirements) (first, rest []string) {
 	default:
 		rest = append(rest, "/snap/bin", "/usr/local/go/bin")
 	}
-	first = append([]string{filepath.Join(home, ".cargo", "bin")}, first...)
-	rest = append(rest, filepath.Join(home, ".local", "bin"))
+	first = append([]string{e.join(home, ".cargo", "bin")}, first...)
+	rest = append(rest, e.join(home, ".local", "bin"))
 	return first, rest
 }
 
-// AugmentPath adds the existing extra folders to path (a PATH value) and reports which it added.
-func (e Env) AugmentPath(path string, req Requirements) (string, []string) {
+// AugmentPath adds the existing extra folders to path (a PATH value) and reports which it
+// added. front are folders a plan put replacements in (Plan.PathFirst): they move to the front
+// even when the PATH already has them further back.
+func (e Env) AugmentPath(path string, req Requirements, front ...string) (string, []string) {
 	sep := string(os.PathListSeparator)
 	if e.Info.OS == "windows" {
 		sep = ";"
 	} else if e.Info.OS != "" {
 		sep = ":"
 	}
+	first, rest := e.ExtraPaths(req)
+	lead := map[string]bool{}
+	var head []string
+	for _, dir := range append(append([]string{}, front...), first...) {
+		if c := e.clean(dir); !lead[c] && e.exists(dir) {
+			lead[c] = true
+			head = append(head, dir)
+		}
+	}
 	have := map[string]bool{}
 	var parts []string
 	for _, p := range strings.Split(path, sep) {
-		if p != "" {
+		if p == "" {
+			continue
+		}
+		have[e.clean(p)] = true
+		if !lead[e.clean(p)] {
 			parts = append(parts, p)
-			have[filepath.Clean(p)] = true
 		}
 	}
-	first, rest := e.ExtraPaths(req)
-	var added, front []string
-	for gi, group := range [][]string{first, rest} {
-		for _, dir := range group {
-			if have[filepath.Clean(dir)] || !e.exists(dir) {
-				continue
-			}
-			have[filepath.Clean(dir)] = true
+	var added []string
+	for _, dir := range head {
+		if !have[e.clean(dir)] {
 			added = append(added, dir)
-			if gi == 0 {
-				front = append(front, dir)
-			} else {
-				parts = append(parts, dir)
-			}
 		}
 	}
-	return strings.Join(append(front, parts...), sep), added
+	for _, dir := range rest {
+		if c := e.clean(dir); !have[c] && !lead[c] && e.exists(dir) {
+			have[c] = true
+			added = append(added, dir)
+			parts = append(parts, dir)
+		}
+	}
+	return strings.Join(append(head, parts...), sep), added
 }
 
 // Terminal is where a plan runs: the user's terminal, so sudo, UAC and package managers talk

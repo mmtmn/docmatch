@@ -3,6 +3,7 @@ package toolchain
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -70,6 +71,25 @@ func (c Command) String() string {
 }
 
 func quote(s string) string {
+	// A control character (a newline, an escape) would make the line on screen differ from the
+	// argument that runs: those go as $'...' with every such byte spelled out.
+	if strings.IndexFunc(s, func(r rune) bool { return r < 0x20 || r == 0x7f }) >= 0 {
+		var b strings.Builder
+		b.WriteString("$'")
+		for _, c := range []byte(s) {
+			switch {
+			case c == '\\' || c == '\'':
+				b.WriteByte('\\')
+				b.WriteByte(c)
+			case c < 0x20 || c == 0x7f:
+				fmt.Fprintf(&b, "\\x%02x", c)
+			default:
+				b.WriteByte(c)
+			}
+		}
+		b.WriteString("'")
+		return b.String()
+	}
 	if s != "" && !strings.ContainsAny(s, " \t\"'$`\\|&;<>()*?[]{}!#~") {
 		return s
 	}
@@ -88,6 +108,10 @@ type Plan struct {
 	Commands []Command
 	Manual   []Manual
 	Notes    []string // after the commands (log in again for the docker group...)
+	// PathFirst are folders that must come first in PATH once the plan ran: they hold the
+	// replacement of a tool an older copy would otherwise shadow (snap's Node over an apt Node
+	// 18 in /usr/bin, the pnpm installed into ~/.local).
+	PathFirst []string
 }
 
 // Empty reports a plan with nothing to run.
@@ -142,6 +166,34 @@ func (p *planner) root(tool string, args ...string) (Command, bool) {
 		return Command{}, false
 	}
 	return Command{Args: append([]string{"sudo"}, args...), Tools: []string{tool}, Elevated: true}, true
+}
+
+func (p *planner) first(dir string) {
+	if !contains(p.plan.PathFirst, dir) {
+		p.plan.PathFirst = append(p.plan.PathFirst, dir)
+	}
+}
+
+// aptListsReady reports whether apt has package lists to answer from.
+func (e Env) aptListsReady() bool {
+	glob := e.Glob
+	if glob == nil {
+		glob = filepath.Glob
+	}
+	lists, _ := glob("/var/lib/apt/lists/*_Packages*")
+	return len(lists) > 0
+}
+
+// needsPackages reports whether some missing tool would come from the distribution's packages.
+func needsPackages(need map[string]Status, wsl bool) bool {
+	for id, s := range need {
+		switch {
+		case id == PNPM, id == Rust && s.Reason == "rustup_no_toolchain", id == Docker && wsl:
+		default:
+			return true
+		}
+	}
+	return false
 }
 
 func (p *planner) then(c Command, ok bool) {
@@ -216,7 +268,7 @@ func (e Env) ManualFix(id string) string {
 		return text.T("preflight.fix_docker_mac")
 	case id == Docker:
 		return text.T("preflight.fix_docker_linux")
-	case (id == Make || id == CC) && e.Info.OS == "darwin":
+	case (id == Make || id == CC || id == Git) && e.Info.OS == "darwin":
 		return text.T("tools.fix_xcode")
 	case e.Info.OS == "darwin" && e.Manager().ID == "":
 		return text.T("tools.fix_brew", "tool", Name(id))
@@ -254,7 +306,8 @@ func (p *planner) candidates(pkgs ...string) (map[string]string, bool) {
 	default:
 		return out, false
 	}
-	return out, len(out) > 0
+	// With lists (checked before planning), a package missing from the answer does not exist.
+	return out, true
 }
 
 // ParseAptPolicy reads `apt-cache policy` into package -> candidate version (without the epoch
@@ -302,6 +355,15 @@ func (p *planner) pick(minimum string, names ...string) (string, bool) {
 func (p *planner) linux(need map[string]Status, order []string) {
 	e := p.e
 	apt := p.plan.Manager.ID == Apt
+	// Empty apt lists (a fresh WSL or container) say nothing about what apt would install: the
+	// first plan only refreshes them, and the next check plans with what they hold.
+	if apt && !e.aptListsReady() && needsPackages(need, e.Info.WSL) {
+		if c, ok := p.root(order[0], "apt-get", "update"); ok {
+			p.plan.Commands = []Command{c}
+		}
+		p.plan.Notes = append(p.plan.Notes, text.T("tools.note_apt_lists"))
+		return
+	}
 	names := func(a, d string) string {
 		if apt {
 			return a
@@ -359,6 +421,7 @@ func (p *planner) linux(need map[string]Status, order []string) {
 				c, ok := p.root(id, "snap", "install", "node", "--classic", "--channel="+p.req.NodeMajor+"/stable")
 				p.then(c, ok)
 				nodeVia = "snap"
+				p.first("/snap/bin") // after /usr/bin in Ubuntu's PATH, where the old Node is
 			} else {
 				p.manual(id, text.T("tools.fix_node_old", "want", p.req.Node))
 			}
@@ -396,15 +459,17 @@ func (p *planner) pnpm(nodeComing bool) {
 	if p.req.PNPM != "" {
 		version += "@" + p.req.PNPM
 	}
-	local := filepath.Join(p.e.Home, ".local")
+	local := p.e.join(p.e.Home, ".local")
 	if _, err := r.LookPath("npm"); err == nil || nodeComing {
 		p.after = append(p.after, p.user(PNPM, "npm", "install", "--global", "--prefix", local, version))
+		p.first(p.e.join(local, "bin"))
 		return
 	}
 	if _, err := r.LookPath("corepack"); err == nil {
 		p.after = append(p.after,
-			p.user(PNPM, "corepack", "enable", "--install-directory", filepath.Join(local, "bin")),
+			p.user(PNPM, "corepack", "enable", "--install-directory", p.e.join(local, "bin")),
 			p.user(PNPM, "corepack", "prepare", version, "--activate"))
+		p.first(p.e.join(local, "bin"))
 		return
 	}
 	p.manual(PNPM, p.e.ManualFix(PNPM))

@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -287,11 +288,17 @@ func TestSubsystems(t *testing.T) {
 // fakeMake puts a `make` on the PATH that prints what make setup would and exits with code.
 func fakeMake(t *testing.T, script string) {
 	t.Helper()
+	fakeBin(t, "make", script)
+}
+
+// fakeBin puts a program written in sh first on the PATH.
+func fakeBin(t *testing.T, name, script string) {
+	t.Helper()
 	if runtime.GOOS == "windows" {
-		t.Skip("make falso em sh")
+		t.Skip("programas falsos em sh")
 	}
 	bin := t.TempDir()
-	if err := os.WriteFile(filepath.Join(bin, "make"), []byte("#!/bin/sh\n"+script), 0o755); err != nil { //nolint:gosec // test helper
+	if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\n"+script), 0o755); err != nil { //nolint:gosec // test helper
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
@@ -302,13 +309,20 @@ func TestDevSetupProgress(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(src, "Makefile"), []byte("SUBSYSTEMS := services/api apps/web\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// The go.mod pins go1.27.3 and the local Go (a fake one here) is Ubuntu's 1.22: make setup
+	// gets the exact toolchain, so its `go install`s build with it.
+	if err := os.WriteFile(filepath.Join(src, "services", "api", "go.mod"), []byte("module x\n\ngo 1.27.0\n\ntoolchain go1.27.3\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fakeBin(t, "go", "echo go1.22.2\n")
 	// make prints the physical path (pwd -P), as on macOS where /var is /private/var: the
-	// checkout is reached through a symlink here.
-	fakeMake(t, `echo "hooks ativados"
-echo "make[1]: Entering directory '$(pwd -P)/services/api'"
-echo "make[1]: Entering directory '$(pwd -P)/apps/web'"
-test "$GOTOOLCHAIN" = auto || exit 3
-`)
+	// checkout is reached through a symlink here. The second line is macOS's make 3.81, which
+	// quotes `...'; English because make runs with LC_ALL=C.
+	fakeMake(t, "echo \"hooks ativados\"\n"+
+		"echo \"make[1]: Entering directory '$(pwd -P)/services/api'\"\n"+
+		"echo \"make[1]: Entering directory \\`$(pwd -P)/apps/web'\"\n"+
+		"test \"$GOTOOLCHAIN\" = go1.27.3 || exit 3\n"+
+		"test \"$LC_ALL\" = C || exit 4\n")
 	t.Setenv("GOTOOLCHAIN", "") // empty counts as unset
 	link := filepath.Join(t.TempDir(), "atalho")
 	if err := os.Symlink(src, link); err != nil {
@@ -338,6 +352,76 @@ test "$GOTOOLCHAIN" = auto || exit 3
 	other := New(Options{Mode: state.ModeDev, Dir: dir, SourceDir: src}, again.State)
 	if res, _ := other.devSetup(context.Background(), r); res.Outcome != flow.OK {
 		t.Fatal("outro checkout roda o make setup")
+	}
+}
+
+// Checkouts with the setup-local target prepare only what make local builds.
+func TestSetupTarget(t *testing.T) {
+	dir := t.TempDir()
+	mk := "SUBSYSTEMS := a b infra\nLOCAL_SUBSYSTEMS := a \\\n    b\n\nsetup: hooks\n\nsetup-local: hooks\n"
+	if err := os.WriteFile(filepath.Join(dir, "Makefile"), []byte(mk), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if target, subs := SetupTarget(dir); target != "setup-local" || strings.Join(subs, ",") != "a,b" {
+		t.Fatalf("%s %v", target, subs)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "Makefile"), []byte("SUBSYSTEMS := a b\nsetup:\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if target, subs := SetupTarget(dir); target != "setup" || strings.Join(subs, ",") != "a,b" {
+		t.Fatalf("checkout antigo: %s %v", target, subs)
+	}
+	if root := FindSource("."); root != "" {
+		if target, subs := SetupTarget(root); target != "setup-local" || len(subs) == 0 || slices.Contains(subs, "infra") {
+			t.Fatalf("o Makefile da raiz: %s %v", target, subs)
+		}
+	}
+}
+
+// The root Makefile's setup and setup-local stop at the first subsystem that fails (before,
+// the loop ignored the status and make setup ended 0) and skip, saying so, what does not exist.
+func TestRootMakefileSetupFailsFast(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("make e sh")
+	}
+	if _, err := exec.LookPath("make"); err != nil {
+		t.Skip("sem make")
+	}
+	root := FindSource(".")
+	if root == "" {
+		t.Skip("fora do repositório")
+	}
+	mk, err := os.ReadFile(filepath.Join(root, "Makefile"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	write := func(rel, body string, mode os.FileMode) {
+		p := filepath.Join(dir, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), mode); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("Makefile", string(mk), 0o644)
+	write("tools/git-hooks/install.sh", "#!/bin/sh\necho hooks\n", 0o755)
+	write("packages/contracts/Makefile", "setup:\n\t@echo contracts-ok\n", 0o644)
+	write("services/api/Makefile", "setup:\n\t@echo api-falha; exit 3\n", 0o644)
+	write("services/harness/Makefile", "setup:\n\t@echo harness-rodou\n", 0o644)
+	for _, target := range []string{"setup", "setup-local"} {
+		cmd := exec.Command("make", "-C", dir, target) //nolint:gosec // test
+		cmd.Env = append(os.Environ(), "MAKEFLAGS=")
+		out, err := cmd.CombinedOutput()
+		if err == nil || !strings.Contains(string(out), "contracts-ok") || strings.Contains(string(out), "harness-rodou") {
+			t.Fatalf("make %s para na primeira falha:\n%s", target, out)
+		}
+	}
+	write("services/api/Makefile", "setup:\n\t@echo api-ok\n", 0o644)
+	out, err := exec.Command("make", "-C", dir, "setup").CombinedOutput() //nolint:gosec // test
+	if err != nil || !strings.Contains(string(out), "harness-rodou") || !strings.Contains(string(out), "apps/web não existe, pulando") {
+		t.Fatalf("%v\n%s", err, out)
 	}
 }
 

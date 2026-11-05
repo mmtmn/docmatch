@@ -62,6 +62,7 @@ func updateWorld(t *testing.T, env map[string]string) (world, *bytes.Buffer, *by
 		data, err := os.ReadFile(path) //nolint:gosec // test file
 		return string(data), err
 	}
+	w.loopbackHTTP = true // httptest serves http on 127.0.0.1
 	return w, out, errb
 }
 
@@ -94,7 +95,18 @@ func TestUpdateCommand(t *testing.T) {
 }
 
 func TestUpdateRefusals(t *testing.T) {
-	w, _, errb := updateWorld(t, nil)
+	// Outside the tests' loopback server, a base (or DOCMATCH_INSTALL_BASE) must be https: the
+	// download replaces this very binary.
+	base := site(t, "0.2.0")
+	w, _, errb := updateWorld(t, map[string]string{"DOCMATCH_INSTALL_BASE": base})
+	w.loopbackHTTP = false
+	if code := run(context.Background(), w, []string{"update"}, Build{Version: "0.1.0"}); code != exitFailed || !strings.Contains(errb.String(), "precisam ser https") {
+		t.Fatalf("http: %d %q", code, errb)
+	}
+	if data, _ := os.ReadFile(w.exe); string(data) != "docmatch 0.1.0" {
+		t.Fatal("nada foi baixado por http")
+	}
+	w, _, errb = updateWorld(t, nil)
 	if code := run(context.Background(), w, []string{"update"}, Build{Version: "dev"}); code != exitFailed || !strings.Contains(errb.String(), "DOCMATCH_INSTALL_BASE") {
 		t.Fatalf("binário local sem base: %d %q", code, errb)
 	}
@@ -115,6 +127,7 @@ type recorder struct {
 	calls []string
 	fail  map[string]error
 	left  []string // what RemoveInstallDir reports it left
+	env   []string // what StopDev ran make with
 }
 
 func (r *recorder) do(call string) error {
@@ -125,7 +138,10 @@ func (r *recorder) do(call string) error {
 func (r *recorder) Down(_ context.Context, o install.Options, _ *state.State, volumes bool) error {
 	return r.do(fmt.Sprintf("down %s volumes=%v", o.Project, volumes))
 }
-func (r *recorder) StopDev(_ context.Context, source string) error { return r.do("stopdev " + source) }
+func (r *recorder) StopDev(_ context.Context, source string, env []string) error {
+	r.env = env
+	return r.do("stopdev " + source)
+}
 func (r *recorder) WipeDev(_ context.Context, source string) error { return r.do("wipedev " + source) }
 func (r *recorder) RemoveImages(_ context.Context, images []string) error {
 	return r.do("rmi " + strings.Join(images, " "))
@@ -283,26 +299,59 @@ func TestUninstallGuards(t *testing.T) {
 
 func TestRemovableDir(t *testing.T) {
 	home := t.TempDir()
+	removable := func(dir string, o install.Options) bool {
+		_, ok := removableDir(dir, home, o)
+		return ok
+	}
 	ok := installed(t, state.State{Mode: state.ModeTry})
-	if !removableDir(ok, home, install.Options{Mode: state.ModeTry}) {
+	if !removable(ok, install.Options{Mode: state.ModeTry}) {
 		t.Fatal("a pasta da instalação sai")
 	}
 	src := filepath.Join(ok, "repo")
-	if removableDir(ok, home, install.Options{Mode: state.ModeDev, SourceDir: src}) {
+	if err := os.Mkdir(src, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if removable(ok, install.Options{Mode: state.ModeDev, SourceDir: src}) {
 		t.Fatal("o checkout de quem desenvolve não sai junto")
 	}
-	if removableDir(home, home, install.Options{}) || removableDir(filepath.Dir(home), home, install.Options{}) || removableDir(string(filepath.Separator), home, install.Options{}) {
+	if removable(home, install.Options{}) || removable(filepath.Dir(home), install.Options{}) || removable(string(filepath.Separator), install.Options{}) {
 		t.Fatal("a pasta pessoal e as de cima, nunca")
 	}
-	if removableDir(t.TempDir(), home, install.Options{}) {
+	if removable(t.TempDir(), install.Options{}) {
 		t.Fatal("sem state.json não é nossa")
 	}
 	withGit := installed(t, state.State{Mode: state.ModeTry})
 	if err := os.Mkdir(filepath.Join(withGit, ".git"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if removableDir(withGit, home, install.Options{}) {
+	if removable(withGit, install.Options{}) {
 		t.Fatal("um repositório git, nunca")
+	}
+}
+
+// A --dir that is a symlink is judged (and removed) by what it points at: a link to the home
+// folder, even with a state.json there, never goes.
+func TestRemovableDirResolvesSymlinks(t *testing.T) {
+	home := t.TempDir()
+	if err := (&state.State{Mode: state.ModeTry, Ports: ports.Defaults()}).Save(home); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(t.TempDir(), "atalho")
+	if err := os.Symlink(home, link); err != nil {
+		t.Skip("sem symlink:", err)
+	}
+	if _, ok := removableDir(link, home, install.Options{}); ok {
+		t.Fatal("um atalho para a pasta pessoal é a pasta pessoal")
+	}
+	inst := installed(t, state.State{Mode: state.ModeTry})
+	toInst := filepath.Join(t.TempDir(), "inst")
+	if err := os.Symlink(inst, toInst); err != nil {
+		t.Fatal(err)
+	}
+	real, ok := removableDir(toInst, home, install.Options{})
+	want, _ := filepath.EvalSymlinks(inst)
+	if !ok || real != want {
+		t.Fatalf("o atalho para uma instalação apaga a pasta de verdade: %q %v", real, ok)
 	}
 }
 
@@ -313,6 +362,7 @@ func toolsWorld(t *testing.T, isTTY bool, stdin string) (*devTools, *fakeRunner,
 	f := &fakeRunner{have: map[string]bool{"git": true, "make": true, "cc": true, "rustup": true, "cargo": true, "node": true, "pnpm": true,
 		"docker": true, "openssl": true, "curl": true, "apt-get": true, "apt-cache": true, "sudo": true}}
 	w.runner, w.exists, w.isTTY, w.stdin = f, func(string) bool { return false }, isTTY, strings.NewReader(stdin)
+	w.glob = func(string) ([]string, error) { return []string{"/var/lib/apt/lists/archive_Packages"}, nil }
 	d := &devTools{w: w}
 	d.exec = func(_ context.Context, args []string, term toolchain.Terminal) error {
 		f.ran = append(f.ran, strings.Join(args, " "))
@@ -340,8 +390,11 @@ func (f *fakeRunner) Output(_ context.Context, _, name string, args ...string) (
 	if !f.have[name] {
 		return "", errors.New("not found")
 	}
+	if name == "wsl" && len(args) > 0 && args[0] == "--list" {
+		return "U\x00b\x00u\x00n\x00t\x00u\x00\r\x00\n\x00", nil // UTF-16, as wsl.exe prints it
+	}
 	return map[string]string{"go": "go version go1.27.3 linux/amd64", "node": "v22.23.4", "pnpm": "11.5.3", "cargo": "cargo 1.93.0",
-		"docker": "2.40.3"}[name], nil
+		"docker": "2.40.3", "apt-cache": "golang-go:\n  Installed: (none)\n  Candidate: 2:1.22~2build1\n"}[name], nil
 }
 
 func sudo() string {

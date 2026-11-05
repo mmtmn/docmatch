@@ -12,6 +12,11 @@ GOBIN ?= $(shell go env GOPATH)/bin
 export GOBIN
 export PATH := $(GOBIN):$(PATH)
 export GOTOOLCHAIN ?= auto
+# Ferramentas (go install) com a toolchain exata do go.mod, a do CI: com auto e um Go local mais
+# antigo, `go install m@v` usa o Go do go.mod da ferramenta, e um golangci-lint assim recusa este
+# código.
+TOOLCHAIN := $(or $(shell awk '$$1=="toolchain"{print $$2}' go.mod),go$(shell awk '$$1=="go"{print $$2}' go.mod))
+GO_INSTALL := GOTOOLCHAIN=$(TOOLCHAIN) go install
 export GOFLAGS ?= -mod=mod
 
 GOLANGCI_VERSION := v2.15.0
@@ -25,13 +30,13 @@ help: ## lista os alvos
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
 
 setup: ## instala o golangci-lint em $(GOBIN) e baixa os módulos
-	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION)
+	$(GO_INSTALL) github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION)
 	go mod download
 
 tools: $(GOBIN)/golangci-lint
 
 $(GOBIN)/golangci-lint:
-	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION)
+	$(GO_INSTALL) github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION)
 
 # ------------------------------------------------------------------ cópias embarcadas
 sync: ## copia textos, compose, tokens e o gêmeo da Vantara para internal/assets
@@ -100,7 +105,7 @@ ci-full: ci release-dry-run ## ci + o release em dry-run
 # ------------------------------------------------------------------------ binários
 build: ## bin/docmatch para esta máquina
 	@mkdir -p bin
-	CGO_ENABLED=0 go build -trimpath -o bin/ .
+	CGO_ENABLED=0 go build -trimpath -o bin/docmatch$(if $(filter windows,$(shell go env GOOS)),.exe) .
 
 release-dry-run: ## release.sh --dry-run (compila, confere a versão, gera checksums, scripts, Homebrew e winget; sem AWS)
 	./release.sh --dry-run --out $(CURDIR)/dist/dry-run

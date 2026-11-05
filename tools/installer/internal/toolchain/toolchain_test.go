@@ -59,7 +59,12 @@ func ubuntu() *fake {
 
 func env(f *fake, os string) Env {
 	return Env{Info: platform.Info{OS: os, Arch: "amd64"}, Getenv: func(string) (string, bool) { return "", false },
-		Home: "/home/ana", User: "ana", Runner: f}
+		Home: "/home/ana", User: "ana", Runner: f, Glob: aptLists}
+}
+
+// aptLists is a machine whose apt has package lists.
+func aptLists(string) ([]string, error) {
+	return []string{"/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble_main_binary-amd64_Packages"}, nil
 }
 
 func detect(t *testing.T, e Env) map[string]Status {
@@ -185,15 +190,34 @@ func TestDetectProblems(t *testing.T) {
 }
 
 func TestGoToolchainFor(t *testing.T) {
-	for _, c := range [][3]string{
-		{"go1.22.2", "go1.27.3", "go1.27.3"}, // Ubuntu's Go: the tools get built with the pinned one
-		{"go1.27.3", "go1.27.3", "auto"},
-		{"go1.28.1", "go1.27.3", "auto"}, // newer local Go: no download
-		{"", "go1.27.3", "auto"},
-		{"go1.22.2", "", "auto"},
+	pinned := Requirements{GoMod: "1.27.0", GoToolchain: "go1.27.3"}
+	noLine := Requirements{GoMod: "1.27.0"} // a go.mod without a toolchain line: the go line
+	for _, c := range []struct {
+		local string
+		req   Requirements
+		want  string
+	}{
+		{"go1.22.2", pinned, "go1.27.3"}, // Ubuntu's Go: the tools get built with the pinned one
+		{"go1.27.3", pinned, "auto"},
+		{"go1.28.1", pinned, "auto"}, // newer local Go: no download
+		{"", pinned, "auto"},
+		{"go1.22.2", noLine, "go1.27.0"},
+		{"go1.22.2", Requirements{}, "auto"},
 	} {
-		if got := GoToolchainFor(c[0], c[1]); got != c[2] {
-			t.Errorf("%q %q: %q", c[0], c[1], got)
+		if got := GoToolchainFor(c.local, c.req); got != c.want {
+			t.Errorf("%q %+v: %q", c.local, c.req, got)
+		}
+	}
+}
+
+func TestCanReach(t *testing.T) {
+	for v, want := range map[string]bool{
+		"": true, "auto": true, "go1.27.3+auto": true, "go1.20+auto": true,
+		"go1.27.3": true, "go1.28.0": true, // an exact name that is new enough
+		"go1.25.0": false, "local": false, "path": false, "go1.27.3+path": false, "nada": false,
+	} {
+		if got := canReach(v, "1.27.0"); got != want {
+			t.Errorf("GOTOOLCHAIN=%q: %v", v, got)
 		}
 	}
 }
@@ -222,9 +246,32 @@ func TestDetectWindows(t *testing.T) {
 	if s[WSL].State != Missing || s[Docker].State != Missing {
 		t.Fatalf("%+v", s)
 	}
+	// The feature on but no distribution: --status succeeds, the list is empty.
 	delete(f.fail, "wsl --status")
-	if s = detect(t, e); !s[WSL].OK() {
+	f.out["wsl --list --quiet"] = ""
+	if s = detect(t, e); s[WSL].State != Missing || s[WSL].Reason != "wsl_no_distro" {
 		t.Fatalf("%+v", s[WSL])
+	}
+	if p := plan(t, e); len(p.Commands) == 0 || p.Commands[0].String() != "wsl --install -d Ubuntu" {
+		t.Fatalf("sem distribuição, o plano instala o Ubuntu: %+v", p.Commands)
+	}
+	f.out["wsl --list --quiet"] = "\ufeffU\x00b\x00u\x00n\x00t\x00u\x00\r\x00\n\x00" // UTF-16, as wsl.exe prints it
+	if s = detect(t, e); !s[WSL].OK() || s[WSL].Detail != "Ubuntu" {
+		t.Fatalf("%+v", s[WSL])
+	}
+}
+
+func TestDetectMacGitStub(t *testing.T) {
+	f := ubuntu()
+	f.have["xcode-select"] = ""
+	f.fail["xcode-select -p"] = true
+	// fake.LookPath answers /usr/bin/<name>: macOS's git stub.
+	if s := detect(t, env(f, "darwin")); s[Git].State != Missing {
+		t.Fatalf("o git de /usr/bin sem as Command Line Tools é um atalho: %+v", s[Git])
+	}
+	delete(f.fail, "xcode-select -p")
+	if s := detect(t, env(f, "darwin")); !s[Git].OK() {
+		t.Fatalf("%+v", s[Git])
 	}
 }
 
@@ -288,7 +335,7 @@ func TestPlanUbuntu(t *testing.T) {
 		"sudo apt-get install -y --no-remove build-essential golang-go rustup docker.io docker-compose-v2",
 		"rustup default stable",
 		"sudo snap install node --classic --channel=22/stable",
-		"npm install --global --prefix "+filepath.Join("/home/ana", ".local")+" pnpm@11.5.3",
+		"npm install --global --prefix "+"/home/ana/.local"+" pnpm@11.5.3",
 		"sudo systemctl enable --now docker",
 		"sudo usermod -aG docker ana",
 	)
@@ -318,25 +365,45 @@ func TestPlanAptNodeSourceAndRoot(t *testing.T) {
 	same(t, commands(p),
 		"apt-get update",
 		"apt-get install -y --no-remove nodejs",
-		"npm install --global --prefix "+filepath.Join("/home/ana", ".local")+" pnpm@11.5.3",
+		"npm install --global --prefix "+"/home/ana/.local"+" pnpm@11.5.3",
 	)
 	// Not root and no sudo: the root commands become manual steps.
 	e.Root = false
 	p = plan(t, e)
-	same(t, commands(p), "npm install --global --prefix "+filepath.Join("/home/ana", ".local")+" pnpm@11.5.3")
+	same(t, commands(p), "npm install --global --prefix "+"/home/ana/.local"+" pnpm@11.5.3")
 	if len(p.Manual) != 2 || !strings.Contains(p.Manual[1].Fix, "Como root: apt-get install -y --no-remove nodejs") {
 		t.Fatalf("%+v", p.Manual)
 	}
 }
 
 func TestPlanAptEmptyLists(t *testing.T) {
-	// A fresh container: apt knows no candidates before apt-get update. The plan trusts the
-	// usual packages and the check afterwards has the last word.
+	// A fresh WSL or container: no apt lists, so apt cannot say what it would install. Assuming
+	// would pick Ubuntu's Node 18 without npm; the first plan only refreshes the lists.
 	f := ubuntu()
 	remove(f, "node", "npm", "snap", "git")
 	f.have["apt-cache"] = ""
-	p := plan(t, env(f, "linux"))
-	same(t, commands(p)[:2], "sudo apt-get update", "sudo apt-get install -y --no-remove git nodejs")
+	e := env(f, "linux")
+	e.Glob = func(string) ([]string, error) { return nil, nil }
+	p := plan(t, e)
+	same(t, commands(p), "sudo apt-get update")
+	if len(p.Notes) != 1 || !strings.Contains(p.Notes[0], "listas do apt") {
+		t.Fatalf("%+v", p.Notes)
+	}
+	// With the lists, a package apt does not know is missing, not assumed.
+	e.Glob = aptLists
+	f.out["apt-cache policy git"] = "git:\n  Installed: (none)\n  Candidate: 1:2.43.0-1ubuntu7\n"
+	f.out["apt-cache policy nodejs"] = ""
+	p = plan(t, e)
+	same(t, commands(p), "sudo apt-get update", "sudo apt-get install -y --no-remove git")
+	if len(p.Manual) != 1 || p.Manual[0].Tool != Node {
+		t.Fatalf("%+v", p.Manual)
+	}
+	// Only pnpm missing: nothing comes from apt, no refresh needed.
+	f = ubuntu()
+	remove(f, "pnpm")
+	e = env(f, "linux")
+	e.Glob = func(string) ([]string, error) { return nil, nil }
+	same(t, commands(plan(t, e)), "npm install --global --prefix /home/ana/.local pnpm@11.5.3")
 }
 
 func TestPlanFedora(t *testing.T) {
@@ -355,7 +422,7 @@ func TestPlanFedora(t *testing.T) {
 	same(t, commands(p),
 		"sudo dnf install -y gcc golang rustup nodejs22 npm moby-engine docker-compose",
 		"rustup-init -y --no-modify-path --default-toolchain stable",
-		"npm install --global --prefix "+filepath.Join("/home/ana", ".local")+" pnpm@11.5.3",
+		"npm install --global --prefix "+"/home/ana/.local"+" pnpm@11.5.3",
 		"sudo systemctl enable --now docker",
 		"sudo usermod -aG docker ana",
 	)
@@ -383,7 +450,7 @@ func TestPlanMac(t *testing.T) {
 		"brew install --cask docker",
 		"open -a Docker",
 		"rustup default stable",
-		"npm install --global --prefix "+filepath.Join("/home/ana", ".local")+" pnpm@11.5.3",
+		"npm install --global --prefix "+"/home/ana/.local"+" pnpm@11.5.3",
 	)
 	if p.Elevated() != 1 || len(p.Notes) != 1 {
 		t.Fatalf("só o cask pode pedir senha: %d %+v", p.Elevated(), p.Notes)
@@ -393,11 +460,11 @@ func TestPlanMac(t *testing.T) {
 	// Without Homebrew everything is by hand, and the fix says how to get Homebrew.
 	remove(f, "brew")
 	p = plan(t, env(f, "darwin"))
-	if !p.Empty() || p.Manager.ID != "" || len(p.Manual) != 7 {
+	if !p.Empty() || p.Manager.ID != "" || len(p.Manual) != 8 {
 		t.Fatalf("%+v", p)
 	}
 	for _, m := range p.Manual {
-		if want := map[string]string{Make: "xcode-select", CC: "xcode-select", Docker: "Docker Desktop"}[m.Tool]; want != "" && !strings.Contains(m.Fix, want) {
+		if want := map[string]string{Make: "xcode-select", CC: "xcode-select", Git: "xcode-select", Docker: "Docker Desktop"}[m.Tool]; want != "" && !strings.Contains(m.Fix, want) {
 			t.Errorf("%s: %s", m.Tool, m.Fix)
 		} else if want == "" && !strings.Contains(m.Fix, "brew.sh") {
 			t.Errorf("%s: %s", m.Tool, m.Fix)
@@ -425,6 +492,7 @@ func TestPlanInsideWSL(t *testing.T) {
 	f := ubuntu()
 	remove(f, "docker", "go")
 	f.have["apt-cache"] = ""
+	f.out["apt-cache policy golang-go"] = aptPolicy
 	e := env(f, "linux")
 	e.Info.WSL = true
 	p := plan(t, e)

@@ -91,19 +91,29 @@ alguns minutos; as seguintes usam o cache do BuildKit.
    Antes de oferecer um pacote, o instalador pergunta ao apt (`apt-cache policy`) ou ao dnf
    (`dnf repoquery`) qual versão ele instalaria: um Node do sistema mais antigo que o
    `engines.node` não entra no plano (no Ubuntu vai pelo `snap install node --classic
-   --channel=22/stable`; sem snap, fica como passo manual, com o fnm ou o nvm). O que nenhum pacote
-   resolve aparece em "faça à mão", com o comando. Sem sudo e sem ser root, os comandos de root
-   viram passos manuais. Dentro do WSL, o Docker vem da integração do Docker Desktop (nunca um
-   segundo Docker Engine). Depois de cada comando o instalador acrescenta ao `PATH` desta execução
-   as pastas onde os instaladores põem programas (`~/.cargo/bin`, `~/.local/bin`, `/snap/bin`, os
-   kegs do Homebrew...) e, no fim, diz quais pôr no seu shell.
+   --channel=22/stable`; sem snap, fica como passo manual, com o fnm ou o nvm). Com as listas do
+   apt vazias (um WSL ou uma máquina nova), o primeiro plano é só o `sudo apt-get update`; ao
+   voltar, o instalador verifica de novo e planeja com o que o apt de fato tem, em vez de supor.
+   O que nenhum pacote resolve aparece em "faça à mão", com o comando. Sem sudo e sem ser root, os
+   comandos de root viram passos manuais. O `apt-get install` leva `--no-remove`: se um pacote
+   exigir remover outro, ele para em vez de remover calado. Dentro do WSL, o Docker vem da
+   integração do Docker Desktop (nunca um segundo Docker Engine), e o WSL só conta como pronto com
+   uma distribuição instalada. Depois de cada comando o instalador acrescenta ao `PATH` desta
+   execução as pastas onde os instaladores põem programas (`~/.cargo/bin`, `~/.local/bin`,
+   `/snap/bin`, os kegs do Homebrew...), pondo na frente as que trazem um substituto (o Node do
+   snap antes do Node 18 de `/usr/bin`, o pnpm novo de `~/.local/bin`), e, no fim, diz quais pôr
+   no seu shell. As versões são lidas numa pasta só deste usuário (`~/.cache/docmatch/probe`),
+   nunca no `/tmp`: o rustup lê um `rust-toolchain.toml` da pasta onde roda e das de cima.
 3. **O código**: o checkout onde o `docmatch` roda, o de `--source`, o de uma instalação anterior
    ou `~/docmatch`. Sem nenhum, a tela de escolhas pergunta onde clonar e a primeira etapa faz um
    clone completo (`DOCMATCH_REPO` escolhe o endereço; com o repositório privado, use o endereço
    SSH ou clone você mesmo).
-4. **As etapas**: clonar (quando preciso), `make setup` (os git hooks e as ferramentas de cada
-   subsistema; uma barra por subsistema; ao retomar a mesma pasta, pula), `make local`, conferir
-   API e site e conciliar o gêmeo da Vantara. Portas e modelo vêm do `.env` do repositório.
+4. **As etapas**: clonar (quando preciso), `make setup-local` (os git hooks e as ferramentas só
+   do que o `make local` compila: contratos, API, harness e site; uma barra por subsistema; ao
+   retomar a mesma pasta, pula; checkouts antigos sem esse alvo usam `make setup`), `make local`,
+   conferir API e site e conciliar o gêmeo da Vantara. Portas e modelo vêm do `.env` do
+   repositório. `docmatch up`, `down` e `uninstall` chamam o `make` com o mesmo `PATH` e o mesmo
+   `GOTOOLCHAIN` da instalação.
 5. **No Windows**, o `make local` roda no WSL2: a tela de ferramentas instala o WSL e o Docker
    Desktop (perguntando antes) e mostra o comando para continuar no Ubuntu, onde o instalador se
    comporta como no Linux:
@@ -123,7 +133,7 @@ alguns minutos; as seguintes usam o cache do BuildKit.
 | `docmatch logs [serviço] [-f] [--tail N]` | logs dos serviços |
 | `docmatch doctor` | as verificações e o estado da instalação |
 | `docmatch demo` | concilia o gêmeo da Vantara de novo pela API |
-| `docmatch update` | baixa a versão mais nova da mesma base do `install.sh`, confere o SHA-256 e a versão e troca o binário; `--check` só diz se há uma, `--to 0.1.0` fixa a versão, `--force` baixa de novo |
+| `docmatch update` | baixa a versão mais nova da mesma base do `install.sh` (só https, redirecionamentos incluídos), confere o SHA-256 e a versão e troca o binário; `--check` só diz se há uma, `--to 0.1.0` fixa a versão, `--force` baixa de novo |
 | `docmatch uninstall` | para tudo, pergunta antes de apagar os dados, as imagens e a pasta da instalação e remove o binário por último. Da pasta só sai o que o instalador criou (o resto fica, e a pasta também); no Desenvolver o código fica e o banco de desenvolvimento (o volume `postgres-data` do `tools/dev/compose.yaml`, o mesmo do `make dev`) só sai se você responder sim na hora; `--yes` responde sim ao resto |
 | `docmatch version` | versão do instalador (`docmatch --version` imprime a mesma linha) |
 

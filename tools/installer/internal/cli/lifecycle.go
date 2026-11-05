@@ -89,7 +89,7 @@ func runUpdate(ctx context.Context, w world, args []string, b Build) (int, error
 	}
 	u := &selfupdate.Updater{
 		Base: base, Current: b.Version, Exe: w.exe, GOOS: w.info.OS, GOARCH: w.info.Arch,
-		HTTP: w.httpClient(), FS: w.filesystem(), Probe: probe,
+		HTTP: w.httpClient(), FS: w.filesystem(), Probe: probe, AllowLoopbackHTTP: w.loopbackHTTP,
 	}
 	if check {
 		latest, err := u.Latest(ctx)
@@ -123,7 +123,7 @@ type uninstallOps interface {
 	Down(ctx context.Context, opts install.Options, st *state.State, volumes bool) error
 	// StopDev runs `make local-down`; WipeDev removes the Postgres of tools/dev/compose.yaml
 	// (the database make local and make dev share), nothing else of that project.
-	StopDev(ctx context.Context, source string) error
+	StopDev(ctx context.Context, source string, env []string) error
 	WipeDev(ctx context.Context, source string) error
 	RemoveImages(ctx context.Context, images []string) error
 	// RemoveInstallDir deletes the installer's entries and the folder when nothing else is left;
@@ -138,10 +138,12 @@ func (realOps) Down(ctx context.Context, opts install.Options, st *state.State, 
 	return install.New(opts, st).Compose().Down(ctx, volumes, nil)
 }
 
-func (realOps) StopDev(ctx context.Context, source string) error {
-	out, err := commandIn(ctx, source, "make", "local-down").CombinedOutput()
+func (realOps) StopDev(ctx context.Context, source string, env []string) error {
+	cmd := commandIn(ctx, source, "make", "local-down")
+	cmd.Env = env
+	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("make local-down: %w: %s", err, strings.TrimSpace(string(out)))
+		return fmt.Errorf("%s: %w: %s", text.T("cli.uninstall_local_down_failed"), err, strings.TrimSpace(string(out)))
 	}
 	return nil
 }
@@ -164,7 +166,7 @@ func (realOps) WipeDev(ctx context.Context, source string) error {
 	}
 	volume := parsed.Volumes["postgres-data"].Name
 	if volume == "" {
-		return errors.New("tools/dev/compose.yaml sem o volume postgres-data")
+		return errors.New(text.T("cli.uninstall_no_pg_volume"))
 	}
 	if _, err := cli.Output(ctx, "compose", "-f", file, "rm", "--stop", "--force", "postgres"); err != nil {
 		return err
@@ -197,9 +199,26 @@ func (w world) uninstaller() uninstallOps {
 }
 
 // removableDir guards the installation folder against an unlucky --dir: it must be the
-// installer's own (state.json inside), never a checkout, the home folder or a root.
-func removableDir(dir, home string, o install.Options) bool {
-	clean := filepath.Clean(dir)
+// installer's own (state.json inside), never a checkout, the home folder or a root. Symlinks are
+// resolved first (a --dir link to the home folder is the home folder); the resolved folder is
+// what gets removed.
+func removableDir(dir, home string, o install.Options) (string, bool) {
+	clean, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return "", false
+	}
+	if real, err := filepath.EvalSymlinks(home); err == nil {
+		home = real
+	}
+	if o.SourceDir != "" {
+		if real, err := filepath.EvalSymlinks(o.SourceDir); err == nil {
+			o.SourceDir = real
+		}
+	}
+	return clean, safeToRemove(clean, home, o)
+}
+
+func safeToRemove(clean, home string, o install.Options) bool {
 	if !filepath.IsAbs(clean) || clean == filepath.Dir(clean) || clean == filepath.Clean(home) {
 		return false
 	}
@@ -241,7 +260,7 @@ func runUninstall(ctx context.Context, w world, args []string, b Build) (int, er
 	ask := func(question string) bool {
 		out(w.stdout, "  "+question+" [s/N] ")
 		if c.y {
-			outln(w.stdout, "s (--yes)")
+			outln(w.stdout, text.T("cli.uninstall_yes"))
 			return true
 		}
 		answer, _ := in.ReadString('\n')
@@ -279,7 +298,7 @@ func runUninstall(ctx context.Context, w world, args []string, b Build) (int, er
 		case o.Mode == state.ModeDev && o.SourceDir == "":
 			outln(w.stdout, "  "+text.T("cli.uninstall_no_source"))
 		case o.Mode == state.ModeDev:
-			step(ops.StopDev(ctx, o.SourceDir), text.T("cli.uninstall_stopped"))
+			step(ops.StopDev(ctx, o.SourceDir, w.devEnviron(ctx, o)), text.T("cli.uninstall_stopped"))
 			// The developer's everyday database (make dev uses it too): asked even with --yes.
 			question := text.T("cli.uninstall_ask_dev_volumes", "dir", o.SourceDir)
 			if c.y {
@@ -309,11 +328,12 @@ func runUninstall(ctx context.Context, w world, args []string, b Build) (int, er
 		if o.Mode == state.ModeTry && !wipe {
 			dirQuestion = text.T("cli.uninstall_ask_dir_keep", "dir", o.Dir)
 		}
+		realDir, removable := removableDir(o.Dir, w.home, o)
 		switch {
-		case !removableDir(o.Dir, w.home, o):
+		case !removable:
 			outln(w.stdout, "  "+text.T("cli.uninstall_dir_kept_unsafe", "dir", o.Dir))
 		case ask(dirQuestion):
-			left, err := ops.RemoveInstallDir(o.Dir)
+			left, err := ops.RemoveInstallDir(realDir)
 			switch {
 			case err != nil:
 				step(err, "")

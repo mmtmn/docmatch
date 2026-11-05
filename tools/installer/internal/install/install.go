@@ -635,11 +635,14 @@ func DevEnv(environ []string, goToolchain string) []string {
 	return append(out, "GOTOOLCHAIN="+goToolchain)
 }
 
-// devEnv is DevEnv for this checkout and this machine's Go.
-func (in *Installer) devEnv(ctx context.Context) []string {
+// DevEnviron is DevEnv for this checkout and this machine's Go: what every make of the
+// Desenvolver mode runs with (the installation, docmatch up, down and uninstall).
+func (in *Installer) DevEnviron(ctx context.Context) []string {
 	local, _ := toolchain.System{}.Output(ctx, "", "go", "env", "GOVERSION")
-	return DevEnv(os.Environ(), toolchain.GoToolchainFor(firstLine(local), toolchain.ReadRequirements(in.Opts.SourceDir).GoToolchain))
+	return DevEnv(os.Environ(), toolchain.GoToolchainFor(firstLine(local), toolchain.ReadRequirements(in.Opts.SourceDir)))
 }
+
+func (in *Installer) devEnv(ctx context.Context) []string { return in.DevEnviron(ctx) }
 
 func firstLine(s string) string {
 	s, _, _ = strings.Cut(strings.TrimSpace(s), "\n")
@@ -661,7 +664,7 @@ func (in *Installer) devClone(ctx context.Context, r *flow.Reporter) (flow.Resul
 	_, statErr := os.Stat(dest)
 	created := errors.Is(statErr, os.ErrNotExist)
 	r.Note(in.Opts.RepoURL + " -> " + dest)
-	cmd := gitCommand(ctx, "clone", "--progress", in.Opts.RepoURL, dest)
+	cmd := gitCommand(ctx, "clone", "--progress", "--", in.Opts.RepoURL, dest)
 	cmd.Env = append(cmd.Env, "GIT_TERMINAL_PROMPT=0")
 	if err := streamCmd(cmd, cloneProgress(r)); err != nil {
 		// A half clone would block the next try; only what this step created goes.
@@ -709,40 +712,55 @@ func cloneProgress(r *flow.Reporter) func(string) {
 	}
 }
 
-var (
-	subsystemsVar = regexp.MustCompile(`(?m)^SUBSYSTEMS\s*:?=((?:.*\\\n)*.*)$`)
-	enteringDir   = regexp.MustCompile(`^make\[\d+\]: Entering directory '(.+)'`)
-)
+// enteringDir is make's "Entering directory" line: GNU make 4 quotes '...', the make 3.81 of
+// macOS `...' (make runs with LC_ALL=C, so the words stay English).
+var enteringDir = regexp.MustCompile("^make(?:\\[\\d+\\])?: Entering directory [`'](.+)'$")
 
-// Subsystems reads the SUBSYSTEMS list of the root Makefile (what `make setup` walks through).
-func Subsystems(source string) []string {
+// Subsystems reads a list variable of the root Makefile (SUBSYSTEMS: what `make setup` walks
+// through).
+func Subsystems(source string) []string { return makeList(source, "SUBSYSTEMS") }
+
+func makeList(source, name string) []string {
 	data, err := os.ReadFile(filepath.Join(source, "Makefile")) //nolint:gosec // the checkout
 	if err != nil {
 		return nil
 	}
-	m := subsystemsVar.FindSubmatch(data)
+	re := regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(name) + `\s*:?=((?:.*\\\n)*.*)$`)
+	m := re.FindSubmatch(data)
 	if m == nil {
 		return nil
 	}
 	return strings.Fields(strings.ReplaceAll(string(m[1]), "\\\n", " "))
 }
 
-// devSetup runs `make setup` (the git hooks and each subsystem's tools), one bar step per
+// SetupTarget is what the Desenvolver mode prepares the checkout with: `make setup-local` (the
+// hooks and only the subsystems make local builds, LOCAL_SUBSYSTEMS) when the Makefile has it,
+// else `make setup` (every subsystem) in older checkouts.
+func SetupTarget(source string) (string, []string) {
+	data, _ := os.ReadFile(filepath.Join(source, "Makefile")) //nolint:gosec // the checkout
+	if regexp.MustCompile(`(?m)^setup-local:`).Match(data) {
+		return "setup-local", makeList(source, "LOCAL_SUBSYSTEMS")
+	}
+	return "setup", Subsystems(source)
+}
+
+// devSetup runs SetupTarget (the git hooks and the subsystems' tools), one bar step per
 // subsystem. A resumed installation of the same checkout skips it.
 func (in *Installer) devSetup(ctx context.Context, r *flow.Reporter) (flow.Result, error) {
 	if in.State.Done(StepDevSetup) && in.prevSource == in.Opts.SourceDir {
 		return flow.Skip(text.T("steps.setup_done_before")), nil
 	}
-	subs := Subsystems(in.Opts.SourceDir)
+	target, subs := SetupTarget(in.Opts.SourceDir)
 	index := map[string]int{}
 	for i, s := range subs {
 		index[s] = i
 	}
 	// make prints physical paths (macOS's /var is /private/var): compare them resolved.
 	root := realPath(in.Opts.SourceDir)
-	cmd := exec.CommandContext(ctx, "make", "setup") //nolint:gosec // fixed command
+	cmd := exec.CommandContext(ctx, "make", target) //nolint:gosec // fixed command
 	cmd.Dir = in.Opts.SourceDir
-	cmd.Env = in.devEnv(ctx)
+	// English messages: the progress reads make's "Entering directory".
+	cmd.Env = append(in.devEnv(ctx), "LC_ALL=C", "LANGUAGE=")
 	err := streamCmd(cmd, func(line string) {
 		r.Log(line)
 		m := enteringDir.FindStringSubmatch(line)
@@ -755,7 +773,7 @@ func (in *Installer) devSetup(ctx context.Context, r *flow.Reporter) (flow.Resul
 		}
 		rel = filepath.ToSlash(rel)
 		if i, ok := index[rel]; ok {
-			r.Progress([]flow.Bar{{Label: "make setup", Fraction: float64(i) / float64(len(subs)), Text: fmt.Sprintf("%d/%d %s", i+1, len(subs), rel)}}, rel)
+			r.Progress([]flow.Bar{{Label: "make " + target, Fraction: float64(i) / float64(len(subs)), Text: fmt.Sprintf("%d/%d %s", i+1, len(subs), rel)}}, rel)
 		}
 	})
 	if err != nil {

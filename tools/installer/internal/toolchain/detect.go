@@ -112,6 +112,15 @@ func (e Env) Detect(ctx context.Context, id string, req Requirements) Status {
 
 	switch id {
 	case Git:
+		// macOS's /usr/bin/git is a stub of the Command Line Tools (it opens their install
+		// dialog) until they are installed; a git from Homebrew is real.
+		if e.Info.OS == "darwin" {
+			if p, err := r.LookPath("git"); err == nil && p == "/usr/bin/git" {
+				if _, err := r.Output(ctx, "", "xcode-select", "-p"); err != nil {
+					return missing()
+				}
+			}
+		}
 		return simple("git", "--version")
 	case OpenSSL:
 		return simple("openssl", "version")
@@ -180,11 +189,18 @@ func (e Env) Detect(ctx context.Context, id string, req Requirements) Status {
 		if _, err := r.LookPath("wsl"); err != nil {
 			return missing()
 		}
-		// Without the feature, wsl.exe is a stub that explains how to install it and fails.
+		// Without the feature, wsl.exe is a stub that explains how to install it and fails; with
+		// it but no distribution, --status still succeeds and the list is empty.
 		if _, err := r.Output(ctx, "", "wsl", "--status"); err != nil {
 			return missing()
 		}
-		return found("")
+		list, err := r.Output(ctx, "", "wsl", "--list", "--quiet")
+		distros := WSLDistros(list)
+		if err != nil || len(distros) == 0 {
+			s.State, s.Reason, s.Detail = Missing, "wsl_no_distro", text.T("tools.wsl_no_distro")
+			return s
+		}
+		return found(strings.Join(distros, ", "))
 	}
 	return missing()
 }
@@ -210,7 +226,7 @@ func (e Env) detectGo(ctx context.Context, s Status, req Requirements) Status {
 		s.State, s.Detail = OK, text.T("tools.found")
 	case req.GoMod == "" || docker.AtLeast(v, req.GoMod):
 		s.State, s.Detail = OK, v
-	case docker.AtLeast(v, MinGoAuto) && !forcesLocal(e.Getenv.Get("GOTOOLCHAIN")):
+	case docker.AtLeast(v, MinGoAuto) && canReach(e.Getenv.Get("GOTOOLCHAIN"), req.GoMod):
 		s.State, s.Detail = OK, text.T("tools.go_auto", "version", v, "want", want)
 	case docker.AtLeast(v, MinGoAuto):
 		s.State, s.Reason = Outdated, "gotoolchain_local"
@@ -227,7 +243,12 @@ func (e Env) detectGo(ctx context.Context, s Status, req Requirements) Status {
 // otherwise. With auto (even "go1.27.3+auto") and an old local Go, `go install tool@version`
 // builds each tool with the toolchain that tool's go.mod picks (go1.26 for some), and a
 // golangci-lint built that way refuses the repository's code.
-func GoToolchainFor(local, pinned string) string {
+// Without a toolchain line, the go line is the version.
+func GoToolchainFor(local string, req Requirements) string {
+	pinned := req.GoToolchain
+	if pinned == "" && req.GoMod != "" {
+		pinned = "go" + req.GoMod
+	}
 	l := versionOf(strings.TrimPrefix(local, "go"))
 	p := versionOf(strings.TrimPrefix(pinned, "go"))
 	if l == "" || p == "" || docker.AtLeast(l, p) {
@@ -236,10 +257,34 @@ func GoToolchainFor(local, pinned string) string {
 	return "go" + p
 }
 
-// forcesLocal reports a GOTOOLCHAIN that forbids downloading the go.mod toolchain.
-func forcesLocal(v string) bool {
+// canReach reports whether a GOTOOLCHAIN lets an older local Go run the go.mod's version want:
+// auto and name+auto download it; an exact name runs that one (enough when it is at least
+// want); local, path and name+path never download.
+func canReach(v, want string) bool {
 	v = strings.TrimSpace(v)
-	return v == "local" || (strings.HasPrefix(v, "go") && !strings.HasSuffix(v, "+auto") && !strings.HasSuffix(v, "+path"))
+	name, mode, _ := strings.Cut(v, "+")
+	switch {
+	case v == "" || v == "auto" || mode == "auto":
+		return true
+	case v == "local" || v == "path" || mode == "path":
+		return false
+	case strings.HasPrefix(name, "go"):
+		return want == "" || docker.AtLeast(versionOf(strings.TrimPrefix(name, "go")), want)
+	}
+	return false
+}
+
+// WSLDistros reads `wsl --list --quiet`, which Windows prints in UTF-16 (a NUL after each ASCII
+// character, sometimes a byte-order mark).
+func WSLDistros(out string) []string {
+	clean := strings.NewReplacer("\x00", "", "\ufeff", "", "\r", "").Replace(out)
+	var names []string
+	for _, l := range strings.Split(clean, "\n") {
+		if l = strings.TrimSpace(l); l != "" {
+			names = append(names, l)
+		}
+	}
+	return names
 }
 
 // detectRust wants cargo to run. With rustup the rust-toolchain.toml of the harness picks (and

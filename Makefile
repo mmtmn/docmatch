@@ -5,8 +5,10 @@ SHELL := /usr/bin/env bash
 
 SUBSYSTEMS := packages/contracts services/api services/harness apps/web apps/admin infra \
               sdks/python sdks/typescript sdks/go sdks/rust
+# O que o `make local` compila: o modo Desenvolver do instalador prepara só isto (setup-local).
+LOCAL_SUBSYSTEMS := packages/contracts services/api services/harness apps/web
 
-.PHONY: help setup hooks dev ci ci-full lint test e2e clean local local-down e2e-local e2e-local-android
+.PHONY: help setup setup-local hooks dev ci ci-full lint test e2e clean local local-down e2e-local e2e-local-android
 
 # Binário do harness usado pelo e2e (mesmo target dir do Makefile do harness).
 HARNESS_TARGET ?= $(or $(CARGO_TARGET_DIR),$(HOME)/.cache/docmatch/cargo-target)
@@ -17,10 +19,21 @@ help: ## lista os alvos
 hooks: ## ativa os git hooks versionados
 	@tools/git-hooks/install.sh
 
-setup: hooks ## instala ferramentas locais de cada subsistema
-	@for s in $(SUBSYSTEMS); do \
-	  if [ -f $$s/Makefile ] && make -C $$s -n setup >/dev/null 2>&1; then make -C $$s setup; fi; \
+# setup_each: `make setup` em cada pasta da lista, parando na primeira falha; uma pasta que não
+# existe ou não tem o alvo setup é pulada, com aviso.
+define setup_each
+	@for s in $(1); do \
+	  if [ ! -f $$s/Makefile ]; then echo "setup: $$s não existe, pulando"; continue; fi; \
+	  if ! grep -qE '^setup:' $$s/Makefile; then continue; fi; \
+	  $(MAKE) -C $$s setup || { echo "setup: $$s falhou" >&2; exit 1; }; \
 	done
+endef
+
+setup: hooks ## instala ferramentas locais de cada subsistema
+	$(call setup_each,$(SUBSYSTEMS))
+
+setup-local: hooks ## só o que o make local precisa: hooks, contratos, API, harness e site
+	$(call setup_each,$(LOCAL_SUBSYSTEMS))
 
 dev: ## sobe o ambiente local (Postgres, MinIO, Mailpit, stripe-mock, modelo local) e os apps
 	@if [ -f tools/dev/up.sh ]; then tools/dev/up.sh; else echo "tools/dev/up.sh ainda não existe"; fi

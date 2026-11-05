@@ -113,9 +113,12 @@ type world struct {
 	http  *http.Client
 	probe func(ctx context.Context, path string) (string, error)
 	ops   uninstallOps
+	// loopbackHTTP lets the tests serve releases from httptest (http on 127.0.0.1).
+	loopbackHTTP bool
 	// Desenvolver toolchain (nil means the machine's).
 	runner toolchain.Runner
 	exists func(path string) bool
+	glob   func(pattern string) ([]string, error)
 }
 
 func (w world) installDir(flagDir string) string {

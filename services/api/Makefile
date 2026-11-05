@@ -12,6 +12,11 @@ GOBIN ?= $(shell go env GOPATH)/bin
 export GOBIN
 export PATH := $(GOBIN):$(PATH)
 export GOTOOLCHAIN ?= auto
+# Ferramentas (go install) com a toolchain exata do go.mod, a do CI: com auto e um Go local mais
+# antigo, `go install m@v` usa o Go do go.mod da ferramenta, e um golangci-lint assim recusa este
+# código.
+TOOLCHAIN := $(or $(shell awk '$$1=="toolchain"{print $$2}' go.mod),go$(shell awk '$$1=="go"{print $$2}' go.mod))
+GO_INSTALL := GOTOOLCHAIN=$(TOOLCHAIN) go install
 export GOFLAGS ?= -mod=mod
 export CGO_ENABLED ?= 1
 # Builds Rust de outros subsistemas compartilham um target dir; exportado aqui
@@ -49,23 +54,23 @@ help: ## lista os alvos
 
 # ----------------------------------------------------------------- ferramentas
 setup: ## instala sqlc, golangci-lint, govulncheck e gotestsum em $(GOBIN)
-	go install github.com/sqlc-dev/sqlc/cmd/sqlc@$(SQLC_VERSION)
-	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION)
-	go install golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
-	go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
+	$(GO_INSTALL) github.com/sqlc-dev/sqlc/cmd/sqlc@$(SQLC_VERSION)
+	$(GO_INSTALL) github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION)
+	$(GO_INSTALL) golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
+	$(GO_INSTALL) gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
 	go mod download
 
 # Instala só o que falta (usado por lint/test para funcionar em um clone novo).
 tools: $(GOBIN)/golangci-lint $(GOBIN)/govulncheck $(GOBIN)/gotestsum
 
 $(GOBIN)/sqlc:
-	go install github.com/sqlc-dev/sqlc/cmd/sqlc@$(SQLC_VERSION)
+	$(GO_INSTALL) github.com/sqlc-dev/sqlc/cmd/sqlc@$(SQLC_VERSION)
 $(GOBIN)/golangci-lint:
-	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION)
+	$(GO_INSTALL) github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION)
 $(GOBIN)/govulncheck:
-	go install golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
+	$(GO_INSTALL) golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
 $(GOBIN)/gotestsum:
-	go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
+	$(GO_INSTALL) gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
 
 # ------------------------------------------------------------------- geração
 sync: ## copia limits.yaml e db/migrations para as cópias embarcadas (go:embed)

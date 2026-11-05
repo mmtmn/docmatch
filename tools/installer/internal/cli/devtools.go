@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/user"
+	"slices"
 	"strings"
 	"sync"
 
@@ -24,6 +25,8 @@ type devTools struct {
 	b     Build
 	mu    sync.Mutex
 	added []string
+	// front are the folders the plans asked to put first (toolchain.Plan.PathFirst).
+	front []string
 	// exec replaces toolchain.SystemExec in tests.
 	exec toolchain.Exec
 }
@@ -35,7 +38,7 @@ func (w world) toolchainEnv(source string) toolchain.Env {
 	}
 	return toolchain.Env{
 		Info: w.info, Getenv: w.env, Home: w.home, User: name, Root: os.Geteuid() == 0, SourceDir: source,
-		Runner: w.runner, Exists: w.exists,
+		Runner: w.runner, Exists: w.exists, Glob: w.glob,
 	}
 }
 
@@ -43,12 +46,27 @@ func (w world) toolchainEnv(source string) toolchain.Env {
 func (d *devTools) refreshPath(env toolchain.Env, req toolchain.Requirements) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	path, added := env.AugmentPath(os.Getenv("PATH"), req)
-	if len(added) == 0 {
-		return
+	old := os.Getenv("PATH")
+	path, added := env.AugmentPath(old, req, d.front...)
+	if path != old {
+		_ = os.Setenv("PATH", path)
 	}
-	_ = os.Setenv("PATH", path)
-	d.added = append(d.added, added...)
+	for _, a := range added {
+		if !slices.Contains(d.added, a) {
+			d.added = append(d.added, a)
+		}
+	}
+}
+
+// remember keeps a plan's PathFirst for the next refreshes.
+func (d *devTools) remember(plan toolchain.Plan) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, dir := range plan.PathFirst {
+		if !slices.Contains(d.front, dir) {
+			d.front = append(d.front, dir)
+		}
+	}
 }
 
 func (d *devTools) pathAdded() []string {
@@ -62,7 +80,9 @@ func (d *devTools) report(ctx context.Context, opts install.Options) ui.ToolsRep
 	env := d.w.toolchainEnv(opts.Resolved().SourceDir)
 	d.refreshPath(env, toolchain.ReadRequirements(env.SourceDir))
 	statuses, req := env.DetectAll(ctx)
-	r := ui.ToolsReport{Statuses: statuses, Plan: env.PlanFor(ctx, statuses, req), PathAdded: d.pathAdded(), Windows: !env.Unix()}
+	plan := env.PlanFor(ctx, statuses, req)
+	d.remember(plan)
+	r := ui.ToolsReport{Statuses: statuses, Plan: plan, PathAdded: d.pathAdded(), Windows: !env.Unix()}
 	if r.Windows {
 		r.Handoff = d.handoff()
 	}
