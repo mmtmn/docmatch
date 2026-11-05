@@ -74,6 +74,16 @@ class DocmatchApi(private val http: HttpTransport) {
 
     suspend fun devices(): List<Device> = http.call("GET", "/v1/me/sessions", null, DeviceList.serializer())!!.items
 
+    /**
+     * Asks for the account's deletion (LGPD): everything goes on the returned date, every device
+     * is signed out now, and this one forgets its cookies.
+     */
+    suspend fun deleteAccount(): String {
+        val scheduled = http.call("DELETE", "/v1/me", null, DeletionScheduled.serializer())!!
+        http.cookies.clear()
+        return scheduled.scheduledFor
+    }
+
     /** Signs one device out; signing out this one also clears the local cookies. */
     suspend fun revokeDevice(device: Device) {
         http.call<Unit>("DELETE", "/v1/me/sessions/${enc(device.id)}", null, null)

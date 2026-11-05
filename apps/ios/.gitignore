@@ -1,0 +1,6 @@
+Docmatch.xcodeproj/
+build/
+DocmatchKit/.build/
+DocmatchKit/.swiftpm/
+*.xcuserstate
+xcuserdata/

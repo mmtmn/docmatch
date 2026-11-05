@@ -68,6 +68,10 @@ data class Device(
 @Serializable
 data class DeviceList(val items: List<Device> = emptyList())
 
+/** DELETE /v1/me: when the account and its data go. */
+@Serializable
+data class DeletionScheduled(@SerialName("scheduled_for") val scheduledFor: String)
+
 /** Presigned upload ticket: a form POST (documents) or a raw PUT (media). */
 @Serializable
 data class UploadTicket(

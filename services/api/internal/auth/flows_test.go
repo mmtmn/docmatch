@@ -404,6 +404,30 @@ func TestAppleNative(t *testing.T) {
 	}
 }
 
+func TestAppleNativeAcceptsTheAppBundleAudience(t *testing.T) {
+	t.Parallel()
+	h := newHarnessWith(t, func(d *Deps) { d.AppleAudiences = []string{"br.com.docmatch"} })
+	web := h.apple.claims(h.now, "", map[string]any{"sub": "apple-ana", "email": "ana-apple@example.com"})
+	delete(web, "nonce")
+	if rec := h.post(AppleCallbackPath, `{"identity_token":"`+h.apple.sign(web)+`","authorization_code":"c"}`); rec.Code != 200 {
+		t.Fatalf("audiência do Services ID: %d %s", rec.Code, rec.Body.String())
+	}
+	org := h.orgOf("ana-apple@example.com")
+	// The iPhone's token is issued to the bundle id, with the same subject: same account.
+	app := h.apple.claims(h.now, "", map[string]any{"sub": "apple-ana", "email": "ana-apple@example.com", "aud": "br.com.docmatch"})
+	delete(app, "nonce")
+	rec := h.do(req{method: http.MethodPost, path: AppleCallbackPath, body: `{"identity_token":"` + h.apple.sign(app) + `","authorization_code":"c"}`,
+		headers: map[string]string{"User-Agent": "docmatch-ios/1.0 (iPhone15,2; iOS 18.1)"}})
+	if rec.Code != 200 || h.orgOf("ana-apple@example.com") != org {
+		t.Fatalf("audiência do app: %d %s", rec.Code, rec.Body.String())
+	}
+	foreign := h.apple.claims(h.now, "", map[string]any{"aud": "com.example.other"})
+	delete(foreign, "nonce")
+	if rec := h.post(AppleCallbackPath, `{"identity_token":"`+h.apple.sign(foreign)+`","authorization_code":"c"}`); rec.Code != 400 {
+		t.Fatalf("app de outra pessoa: %d %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestEmailLogin(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)

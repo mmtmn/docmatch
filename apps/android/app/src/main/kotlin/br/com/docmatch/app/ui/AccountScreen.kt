@@ -8,15 +8,20 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -86,11 +91,38 @@ class AccountViewModel(private val dm: Docmatch, private val onSignedOut: (Strin
             onSignedOut(dm.texts.t("account.signed_out"))
         }
     }
+
+    /** Deletes the account (after the screen's confirmation) and returns to the sign-in. */
+    fun deleteAccount() {
+        viewModelScope.launch {
+            try {
+                val date = dm.api.deleteAccount()
+                onSignedOut(dm.texts.t("mobile.delete_done", mapOf("date" to Format.date(date))))
+            } catch (e: ApiException) {
+                (_state.value as? AccountState.Ready)?.let { _state.value = it.copy(notice = e.message) }
+            }
+        }
+    }
 }
 
 @Composable
 fun AccountScreen(vm: AccountViewModel) {
     val state by vm.state.collectAsState()
+    var confirmDeletion by remember { mutableStateOf(false) }
+    if (confirmDeletion) {
+        AlertDialog(
+            onDismissRequest = { confirmDeletion = false },
+            title = { Text(t("mobile.delete_title")) },
+            text = { Text(t("mobile.delete_text")) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDeletion = false
+                    vm.deleteAccount()
+                }) { Text(t("mobile.delete_confirm"), color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { confirmDeletion = false }) { Text(t("common.cancel")) } },
+        )
+    }
     // Every time the tab is shown: credits spent and devices added elsewhere appear.
     LaunchedEffect(Unit) { vm.load() }
     when (val s = state) {
@@ -131,7 +163,13 @@ fun AccountScreen(vm: AccountViewModel) {
                         }
                     }
                 }
-                item { Button(onClick = vm::signOut) { Text(t("account.sign_out")) } }
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(DmSize.space2)) {
+                        Button(onClick = vm::signOut) { Text(t("account.sign_out")) }
+                        // The stores' rule: an app that creates accounts lets them be deleted in it.
+                        TextButton(onClick = { confirmDeletion = true }) { Text(t("mobile.delete_account"), color = MaterialTheme.colorScheme.error) }
+                    }
+                }
             }
     }
 }

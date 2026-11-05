@@ -192,6 +192,9 @@ type Deps struct {
 	// GoogleAudiences are extra client ids accepted for native ID tokens
 	// (the Android and iOS apps), besides Google.ClientID.
 	GoogleAudiences []string
+	// AppleAudiences are extra client ids accepted for identity tokens from
+	// Sign in with Apple inside the iOS app (its bundle ids).
+	AppleAudiences []string
 	// DevLogin mounts POST /v1/auth/dev/login (DM_DEV_LOGIN, dev only);
 	// DevGrant, when set, tops up the organization after that sign-in.
 	DevLogin bool

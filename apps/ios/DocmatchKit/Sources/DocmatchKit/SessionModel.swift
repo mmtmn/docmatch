@@ -1,0 +1,153 @@
+// Who is signed in on this device. Every sign-in lands on the same account as on the site and on
+// Android: the API resolves the person (provider subject, then verified e-mail).
+import Foundation
+import Observation
+
+/// Not signed in: the sign-ins this deployment offers, and the e-mail step if one is open.
+public struct SignedOut: Sendable, Equatable {
+    public var methods: AuthMethods
+    public var email: String
+    public var challengeId: String?
+    public var busy: Bool
+    public var error: String?
+
+    public init(methods: AuthMethods, email: String = "", challengeId: String? = nil, busy: Bool = false, error: String? = nil) {
+        self.methods = methods
+        self.email = email
+        self.challengeId = challengeId
+        self.busy = busy
+        self.error = error
+    }
+}
+
+public enum SessionState: Sendable, Equatable {
+    case loading
+    case signedOut(SignedOut)
+    case signedIn(Me)
+}
+
+@MainActor
+@Observable
+public final class SessionModel {
+    public private(set) var state: SessionState = .loading
+    @ObservationIgnored public let dm: Docmatch
+    @ObservationIgnored private let cleanup: @Sendable () -> Void
+
+    /// `cleanup` removes what a session leaves on the device (exported reports) when it ends.
+    public init(dm: Docmatch, cleanup: @escaping @Sendable () -> Void = { RunModel.clearExports() }) {
+        self.dm = dm
+        self.cleanup = cleanup
+        // Revoked from another device's account page (or ended on the server): back to sign-in
+        // with the API's own message, wherever the user was.
+        dm.transport.onSessionEnded { [weak self] e in
+            Task { @MainActor in await self?.ended(e) }
+        }
+    }
+
+    public func refresh() async {
+        state = .loading
+        let next = await load()
+        if Task.isCancelled { return }  // the screen went away; its replacement loads again
+        state = next
+    }
+
+    /// After a sign-out (here or from another device): back to the sign-in, with a notice.
+    public func signedOut(notice: String?) async {
+        cleanup()
+        state = .signedOut(SignedOut(methods: await dm.api.methods(), error: notice))
+    }
+
+    public func sendCode(_ email: String) async {
+        let address = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        await signingIn(email: address) { .challenge(try await self.dm.api.emailStart(address).challengeId) }
+    }
+
+    public func verifyCode(_ code: String) async {
+        guard case .signedOut(let current) = state, let challenge = current.challengeId else { return }
+        await signingIn(email: current.email) {
+            try await self.dm.api.emailVerify(challengeId: challenge, code: code)
+            return .signedIn
+        }
+    }
+
+    public func changeEmail() {
+        guard case .signedOut(var current) = state else { return }
+        current.challengeId = nil
+        current.error = nil
+        state = .signedOut(current)
+    }
+
+    public func devLogin() async {
+        await signingIn {
+            try await self.dm.api.devLogin()
+            return .signedIn
+        }
+    }
+
+    public func apple(identityToken: String, authorizationCode: String, fullName: String?) async {
+        await signingIn {
+            try await self.dm.api.appleNative(identityToken: identityToken, authorizationCode: authorizationCode, fullName: fullName)
+            return .signedIn
+        }
+    }
+
+    public func google(idToken: String) async {
+        await signingIn {
+            try await self.dm.api.googleNative(idToken: idToken)
+            return .signedIn
+        }
+    }
+
+    /// A sign-in that ended before reaching the API (nil: the user closed the sheet).
+    public func failed(_ message: String?) {
+        guard case .signedOut(var current) = state else { return }
+        current.busy = false
+        current.error = message
+        state = .signedOut(current)
+    }
+
+    func ended(_ e: ApiError) async {
+        cleanup()
+        guard case .signedIn = state else { return }
+        state = .signedOut(SignedOut(methods: await dm.api.methods(), error: e.message))
+    }
+
+    private enum Outcome: Sendable {
+        case signedIn
+        case challenge(String)
+    }
+
+    /// Runs a sign-in step. The e-mail step stays on the sign-in screen with the challenge open;
+    /// any other step signed in, and the account is loaded.
+    private func signingIn(email: String? = nil, _ step: @MainActor () async throws -> Outcome) async {
+        guard case .signedOut(var current) = state, !current.busy else { return }
+        if let email { current.email = email }
+        current.busy = true
+        current.error = nil
+        state = .signedOut(current)
+        do {
+            switch try await step() {
+            case .challenge(let id):
+                current.challengeId = id
+                current.busy = false
+                state = .signedOut(current)
+            case .signedIn:
+                state = await load()
+            }
+        } catch {
+            current.busy = false
+            current.error = (error as? ApiError)?.message ?? dm.texts.t("errors.unknown")
+            state = .signedOut(current)
+        }
+    }
+
+    private func load() async -> SessionState {
+        do {
+            if let me = try await dm.api.me() { return .signedIn(me) }
+            return .signedOut(SignedOut(methods: await dm.api.methods()))
+        } catch {
+            let message = (error as? ApiError)?.message ?? dm.texts.t("errors.unknown")
+            return .signedOut(SignedOut(methods: await dm.api.methods(), error: message))
+        }
+    }
+}

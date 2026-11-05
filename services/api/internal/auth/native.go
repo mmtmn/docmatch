@@ -126,7 +126,7 @@ func (s *Service) googleNative(w http.ResponseWriter, r *http.Request) {
 		apierr.Validation(w, r, apierr.Field{Path: "/id_token", Code: apierr.FieldRequired})
 		return
 	}
-	id, err := s.verifyAudiences(r.Context(), p, req.IDToken)
+	id, err := s.verifyAudiences(r.Context(), p, req.IDToken, s.d.GoogleAudiences)
 	if err != nil {
 		apierr.Write(w, r, codeFor(err))
 		return
@@ -141,10 +141,10 @@ func (s *Service) googleNative(w http.ResponseWriter, r *http.Request) {
 }
 
 // verifyAudiences accepts an ID token issued to the provider's client id or
-// to one of GoogleAudiences. No nonce: like the native Apple flow, the token
+// to one of the apps' own (extra). No nonce: on the native flows the token
 // comes straight from the provider to the app, bound by its audience.
-func (s *Service) verifyAudiences(ctx context.Context, p *Provider, token string) (Identity, error) {
-	audiences := append([]string{p.ClientID}, s.d.GoogleAudiences...)
+func (s *Service) verifyAudiences(ctx context.Context, p *Provider, token string, extra []string) (Identity, error) {
+	audiences := append([]string{p.ClientID}, extra...)
 	var last error
 	for _, aud := range audiences {
 		q := *p

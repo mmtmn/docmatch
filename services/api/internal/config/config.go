@@ -87,6 +87,10 @@ const (
 	// VarGoogleNativeClientIDs lists the extra audiences accepted for ID
 	// tokens obtained by the mobile apps (Android and iOS client ids).
 	VarGoogleNativeClientIDs = "GOOGLE_OAUTH_NATIVE_CLIENT_IDS"
+	// VarAppleNativeClientIDs lists the extra audiences accepted for identity
+	// tokens from Sign in with Apple inside the iOS app (its bundle ids; the
+	// web flow uses APPLE_CLIENT_ID, the Services ID).
+	VarAppleNativeClientIDs = "APPLE_NATIVE_CLIENT_IDS"
 	// VarDevLogin enables POST /v1/auth/dev/login (local only: refused
 	// outside DM_ENV=dev).
 	VarDevLogin = "DM_DEV_LOGIN"
@@ -232,6 +236,8 @@ type Auth struct {
 	SessionSecret SecretBytes
 	// GoogleNativeClientIDs are extra audiences for native Google ID tokens.
 	GoogleNativeClientIDs []string
+	// AppleNativeClientIDs are extra audiences for native Apple identity tokens.
+	AppleNativeClientIDs []string
 	// DevLogin signs in without any provider (DM_ENV=dev only).
 	DevLogin bool
 }
@@ -341,6 +347,7 @@ func LoadFrom(lookup Lookup) (*Config, error) {
 	cfg.Auth.ApplePrivateKey = r.secret(VarApplePrivateKey, false)
 	cfg.Auth.SessionSecret = r.base64Secret(VarSessionSecret, minSessionSecretBytes)
 	cfg.Auth.GoogleNativeClientIDs = r.clientIDs(VarGoogleNativeClientIDs)
+	cfg.Auth.AppleNativeClientIDs = r.clientIDs(VarAppleNativeClientIDs)
 	cfg.Auth.DevLogin = r.boolean(VarDevLogin, false)
 	if cfg.Auth.DevLogin && cfg.Env != EnvDev {
 		r.problem(VarDevLogin, "só pode ser ligada com DM_ENV=dev")
@@ -494,6 +501,7 @@ func (c *Config) redacted() [][2]string {
 		{VarApplePrivateKey, presence(c.Auth.ApplePrivateKey)},
 		{VarSessionSecret, sessionSecret},
 		{VarGoogleNativeClientIDs, strings.Join(c.Auth.GoogleNativeClientIDs, ",")},
+		{VarAppleNativeClientIDs, strings.Join(c.Auth.AppleNativeClientIDs, ",")},
 		{VarDevLogin, strconv.FormatBool(c.Auth.DevLogin)},
 		{VarStripeSecretKey, presence(c.Billing.StripeSecretKey)},
 		{VarStripeWebhookSecret, presence(c.Billing.StripeWebhookSecret)},
@@ -853,7 +861,7 @@ func KnownVars() []string {
 		VarHarnessSocket, VarScanQueueURL, VarScannerBin,
 		VarLLMMode, VarOpenRouterKey, VarLocalLLMBaseURL, VarModelsFile, VarLLMCacheDir,
 		VarGoogleClientID, VarGoogleClientSecret, VarAppleTeamID, VarAppleClientID, VarAppleKeyID, VarApplePrivateKey, VarSessionSecret,
-		VarGoogleNativeClientIDs, VarDevLogin,
+		VarGoogleNativeClientIDs, VarAppleNativeClientIDs, VarDevLogin,
 		VarStripeSecretKey, VarStripeWebhookSecret, VarStripePublishableKey,
 		VarTargetMargin, VarIncomeTaxRate, VarPaymentRate, VarInfraRate, VarOpenRouterFee, VarPricingFile,
 		VarResendAPIKey, VarEmailFrom, VarSecurityContact, VarSMTPAddr,

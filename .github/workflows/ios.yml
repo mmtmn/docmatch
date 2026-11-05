@@ -1,0 +1,36 @@
+# As telas do app iOS só compilam num Mac: este workflow as compila no runner macOS do GitHub
+# quando apps/ios muda. Ninguém espera por ele; os testes do DocmatchKit rodam localmente (no
+# Linux, num contêiner Swift) antes de cada push.
+name: ios
+
+on:
+  pull_request:
+    paths:
+      - apps/ios/**
+      - packages/locales/**
+      - packages/contracts/gen/Limits.swift
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: xcodegen
+        run: brew install xcodegen
+
+      - name: DocmatchKit
+        working-directory: apps/ios/DocmatchKit
+        run: swift test
+
+      - name: app (simulador, sem assinatura)
+        run: make -C apps/ios app

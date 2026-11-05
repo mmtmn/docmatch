@@ -558,6 +558,20 @@ func TestDevLoginOnlyInDev(t *testing.T) {
 	}
 }
 
+func TestAppleNativeClientIDs(t *testing.T) {
+	t.Parallel()
+	env := validEnv()
+	env[VarAppleNativeClientIDs] = "br.com.docmatch, br.com.docmatch.debug"
+	cfg := mustLoad(t, env)
+	if got, want := strings.Join(cfg.Auth.AppleNativeClientIDs, ","), "br.com.docmatch,br.com.docmatch.debug"; got != want {
+		t.Fatalf("AppleNativeClientIDs = %q, quer %q", got, want)
+	}
+	env[VarAppleNativeClientIDs] = "br.com/docmatch"
+	if _, err := LoadFrom(lookupFrom(env)); err == nil {
+		t.Fatal("bundle id inválido deveria ser rejeitado")
+	}
+}
+
 func TestGoogleNativeClientIDs(t *testing.T) {
 	t.Parallel()
 	env := validEnv()

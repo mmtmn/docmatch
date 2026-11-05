@@ -114,9 +114,10 @@ class NewRunViewModel(private val dm: Docmatch) : ViewModel() {
         }
     }
 
-    fun remove(name: String) {
+    /** By name and size: two different files may share a name. */
+    fun remove(file: LocalFile) {
         if (_phase.value != NewRunPhase.Idle) return
-        _files.value = _files.value.filterNot { it.name == name }
+        _files.value = _files.value.filterNot { it.name == file.name && it.size == file.size }
     }
 
     /** The rules text, cut at the API's limit (code points after NFC, like the site counts). */
@@ -290,7 +291,7 @@ fun NewRunScreen(vm: NewRunViewModel, onStarted: (String) -> Unit) {
             files.forEach { f ->
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("${f.name} · ${kindLabel(f.kind.id)} · ${Format.size(texts, f.size)}", modifier = Modifier.weight(1f))
-                    IconButton(onClick = { vm.remove(f.name) }, enabled = !busy) {
+                    IconButton(onClick = { vm.remove(f) }, enabled = !busy) {
                         Icon(Icons.Filled.Close, contentDescription = t("dropzone.remove_file", mapOf("name" to f.name)))
                     }
                 }

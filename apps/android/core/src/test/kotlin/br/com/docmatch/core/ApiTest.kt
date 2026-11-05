@@ -258,6 +258,22 @@ class ApiTest {
     }
 
     @Test
+    fun `deleting the account schedules it and signs this device out`() = runTest {
+        val dm = newClient(server)
+        signedIn(dm)
+        server.enqueue(
+            json(202, """{"scheduled_for":"2026-11-12T10:00:00Z"}""")
+                .addHeader("Set-Cookie", "dm_session=; Path=/; Max-Age=0")
+                .addHeader("Set-Cookie", "dm_refresh=; Path=/v1/auth/refresh; Max-Age=0"),
+        )
+        assertEquals("2026-11-12T10:00:00Z", dm.api.deleteAccount())
+        val req = server.takeRequest()
+        assertEquals("DELETE", req.method)
+        assertEquals("/v1/me", req.path)
+        assertFalse(dm.cookies.hasSession())
+    }
+
+    @Test
     fun `logout clears the cookies even when the session was already gone`() = runTest {
         val dm = newClient(server)
         server.enqueue(json(200, SESSION_JSON).addHeader("Set-Cookie", sessionCookie()))

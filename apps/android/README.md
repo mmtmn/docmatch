@@ -4,7 +4,7 @@ App Android da docmatch: Kotlin e Jetpack Compose, Android 8.0+ (minSdk 26), só
 documentos, áudios e vídeos, confirma a estimativa de tokens (e o orçamento adicional de uma
 execução parada), acompanha a conciliação, mostra os achados com as evidências, registra decisões
 (aceitar, rejeitar, editar com observação), exporta XLSX/CSV e mostra a conta com todos os
-aparelhos.
+aparelhos. A conta também se exclui pelo app (`DELETE /v1/me`), como o Google Play exige.
 
 O app diz o que o site diz: os textos vêm de [`packages/locales/pt-BR.json`](../../packages/locales)
 (lido em tempo de execução, com os mesmos `{nome}`), os limites de cada campo de
