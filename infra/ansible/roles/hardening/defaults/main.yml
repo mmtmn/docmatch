@@ -188,6 +188,14 @@ hardening_caddy_dns_module: github.com/caddy-dns/route53
 hardening_caddy_dns_module_version: v1.6.2
 hardening_caddy_crowdsec_module: github.com/hslatman/caddy-crowdsec-bouncer
 hardening_caddy_crowdsec_module_version: v0.15.0
+# Caddy's official build service (what add-package used to call): one binary per os/arch with the
+# listed packages. It builds on demand, so there is no published checksum; the role checks the
+# modules of the result instead.
+hardening_caddy_build_url: https://caddyserver.com/api/download
+hardening_caddy_build_packages:
+  - "{{ hardening_caddy_dns_module }}@{{ hardening_caddy_dns_module_version }}"
+  # One registered package with every bouncer module (crowdsec app, http.handlers.crowdsec, ...).
+  - "{{ hardening_caddy_crowdsec_module }}@{{ hardening_caddy_crowdsec_module_version }}"
 hardening_caddy_max_body: 600MB
 hardening_caddy_read_timeout: 30s
 hardening_caddy_header_timeout: 5s

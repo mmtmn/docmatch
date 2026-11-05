@@ -33,6 +33,9 @@ literal:https://releases\.hashicorp\.com/(packer|terraform)/
 literal:https://(dl\.cloudsmith\.io/public/caddy/stable/|apt\.postgresql\.org/pub/repos/apt|www\.postgresql\.org/media/keys/)
 literal:https://(packagecloud\.io/crowdsec/crowdsec/|download\.falco\.org/packages/deb|falco\.org/repo/falcosecurity-packages\.asc)
 literal:https://(awscli\.amazonaws\.com/awscli-exe-linux-|ip-ranges\.amazonaws\.com/ip-ranges\.json)
+# Serviço oficial de builds do Caddy (o que o add-package chamava): binário com os módulos do DNS do
+# Route 53 e do CrowdSec; sem checksum publicado, o papel confere os módulos do resultado.
+literal:https://caddyserver\.com/api/download
 # infra: endereços link-local da AWS na instância (resolvedor de DNS da VPC e Amazon Time Sync).
 literal:169\.254\.169\.253|169\.254\.169\.123
 # Domínio reservado .invalid (RFC 2606): nunca resolve; usado como URI fictícia de clientes gRPC em socket Unix.
