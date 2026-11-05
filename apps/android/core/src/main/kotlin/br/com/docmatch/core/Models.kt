@@ -106,6 +106,10 @@ data class Quote(
     @SerialName("cap_credits") val capCredits: Long,
     val signature: String,
     @SerialName("requires_approval") val requiresApproval: Boolean = false,
+    /** How long the run should take, queue included; absent on older quotes. */
+    @SerialName("expected_seconds") val expectedSeconds: Long? = null,
+    /** A large order: the confirmation says how long it takes and an e-mail follows. */
+    val large: Boolean = false,
 )
 
 /** openapi RunStatus. */

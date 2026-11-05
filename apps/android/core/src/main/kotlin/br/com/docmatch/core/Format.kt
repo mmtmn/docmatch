@@ -35,6 +35,33 @@ object Format {
         }
     }
 
+    /**
+     * An approximate duration the site's way (testdata/duration/cases.json): minutes rounded half
+     * up, at least one; under an hour, minutes ("12 minutos"); up to ten hours, hours and minutes
+     * in steps of five ("1 h 20 min"); from ten hours on, whole hours ("11 h").
+     */
+    fun duration(texts: Texts, seconds: Long): String {
+        var minutes = maxOf(1L, (maxOf(seconds, 0L) + 30) / 60)
+        if (minutes < 60) {
+            return if (minutes == 1L) texts.t("duration.minute") else texts.t("duration.minutes", mapOf("minutes" to minutes))
+        }
+        minutes = if (minutes < 600) (minutes + 2) / 5 * 5 else (minutes + 30) / 60 * 60
+        val hours = minutes / 60
+        val rest = minutes % 60
+        return if (rest == 0L) {
+            texts.t("duration.hours", mapOf("hours" to hours))
+        } else {
+            texts.t("duration.hours_minutes", mapOf("hours" to hours, "minutes" to rest))
+        }
+    }
+
+    /** The confirmation line of a large order (app.confirm_large); null for the others. */
+    fun largeNotice(texts: Texts, quote: Quote): String? {
+        val seconds = quote.expectedSeconds ?: 0L
+        if (!quote.large || seconds <= 0) return null
+        return texts.t("app.confirm_large", mapOf("duration" to duration(texts, seconds)))
+    }
+
     private const val KB = 1024L
     private const val MB = 1024 * KB
     private const val GB = 1024 * MB

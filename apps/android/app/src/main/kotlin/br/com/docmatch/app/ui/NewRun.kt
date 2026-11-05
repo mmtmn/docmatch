@@ -326,6 +326,7 @@ fun NewRunScreen(vm: NewRunViewModel, onStarted: (String) -> Unit) {
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(DmSize.space1)) {
                     Text(t("app.confirm_run", mapOf("expected" to c.prepared.quote.expectedCredits, "cap" to c.prepared.quote.capCredits)))
+                    Format.largeNotice(texts, c.prepared.quote)?.let { Text(it) }
                     error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
             },
