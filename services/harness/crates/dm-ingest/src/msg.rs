@@ -25,12 +25,25 @@ use crate::IngestError;
 
 type Cfb<'a> = cfb::CompoundFile<Cursor<&'a [u8]>>;
 
-/// Text property (subject, body, addresses), bytes.
-const MAX_TEXT_PROP: u64 = 16 << 20;
-/// Small properties (the fixed-size property stream), bytes.
-const MAX_PROPS: u64 = 1 << 20;
+/// Short text properties (subject, names, addresses, ids, file names), bytes.
+const MAX_SHORT_PROP: u64 = 8 << 10;
+/// Characters kept of a header field (sender, recipients, subject, message id).
+const MAX_FIELD_CHARS: usize = 4 << 10;
+/// The transport headers, bytes.
+const MAX_HEADERS_PROP: u64 = 64 << 10;
+/// A body property (text, HTML or compressed RTF), bytes.
+const MAX_BODY_PROP: u64 = 16 << 20;
+/// The fixed-size property stream of one storage, bytes (a real one is a few kilobytes).
+const MAX_PROPS: u64 = 64 << 10;
 /// Characters of body text kept.
 const MAX_BODY: usize = 8 << 20;
+/// Bytes read from one `.msg` in all: twice the file (directory entries may share a chain)
+/// and never more than this.
+const MAX_READ: u64 = 64 << 20;
+/// Recipients read per message.
+const MAX_RECIPIENTS: usize = 200;
+/// Attached messages read per message.
+const MAX_EMBEDDED: usize = 50;
 
 const PT_STRING8: u16 = 0x001E;
 const PT_UNICODE: u16 = 0x001F;
@@ -79,8 +92,8 @@ pub struct MessageProps {
     pub cc: String,
     /// Subject.
     pub subject: String,
-    /// When it was sent: the sender's local time from the transport headers when present,
-    /// else the submit time in UTC.
+    /// When it was sent, local time: the sender's from the transport headers when present,
+    /// else the submit time converted from UTC.
     pub date: Option<NaiveDateTime>,
     /// Internet message id.
     pub message_id: String,
@@ -134,11 +147,56 @@ pub fn is_msg(bytes: &[u8]) -> bool {
     })
 }
 
-fn read_stream(file: &mut Cfb<'_>, path: &str, cap: u64) -> Option<Vec<u8>> {
-    let mut stream = file.open_stream(path).ok()?;
-    let mut buf = Vec::new();
-    (&mut stream).take(cap).read_to_end(&mut buf).ok()?;
-    Some(buf)
+/// The Compound File of a message with a budget for every byte read from it: directory
+/// entries may point at the same chain any number of times, so the caps per property alone
+/// do not bound a file.
+struct MsgFile<'a> {
+    cfb: Cfb<'a>,
+    left: u64,
+    exhausted: bool,
+}
+
+/// The bytes one `.msg` may have read: twice the file, at most [`MAX_READ`].
+fn read_budget(len: usize) -> u64 {
+    (len as u64).saturating_mul(2).min(MAX_READ)
+}
+
+impl<'a> MsgFile<'a> {
+    fn open(bytes: &'a [u8], budget: u64) -> std::io::Result<MsgFile<'a>> {
+        let cfb = cfb::CompoundFile::open(Cursor::new(bytes))?;
+        Ok(MsgFile {
+            cfb,
+            left: budget,
+            exhausted: false,
+        })
+    }
+
+    /// A stream, at most `cap` bytes and what is left of the budget.
+    fn read(&mut self, path: &str, cap: u64) -> Option<Vec<u8>> {
+        let mut stream = self.cfb.open_stream(path).ok()?;
+        let want = cap.min(self.left);
+        if stream.len() > want && want < cap {
+            self.exhausted = true;
+        }
+        let mut buf = Vec::new();
+        (&mut stream).take(want).read_to_end(&mut buf).ok()?;
+        self.left = self.left.saturating_sub(buf.len() as u64);
+        Some(buf)
+    }
+
+    /// Child storages of `base` whose names start with `prefix`, sorted.
+    fn storages(&self, base: &str, prefix: &str) -> Vec<String> {
+        let path = if base.is_empty() { "/" } else { base };
+        let Ok(entries) = self.cfb.read_storage(path) else {
+            return Vec::new();
+        };
+        let mut out: Vec<String> = entries
+            .filter(|e| e.is_storage() && e.name().starts_with(prefix))
+            .map(|e| format!("{base}/{}", e.name()))
+            .collect();
+        out.sort();
+        out
+    }
 }
 
 fn utf16le(bytes: &[u8]) -> String {
@@ -168,21 +226,38 @@ fn codepage(cp: u32) -> &'static Encoding {
     Encoding::for_label(label.as_bytes()).unwrap_or(encoding_rs::WINDOWS_1252)
 }
 
+/// The encodings of 8-bit strings: the message code page for every property, the internet
+/// code page for the body ([MS-OXCMSG]: PidTagMessageCodepage, PidTagInternetCodepage).
+#[derive(Clone, Copy)]
+struct Encodings {
+    strings: &'static Encoding,
+    body: &'static Encoding,
+}
+
+impl Default for Encodings {
+    fn default() -> Self {
+        Encodings {
+            strings: encoding_rs::WINDOWS_1252,
+            body: encoding_rs::WINDOWS_1252,
+        }
+    }
+}
+
 /// The properties of one storage (the message, a recipient, an attachment, an embedded
 /// message), read on demand.
 struct Props {
     base: String,
     fixed: IndexMap<u16, (u16, [u8; 8])>,
-    encoding: &'static Encoding,
+    enc: Encodings,
 }
 
 impl Props {
     /// `header` is the size of the property stream header: 32 for the top-level message,
-    /// 24 for an embedded message, 8 for a recipient or an attachment.
-    fn open(file: &mut Cfb<'_>, base: &str, header: usize) -> Props {
+    /// 24 for an embedded message, 8 for a recipient or an attachment, which inherit the
+    /// code pages of their message (`inherited`).
+    fn open(file: &mut MsgFile<'_>, base: &str, header: usize, inherited: Encodings) -> Props {
         let mut fixed = IndexMap::new();
-        if let Some(data) = read_stream(file, &format!("{base}/__properties_version1.0"), MAX_PROPS)
-        {
+        if let Some(data) = file.read(&format!("{base}/__properties_version1.0"), MAX_PROPS) {
             for entry in data.get(header..).unwrap_or_default().chunks_exact(16) {
                 let kind = u16::from_le_bytes([entry[0], entry[1]]);
                 let id = u16::from_le_bytes([entry[2], entry[3]]);
@@ -194,13 +269,14 @@ impl Props {
         let mut p = Props {
             base: base.to_string(),
             fixed,
-            encoding: encoding_rs::WINDOWS_1252,
+            enc: inherited,
         };
-        if let Some(cp) = p
-            .long(PR_INTERNET_CPID)
-            .or_else(|| p.long(PR_MESSAGE_CODEPAGE))
-        {
-            p.encoding = codepage(cp);
+        if let Some(cp) = p.long(PR_MESSAGE_CODEPAGE) {
+            p.enc.strings = codepage(cp);
+            p.enc.body = p.enc.strings;
+        }
+        if let Some(cp) = p.long(PR_INTERNET_CPID) {
+            p.enc.body = codepage(cp);
         }
         p
     }
@@ -211,25 +287,32 @@ impl Props {
             .map(|(_, v)| u32::from_le_bytes([v[0], v[1], v[2], v[3]]))
     }
 
+    /// A time property (UTC on disk) in local time, as the `.eml` and text dumps have it.
     fn time(&self, id: u16) -> Option<NaiveDateTime> {
         let (_, v) = self.fixed.get(&id)?;
         let ticks = u64::from_le_bytes(*v);
         let secs = i64::try_from(ticks / 10_000_000).ok()? - 11_644_473_600;
         let nanos = u32::try_from((ticks % 10_000_000) * 100).ok()?;
-        DateTime::from_timestamp(secs, nanos).map(|d| d.naive_utc())
+        DateTime::from_timestamp(secs, nanos).and_then(crate::mail::local_time)
     }
 
     fn stream_name(&self, id: u16, kind: u16) -> String {
         format!("{}/__substg1.0_{id:04X}{kind:04X}", self.base)
     }
 
-    fn string(&self, file: &mut Cfb<'_>, id: u16) -> Option<String> {
-        if let Some(b) = read_stream(file, &self.stream_name(id, PT_UNICODE), MAX_TEXT_PROP) {
+    fn string_in(
+        &self,
+        file: &mut MsgFile<'_>,
+        id: u16,
+        cap: u64,
+        encoding: &'static Encoding,
+    ) -> Option<String> {
+        if let Some(b) = file.read(&self.stream_name(id, PT_UNICODE), cap) {
             return Some(utf16le(&b));
         }
-        let b = read_stream(file, &self.stream_name(id, PT_STRING8), MAX_TEXT_PROP)?;
+        let b = file.read(&self.stream_name(id, PT_STRING8), cap)?;
         Some(
-            self.encoding
+            encoding
                 .decode_without_bom_handling(&b)
                 .0
                 .trim_end_matches('\0')
@@ -237,29 +320,32 @@ impl Props {
         )
     }
 
-    fn text(&self, file: &mut Cfb<'_>, id: u16) -> String {
-        self.string(file, id)
+    /// A short text property, trimmed and cut at [`MAX_FIELD_CHARS`] (empty when absent).
+    fn text(&self, file: &mut MsgFile<'_>, id: u16) -> String {
+        field(&self.text_capped(file, id, MAX_SHORT_PROP))
+    }
+
+    fn text_capped(&self, file: &mut MsgFile<'_>, id: u16, cap: u64) -> String {
+        self.string_in(file, id, cap, self.enc.strings)
             .map(|s| s.trim().to_string())
             .unwrap_or_default()
     }
 
-    fn binary(&self, file: &mut Cfb<'_>, id: u16, cap: u64) -> Option<Vec<u8>> {
-        read_stream(file, &self.stream_name(id, PT_BINARY), cap)
+    fn binary(&self, file: &mut MsgFile<'_>, id: u16, cap: u64) -> Option<Vec<u8>> {
+        file.read(&self.stream_name(id, PT_BINARY), cap)
     }
-}
 
-/// Child storages of `base` whose names start with `prefix`, sorted.
-fn storages(file: &Cfb<'_>, base: &str, prefix: &str) -> Vec<String> {
-    let path = if base.is_empty() { "/" } else { base };
-    let Ok(entries) = file.read_storage(path) else {
-        return Vec::new();
-    };
-    let mut out: Vec<String> = entries
-        .filter(|e| e.is_storage() && e.name().starts_with(prefix))
-        .map(|e| format!("{base}/{}", e.name()))
-        .collect();
-    out.sort();
-    out
+    /// HTML bodies are bytes in the internet code page, unless they are valid UTF-8.
+    fn html_body(&self, bytes: &[u8]) -> String {
+        if let Ok(s) = std::str::from_utf8(bytes) {
+            return s.to_string();
+        }
+        self.enc
+            .body
+            .decode_without_bom_handling(bytes)
+            .0
+            .into_owned()
+    }
 }
 
 fn with_name(name: &str, address: &str) -> String {
@@ -280,23 +366,43 @@ fn smtp(s: String) -> String {
     }
 }
 
+/// A header field: trimmed, at most [`MAX_FIELD_CHARS`] characters.
+fn field(value: &str) -> String {
+    let v = value.trim();
+    match v.char_indices().nth(MAX_FIELD_CHARS) {
+        Some((cut, _)) => v[..cut].trim_end().to_string(),
+        None => v.to_string(),
+    }
+}
+
 fn header_value(headers: &[mailparse::MailHeader<'_>], name: &str) -> Option<String> {
     headers
         .iter()
         .find(|h| h.get_key_ref().eq_ignore_ascii_case(name))
         .map(mailparse::MailHeader::get_value)
-        .map(|v| v.trim().to_string())
+        .map(|v| field(&v))
         .filter(|v| !v.is_empty())
 }
 
-/// Reads the message stored under `base` (empty for the top-level one).
+/// A message as read: its properties, its attachments listed once (and how many storages
+/// there were) and the code pages its attachments inherit.
+struct ReadMessage {
+    props: MessageProps,
+    listed: Vec<Listed>,
+    attachment_count: usize,
+    enc: Encodings,
+}
+
+/// Reads the message stored under `base` (empty for the top-level one) and lists its
+/// attachments.
 fn read_message(
-    file: &mut Cfb<'_>,
+    file: &mut MsgFile<'_>,
     base: &str,
     header: usize,
+    inherited: Encodings,
     warnings: &mut Vec<String>,
-) -> MessageProps {
-    let p = Props::open(file, base, header);
+) -> ReadMessage {
+    let p = Props::open(file, base, header, inherited);
     let mut m = MessageProps {
         subject: p.text(file, PR_SUBJECT),
         message_id: p.text(file, PR_INTERNET_MESSAGE_ID),
@@ -305,7 +411,7 @@ fn read_message(
     if m.subject.is_empty() {
         m.subject = p.text(file, PR_NORMALIZED_SUBJECT);
     }
-    let transport = p.text(file, PR_TRANSPORT_HEADERS);
+    let transport = p.text_capped(file, PR_TRANSPORT_HEADERS, MAX_HEADERS_PROP);
     let headers = mailparse::parse_headers(transport.as_bytes())
         .map(|(h, _)| h)
         .unwrap_or_default();
@@ -336,8 +442,15 @@ fn read_message(
     // Recipients: their own storages, else the display lists.
     let mut to = Vec::new();
     let mut cc = Vec::new();
-    for storage in storages(file, base, "__recip_version1.0_#") {
-        let r = Props::open(file, &storage, 8);
+    let recipients = file.storages(base, "__recip_version1.0_#");
+    if recipients.len() > MAX_RECIPIENTS {
+        warnings.push(format!(
+            "{} destinatários; só os primeiros {MAX_RECIPIENTS} foram lidos",
+            recipients.len()
+        ));
+    }
+    for storage in recipients.into_iter().take(MAX_RECIPIENTS) {
+        let r = Props::open(file, &storage, 8, p.enc);
         let address = [PR_SMTP_ADDRESS, PR_EMAIL_ADDRESS]
             .into_iter()
             .map(|id| smtp(r.text(file, id)))
@@ -356,12 +469,12 @@ fn read_message(
     m.to = if to.is_empty() {
         p.text(file, PR_DISPLAY_TO)
     } else {
-        to.join("; ")
+        field(&to.join("; "))
     };
     m.cc = if cc.is_empty() {
         p.text(file, PR_DISPLAY_CC)
     } else {
-        cc.join("; ")
+        field(&cc.join("; "))
     };
     m.date = header_value(&headers, "Date")
         .and_then(|d| DateTime::parse_from_rfc2822(&d).ok())
@@ -370,26 +483,31 @@ fn read_message(
         .or_else(|| p.time(PR_DELIVERY_TIME))
         .or_else(|| p.time(PR_CREATION_TIME));
     m.body = body(file, &p, warnings);
-    m.attachments = attachments_of(file, base)
-        .into_iter()
-        .map(|a| a.name)
-        .collect();
-    m
+    let (listed, attachment_count) = attachments_of(file, base, p.enc);
+    m.attachments = listed.iter().map(|a| a.name.clone()).collect();
+    ReadMessage {
+        props: m,
+        listed,
+        attachment_count,
+        enc: p.enc,
+    }
 }
 
-fn body(file: &mut Cfb<'_>, p: &Props, warnings: &mut Vec<String>) -> String {
-    let mut text = p.string(file, PR_BODY).unwrap_or_default();
+fn body(file: &mut MsgFile<'_>, p: &Props, warnings: &mut Vec<String>) -> String {
+    let mut text = p
+        .string_in(file, PR_BODY, MAX_BODY_PROP, p.enc.body)
+        .unwrap_or_default();
     if text.trim().is_empty() {
         let html = p
-            .binary(file, PR_HTML, MAX_TEXT_PROP)
-            .map(|b| p.encoding_for_html(&b))
-            .or_else(|| p.string(file, PR_HTML));
+            .binary(file, PR_HTML, MAX_BODY_PROP)
+            .map(|b| p.html_body(&b))
+            .or_else(|| p.string_in(file, PR_HTML, MAX_BODY_PROP, p.enc.body));
         if let Some(h) = html.filter(|h| !h.trim().is_empty()) {
             text = crate::html::html_text(&h);
         }
     }
     if text.trim().is_empty() {
-        if let Some(rtf) = p.binary(file, PR_RTF_COMPRESSED, MAX_TEXT_PROP) {
+        if let Some(rtf) = p.binary(file, PR_RTF_COMPRESSED, MAX_BODY_PROP) {
             match decompress_rtf(&rtf) {
                 Some(raw) => text = rtf_text(&raw),
                 None => warnings.push("corpo em RTF compactado ilegível".to_string()),
@@ -409,19 +527,6 @@ fn body(file: &mut Cfb<'_>, p: &Props, warnings: &mut Vec<String>) -> String {
         ));
     }
     text.trim().to_string()
-}
-
-impl Props {
-    /// HTML bodies are bytes in the message's code page, unless the markup says otherwise.
-    fn encoding_for_html(&self, bytes: &[u8]) -> String {
-        if std::str::from_utf8(bytes).is_ok() {
-            return String::from_utf8_lossy(bytes).into_owned();
-        }
-        self.encoding
-            .decode_without_bom_handling(bytes)
-            .0
-            .into_owned()
-    }
 }
 
 /// [MS-OXRTFCP] decompression (`LZFu`, or `MELA` stored uncompressed).
@@ -646,7 +751,7 @@ fn rtf_text(rtf: &[u8]) -> String {
 /// A file name without directories or control characters.
 fn safe_name(raw: &str, n: usize) -> String {
     let base = raw.rsplit(['/', '\\']).next().unwrap_or("").trim();
-    let clean: String = base.chars().filter(|c| !c.is_control()).take(200).collect();
+    let clean = crate::archive::clean_name(base);
     if clean.is_empty() || clean == "." || clean == ".." {
         format!("anexo_{n}")
     } else {
@@ -655,24 +760,23 @@ fn safe_name(raw: &str, n: usize) -> String {
 }
 
 /// An attachment of a message, as listed: inline images of the body are not attachments.
+/// Only what opening it needs is kept.
 struct Listed {
     storage: String,
     name: String,
     method: u32,
-    props: Props,
 }
 
 /// The attachments of the message stored under `base`, in order, at most the ZIP entry limit
-/// (a message with more is refused by [`parse_msg`]).
-fn attachments_of(file: &mut Cfb<'_>, base: &str) -> Vec<Listed> {
+/// (a message with more is refused by [`parse_msg`]), and how many storages there are. Each
+/// attachment's properties are read once and dropped: only what opening it needs is kept.
+fn attachments_of(file: &mut MsgFile<'_>, base: &str, enc: Encodings) -> (Vec<Listed>, usize) {
     let mut out = Vec::new();
     let max = ZipLimits::default().max_entries;
-    for (n, storage) in storages(file, base, "__attach_version1.0_#")
-        .into_iter()
-        .take(max)
-        .enumerate()
-    {
-        let a = Props::open(file, &storage, 8);
+    let storages = file.storages(base, "__attach_version1.0_#");
+    let count = storages.len();
+    for (n, storage) in storages.into_iter().take(max).enumerate() {
+        let a = Props::open(file, &storage, 8, enc);
         let hidden = a.long(PR_ATTACHMENT_HIDDEN).is_some_and(|v| v & 0xFF != 0);
         let mime = a.text(file, PR_ATTACH_MIME_TAG).to_ascii_lowercase();
         let inline_image =
@@ -694,10 +798,9 @@ fn attachments_of(file: &mut Cfb<'_>, base: &str) -> Vec<Listed> {
             storage,
             name,
             method,
-            props: a,
         });
     }
-    out
+    (out, count)
 }
 
 /// Parses a message. With `open_attachments` false (a message inside a container), the
@@ -707,42 +810,58 @@ pub fn parse_msg(
     open_attachments: bool,
     lim: &ZipLimits,
 ) -> Result<MsgParsed, IngestError> {
+    parse_msg_within(bytes, open_attachments, lim, read_budget(bytes.len()))
+}
+
+fn parse_msg_within(
+    bytes: &[u8],
+    open_attachments: bool,
+    lim: &ZipLimits,
+    budget: u64,
+) -> Result<MsgParsed, IngestError> {
     if bytes.is_empty() {
         return Err(IngestError::Empty);
     }
-    let mut file = cfb::CompoundFile::open(Cursor::new(bytes)).map_err(|e| IngestError::Parse {
+    let mut file = MsgFile::open(bytes, budget).map_err(|e| IngestError::Parse {
         format: "msg",
         detail: format!("arquivo .msg ilegível ({e})"),
     })?;
     let mut out = MsgParsed::default();
-    out.message = read_message(&mut file, "", 32, &mut out.warnings);
-    let attachments = storages(&file, "", "__attach_version1.0_#");
-    if attachments.len() > lim.max_entries {
+    let read = read_message(&mut file, "", 32, Encodings::default(), &mut out.warnings);
+    let count = read.attachment_count;
+    if count > lim.max_entries {
         out.warnings.push(format!(
-            "{} anexos (máximo {}); nenhum foi aberto",
-            attachments.len(),
+            "{count} anexos (máximo {}); nenhum foi aberto",
             lim.max_entries
         ));
-        return Ok(out);
     }
+    out.message = read.props;
+    let (listed, enc) = (read.listed, read.enc);
     let max_mb = lim.max_uncompressed >> 20;
     let mut total: u64 = 0;
-    for listed in attachments_of(&mut file, "") {
-        let Listed {
-            storage,
-            name,
-            method,
-            props: a,
-        } = listed;
-        if !open_attachments {
-            continue;
+    let open = open_attachments && count <= lim.max_entries;
+    for Listed {
+        storage,
+        name,
+        method,
+    } in listed.into_iter().filter(|_| open)
+    {
+        if crate::cancel::cancelled() {
+            out.warnings.push(crate::cancel::STOPPED.to_string());
+            break;
         }
         match method {
             0 | 1 => {}
             5 => {
+                if out.embedded.len() >= MAX_EMBEDDED {
+                    out.warnings.push(format!(
+                        "{name}: mais de {MAX_EMBEDDED} mensagens anexadas; esta e as seguintes não foram lidas"
+                    ));
+                    continue;
+                }
                 let sub = format!("{storage}/__substg1.0_3701000D");
                 let mut warnings = Vec::new();
-                let message = read_message(&mut file, &sub, 24, &mut warnings);
+                let message = read_message(&mut file, &sub, 24, enc, &mut warnings).props;
                 if !message.attachments.is_empty() {
                     warnings.push(
                         "anexos da mensagem anexada não são abertos (profundidade máxima 1)"
@@ -769,7 +888,8 @@ pub fn parse_msg(
             }
         }
         let budget = lim.max_uncompressed.saturating_sub(total);
-        let Some(data) = a.binary(&mut file, PR_ATTACH_DATA, budget.saturating_add(1)) else {
+        let path = format!("{storage}/__substg1.0_{PR_ATTACH_DATA:04X}{PT_BINARY:04X}");
+        let Some(data) = file.read(&path, budget.saturating_add(1)) else {
             out.warnings.push(format!("{name}: anexo sem conteúdo"));
             continue;
         };
@@ -794,6 +914,12 @@ pub fn parse_msg(
             name: unique,
             bytes: data,
         });
+    }
+    if file.exhausted {
+        out.warnings.push(format!(
+            "leitura do .msg parou no limite de bytes lidos (o dobro do arquivo, até {} MB); o restante da mensagem e dos anexos não foi lido",
+            MAX_READ >> 20
+        ));
     }
     Ok(out)
 }
@@ -1087,7 +1213,8 @@ pub(crate) mod tests {
                 .date
                 .map(|d| d.format("%d/%m/%Y %H:%M").to_string())
                 .as_deref(),
-            Some("18/07/2026 19:00")
+            // 19:00 UTC is 16:00 in Brazil, as an .eml of the same message would say.
+            Some("18/07/2026 16:00")
         );
         assert_eq!(e.warnings.len(), 1);
         let items = message_items(m, "src_msg", bytes.len(), &InboxContext::default());
@@ -1149,5 +1276,154 @@ pub(crate) mod tests {
         assert!(parse_msg(b"", true, &ZipLimits::default()).is_err());
         assert_eq!(safe_name("..", 3), "anexo_3");
         assert_eq!(safe_name("a/b\\c.pdf", 1), "c.pdf");
+    }
+
+    /// A message with `recipients` recipients, `embedded` attached messages, a subject of
+    /// `subject` and the given transport headers.
+    fn crowded_msg(recipients: usize, embedded: usize, subject: &str, headers: &str) -> Vec<u8> {
+        let mut f =
+            cfb::CompoundFile::create(Cursor::new(Vec::new())).unwrap_or_else(|e| panic!("{e}"));
+        let s = |id: u16| format!("/__substg1.0_{id:04X}001F");
+        put(&mut f, &s(PR_SUBJECT), &unicode(subject));
+        put(&mut f, &s(PR_TRANSPORT_HEADERS), &unicode(headers));
+        put(&mut f, &s(PR_BODY), &unicode("Corpo."));
+        put(&mut f, "/__properties_version1.0", &props(32, &[]));
+        for i in 0..recipients {
+            let r = format!("/__recip_version1.0_#{i:08X}");
+            f.create_storage(&r).unwrap_or_else(|e| panic!("{e}"));
+            put(
+                &mut f,
+                &format!("{r}/__substg1.0_39FE001F"),
+                &unicode(&format!("pessoa{i}@example.com")),
+            );
+            put(
+                &mut f,
+                &format!("{r}/__properties_version1.0"),
+                &props(8, &[]),
+            );
+        }
+        for i in 0..embedded {
+            let a = format!("/__attach_version1.0_#{i:08X}");
+            f.create_storage(&a).unwrap_or_else(|e| panic!("{e}"));
+            put(
+                &mut f,
+                &format!("{a}/__properties_version1.0"),
+                &props(8, &[(0x0003, PR_ATTACH_METHOD, long(5))]),
+            );
+            put(
+                &mut f,
+                &format!("{a}/__substg1.0_3001001F"),
+                &unicode(&format!("resposta {i}")),
+            );
+            let inner = format!("{a}/__substg1.0_3701000D");
+            f.create_storage(&inner).unwrap_or_else(|e| panic!("{e}"));
+            put(
+                &mut f,
+                &format!("{inner}/__substg1.0_1000001F"),
+                &unicode("ok"),
+            );
+            put(
+                &mut f,
+                &format!("{inner}/__properties_version1.0"),
+                &props(24, &[]),
+            );
+        }
+        f.flush().unwrap_or_else(|e| panic!("{e}"));
+        f.into_inner().into_inner()
+    }
+
+    #[test]
+    fn recipients_attached_messages_and_fields_are_capped() {
+        let long_from = format!("From: {}@example.com\r\n", "a".repeat(50_000));
+        let bytes = crowded_msg(250, 60, &"S".repeat(100_000), &long_from);
+        let p = parse_msg(&bytes, true, &ZipLimits::default()).unwrap_or_else(|e| panic!("{e}"));
+        let m = &p.message;
+        assert!(
+            m.subject.chars().count() <= MAX_FIELD_CHARS,
+            "{}",
+            m.subject.len()
+        );
+        assert!(
+            m.from.chars().count() <= MAX_FIELD_CHARS,
+            "{}",
+            m.from.len()
+        );
+        assert!(m.to.chars().count() <= MAX_FIELD_CHARS, "{}", m.to.len());
+        assert!(m.to.starts_with("pessoa0@example.com; pessoa1@example.com"));
+        assert!(!m.to.contains("pessoa220@"), "only the first 200 are read");
+        assert_eq!(p.embedded.len(), MAX_EMBEDDED);
+        assert!(
+            p.warnings.iter().any(|w| w.contains("250 destinatários")),
+            "{:?}",
+            p.warnings
+        );
+        assert!(
+            p.warnings.iter().any(|w| w.contains("mensagens anexadas")),
+            "{:?}",
+            p.warnings
+        );
+    }
+
+    #[test]
+    fn reads_stop_at_the_byte_budget_of_the_file() {
+        assert_eq!(read_budget(10), 20);
+        assert_eq!(read_budget(100 << 20), MAX_READ);
+        let bytes = sample_msg();
+        let whole =
+            parse_msg(&bytes, true, &ZipLimits::default()).unwrap_or_else(|e| panic!("{e}"));
+        assert!(whole.warnings.is_empty(), "{:?}", whole.warnings);
+        // Directory entries may share one chain: reads are counted, not the file size.
+        let cut = parse_msg_within(&bytes, true, &ZipLimits::default(), 300)
+            .unwrap_or_else(|e| panic!("{e}"));
+        assert!(
+            cut.warnings
+                .iter()
+                .any(|w| w.contains("limite de bytes lidos")),
+            "{:?}",
+            cut.warnings
+        );
+        assert!(cut.attachments.iter().map(|a| a.bytes.len()).sum::<usize>() <= 300);
+        let mut file = MsgFile::open(&bytes, 10).unwrap_or_else(|e| panic!("{e}"));
+        let first = file.read(
+            &format!("/__substg1.0_{PR_SUBJECT:04X}001F"),
+            MAX_SHORT_PROP,
+        );
+        assert_eq!(first.map(|b| b.len()), Some(10));
+        assert!(file.exhausted);
+        let next = file.read(&format!("/__substg1.0_{PR_BODY:04X}001F"), MAX_SHORT_PROP);
+        assert_eq!(next.map(|b| b.len()), Some(0));
+    }
+
+    #[test]
+    fn string8_properties_use_the_message_code_page() {
+        let mut f =
+            cfb::CompoundFile::create(Cursor::new(Vec::new())).unwrap_or_else(|e| panic!("{e}"));
+        let (cyrillic, _, _) = encoding_rs::WINDOWS_1251.encode("Счёт 55120");
+        put(
+            &mut f,
+            &format!("/__substg1.0_{PR_SUBJECT:04X}001E"),
+            &cyrillic,
+        );
+        put(
+            &mut f,
+            &format!("/__substg1.0_{PR_BODY:04X}001E"),
+            "Olá, segue a NF.".as_bytes(),
+        );
+        put(
+            &mut f,
+            "/__properties_version1.0",
+            &props(
+                32,
+                &[
+                    (0x0003, PR_MESSAGE_CODEPAGE, long(1251)),
+                    (0x0003, PR_INTERNET_CPID, long(65001)),
+                ],
+            ),
+        );
+        f.flush().unwrap_or_else(|e| panic!("{e}"));
+        let bytes = f.into_inner().into_inner();
+        let p = parse_msg(&bytes, true, &ZipLimits::default()).unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(p.message.subject, "Счёт 55120");
+        assert_eq!(p.message.body, "Olá, segue a NF.");
     }
 }
