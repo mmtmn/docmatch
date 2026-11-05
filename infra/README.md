@@ -115,7 +115,12 @@ por `aws iam get-user` e depois por `aws ec2 describe-security-groups`.
    valida: volte `wait_for_certificate_validation = true` e aplique (o Terraform espera até 75 min
    pela validação e então troca a distribuição para o certificado ACM com os aliases do domínio;
    o output `custom_domain_enabled` confirma). Para o dev, adicione o NS de `dev` em
-   `extra_dns_records` do prod.
+   `extra_dns_records` do prod. Se o domínio já estiver delegado a uma zona do Route 53 criada
+   à mão, adote-a em vez de trocar o NS no registrador:
+   `terraform state rm module.edge.aws_route53_zone.this`,
+   `terraform import module.edge.aws_route53_zone.this <id da zona delegada>` e um apply, que
+   move registros e DNSSEC para ela; depois apague a zona que o primeiro apply criou (só NS e
+   SOA). O DS continua o mesmo: a chave KSK vem da mesma chave KMS.
 6. **Aplicação**: `infra/scripts/deploy-app.sh --env prod` compila API, worker, migrações
    (`GOOS=linux GOARCH=arm64`) e o harness (`aarch64-unknown-linux-musl`, ligado pelo `rust-lld`,
    sem toolchain C cruzada), publica em `s3://<releases>/releases/<sha>/` com `SHA256SUMS` e
