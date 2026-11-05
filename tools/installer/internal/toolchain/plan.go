@@ -330,7 +330,9 @@ func (p *planner) linux(need map[string]Status, order []string) {
 				p.after = append(p.after, p.user(id, "rustup", "default", "stable"))
 				continue
 			}
-			if _, ok := p.pick("", "rustup"); !ok {
+			// An old cargo from the distribution conflicts with its rustup package: swapping
+			// them removes packages, which the user decides by hand.
+			if _, ok := p.pick("", "rustup"); !ok || s.State == Outdated {
 				p.manual(id, e.ManualFix(id))
 				continue
 			}
@@ -373,7 +375,7 @@ func (p *planner) linux(need map[string]Status, order []string) {
 				c.Tools = append([]string{}, p.pkgTools...)
 				cmds = append(cmds, c)
 			}
-			if c, ok := p.root(p.pkgTools[0], append([]string{"apt-get", "install", "-y"}, p.pkgs...)...); ok {
+			if c, ok := p.root(p.pkgTools[0], append([]string{"apt-get", "install", "-y", "--no-remove"}, p.pkgs...)...); ok {
 				c.Tools = append([]string{}, p.pkgTools...)
 				cmds = append(cmds, c)
 			}
@@ -484,14 +486,22 @@ func (p *planner) brew(need map[string]Status, order []string) {
 			// Docker Desktop: the cask may ask for the password to install its helper.
 			casks = append(casks, Command{Args: []string{"brew", "install", "--cask", "docker"}, Tools: []string{id}, Elevated: true},
 				p.user(id, "open", "-a", "Docker"))
-			p.plan.Notes = append(p.plan.Notes, text.T("tools.note_docker_desktop"))
 		}
 	}
-	cmds := clt
+	if len(clt) > 0 {
+		// xcode-select only opens the system's dialog and returns; Homebrew needs what it
+		// installs. The rest of the plan comes on the next check.
+		p.plan.Commands = clt
+		return
+	}
+	var cmds []Command
 	if len(p.pkgs) > 0 {
 		cmds = append(cmds, Command{Args: append([]string{"brew", "install"}, p.pkgs...), Tools: append([]string{}, p.pkgTools...)})
 	}
-	cmds = append(cmds, casks...)
+	if len(casks) > 0 {
+		cmds = append(cmds, casks...)
+		p.plan.Notes = append(p.plan.Notes, text.T("tools.note_docker_desktop"))
+	}
 	cmds = append(cmds, p.after...)
 	p.plan.Commands = cmds
 }

@@ -21,6 +21,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/mmtmn/docmatch/tools/installer/internal/docker"
 )
 
 // MaxBinary bounds a download (the binaries are ~10 MB).
@@ -73,6 +75,8 @@ var (
 	ErrNoBase   = errors.New("sem base de download")
 	ErrChecksum = errors.New("checksum não confere")
 	ErrVersion  = errors.New("o binário baixado não é a versão anunciada")
+	// ErrStranded: on Windows neither the new binary nor the old one is in place.
+	ErrStranded = errors.New("nem o binário novo nem o antigo ficaram no lugar")
 )
 
 // Updater replaces Exe with a release from Base.
@@ -152,6 +156,19 @@ func (u *Updater) Latest(ctx context.Context) (string, error) {
 	return v, nil
 }
 
+// Newer reports whether version a is newer than b ("0.2.0" > "0.1.9"); "dev" and other
+// non-versions are never newer.
+func Newer(a, b string) bool {
+	if !isVersion(a) || !isVersion(b) {
+		return false
+	}
+	return a != b && docker.AtLeast(a, b) && !docker.AtLeast(b, a)
+}
+
+func isVersion(v string) bool {
+	return v != "" && v[0] >= '0' && v[0] <= '9' && strings.Contains(v, ".")
+}
+
 // Expected finds name's checksum in a SHA256SUMS.txt ("<hex>  <name>" or "<hex> *<name>").
 func Expected(sums, name string) string {
 	sc := bufio.NewScanner(strings.NewReader(sums))
@@ -175,6 +192,7 @@ func (u *Updater) Update(ctx context.Context, version string, force bool, say fu
 		return Outcome{}, err
 	}
 	out := Outcome{From: u.Current}
+	pinned := strings.TrimSpace(version) != ""
 	if version = strings.TrimPrefix(strings.TrimSpace(version), "v"); version == "" {
 		if version, err = u.Latest(ctx); err != nil {
 			return out, err
@@ -184,6 +202,12 @@ func (u *Updater) Update(ctx context.Context, version string, force bool, say fu
 	}
 	out.To = version
 	if version == u.Current && !force {
+		return out, nil
+	}
+	// The latest is older than this one (a stale VERSION.txt, an earlier --to): never go back
+	// without --to or --force.
+	if !pinned && !force && Newer(u.Current, version) {
+		out.To = u.Current
 		return out, nil
 	}
 	name := AssetName(u.GOOS, u.GOARCH)
@@ -217,6 +241,10 @@ func (u *Updater) Update(ctx context.Context, version string, force bool, say fu
 		}
 	}
 	if err := u.Replace(tmp); err != nil {
+		if errors.Is(err, ErrStranded) {
+			keep = true // the only good binary left: say where it is
+			return out, fmt.Errorf("%w; o binário novo está em %s", err, tmp)
+		}
 		return out, err
 	}
 	keep = true
@@ -278,7 +306,7 @@ func (u *Updater) Replace(newPath string) error {
 	}
 	if err := u.FS.Rename(newPath, u.Exe); err != nil {
 		if rerr := u.FS.Rename(old, u.Exe); rerr != nil {
-			return fmt.Errorf("%w; e não consegui pôr o antigo de volta (%s): %w", err, old, rerr)
+			return fmt.Errorf("%w: %w; e o antigo não voltou de %s: %w", ErrStranded, err, old, rerr)
 		}
 		return err
 	}

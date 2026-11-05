@@ -113,8 +113,9 @@ func TestFrameToolsWindows(t *testing.T) {
 			{ID: "docker", Name: "Docker", Detail: "Compose 2.40.3"},
 		},
 		Plan: toolchain.Plan{Manager: toolchain.Manager{ID: toolchain.Winget, Name: "winget"},
-			Commands: []toolchain.Command{{Args: []string{"wsl", "--install", "-d", "Ubuntu"}, Elevated: true}},
-			Notes:    []string{"O wsl --install pode pedir para reiniciar o Windows."}},
+			Commands: []toolchain.Command{{Args: []string{"wsl", "--install", "-d", "Ubuntu"}, Elevated: true},
+				{Args: []string{"winget", "install", "--exact", "--id", "Docker.DockerDesktop", "--accept-package-agreements", "--accept-source-agreements"}, Elevated: true}},
+			Notes: []string{"O wsl --install pode pedir para reiniciar o Windows."}},
 		Handoff: "curl -fsSL https://site.invalid/install/install.sh | sh -s -- --mode desenvolver",
 	}))
 	frame(t, a.View())

@@ -114,6 +114,7 @@ func TestUpdateRefusals(t *testing.T) {
 type recorder struct {
 	calls []string
 	fail  map[string]error
+	left  []string // what RemoveInstallDir reports it left
 }
 
 func (r *recorder) do(call string) error {
@@ -129,7 +130,9 @@ func (r *recorder) WipeDev(_ context.Context, source string) error { return r.do
 func (r *recorder) RemoveImages(_ context.Context, images []string) error {
 	return r.do("rmi " + strings.Join(images, " "))
 }
-func (r *recorder) RemoveAll(dir string) error    { return r.do("rmdir " + dir) }
+func (r *recorder) RemoveInstallDir(dir string) ([]string, error) {
+	return r.left, r.do("rmdir " + dir)
+}
 func (r *recorder) RemoveBinary(exe string) error { return r.do("rmbin " + exe) }
 
 func installed(t *testing.T, st state.State) string {
@@ -175,6 +178,16 @@ func TestUninstallTry(t *testing.T) {
 	if strings.Join(rec.calls, "|") != "down docmatch-local volumes=false|rmbin "+w.exe {
 		t.Fatalf("%q", rec.calls)
 	}
+	// Data kept and folder asked: the question says the kept data needs the folder's .env.
+	w, out, _ = testWorld(t, nil)
+	rec = &recorder{left: []string{"meu-projeto"}}
+	w.ops, w.stdin = rec, strings.NewReader("n\nn\ns\n")
+	if code := run(context.Background(), w, []string{"uninstall", "--dir", dir}, Build{}); code != 0 {
+		t.Fatal(code)
+	}
+	if !strings.Contains(out.String(), "senha do .env") || !strings.Contains(out.String(), "o resto ficou: meu-projeto") {
+		t.Fatal(out.String())
+	}
 
 	// --yes answers yes to every question.
 	w, _, _ = testWorld(t, nil)
@@ -214,12 +227,25 @@ func TestUninstallDevKeepsTheCheckout(t *testing.T) {
 	if strings.Join(rec.calls, "|") != strings.Join([]string{"stopdev " + src, "wipedev " + src, "rmdir " + dir, "rmbin " + w.exe}, "|") {
 		t.Fatalf("%q", rec.calls)
 	}
-	if !strings.Contains(out.String(), "o código em "+src+" fica") {
+	if !strings.Contains(out.String(), "o código em "+src+" fica") || !strings.Contains(out.String(), "o mesmo do make dev") {
 		t.Fatal(out.String())
 	}
-	// The checkout is gone: nothing runs make in some other folder.
-	dir = installed(t, state.State{Mode: state.ModeDev, Project: "docmatch-local", SourceDir: filepath.Join(t.TempDir(), "sumiu")})
+	// --yes never wipes the development database.
+	dir = installed(t, state.State{Mode: state.ModeDev, Project: "docmatch-local", SourceDir: src})
 	w, out, _ = testWorld(t, nil)
+	rec = &recorder{}
+	w.ops = rec
+	if code := run(context.Background(), w, []string{"uninstall", "--dir", dir, "--yes"}, Build{}); code != 0 {
+		t.Fatal(code)
+	}
+	if strings.Join(rec.calls, "|") != strings.Join([]string{"stopdev " + src, "rmdir " + dir, "rmbin " + w.exe}, "|") || !strings.Contains(out.String(), "--yes não o apaga") {
+		t.Fatalf("%q\n%s", rec.calls, out)
+	}
+	// The checkout is gone: nothing runs make in some other folder, not even in a checkout
+	// found from the current folder or DOCMATCH_SOURCE.
+	dir = installed(t, state.State{Mode: state.ModeDev, Project: "docmatch-local", SourceDir: filepath.Join(t.TempDir(), "sumiu")})
+	w, out, _ = testWorld(t, map[string]string{"DOCMATCH_SOURCE": checkout(t)})
+	w.cwd = checkout(t)
 	rec = &recorder{}
 	w.ops, w.stdin = rec, strings.NewReader("n\n")
 	if code := run(context.Background(), w, []string{"uninstall", "--dir", dir}, Build{}); code != 0 || strings.Join(rec.calls, "|") != "rmbin "+w.exe || !strings.Contains(out.String(), "nada a parar") {
@@ -233,10 +259,16 @@ func TestUninstallGuards(t *testing.T) {
 	if code := run(context.Background(), w, []string{"uninstall"}, Build{}); code != exitUsage || !strings.Contains(errb.String(), "--yes") {
 		t.Fatalf("sem terminal e sem --yes: %d %q", code, errb)
 	}
-	// No installation: only the binary goes.
+	// No installation: the binary goes only when the user says so (the stack may run elsewhere).
 	w, out, _ := testWorld(t, nil)
 	rec := &recorder{}
 	w.ops = rec
+	if code := run(context.Background(), w, []string{"uninstall", "--dir", filepath.Join(t.TempDir(), "nada")}, Build{}); code != 0 || len(rec.calls) != 0 || !strings.Contains(out.String(), "Nada foi removido") {
+		t.Fatalf("%d %q %s", code, rec.calls, out)
+	}
+	w, out, _ = testWorld(t, nil)
+	rec = &recorder{}
+	w.ops, w.stdin = rec, strings.NewReader("s\n")
 	if code := run(context.Background(), w, []string{"uninstall", "--dir", filepath.Join(t.TempDir(), "nada")}, Build{}); code != 0 || len(rec.calls) != 1 || !strings.Contains(out.String(), "nenhuma instalação") {
 		t.Fatalf("%d %q %s", code, rec.calls, out)
 	}
@@ -284,7 +316,7 @@ func toolsWorld(t *testing.T, isTTY bool, stdin string) (*devTools, *fakeRunner,
 	d := &devTools{w: w}
 	d.exec = func(_ context.Context, args []string, term toolchain.Terminal) error {
 		f.ran = append(f.ran, strings.Join(args, " "))
-		if strings.Contains(strings.Join(args, " "), "install -y golang-go") {
+		if strings.Contains(strings.Join(args, " "), "golang-go") {
 			f.have["go"] = true
 		}
 		return nil
@@ -326,10 +358,10 @@ func TestToolsPlainInstalls(t *testing.T) {
 	if !goOn || code != 0 {
 		t.Fatalf("%v %d\n%s", goOn, code, out)
 	}
-	if strings.Join(f.ran, "|") != sudo()+"apt-get update|"+sudo()+"apt-get install -y golang-go" {
+	if strings.Join(f.ran, "|") != sudo()+"apt-get update|"+sudo()+"apt-get install -y --no-remove golang-go" {
 		t.Fatalf("%q", f.ran)
 	}
-	for _, s := range []string{"[xx] Go", "Para instalar com o apt, nesta ordem:", "! $ " + sudo() + "apt-get install -y golang-go", "[ok] " + sudo() + "apt-get update", "Tudo pronto para o make local."} {
+	for _, s := range []string{"[xx] Go", "Para instalar com o apt, nesta ordem:", "! $ " + sudo() + "apt-get install -y --no-remove golang-go", "[ok] " + sudo() + "apt-get update", "Tudo pronto para o make local."} {
 		if !strings.Contains(out.String(), s) {
 			t.Errorf("sem %q:\n%s", s, out)
 		}

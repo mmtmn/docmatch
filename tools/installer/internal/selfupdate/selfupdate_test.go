@@ -197,6 +197,55 @@ func TestUpdateUnix(t *testing.T) {
 	}
 }
 
+func TestUpdateNeverGoesBackByItself(t *testing.T) {
+	m := newMemFS(false)
+	u := updater(t, release(t, false), "linux", m)
+	u.Current = "0.3.0" // newer than the 0.2.0 VERSION.txt announces
+	out, err := u.Update(context.Background(), "", false, nil)
+	if err != nil || out.Updated || out.To != "0.3.0" || string(m.files[u.Exe]) != "binário antigo 0.1.0" {
+		t.Fatalf("%+v %v", out, err)
+	}
+	// Asked for by name, it goes.
+	if out, err = u.Update(context.Background(), "0.1.5", false, nil); err != nil || !out.Updated {
+		t.Fatalf("--to: %+v %v", out, err)
+	}
+	if !Newer("0.10.0", "0.9.9") || Newer("0.2.0", "0.2.0") || Newer("dev", "0.1.0") || Newer("0.1.0", "dev") {
+		t.Fatal("Newer")
+	}
+}
+
+func TestUpdateWindowsStranded(t *testing.T) {
+	m := newMemFS(true)
+	u := updater(t, release(t, false), "windows", m)
+	u.FS = &strandingFS{memFS: m, exe: u.Exe}
+	_, err := u.Update(context.Background(), "", false, nil)
+	if !errors.Is(err, ErrStranded) || !strings.Contains(err.Error(), "o binário novo está em") {
+		t.Fatalf("%v", err)
+	}
+	kept := false
+	for _, n := range m.names() {
+		if strings.Contains(n, ".docmatch-update-") {
+			kept = true
+		}
+	}
+	if !kept {
+		t.Fatalf("o binário novo, o único bom, fica: %v", m.names())
+	}
+}
+
+// strandingFS refuses everything onto exe, the old binary coming back included.
+type strandingFS struct {
+	*memFS
+	exe string
+}
+
+func (f *strandingFS) Rename(oldpath, newpath string) error {
+	if newpath == f.exe {
+		return errors.New("Access is denied.")
+	}
+	return f.memFS.Rename(oldpath, newpath)
+}
+
 func TestUpdatePinnedVersion(t *testing.T) {
 	m := newMemFS(false)
 	u := updater(t, release(t, false), "linux", m)

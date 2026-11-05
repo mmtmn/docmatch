@@ -8,8 +8,10 @@
 
   Para instalar com o winget, nesta ordem:
     ! $ wsl --install -d Ubuntu
+    ! $ winget install --exact --id Docker.DockerDesktop --accept-package-agreements
+          --accept-source-agreements
 
-  ! 1 comando(s) marcado(s) com ! pedem a sua senha (sudo) ou administrador no próprio
+  ! 2 comando(s) marcado(s) com ! pedem a sua senha (sudo) ou administrador no próprio
     terminal. Nada roda antes de você apertar i.
 
   O wsl --install pode pedir para reiniciar o Windows.

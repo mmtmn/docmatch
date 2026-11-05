@@ -66,10 +66,13 @@ alguns minutos; as seguintes usam o cache do BuildKit.
    compilador C (o Rust liga o harness com ele), Go, Rust, Node, pnpm, Docker com Compose v2,
    openssl e curl. As versões vêm do checkout (as de antes do clone ficam em
    `internal/toolchain.Defaults`, e um teste confere que batem com o repositório):
-   - **Go**: qualquer Go 1.21+ serve, porque com `GOTOOLCHAIN=auto` ele baixa o
-     `toolchain` do `services/api/go.mod` sozinho. O instalador passa `GOTOOLCHAIN=auto` ao `make`
-     quando o ambiente não diz outra coisa (algumas distribuições gravam `local` no `go.env`);
-     com `GOTOOLCHAIN=local` no ambiente, ele avisa em vez de instalar outro Go.
+   - **Go**: qualquer Go 1.21+ serve, porque ele baixa o `toolchain` do `services/api/go.mod`
+     sozinho. Quando o ambiente não diz outra coisa, o instalador passa ao `make` exatamente esse
+     toolchain (`GOTOOLCHAIN=go1.27.3`, como o CI) se o Go local for mais antigo, e `auto` se não
+     for: com `auto` e um Go antigo, o `go install` do `make setup` compila cada ferramenta com o
+     Go que o go.mod dela pede (go1.26), e um golangci-lint compilado assim recusa o código do
+     repositório. Algumas distribuições gravam `local` no `go.env`; com `GOTOOLCHAIN=local` no
+     ambiente, ele avisa em vez de instalar outro Go.
    - **Rust**: com o rustup basta (o `rust-toolchain.toml` do harness escolhe e baixa a versão);
      sem ele, o `cargo` do sistema precisa ser pelo menos a versão fixada.
    - **Node**: o mínimo do `engines.node` do `package.json` (o `.npmrc` tem `engine-strict`); o
@@ -121,7 +124,7 @@ alguns minutos; as seguintes usam o cache do BuildKit.
 | `docmatch doctor` | as verificações e o estado da instalação |
 | `docmatch demo` | concilia o gêmeo da Vantara de novo pela API |
 | `docmatch update` | baixa a versão mais nova da mesma base do `install.sh`, confere o SHA-256 e a versão e troca o binário; `--check` só diz se há uma, `--to 0.1.0` fixa a versão, `--force` baixa de novo |
-| `docmatch uninstall` | para tudo, pergunta antes de apagar os dados, as imagens e a pasta da instalação e remove o binário por último (`--yes` responde sim a tudo) |
+| `docmatch uninstall` | para tudo, pergunta antes de apagar os dados, as imagens e a pasta da instalação e remove o binário por último. Da pasta só sai o que o instalador criou (o resto fica, e a pasta também); no Desenvolver o código fica e o banco de desenvolvimento (o volume `postgres-data` do `tools/dev/compose.yaml`, o mesmo do `make dev`) só sai se você responder sim na hora; `--yes` responde sim ao resto |
 | `docmatch version` | versão do instalador (`docmatch --version` imprime a mesma linha) |
 
 ## Opções

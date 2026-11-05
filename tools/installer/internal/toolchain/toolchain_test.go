@@ -186,7 +186,7 @@ func TestDetectProblems(t *testing.T) {
 
 func TestGoToolchainFor(t *testing.T) {
 	for _, c := range [][3]string{
-		{"go1.22.2", "go1.27.3", "go1.27.3+auto"}, // Ubuntu's Go: the tools get built with the pinned one
+		{"go1.22.2", "go1.27.3", "go1.27.3"}, // Ubuntu's Go: the tools get built with the pinned one
 		{"go1.27.3", "go1.27.3", "auto"},
 		{"go1.28.1", "go1.27.3", "auto"}, // newer local Go: no download
 		{"", "go1.27.3", "auto"},
@@ -285,7 +285,7 @@ func TestPlanUbuntu(t *testing.T) {
 	}
 	same(t, commands(p),
 		"sudo apt-get update",
-		"sudo apt-get install -y build-essential golang-go rustup docker.io docker-compose-v2",
+		"sudo apt-get install -y --no-remove build-essential golang-go rustup docker.io docker-compose-v2",
 		"rustup default stable",
 		"sudo snap install node --classic --channel=22/stable",
 		"npm install --global --prefix "+filepath.Join("/home/ana", ".local")+" pnpm@11.5.3",
@@ -317,14 +317,14 @@ func TestPlanAptNodeSourceAndRoot(t *testing.T) {
 	// NodeSource's nodejs carries npm (Ubuntu's npm would conflict); as root, no sudo.
 	same(t, commands(p),
 		"apt-get update",
-		"apt-get install -y nodejs",
+		"apt-get install -y --no-remove nodejs",
 		"npm install --global --prefix "+filepath.Join("/home/ana", ".local")+" pnpm@11.5.3",
 	)
 	// Not root and no sudo: the root commands become manual steps.
 	e.Root = false
 	p = plan(t, e)
 	same(t, commands(p), "npm install --global --prefix "+filepath.Join("/home/ana", ".local")+" pnpm@11.5.3")
-	if len(p.Manual) != 2 || !strings.Contains(p.Manual[1].Fix, "Como root: apt-get install -y nodejs") {
+	if len(p.Manual) != 2 || !strings.Contains(p.Manual[1].Fix, "Como root: apt-get install -y --no-remove nodejs") {
 		t.Fatalf("%+v", p.Manual)
 	}
 }
@@ -336,7 +336,7 @@ func TestPlanAptEmptyLists(t *testing.T) {
 	remove(f, "node", "npm", "snap", "git")
 	f.have["apt-cache"] = ""
 	p := plan(t, env(f, "linux"))
-	same(t, commands(p)[:2], "sudo apt-get update", "sudo apt-get install -y git nodejs")
+	same(t, commands(p)[:2], "sudo apt-get update", "sudo apt-get install -y --no-remove git nodejs")
 }
 
 func TestPlanFedora(t *testing.T) {
@@ -370,17 +370,25 @@ func TestPlanMac(t *testing.T) {
 	if p.Manager.ID != Brew || p.Manager.Name != "Homebrew" {
 		t.Fatalf("%+v", p.Manager)
 	}
+	// Without the Command Line Tools only their dialog runs: Homebrew needs them, and
+	// xcode-select returns before they are installed. The next check plans the rest.
+	same(t, commands(p), "xcode-select --install")
+	if len(p.Notes) != 1 || !strings.Contains(p.Notes[0], "janela") {
+		t.Fatalf("%+v", p.Notes)
+	}
+	delete(f.fail, "xcode-select -p")
+	p = plan(t, env(f, "darwin"))
 	same(t, commands(p),
-		"xcode-select --install",
 		"brew install go rustup node@22",
 		"brew install --cask docker",
 		"open -a Docker",
 		"rustup default stable",
 		"npm install --global --prefix "+filepath.Join("/home/ana", ".local")+" pnpm@11.5.3",
 	)
-	if p.Elevated() != 1 || len(p.Notes) != 2 {
+	if p.Elevated() != 1 || len(p.Notes) != 1 {
 		t.Fatalf("só o cask pode pedir senha: %d %+v", p.Elevated(), p.Notes)
 	}
+	f.fail["xcode-select -p"] = true
 
 	// Without Homebrew everything is by hand, and the fix says how to get Homebrew.
 	remove(f, "brew")
@@ -420,7 +428,7 @@ func TestPlanInsideWSL(t *testing.T) {
 	e := env(f, "linux")
 	e.Info.WSL = true
 	p := plan(t, e)
-	same(t, commands(p), "sudo apt-get update", "sudo apt-get install -y golang-go")
+	same(t, commands(p), "sudo apt-get update", "sudo apt-get install -y --no-remove golang-go")
 	if len(p.Manual) != 1 || p.Manual[0].Tool != Docker || !strings.Contains(p.Manual[0].Fix, "WSL integration") {
 		t.Fatalf("no WSL, o Docker vem do Docker Desktop: %+v", p.Manual)
 	}

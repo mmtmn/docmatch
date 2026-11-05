@@ -166,7 +166,14 @@ func (m *toolsModel) planView(b *strings.Builder, w int) {
 			if c.Elevated {
 				mark = t.WarnS.Render(t.G.Warn) + " "
 			}
-			b.WriteString("  " + mark + t.Accent.Render("$ "+truncate(c.String(), w-8)) + "\n")
+			// Wrapped between arguments, never cut: the user consents to every character.
+			for i, line := range wrapWords("$ "+c.String(), w-6) {
+				if i == 0 {
+					b.WriteString("  " + mark + t.Accent.Render(line) + "\n")
+				} else {
+					b.WriteString("        " + t.Accent.Render(line) + "\n")
+				}
+			}
 		}
 		if n := p.Elevated(); n > 0 {
 			b.WriteString("\n" + t.WarnS.Render(t.G.Warn) + " " + indentRest(t.WarnS.Width(w-2).Render(t.plainText(text.T("tools.elevated_note", "count", strconv.Itoa(n)))), 2) + "\n")
@@ -189,6 +196,25 @@ func (m *toolsModel) planView(b *strings.Builder, w int) {
 	if len(p.Notes) > 0 {
 		b.WriteString("\n")
 	}
+}
+
+// wrapWords splits s at spaces into lines of at most width cells (a longer word keeps a line of
+// its own, whole).
+func wrapWords(s string, width int) []string {
+	var lines []string
+	cur := ""
+	for _, word := range strings.Fields(s) {
+		switch {
+		case cur == "":
+			cur = word
+		case lipgloss.Width(cur)+1+lipgloss.Width(word) <= width:
+			cur += " " + word
+		default:
+			lines = append(lines, cur)
+			cur = word
+		}
+	}
+	return append(lines, cur)
 }
 
 func (m *toolsModel) busyLine() string {

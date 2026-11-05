@@ -3,6 +3,7 @@ package cli
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -95,7 +96,7 @@ func runUpdate(ctx context.Context, w world, args []string, b Build) (int, error
 		if err != nil {
 			return exitFailed, err
 		}
-		if latest == b.Version {
+		if latest == b.Version || selfupdate.Newer(b.Version, latest) {
 			outln(w.stdout, text.T("cli.update_current", "version", b.Version))
 		} else {
 			outln(w.stdout, text.T("cli.update_available", "version", latest, "current", b.Version))
@@ -120,11 +121,14 @@ func runUpdate(ctx context.Context, w world, args []string, b Build) (int, error
 type uninstallOps interface {
 	// Down stops (and with volumes, wipes) an Experimentar installation.
 	Down(ctx context.Context, opts install.Options, st *state.State, volumes bool) error
-	// StopDev runs `make local-down`; WipeDev removes the make local stack's volumes.
+	// StopDev runs `make local-down`; WipeDev removes the Postgres of tools/dev/compose.yaml
+	// (the database make local and make dev share), nothing else of that project.
 	StopDev(ctx context.Context, source string) error
 	WipeDev(ctx context.Context, source string) error
 	RemoveImages(ctx context.Context, images []string) error
-	RemoveAll(dir string) error
+	// RemoveInstallDir deletes the installer's entries and the folder when nothing else is left;
+	// it returns what it left.
+	RemoveInstallDir(dir string) ([]string, error)
 	RemoveBinary(exe string) error
 }
 
@@ -143,8 +147,32 @@ func (realOps) StopDev(ctx context.Context, source string) error {
 }
 
 func (realOps) WipeDev(ctx context.Context, source string) error {
-	_, err := docker.CLI{}.Output(ctx, "compose", "-f", filepath.Join(source, "tools", "dev", "compose.yaml"), "down", "--volumes")
-	return err
+	file := filepath.Join(source, "tools", "dev", "compose.yaml")
+	cli := docker.CLI{}
+	// The real volume name (the project may come from COMPOSE_PROJECT_NAME).
+	cfg, err := cli.Output(ctx, "compose", "-f", file, "config", "--format", "json")
+	if err != nil {
+		return err
+	}
+	var parsed struct {
+		Volumes map[string]struct {
+			Name string `json:"name"`
+		} `json:"volumes"`
+	}
+	if err := json.Unmarshal([]byte(cfg), &parsed); err != nil {
+		return err
+	}
+	volume := parsed.Volumes["postgres-data"].Name
+	if volume == "" {
+		return errors.New("tools/dev/compose.yaml sem o volume postgres-data")
+	}
+	if _, err := cli.Output(ctx, "compose", "-f", file, "rm", "--stop", "--force", "postgres"); err != nil {
+		return err
+	}
+	if _, err := cli.Output(ctx, "volume", "rm", volume); err != nil && !strings.Contains(strings.ToLower(err.Error()), "no such volume") {
+		return err
+	}
+	return nil
 }
 
 func (realOps) RemoveImages(ctx context.Context, images []string) error {
@@ -155,7 +183,7 @@ func (realOps) RemoveImages(ctx context.Context, images []string) error {
 	return err
 }
 
-func (realOps) RemoveAll(dir string) error { return os.RemoveAll(dir) }
+func (realOps) RemoveInstallDir(dir string) ([]string, error) { return install.RemoveInstallation(dir) }
 
 func (o realOps) RemoveBinary(exe string) error {
 	return selfupdate.Remover{FS: selfupdate.OSFS{}, GOOS: o.goos}.Remove(exe)
@@ -229,20 +257,38 @@ func runUninstall(ctx context.Context, w world, args []string, b Build) (int, er
 	}
 	o := r.opts
 	outln(w.stdout, text.T("cli.uninstall_title"))
+	wipe := false
 	if r.st == nil {
 		outln(w.stdout, "  "+text.T("cli.uninstall_none", "dir", o.Dir))
+		// The stack may still run from another folder: the binary that stops it stays unless
+		// the user says so.
+		if !ask(text.T("cli.uninstall_ask_binary_only", "path", w.exe)) {
+			outln(w.stdout, text.T("cli.uninstall_nothing"))
+			return exitOK, nil
+		}
 	} else {
 		outln(w.stdout, "  "+text.T("cli.status_header", "mode", text.T("mode."+modeKey(o.Mode)+"_name"), "project", o.Project, "dir", o.Dir))
+		// Only the checkout this installation used: never one found from here or ~/docmatch.
+		if o.Mode == state.ModeDev {
+			o.SourceDir = ""
+			if install.IsSource(r.st.SourceDir) {
+				o.SourceDir = r.st.SourceDir
+			}
+		}
 		switch {
 		case o.Mode == state.ModeDev && o.SourceDir == "":
 			outln(w.stdout, "  "+text.T("cli.uninstall_no_source"))
 		case o.Mode == state.ModeDev:
 			step(ops.StopDev(ctx, o.SourceDir), text.T("cli.uninstall_stopped"))
-			if ask(text.T("cli.uninstall_ask_dev_volumes", "dir", o.SourceDir)) {
-				step(ops.WipeDev(ctx, o.SourceDir), text.T("cli.uninstall_volumes_done"))
+			// The developer's everyday database (make dev uses it too): asked even with --yes.
+			question := text.T("cli.uninstall_ask_dev_volumes", "dir", o.SourceDir)
+			if c.y {
+				outln(w.stdout, "  "+text.T("cli.uninstall_dev_volumes_kept"))
+			} else if ask(question) {
+				step(ops.WipeDev(ctx, o.SourceDir), text.T("cli.uninstall_dev_volumes_done"))
 			}
 		default:
-			wipe := ask(text.T("cli.uninstall_ask_volumes"))
+			wipe = ask(text.T("cli.uninstall_ask_volumes"))
 			done := text.T("cli.uninstall_stopped")
 			if wipe {
 				done = text.T("cli.uninstall_volumes_done")
@@ -259,11 +305,23 @@ func runUninstall(ctx context.Context, w world, args []string, b Build) (int, er
 				step(ops.RemoveImages(ctx, images), text.T("cli.uninstall_images_done"))
 			}
 		}
+		dirQuestion := text.T("cli.uninstall_ask_dir", "dir", o.Dir)
+		if o.Mode == state.ModeTry && !wipe {
+			dirQuestion = text.T("cli.uninstall_ask_dir_keep", "dir", o.Dir)
+		}
 		switch {
 		case !removableDir(o.Dir, w.home, o):
 			outln(w.stdout, "  "+text.T("cli.uninstall_dir_kept_unsafe", "dir", o.Dir))
-		case ask(text.T("cli.uninstall_ask_dir", "dir", o.Dir)):
-			step(ops.RemoveAll(o.Dir), text.T("cli.uninstall_dir_done", "dir", o.Dir))
+		case ask(dirQuestion):
+			left, err := ops.RemoveInstallDir(o.Dir)
+			switch {
+			case err != nil:
+				step(err, "")
+			case len(left) > 0:
+				outln(w.stdout, "  "+text.T("cli.uninstall_dir_left", "dir", o.Dir, "names", strings.Join(left, ", ")))
+			default:
+				outln(w.stdout, "  "+text.T("cli.uninstall_dir_done", "dir", o.Dir))
+			}
 		}
 		if o.Mode == state.ModeDev && o.SourceDir != "" {
 			outln(w.stdout, "  "+text.T("cli.uninstall_source_kept", "dir", o.SourceDir))

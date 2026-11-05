@@ -223,16 +223,17 @@ func (e Env) detectGo(ctx context.Context, s Status, req Requirements) Status {
 }
 
 // GoToolchainFor is the GOTOOLCHAIN for `make setup` and `make local` when the user set none:
-// the go.mod toolchain ("go1.27.3+auto") when the local Go is older, "auto" otherwise. With plain
-// auto and an old local Go, `go install tool@version` builds each tool with that tool's own
-// minimum Go, and a golangci-lint built that way refuses the repository's code.
+// exactly the go.mod toolchain ("go1.27.3", what CI uses) when the local Go is older, "auto"
+// otherwise. With auto (even "go1.27.3+auto") and an old local Go, `go install tool@version`
+// builds each tool with the toolchain that tool's go.mod picks (go1.26 for some), and a
+// golangci-lint built that way refuses the repository's code.
 func GoToolchainFor(local, pinned string) string {
 	l := versionOf(strings.TrimPrefix(local, "go"))
 	p := versionOf(strings.TrimPrefix(pinned, "go"))
 	if l == "" || p == "" || docker.AtLeast(l, p) {
 		return "auto"
 	}
-	return "go" + p + "+auto"
+	return "go" + p
 }
 
 // forcesLocal reports a GOTOOLCHAIN that forbids downloading the go.mod toolchain.

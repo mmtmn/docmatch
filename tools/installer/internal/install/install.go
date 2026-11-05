@@ -17,6 +17,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -103,6 +104,42 @@ func CanClone(dir string) bool {
 		return true
 	}
 	return err == nil && len(entries) == 0
+}
+
+// OwnEntries are what the installer writes into an installation folder (src/ is Experimentar's
+// clone when it had no code to build from).
+var OwnEntries = []string{"compose.yaml", ".env", "state.json", "state.json.tmp", "logs", "src"}
+
+// RemoveInstallation deletes what the installer put in dir, then dir when nothing else is left.
+// Anything else (a --dir that pointed at a busy folder) stays and is returned; src/ then stays
+// too, since it may not be ours.
+func RemoveInstallation(dir string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	var left []string
+	for _, e := range entries {
+		if !slices.Contains(OwnEntries, e.Name()) {
+			left = append(left, e.Name())
+		}
+	}
+	for _, name := range OwnEntries {
+		p := filepath.Join(dir, name)
+		if name == "src" && len(left) > 0 {
+			if _, err := os.Stat(p); err == nil {
+				left = append(left, name)
+			}
+			continue
+		}
+		if err := os.RemoveAll(p); err != nil {
+			return left, err
+		}
+	}
+	if len(left) > 0 {
+		return left, nil
+	}
+	return nil, os.Remove(dir)
 }
 
 // URLs of a running installation.
@@ -198,6 +235,10 @@ type Installer struct {
 	DemoErr  error
 	Revision string
 
+	// prevSource is the checkout of the saved state, before these options replaced it (make
+	// setup is skipped only when it already ran for the same checkout).
+	prevSource string
+
 	mu sync.Mutex
 }
 
@@ -206,10 +247,11 @@ func New(opts Options, st *state.State) *Installer {
 	if st == nil {
 		st = &state.State{}
 	}
+	prev := st.SourceDir
 	st.Mode, st.Project, st.Ports = opts.Mode, opts.Project, opts.Ports.Clone()
 	st.LLMMode, st.LocalLLM = opts.LLMMode, opts.LocalLLM
 	st.Registry, st.Tag, st.SourceDir = opts.Registry, opts.Tag, opts.SourceDir
-	return &Installer{Opts: opts, State: st}
+	return &Installer{Opts: opts, State: st, prevSource: prev}
 }
 
 // ComposeFile and EnvFile are the installation's copies.
@@ -583,7 +625,7 @@ func (in *Installer) demo(ctx context.Context, r *flow.Reporter) (flow.Result, e
 func DevEnv(environ []string, goToolchain string) []string {
 	out := append([]string{}, environ...)
 	for _, kv := range environ {
-		if strings.HasPrefix(kv, "GOTOOLCHAIN=") {
+		if strings.HasPrefix(kv, "GOTOOLCHAIN=") && kv != "GOTOOLCHAIN=" {
 			return out
 		}
 	}
@@ -613,14 +655,23 @@ func (in *Installer) devClone(ctx context.Context, r *flow.Reporter) (flow.Resul
 	if in.Opts.RepoURL == "" {
 		return flow.Result{}, fmt.Errorf("%w: %s", ErrNoSource, text.T("steps.clone_no_repo"))
 	}
-	if entries, err := os.ReadDir(dest); err == nil && len(entries) > 0 {
+	if !CanClone(dest) {
 		return flow.Result{}, errors.New(text.T("steps.clone_not_empty", "dir", dest))
 	}
+	_, statErr := os.Stat(dest)
+	created := errors.Is(statErr, os.ErrNotExist)
 	r.Note(in.Opts.RepoURL + " -> " + dest)
 	cmd := gitCommand(ctx, "clone", "--progress", in.Opts.RepoURL, dest)
 	cmd.Env = append(cmd.Env, "GIT_TERMINAL_PROMPT=0")
 	if err := streamCmd(cmd, cloneProgress(r)); err != nil {
-		_ = os.RemoveAll(dest) // a half clone would block the next try
+		// A half clone would block the next try; only what this step created goes.
+		if created {
+			_ = os.RemoveAll(dest)
+		} else if entries, _ := os.ReadDir(dest); len(entries) > 0 {
+			for _, e := range entries {
+				_ = os.RemoveAll(filepath.Join(dest, e.Name()))
+			}
+		}
 		return flow.Result{}, fmt.Errorf("%s: %w. %s", in.Opts.RepoURL, err, text.T("steps.clone_hint"))
 	}
 	if !IsSource(dest) {
@@ -679,7 +730,7 @@ func Subsystems(source string) []string {
 // devSetup runs `make setup` (the git hooks and each subsystem's tools), one bar step per
 // subsystem. A resumed installation of the same checkout skips it.
 func (in *Installer) devSetup(ctx context.Context, r *flow.Reporter) (flow.Result, error) {
-	if in.State.Done(StepDevSetup) && in.State.SourceDir == in.Opts.SourceDir {
+	if in.State.Done(StepDevSetup) && in.prevSource == in.Opts.SourceDir {
 		return flow.Skip(text.T("steps.setup_done_before")), nil
 	}
 	subs := Subsystems(in.Opts.SourceDir)
@@ -687,7 +738,8 @@ func (in *Installer) devSetup(ctx context.Context, r *flow.Reporter) (flow.Resul
 	for i, s := range subs {
 		index[s] = i
 	}
-	root := filepath.Clean(in.Opts.SourceDir)
+	// make prints physical paths (macOS's /var is /private/var): compare them resolved.
+	root := realPath(in.Opts.SourceDir)
 	cmd := exec.CommandContext(ctx, "make", "setup") //nolint:gosec // fixed command
 	cmd.Dir = in.Opts.SourceDir
 	cmd.Env = in.devEnv(ctx)
@@ -697,7 +749,7 @@ func (in *Installer) devSetup(ctx context.Context, r *flow.Reporter) (flow.Resul
 		if m == nil {
 			return
 		}
-		rel, err := filepath.Rel(root, filepath.Clean(m[1]))
+		rel, err := filepath.Rel(root, realPath(m[1]))
 		if err != nil {
 			return
 		}
@@ -710,6 +762,14 @@ func (in *Installer) devSetup(ctx context.Context, r *flow.Reporter) (flow.Resul
 		return flow.Result{}, err
 	}
 	return flow.Done(text.T("steps.setup_done", "count", len(subs))), nil
+}
+
+// realPath resolves symlinks (the cleaned path when it cannot).
+func realPath(p string) string {
+	if r, err := filepath.EvalSymlinks(p); err == nil {
+		return r
+	}
+	return filepath.Clean(p)
 }
 
 // devLocal runs `make local` in the repository (Desenvolver mode).

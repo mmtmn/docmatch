@@ -116,6 +116,49 @@ func TestDevURLs(t *testing.T) {
 	}
 }
 
+func TestRemoveInstallation(t *testing.T) {
+	fill := func(dir string, names ...string) {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		for _, n := range names {
+			p := filepath.Join(dir, n)
+			if n == "logs" || n == "src" || n == "projeto" {
+				if err := os.MkdirAll(filepath.Join(p, "x"), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				continue
+			}
+			if err := os.WriteFile(p, []byte("x"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	ours := filepath.Join(t.TempDir(), "local")
+	fill(ours, "compose.yaml", ".env", "state.json", "logs", "src")
+	if left, err := RemoveInstallation(ours); err != nil || left != nil {
+		t.Fatalf("%v %v", left, err)
+	}
+	if _, err := os.Stat(ours); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("só com o que é nosso, a pasta sai")
+	}
+	// A --dir that pointed at a busy folder: only our files go; src/ may not be ours.
+	busy := t.TempDir()
+	fill(busy, "compose.yaml", ".env", "state.json", "logs", "src", "projeto", "notas.txt")
+	left, err := RemoveInstallation(busy)
+	if err != nil || strings.Join(left, ",") != "notas.txt,projeto,src" {
+		t.Fatalf("%v %v", left, err)
+	}
+	for _, n := range []string{"projeto", "notas.txt", "src"} {
+		if _, err := os.Stat(filepath.Join(busy, n)); err != nil {
+			t.Fatalf("%s devia ficar", n)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(busy, ".env")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("o .env é nosso")
+	}
+}
+
 func TestDevPorts(t *testing.T) {
 	dir := t.TempDir()
 	if DevPorts(dir).String() != ports.Defaults().String() {
@@ -177,10 +220,10 @@ func TestDevEnv(t *testing.T) {
 	if env[len(env)-1] != "GOTOOLCHAIN=auto" || len(env) != 3 {
 		t.Fatalf("%v", env)
 	}
-	if env = DevEnv(nil, "go1.27.3+auto"); env[0] != "GOTOOLCHAIN=go1.27.3+auto" {
+	if env = DevEnv(nil, "go1.27.3"); env[0] != "GOTOOLCHAIN=go1.27.3" {
 		t.Fatalf("%v", env)
 	}
-	env = DevEnv([]string{"GOTOOLCHAIN=local"}, "go1.27.3+auto")
+	env = DevEnv([]string{"GOTOOLCHAIN=local"}, "go1.27.3")
 	if len(env) != 1 || env[0] != "GOTOOLCHAIN=local" {
 		t.Fatalf("a escolha do usuário fica: %v", env)
 	}
@@ -259,13 +302,20 @@ func TestDevSetupProgress(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(src, "Makefile"), []byte("SUBSYSTEMS := services/api apps/web\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// make prints the physical path (pwd -P), as on macOS where /var is /private/var: the
+	// checkout is reached through a symlink here.
 	fakeMake(t, `echo "hooks ativados"
-echo "make[1]: Entering directory '$PWD/services/api'"
-echo "make[1]: Entering directory '$PWD/apps/web'"
+echo "make[1]: Entering directory '$(pwd -P)/services/api'"
+echo "make[1]: Entering directory '$(pwd -P)/apps/web'"
 test "$GOTOOLCHAIN" = auto || exit 3
 `)
+	t.Setenv("GOTOOLCHAIN", "") // empty counts as unset
+	link := filepath.Join(t.TempDir(), "atalho")
+	if err := os.Symlink(src, link); err != nil {
+		t.Skip("sem symlink:", err)
+	}
 	dir := t.TempDir()
-	in := New(Options{Mode: state.ModeDev, Dir: dir, SourceDir: src}, nil)
+	in := New(Options{Mode: state.ModeDev, Dir: dir, SourceDir: link}, nil)
 	var texts []string
 	r := flow.NewReporter(StepDevSetup, func(e flow.Event) {
 		for _, b := range e.Bars {
@@ -279,9 +329,15 @@ test "$GOTOOLCHAIN" = auto || exit 3
 	if strings.Join(texts, "|") != "1/2 services/api|2/2 apps/web" {
 		t.Fatalf("%q", texts)
 	}
+	// Resuming the same checkout skips it; another checkout runs it again.
 	in.State.Mark(StepDevSetup)
-	if res, _ := in.devSetup(context.Background(), r); res.Outcome != flow.Skipped {
+	again := New(Options{Mode: state.ModeDev, Dir: dir, SourceDir: link}, in.State)
+	if res, _ := again.devSetup(context.Background(), r); res.Outcome != flow.Skipped {
 		t.Fatal("make setup já rodou nesta pasta: retomar pula")
+	}
+	other := New(Options{Mode: state.ModeDev, Dir: dir, SourceDir: src}, again.State)
+	if res, _ := other.devSetup(context.Background(), r); res.Outcome != flow.OK {
+		t.Fatal("outro checkout roda o make setup")
 	}
 }
 
@@ -320,6 +376,18 @@ func TestDevClone(t *testing.T) {
 	in = New(Options{Mode: state.ModeDev, Dir: dir, CloneDir: dest, RepoURL: origin}, nil)
 	if _, err := in.devClone(context.Background(), flow.NewReporter(StepDevClone, func(flow.Event) {})); err == nil || !strings.Contains(err.Error(), "não está vazia") {
 		t.Fatalf("pasta ocupada: %v", err)
+	}
+	// A file where the clone would go stays untouched.
+	file := filepath.Join(t.TempDir(), "docmatch")
+	if err := os.WriteFile(file, []byte("meu"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	in = New(Options{Mode: state.ModeDev, Dir: dir, CloneDir: file, RepoURL: origin}, nil)
+	if _, err := in.devClone(context.Background(), flow.NewReporter(StepDevClone, func(flow.Event) {})); err == nil {
+		t.Fatal("um arquivo não vira clone")
+	}
+	if data, err := os.ReadFile(file); err != nil || string(data) != "meu" { //nolint:gosec // test file
+		t.Fatalf("o arquivo fica: %q %v", data, err)
 	}
 	in = New(Options{Mode: state.ModeDev, Dir: dir, CloneDir: filepath.Join(t.TempDir(), "x"), RepoURL: filepath.Join(t.TempDir(), "nao-existe")}, nil)
 	_, err = in.devClone(context.Background(), flow.NewReporter(StepDevClone, func(flow.Event) {}))
