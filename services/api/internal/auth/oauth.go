@@ -329,7 +329,9 @@ type appleNativeRequest struct {
 
 // appleNative verifies the identity token obtained by the iOS app. There is
 // no browser-bound state here: the token comes straight from Apple to the
-// app, and the audience check binds it to our client id.
+// app, and the audience check binds it to our client ids (the Services ID or
+// one of the app's bundle ids, AppleAudiences). Apple keeps the same subject
+// for every client id of one team, so the phone lands on the site's account.
 func (s *Service) appleNative(w http.ResponseWriter, r *http.Request, p *Provider) {
 	if !s.allow(w, r, limitKey(s.d.ClientIP(r), "")) {
 		return
@@ -343,7 +345,7 @@ func (s *Service) appleNative(w http.ResponseWriter, r *http.Request, p *Provide
 		apierr.Validation(w, r, apierr.Field{Path: "/identity_token", Code: apierr.FieldRequired})
 		return
 	}
-	id, err := p.Verify(r.Context(), req.IdentityToken, "", s.d.Now())
+	id, err := s.verifyAudiences(r.Context(), p, req.IdentityToken, s.d.AppleAudiences)
 	if err != nil {
 		apierr.Write(w, r, codeFor(err))
 		return

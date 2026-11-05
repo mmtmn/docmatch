@@ -155,7 +155,7 @@ func authStack(cfg *config.Config, log *slog.Logger, pool *pgxpool.Pool) (*auth.
 	authSvc, err := auth.New(auth.Deps{
 		Store: store, Sessions: sessions, Keys: keys, Limits: limits.Must(), Audit: auditSvc,
 		Google: google, Apple: apple, EmailEnabled: emailErr == nil,
-		GoogleAudiences: cfg.Auth.GoogleNativeClientIDs, DevLogin: cfg.Auth.DevLogin, DevGrant: devGrant,
+		GoogleAudiences: cfg.Auth.GoogleNativeClientIDs, AppleAudiences: cfg.Auth.AppleNativeClientIDs, DevLogin: cfg.Auth.DevLogin, DevGrant: devGrant,
 		PublicBaseURL: cfg.PublicBaseURL, APIBaseURL: cfg.APIBaseURL, Secure: secure,
 		Limiter: limiter, Lockout: ratelimit.NewLockout(policies.Lockout, nil), Policy: policies.Auth,
 		ClientIP: edge.ClientIP, Country: edge.Country, Logger: log,
