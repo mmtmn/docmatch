@@ -58,9 +58,9 @@ public final class NewRunModel {
         error = problems.isEmpty ? nil : problems.joined(separator: "\n")
     }
 
-    public func remove(_ name: String) {
+    public func remove(_ file: LocalFile) {
         guard !busy else { return }
-        files.removeAll { $0.name == name }
+        files.removeAll { $0.id == file.id }
     }
 
     /// The rules text, cut at the limit the API enforces (code points after NFC).

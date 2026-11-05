@@ -26,7 +26,7 @@ struct NewRunView: View {
 
             if !model.files.isEmpty {
                 Section(Labels.files(texts, count: model.files.count, bytes: model.totalBytes)) {
-                    ForEach(model.files, id: \.name) { file in
+                    ForEach(model.files) { file in
                         HStack {
                             VStack(alignment: .leading) {
                                 Text(file.name)
@@ -37,7 +37,7 @@ struct NewRunView: View {
                             .accessibilityElement(children: .combine)
                             Spacer()
                             Button {
-                                model.remove(file.name)
+                                model.remove(file)
                             } label: {
                                 Image(systemName: "xmark.circle.fill")
                             }
@@ -92,14 +92,17 @@ struct NewRunView: View {
         .navigationTitle(texts.t("common.app_title"))
         .fileImporter(isPresented: $picking, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             guard case .success(let urls) = result else { return }
-            Task { await model.add(urls.map(Self.picked)) }
+            Task { await model.add(urls.map { Self.picked($0) }) }
         }
         .alert(texts.t("mobile.confirm_title"), isPresented: confirming) {
             Button(texts.t("form.submit")) { Task { await model.confirm() } }
             Button(texts.t("common.cancel"), role: .cancel) { model.cancel() }
         } message: {
             if case .confirm(let prepared) = model.phase {
-                Text(texts.t("app.confirm_run", ["expected": prepared.quote.expectedCredits, "cap": prepared.quote.capCredits]))
+                // After a failed start the same estimate is offered again, with the reason.
+                Text(
+                    texts.t("app.confirm_run", ["expected": prepared.quote.expectedCredits, "cap": prepared.quote.capCredits])
+                        + (model.error.map { "\n\n" + $0 } ?? ""))
             }
         }
         .onChange(of: model.started) { _, runId in

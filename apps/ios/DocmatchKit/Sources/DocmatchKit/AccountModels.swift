@@ -24,6 +24,7 @@ public final class HistoryModel {
             let page = try await dm.api.runs()
             state = .ready(page.items, next: page.nextCursor, notice: nil)
         } catch {
+            if error is CancellationError || Task.isCancelled { return }
             let message = (error as? ApiError)?.message ?? dm.texts.t("errors.unknown")
             if case .ready(let runs, let next, _) = state {
                 state = .ready(runs, next: next, notice: message)
@@ -72,6 +73,7 @@ public final class AccountModel {
             }
             state = .ready(me, try await dm.api.devices(), notice: notice)
         } catch {
+            if error is CancellationError || Task.isCancelled { return }
             let message = (error as? ApiError)?.message ?? dm.texts.t("errors.unknown")
             if case .ready(let me, let devices, _) = state {
                 state = .ready(me, devices, notice: message)
@@ -99,6 +101,18 @@ public final class AccountModel {
     public func signOut() async {
         try? await dm.api.logout()
         await onSignedOut(dm.texts.t("account.signed_out"))
+    }
+
+    /// Deletes the account (after the screen's confirmation) and returns to the sign-in.
+    public func deleteAccount() async {
+        do {
+            let when = try await dm.api.deleteAccount()
+            await onSignedOut(dm.texts.t("mobile.delete_done", ["date": Format.date(when)]))
+        } catch {
+            if case .ready(let me, let devices, _) = state {
+                state = .ready(me, devices, notice: (error as? ApiError)?.message ?? dm.texts.t("errors.unknown"))
+            }
+        }
     }
 }
 

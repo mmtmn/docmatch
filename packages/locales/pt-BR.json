@@ -587,6 +587,11 @@
     "google_no_account": "Nenhuma conta Google neste aparelho. Adicione uma nas configurações ou entre com o código por e-mail.",
     "approve_title": "Aprovação necessária",
     "approve_text": "A conciliação parou porque precisa de mais tokens: até {cap} tokens docmatch (estimativa de {expected}).",
-    "approve": "Aprovar e continuar"
+    "approve": "Aprovar e continuar",
+    "delete_account": "Excluir conta",
+    "delete_title": "Excluir a conta?",
+    "delete_text": "A conta e todos os dados dela (conciliações, achados, regras e créditos) são excluídos em 7 dias, em todos os aparelhos. Até lá ninguém entra nela, e o suporte ainda pode cancelar o pedido.",
+    "delete_confirm": "Excluir a conta",
+    "delete_done": "Exclusão agendada para {date}. Você saiu em todos os aparelhos."
   }
 }

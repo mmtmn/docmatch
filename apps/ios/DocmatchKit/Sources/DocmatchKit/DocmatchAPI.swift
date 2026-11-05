@@ -7,7 +7,7 @@ import FoundationNetworking
 
 /// A file picked on the phone. Only its name, size and kind are kept; the bytes are read while
 /// uploading, one file at a time, and media is streamed from disk.
-public struct LocalFile: Sendable, Equatable {
+public struct LocalFile: Sendable, Equatable, Identifiable {
     public enum Source: Sendable, Equatable {
         case data(Data)
         /// A file the picker returned; `scoped` asks for security-scoped access around each read.
@@ -19,6 +19,9 @@ public struct LocalFile: Sendable, Equatable {
     public let size: Int64
     public let kind: FileKind
     public let source: Source
+
+    /// Name and size: the precheck accepts two files with one name when their sizes differ.
+    public var id: String { "\(name)#\(size)" }
 
     public init(name: String, mime: String, size: Int64, kind: FileKind, source: Source) {
         self.name = name
@@ -121,6 +124,18 @@ public final class DocmatchAPI: Sendable {
 
     public func devices() async throws -> [Device] {
         try await http.call("GET", "/v1/me/sessions", as: DeviceList.self).items
+    }
+
+    /// Asks for the account's deletion (LGPD): everything goes on the returned date, every device
+    /// is signed out now, and this one forgets its cookies.
+    public func deleteAccount() async throws -> String {
+        struct Scheduled: Decodable, Sendable {
+            let scheduledFor: String
+            private enum CodingKeys: String, CodingKey { case scheduledFor = "scheduled_for" }
+        }
+        let when = try await http.call("DELETE", "/v1/me", as: Scheduled.self).scheduledFor
+        http.cookies.clear()
+        return when
     }
 
     /// Signs one device out; signing out this one also clears the local cookies.

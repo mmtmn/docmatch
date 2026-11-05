@@ -5,12 +5,14 @@ import SwiftUI
 /// which can be signed out from here; reloaded every time the tab is shown.
 struct AccountView: View {
     let model: AccountModel
+    @State private var confirmingDeletion = false
     @Environment(\.texts) private var texts
 
     init(model: AccountModel) { self.model = model }
 
     var body: some View {
-        Group {
+        // The ZStack owns the task (on a Group it would run for each state that appears).
+        ZStack {
             switch model.state {
             case .loading:
                 LoadingView(label: texts.t("account.loading"))
@@ -57,12 +59,20 @@ struct AccountView: View {
                         Text(texts.t("account.devices_text"))
                     }
                     Section {
-                        Button(texts.t("account.sign_out"), role: .destructive) { Task { await model.signOut() } }
+                        Button(texts.t("account.sign_out")) { Task { await model.signOut() } }
+                        // The stores' rule: an app that creates accounts lets them be deleted in it.
+                        Button(texts.t("mobile.delete_account"), role: .destructive) { confirmingDeletion = true }
                     }
                 }
             }
         }
         .navigationTitle(texts.t("account.title"))
         .task { await model.refresh() }
+        .alert(texts.t("mobile.delete_title"), isPresented: $confirmingDeletion) {
+            Button(texts.t("mobile.delete_confirm"), role: .destructive) { Task { await model.deleteAccount() } }
+            Button(texts.t("common.cancel"), role: .cancel) {}
+        } message: {
+            Text(texts.t("mobile.delete_text"))
+        }
     }
 }

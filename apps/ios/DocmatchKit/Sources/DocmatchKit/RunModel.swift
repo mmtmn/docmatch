@@ -32,7 +32,6 @@ public final class RunModel {
     /// leaving, so a run left open does not poll in the background.
     public func follow() async {
         if case .done = state { return }
-        if case .running = state {} else { state = .loading }
         do {
             let run = try await dm.reconciler.follow(runId) { step in
                 Task { @MainActor [weak self] in self?.state = .running(step) }
@@ -46,9 +45,8 @@ public final class RunModel {
             default:
                 state = .failed(dm.texts.t("results.live_failed", ["message": run.error?.message ?? dm.texts.t("errors.unknown")]))
             }
-        } catch is CancellationError {
-            return
         } catch {
+            if error is CancellationError || Task.isCancelled { return }
             state = .failed((error as? ApiError)?.message ?? dm.texts.t("errors.unknown"))
         }
     }

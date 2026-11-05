@@ -46,10 +46,13 @@ release: ## no Mac: arquivo de release para a origem do ambiente (outputs do Ter
 	@url="$${DOCMATCH_API_BASE_URL:-$$(terraform -chdir=$(ROOT)/infra/terraform/envs/$(ENV) output -raw site_url)}"; \
 	  [[ "$$url" == https://* ]] || { echo "sem origem HTTPS da API: aplique o ambiente $(ENV) ou defina DOCMATCH_API_BASE_URL" >&2; exit 1; }; \
 	  [[ -n "$${APPLE_TEAM_ID:-}" ]] || { echo "APPLE_TEAM_ID vazio: é o time que assina o app" >&2; exit 1; }; \
+	  auth=(); if [[ -n "$${APP_STORE_CONNECT_KEY_PATH:-}" ]]; then \
+	    auth=(-authenticationKeyPath "$$APP_STORE_CONNECT_KEY_PATH" -authenticationKeyID "$$APP_STORE_CONNECT_KEY_ID" \
+	      -authenticationKeyIssuerID "$$APP_STORE_CONNECT_ISSUER_ID"); fi; \
 	  xcodegen generate --quiet && \
 	  xcodebuild -project Docmatch.xcodeproj -scheme Docmatch -configuration Release -destination 'generic/platform=iOS' \
-	    -archivePath build/Docmatch.xcarchive DEVELOPMENT_TEAM="$$APPLE_TEAM_ID" DOCMATCH_API_BASE_URL="$$url" \
-	    DOCMATCH_GOOGLE_IOS_CLIENT_ID="$${DOCMATCH_GOOGLE_IOS_CLIENT_ID:-}" archive
+	    -archivePath build/Docmatch.xcarchive -allowProvisioningUpdates "$${auth[@]}" DEVELOPMENT_TEAM="$$APPLE_TEAM_ID" \
+	    DOCMATCH_API_BASE_URL="$$url" DOCMATCH_GOOGLE_IOS_CLIENT_ID="$${DOCMATCH_GOOGLE_IOS_CLIENT_ID:-}" archive
 	@echo "arquivo em build/Docmatch.xcarchive (envio: Xcode Organizer ou xcodebuild -exportArchive)"
 
 clean: ## apaga o projeto gerado e os builds

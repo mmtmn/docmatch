@@ -212,4 +212,34 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(run.state, .running(nil))
         XCTAssertEqual(run.attempt, 1, "a tela volta a acompanhar")
     }
+
+    @MainActor
+    func testTwoFilesWithOneNameStayApartAndGoOneByOne() async throws {
+        let dm = try newClient(FakeServer())
+        let newRun = NewRunModel(dm: dm)
+        let a = Data("a;b\n1;2\n".utf8)
+        let b = Data("a;b\n1;2\n3;4\n".utf8)
+        await newRun.add([
+            PickedFile(name: "extrato.csv", size: Int64(a.count), source: .data(a)) { a },
+            PickedFile(name: "extrato.csv", size: Int64(b.count), source: .data(b)) { b },
+        ])
+        XCTAssertEqual(newRun.files.count, 2)
+        XCTAssertEqual(Set(newRun.files.map(\.id)).count, 2, "nome e tamanho identificam o arquivo")
+        newRun.remove(newRun.files[0])
+        XCTAssertEqual(newRun.files.map(\.size), [Int64(b.count)])
+    }
+
+    @MainActor
+    func testDeletingTheAccountReturnsToSignInWithTheDate() async throws {
+        let server = FakeServer()
+        let dm = try newClient(server)
+        server.enqueue(200, sessionJSON, setCookie: [sessionCookie(), refreshCookie(), deviceCookie()])
+        try await dm.api.devLogin()
+        let signedOut = Locked<[String?]>([])
+        let account = AccountModel(dm: dm) { notice in signedOut.mutate { $0.append(notice) } }
+        server.enqueue(202, #"{"scheduled_for":"2026-11-12T10:00:00Z"}"#)
+        await account.deleteAccount()
+        XCTAssertEqual(signedOut.value, [try realTexts().t("mobile.delete_done", ["date": "12/11/2026"])])
+        XCTAssertFalse(dm.cookies.hasSession())
+    }
 }

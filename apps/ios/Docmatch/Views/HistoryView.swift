@@ -13,7 +13,8 @@ struct HistoryView: View {
     }
 
     var body: some View {
-        Group {
+        // The ZStack owns the task (on a Group it would run for each state that appears).
+        ZStack {
             switch model.state {
             case .loading:
                 LoadingView(label: texts.t("mobile.loading"))

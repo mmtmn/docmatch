@@ -46,7 +46,9 @@ public final class SessionModel {
 
     public func refresh() async {
         state = .loading
-        state = await load()
+        let next = await load()
+        if Task.isCancelled { return }  // the screen went away; its replacement loads again
+        state = next
     }
 
     /// After a sign-out (here or from another device): back to the sign-in, with a notice.

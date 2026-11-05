@@ -9,7 +9,9 @@ struct RootView: View {
     init(session: SessionModel) { self.session = session }
 
     var body: some View {
-        Group {
+        // The ZStack owns the task: on a Group (or on the switch itself) it would run again for
+        // every case that appears, and refresh() changes the case.
+        ZStack {
             switch session.state {
             case .loading:
                 LoadingView(label: texts.t("mobile.loading"))

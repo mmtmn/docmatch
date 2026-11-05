@@ -49,6 +49,11 @@ site entra sozinho pelo login local (`DM_DEV_LOGIN`, que a API recusa fora de `D
 conta local recebe créditos de desenvolvimento uma vez por dia. Para o ambiente completo de
 desenvolvimento (MinIO, stripe-mock, modelo local), `make dev`.
 
+Os apps usam a mesma API local, também sem chave. `make e2e-local-android` roda o app Android num
+emulador contra o `make local`: login local, gêmeo da Vantara e a mesma conta vista de um segundo
+aparelho. No Mac, `make -C apps/ios app` compila o app iOS para o simulador. Ver
+[apps/android](apps/android/README.md) e [apps/ios](apps/ios/README.md).
+
 Com `DM_LLM_MODE=local` o harness usa qualquer endpoint compatível com a API da OpenAI (Ollama, llama.cpp, vLLM). Com `openrouter` usa a sua chave da OpenRouter. Com `off` roda só a parte determinística.
 
 ## Mapa do repositório

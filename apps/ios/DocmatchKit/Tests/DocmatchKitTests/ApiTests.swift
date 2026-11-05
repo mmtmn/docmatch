@@ -209,6 +209,19 @@ final class ApiTests: XCTestCase {
         XCTAssertEqual(first, header(server.take(), "Idempotency-Key"), "um orçamento aceito vira uma execução só")
     }
 
+    func testDeletingTheAccountSchedulesItAndSignsThisDeviceOut() async throws {
+        let server = FakeServer()
+        let dm = try newClient(server)
+        try await signedIn(server, dm)
+        server.enqueue(202, #"{"scheduled_for":"2026-11-12T10:00:00Z"}"#, setCookie: ["dm_session=; Path=/; Max-Age=0", "dm_refresh=; Path=/v1/auth/refresh; Max-Age=0"])
+        let when = try await dm.api.deleteAccount()
+        XCTAssertEqual(when, "2026-11-12T10:00:00Z")
+        let req = server.take()
+        XCTAssertEqual(req.httpMethod, "DELETE")
+        XCTAssertEqual(req.url?.path, "/v1/me")
+        XCTAssertFalse(dm.cookies.hasSession())
+    }
+
     func testDebugBuildsReachALoopbackUploadURLThroughTheAPIHost() throws {
         let server = FakeServer()
         let local = "http://localhost:8080/v1/uploads/local/upl_1?sig=abc"

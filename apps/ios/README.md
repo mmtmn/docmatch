@@ -8,7 +8,7 @@ app Android:
 - acompanha a conciliação e mostra os achados com as evidências;
 - registra decisões (aceitar, rejeitar, editar com observação);
 - exporta XLSX/CSV pela folha de compartilhar;
-- mostra a conta com todos os aparelhos.
+- mostra a conta com todos os aparelhos, e exclui a conta (`DELETE /v1/me`, a regra das lojas).
 
 O app diz o que o site diz:
 
@@ -84,6 +84,15 @@ Tudo por build setting (variável do `xcodebuild` ou do `make`), nada no código
 
 Para o Sign in with Apple, ative a capability no App ID `br.com.docmatch` (e no `.debug`, para
 testar), no mesmo time do Services ID do site, e ponha os bundle ids em `APPLE_NATIVE_CLIENT_IDS`.
+
+Antes de enviar à App Store, falta uma peça no servidor: quando uma conta criada com a Apple é
+excluída, a Apple pede que os tokens sejam revogados (`/auth/revoke`). Para isso a API precisa
+trocar o `authorization_code` do login nativo por um refresh token e guardá-lo cifrado. Hoje ela
+verifica o código, mas não o troca.
+
+O `make release` usa `-allowProvisioningUpdates`. Numa máquina de CI, passe também a chave da App
+Store Connect: `APP_STORE_CONNECT_KEY_PATH`, `APP_STORE_CONNECT_KEY_ID` e
+`APP_STORE_CONNECT_ISSUER_ID`.
 
 ## Segurança
 

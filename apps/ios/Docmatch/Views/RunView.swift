@@ -14,7 +14,8 @@ struct RunView: View {
     }
 
     var body: some View {
-        content
+        // The ZStack owns the polling task, so a change of state never restarts it.
+        ZStack { content }
             .navigationTitle(texts.t("mobile.run_title"))
             .navigationBarTitleDisplayMode(.inline)
             // Polls only while this screen is shown (and again on retry or after an approval).
