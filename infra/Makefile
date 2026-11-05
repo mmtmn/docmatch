@@ -104,11 +104,15 @@ lint-shell: ## shellcheck nos scripts (instalado pelo setup via shellcheck-py; n
 # ---------------------------------------------------------------------------------- validate
 validate: validate-terraform validate-packer ## terraform validate em cada env e módulo + packer validate
 
-validate-terraform: ## terraform init -backend=false && terraform validate em cada raiz
+# Each root validates in its own data dir under the cache: a root already initialized for real
+# (envs/prod, with the S3 backend) must not need AWS credentials just to be validated.
+validate-terraform: ## terraform init -backend=false && terraform validate em cada raiz, sem credenciais
 	@mkdir -p "$(TF_PLUGIN_CACHE_DIR)"
 	@status=0
 	for d in $(TF_ROOTS); do
-	  printf '%-60s' "$${d#$(REPO_ROOT)/}"
+	  rel="$${d#$(REPO_ROOT)/}"
+	  printf '%-60s' "$$rel"
+	  export TF_DATA_DIR="$(CACHE_DIR)/terraform-validate/$${rel//\//_}"
 	  if (cd "$$d" && terraform init -backend=false -input=false -no-color >/dev/null 2>"$$d/.init.err" && terraform validate -no-color >/dev/null 2>"$$d/.validate.err"); then
 	    echo "ok"; rm -f "$$d/.init.err" "$$d/.validate.err"
 	  else

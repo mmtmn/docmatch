@@ -40,3 +40,5 @@ literal:https://caddyserver\.com/api/download
 literal:169\.254\.169\.253|169\.254\.169\.123
 # Domínio reservado .invalid (RFC 2606): nunca resolve; usado como URI fictícia de clientes gRPC em socket Unix.
 literal:https?://[a-z0-9.-]+\.invalid\b
+literal:https?://schemas\.android\.com/(apk/res/android|apk/res-auto|tools)\b
+literal:https?://www\.apple\.com/DTDs/PropertyList-1\.0\.dtd

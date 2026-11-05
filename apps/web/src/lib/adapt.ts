@@ -26,9 +26,10 @@ function matchType(f: FindingView): MatchType {
   return 'amount';
 }
 
+/** finding.json `confidence_label`: Confirmado, Provável or Precisa de você. */
 function confidence(label: string): Confidence {
-  if (label === 'confirmed') return 'high';
-  if (label === 'probable') return 'medium';
+  if (label === 'Confirmado') return 'high';
+  if (label === 'Provável') return 'medium';
   return 'low';
 }
 

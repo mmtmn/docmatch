@@ -6,7 +6,7 @@ SHELL := /usr/bin/env bash
 SUBSYSTEMS := packages/contracts services/api services/harness apps/web apps/admin infra \
               sdks/python sdks/typescript sdks/go sdks/rust
 
-.PHONY: help setup hooks dev ci ci-full lint test e2e clean local local-down e2e-local
+.PHONY: help setup hooks dev ci ci-full lint test e2e clean local local-down e2e-local e2e-local-android
 
 # Binário do harness usado pelo e2e (mesmo target dir do Makefile do harness).
 HARNESS_TARGET ?= $(or $(CARGO_TARGET_DIR),$(HOME)/.cache/docmatch/cargo-target)
@@ -34,6 +34,9 @@ local-down: ## para o que o make local subiu
 e2e-local: ## make local + Playwright no fluxo real (envio, estimativa, execução, resultados, conta)
 	tools/dev/local.sh up
 	cd apps/web && pnpm exec playwright test -c playwright.local.config.ts
+
+e2e-local-android: ## make local + o app Android num emulador (login local, gêmeo da Vantara, conta em dois aparelhos)
+	$(MAKE) -C apps/android e2e-local
 
 ci: ## portão completo antes de push (< 6 min)
 	@tools/ci/run.sh ci

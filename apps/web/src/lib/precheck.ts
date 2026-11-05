@@ -114,6 +114,60 @@ export const ACCEPT_ATTRIBUTE = [
   'video/*',
 ].join(',');
 
+const AUDIO_MIME: Readonly<Record<string, string>> = {
+  mp3: 'audio/mpeg',
+  wav: 'audio/wav',
+  m4a: 'audio/mp4',
+  aac: 'audio/aac',
+  flac: 'audio/flac',
+  ogg: 'audio/ogg',
+  oga: 'audio/ogg',
+  opus: 'audio/opus',
+  weba: 'audio/webm',
+};
+
+const VIDEO_MIME: Readonly<Record<string, string>> = {
+  mp4: 'video/mp4',
+  m4v: 'video/mp4',
+  mov: 'video/quicktime',
+  webm: 'video/webm',
+  mkv: 'video/x-matroska',
+  avi: 'video/x-msvideo',
+};
+
+/**
+ * The MIME sent with the upload: one the API's scanner accepts for the kind, never the browser's
+ * guess (an .ofx or .ret has none). Images keep the browser's type. testdata/precheck/cases.json
+ * holds the same table for the apps.
+ */
+export function uploadMime(kind: FileKind, name: string, browserType = ''): string {
+  const ext = extensionOf(name);
+  switch (kind) {
+    case 'csv':
+      return ext === 'tsv' ? 'text/tab-separated-values' : 'text/csv';
+    case 'txt':
+      return 'text/plain';
+    case 'xlsx':
+      return ext === 'xls'
+        ? 'application/vnd.ms-excel'
+        : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    case 'pdf':
+      return 'application/pdf';
+    case 'zip':
+      return 'application/zip';
+    case 'eml':
+      return 'message/rfc822';
+    case 'ofx':
+      return 'application/x-ofx';
+    case 'audio':
+      return (ext && AUDIO_MIME[ext]) ?? 'audio/mpeg';
+    case 'video':
+      return (ext && VIDEO_MIME[ext]) ?? 'video/mp4';
+    case 'image':
+      return browserType || 'application/octet-stream';
+  }
+}
+
 export function extensionOf(name: string): string | null {
   const match = /\.([A-Za-z0-9]{1,8})$/.exec(name.trim());
   return match ? match[1]!.toLowerCase() : null;

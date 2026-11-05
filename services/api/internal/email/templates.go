@@ -32,6 +32,9 @@ func LoginMessage(to string, d LoginData) Message {
 	if len(code) == 6 {
 		code = code[:3] + " " + code[3:]
 	}
+	if d.Link == "" {
+		return loginCodeOnly(to, code, d.Minutes)
+	}
 	text := fmt.Sprintf(`Olá,
 
 Seu código de acesso à docmatch é:
@@ -55,6 +58,29 @@ O código e o link valem por %d minutos e só funcionam uma vez. Se você não p
 <p style="color:#555">O código e o link valem por %d minutos e só funcionam uma vez. Se você não pediu este acesso, ignore este e-mail: ninguém entra na sua conta sem ele.</p>
 <p>— docmatch</p>
 </body></html>`, html.EscapeString(code), html.EscapeString(d.Link), d.Minutes)
+	return Message{To: to, Subject: "Seu código de acesso à docmatch: " + code, Text: text, HTML: htmlBody, Tag: TagLogin}
+}
+
+// loginCodeOnly is the login e-mail of a sign-in started in the app: the code
+// is typed there, so there is no link to open elsewhere.
+func loginCodeOnly(to, code string, minutes int) Message {
+	text := fmt.Sprintf(`Olá,
+
+Seu código de acesso à docmatch é:
+
+    %s
+
+Digite o código no app. Ele vale por %d minutos e só funciona uma vez. Se você não pediu este acesso, ignore este e-mail: ninguém entra na sua conta sem ele.
+
+— docmatch
+`, code, minutes)
+	htmlBody := fmt.Sprintf(`<!doctype html><html lang="pt-BR"><body style="font-family:system-ui,sans-serif;line-height:1.5;color:#111">
+<p>Olá,</p>
+<p>Seu código de acesso à docmatch é:</p>
+<p style="font-size:28px;letter-spacing:4px;font-weight:600">%s</p>
+<p style="color:#555">Digite o código no app. Ele vale por %d minutos e só funciona uma vez. Se você não pediu este acesso, ignore este e-mail: ninguém entra na sua conta sem ele.</p>
+<p>— docmatch</p>
+</body></html>`, html.EscapeString(code), minutes)
 	return Message{To: to, Subject: "Seu código de acesso à docmatch: " + code, Text: text, HTML: htmlBody, Tag: TagLogin}
 }
 

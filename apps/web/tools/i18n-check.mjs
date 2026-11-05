@@ -21,6 +21,8 @@ const CALL = /\b(t|tl|tf)\(\s*(['"`])([^'"`$]+)\2/g;
 // an entry here as soon as its screen lands.
 export const RESERVED_KEYS = [
   'auth.',
+  // Used by the Android and iOS apps (apps/android, apps/ios), not by the web.
+  'mobile.',
   'common.cancel',
   'common.confirm',
   'common.yes',
