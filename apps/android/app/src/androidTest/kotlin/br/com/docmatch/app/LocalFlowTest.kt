@@ -4,6 +4,7 @@ import android.app.Activity
 import android.app.Instrumentation
 import android.content.ClipData
 import android.content.Intent
+import android.os.SystemClock
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasAnyDescendant
@@ -45,6 +46,8 @@ import kotlin.test.assertTrue
  * same run and decision and ends this phone's session; the phone goes back to sign-in.
  *
  * Opt-in, since it needs the local stack: make -C apps/android e2e-local
+ * With -e docmatchMediaPauseMs <ms> (tools/media/android.sh) each visible step stays on screen
+ * that long, so a recording of the flow is readable; without it the test runs at full speed.
  */
 @RunWith(AndroidJUnit4::class)
 class LocalFlowTest {
@@ -53,6 +56,7 @@ class LocalFlowTest {
     private val app = ApplicationProvider.getApplicationContext<DocmatchApplication>()
     private val dm: Docmatch get() = app.docmatch
     private val fixtures = InstrumentationRegistry.getInstrumentation().context.assets
+    private val mediaPauseMs = InstrumentationRegistry.getArguments().getString("docmatchMediaPauseMs")?.toLongOrNull() ?: 0L
 
     @Before
     fun setUp() {
@@ -70,23 +74,33 @@ class LocalFlowTest {
     fun reconcilesTheTwinAndKeepsTheAccountConsistentAcrossDevices() {
         ActivityScenario.launch(MainActivity::class.java).use {
             // No key and no account: the local sign-in.
+            await(hasText(t("auth.dev_sign_in")))
+            hold()
             click(hasText(t("auth.dev_sign_in")))
             await(hasText(t("common.app_title")))
+            hold()
 
             // The twin's inputs through the system picker (answered with this app's own provider).
             intending(hasAction(Intent.ACTION_OPEN_DOCUMENT)).respondWith(Instrumentation.ActivityResult(Activity.RESULT_OK, pickedInputs()))
             click(hasText(t("mobile.pick_files")))
             INPUTS.forEach { await(hasText(it, substring = true)) }
+            hold()
             click(hasText(t("form.submit")))
 
             // The estimate, confirmed; the run, to the answer key.
-            click(hasText(t("form.submit")) and hasAnyAncestor(isDialog()), timeoutMs = RUN_TIMEOUT_MS)
+            val confirm = hasText(t("form.submit")) and hasAnyAncestor(isDialog())
+            await(confirm, timeoutMs = RUN_TIMEOUT_MS)
+            hold()
+            click(confirm)
             await(hasText(t("mobile.run_findings", mapOf("count" to expectedFindings()))), timeoutMs = RUN_TIMEOUT_MS)
+            hold()
 
             // A decision, recorded on the API.
             compose.onAllNodesWithTag(TAG_FINDING).onFirst().performClick()
+            hold()
             click(hasText(t("results.accept")))
             await(hasText(t("mobile.finding_decided")))
+            hold()
             click(hasText(t("common.close")))
 
             // This phone is the current device of the account.
@@ -95,6 +109,7 @@ class LocalFlowTest {
             click(hasText(t("mobile.tab_account")))
             await(hasTestTag(TAG_DEVICE) and hasAnyDescendant(hasText(phone.name)))
             await(hasText(t("account.this_device")))
+            hold()
             val runId = runBlocking { dm.api.runs() }.items.first().id
 
             // The same account from another device: the same run, the same decision, both devices.
@@ -115,6 +130,7 @@ class LocalFlowTest {
             // The phone notices on its next request and goes back to sign-in.
             click(hasText(t("mobile.tab_history")))
             await(hasText(t("auth.dev_sign_in")))
+            hold()
             assertTrue(!dm.cookies.hasSession(), "a sessão encerrada saiu do aparelho")
             runBlocking { browser.api.logout() }
         }
@@ -129,6 +145,13 @@ class LocalFlowTest {
     private fun click(matcher: SemanticsMatcher, timeoutMs: Long = UI_TIMEOUT_MS) {
         await(matcher, timeoutMs)
         compose.onAllNodes(matcher).onFirst().performClick()
+    }
+
+    /** Only with docmatchMediaPauseMs: the settled screen stays up that long for the recording. */
+    private fun hold() {
+        if (mediaPauseMs <= 0) return
+        compose.waitForIdle()
+        SystemClock.sleep(mediaPauseMs)
     }
 
     /** The twin's inputs copied to the cache and offered through the app's FileProvider. */

@@ -6,7 +6,7 @@ SHELL := /usr/bin/env bash
 SUBSYSTEMS := packages/contracts services/api services/harness apps/web apps/admin infra \
               sdks/python sdks/typescript sdks/go sdks/rust
 
-.PHONY: help setup hooks dev ci ci-full lint test e2e clean local local-down e2e-local e2e-local-android
+.PHONY: help setup hooks dev ci ci-full lint test e2e clean local local-down e2e-local e2e-local-android media
 
 # Binário do harness usado pelo e2e (mesmo target dir do Makefile do harness).
 HARNESS_TARGET ?= $(or $(CARGO_TARGET_DIR),$(HOME)/.cache/docmatch/cargo-target)
@@ -37,6 +37,9 @@ e2e-local: ## make local + Playwright no fluxo real (envio, estimativa, execuç�
 
 e2e-local-android: ## make local + o app Android num emulador (login local, gêmeo da Vantara, conta em dois aparelhos)
 	$(MAKE) -C apps/android e2e-local
+
+media: ## regrava os GIFs e o vídeo de docs/media (instalador, doctor, site, Android; ver docs/media/README.md)
+	tools/media/media.sh all
 
 ci: ## portão completo antes de push (< 6 min)
 	@tools/ci/run.sh ci

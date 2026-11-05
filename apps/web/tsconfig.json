@@ -14,10 +14,12 @@
     "test/**/*",
     "e2e/**/*",
     "e2e-local/**/*",
+    "e2e-media/**/*",
     "astro.config.ts",
     "vitest.config.ts",
     "playwright.config.ts",
-    "playwright.local.config.ts"
+    "playwright.local.config.ts",
+    "playwright.media.config.ts"
   ],
   "exclude": ["dist", "node_modules", "playwright-report", "test-results", ".vitest"]
 }
