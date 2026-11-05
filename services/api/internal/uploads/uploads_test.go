@@ -55,6 +55,7 @@ func TestSniffAndFamilies(t *testing.T) {
 	cases := map[string]Detected{
 		"%PDF-1.7 x":                        {"application/pdf", familyPDF},
 		"PK\x03\x04rest":                    {"application/zip", familyZip},
+		"7z\xBC\xAF\x27\x1C\x00\x04":        {"application/x-7z-compressed", family7z},
 		"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1x": {"application/vnd.ms-excel", familyOLE},
 		"\xFF\xD8\xFFxx":                    {"image/jpeg", familyImage},
 		"\x89PNG\r\n\x1a\nxx":               {"image/png", familyImage},
@@ -91,6 +92,72 @@ func TestSniffAndFamilies(t *testing.T) {
 	// Text cut mid-rune still counts as text.
 	if !isText([]byte("olá"[:3])) {
 		t.Fatal("utf-8 cortada")
+	}
+}
+
+// The MIME types the web, Android and iOS prechecks send (testdata/precheck/cases.json) for
+// text documents, Outlook messages, JSON, HTML and 7z archives.
+func TestDocumentFormatMimes(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		mime   string
+		family string
+	}{
+		{"application/vnd.openxmlformats-officedocument.wordprocessingml.document", familyZip},
+		{"application/vnd.oasis.opendocument.text", familyZip},
+		{"application/vnd.ms-outlook", familyOLE},
+		{"application/json", familyText},
+		{"text/html", familyText},
+		{"application/xml", familyText},
+		{"application/mbox", familyText},
+		{"application/x-7z-compressed", family7z},
+		{"APPLICATION/X-7Z-COMPRESSED", family7z},
+	}
+	for _, c := range cases {
+		if got := FamilyOf(c.mime); got != c.family {
+			t.Errorf("FamilyOf(%q) = %q, esperado %q", c.mime, got, c.family)
+		}
+		if !AcceptedMime(KindDocument, c.mime) {
+			t.Errorf("AcceptedMime(document, %q) = false", c.mime)
+		}
+		if AcceptedMime(KindMedia, c.mime) {
+			t.Errorf("AcceptedMime(media, %q) = true", c.mime)
+		}
+	}
+}
+
+// Without the dm-scanner binary, a 7z goes through only when declared as 7z.
+func TestBuiltinSevenZip(t *testing.T) {
+	t.Parallel()
+	head := []byte("7z\xBC\xAF\x27\x1C\x00\x04\x00\x00\x00\x00\x00\x00\x00\x00")
+	path := filepath.Join(t.TempDir(), "lote.7z")
+	if err := os.WriteFile(path, head, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(head)
+	s := &LocalScanner{Limits: limits.Must(), Logger: logx.Discard(), now: func() time.Time { return time.Date(2026, 11, 5, 12, 0, 0, 0, time.UTC) }}
+	cases := []struct {
+		declared string
+		verdict  string
+		mime     string
+	}{
+		{"application/x-7z-compressed", VerdictAccept, "application/x-7z-compressed"},
+		{"application/zip", VerdictReject, ""},
+		{"application/vnd.oasis.opendocument.text", VerdictReject, ""},
+		{"text/plain", VerdictReject, ""},
+	}
+	for _, c := range cases {
+		u := Upload{ID: uuid.New(), FileName: "lote.7z", DeclaredMime: c.declared, StorageKey: "quarantine/lote.7z", SizeBytes: int64(len(head))}
+		v, err := s.builtin(path, u, hex.EncodeToString(sum[:]), int64(len(head)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if v.Verdict != c.verdict || v.Mime != c.mime {
+			t.Errorf("declarado %s: veredito %s (%s), mime %q; esperado %s, %q", c.declared, v.Verdict, v.Reason, v.Mime, c.verdict, c.mime)
+		}
+		if c.verdict == VerdictReject && v.ReasonCode != ReasonType {
+			t.Errorf("declarado %s: motivo %q, esperado %q", c.declared, v.ReasonCode, ReasonType)
+		}
 	}
 }
 

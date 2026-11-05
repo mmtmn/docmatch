@@ -293,9 +293,9 @@ func SourceKind(u uploads.Upload) pb.SourceKind {
 	switch {
 	case strings.Contains(m, "csv"), strings.Contains(m, "tab-separated"), strings.Contains(m, "spreadsheet"), strings.Contains(m, "ms-excel"):
 		return pb.SourceKind_SOURCE_KIND_TABLE
-	case strings.Contains(m, "rfc822"), strings.Contains(m, "outlook"):
+	case strings.Contains(m, "rfc822"), strings.Contains(m, "outlook"), strings.Contains(m, "mbox"):
 		return pb.SourceKind_SOURCE_KIND_EMAIL
-	case strings.Contains(m, "zip"):
+	case strings.Contains(m, "zip"), strings.Contains(m, "7z-compressed"):
 		return pb.SourceKind_SOURCE_KIND_ARCHIVE
 	}
 	return pb.SourceKind_SOURCE_KIND_DOCUMENT

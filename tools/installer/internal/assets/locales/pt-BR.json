@@ -56,7 +56,7 @@
     "title": "Solte os arquivos aqui",
     "hint": "ou clique para escolher. Você também pode colar.",
     "hint_short": "Toque para escolher arquivos",
-    "accepted": "Extratos, planilhas, PDFs, notas fiscais (XML), ZIPs, e-mails, imagens, áudios e vídeos",
+    "accepted": "Extratos, planilhas, PDFs, documentos (DOCX, ODT), notas fiscais e dados (XML, JSON), páginas HTML, ZIPs e 7z, e-mails (EML, MSG), imagens, áudios e vídeos",
     "add_more": "Adicionar mais",
     "files_count_one": "1 arquivo",
     "files_count_many": "{count} arquivos",
@@ -78,7 +78,12 @@
     "kind_audio": "Áudio",
     "kind_video": "Vídeo",
     "kind_ofx": "Extrato OFX",
-    "kind_xml": "Nota fiscal (XML)"
+    "kind_xml": "XML (nota fiscal ou dados)",
+    "kind_doc": "Documento (DOCX, ODT)",
+    "kind_msg": "E-mail do Outlook (MSG)",
+    "kind_json": "Dados (JSON)",
+    "kind_html": "Página HTML",
+    "kind_7z": "Arquivo 7z"
   },
   "picker": {
     "label": "Regras salvas",
@@ -101,7 +106,7 @@
     "size_gb": "{n} GB"
   },
   "errors": {
-    "file_type_unknown": "{name}: formato não reconhecido. Aceitamos CSV, TXT, XLSX, ODS, PDF, XML de NF-e, ZIP, EML, MBOX, OFX, imagens, áudios e vídeos.",
+    "file_type_unknown": "{name}: formato não reconhecido. Aceitamos CSV, TXT, XLSX, ODS, DOCX, ODT, PDF, XML, JSON, HTML, ZIP, 7Z, EML, MBOX, MSG, OFX, imagens, áudios e vídeos.",
     "file_extension_mismatch": "{name}: o conteúdo não corresponde à extensão .{ext}.",
     "file_empty": "{name}: o arquivo está vazio.",
     "file_too_large": "{name}: maior que o limite de {max}.",

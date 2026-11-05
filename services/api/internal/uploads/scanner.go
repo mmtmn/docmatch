@@ -175,9 +175,12 @@ func (s *LocalScanner) builtin(path string, u Upload, sum string, size int64) (*
 			return reject(v, ReasonBomb, reason), nil
 		}
 	}
+	// 7z has no reader in the Go standard library and the API takes no
+	// dependency for one: the harness applies the archive limits of
+	// limits.yaml (entries, uncompressed size, ratio, depth) when it opens it.
 	v.Verdict = VerdictAccept
 	v.Mime = detected.Mime
-	if detected.Family == familyText || detected.Family == familyZip || detected.Family == familyOLE {
+	if detected.Family == familyText || detected.Family == familyZip || detected.Family == family7z || detected.Family == familyOLE {
 		// Text and container families keep the declared, more specific type.
 		v.Mime = u.DeclaredMime
 	}
@@ -216,6 +219,7 @@ const (
 	familyUnknown = ""
 	familyPDF     = "pdf"
 	familyZip     = "zip"
+	family7z      = "7z"
 	familyOLE     = "ole"
 	familyText    = "text"
 	familyImage   = "image"
@@ -237,6 +241,8 @@ var documentMimes = map[string]string{
 	"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":       familyZip,
 	"application/vnd.openxmlformats-officedocument.wordprocessingml.document": familyZip,
 	"application/vnd.oasis.opendocument.spreadsheet":                          familyZip,
+	"application/vnd.oasis.opendocument.text":                                 familyZip,
+	"application/x-7z-compressed":                                             family7z,
 	"application/vnd.ms-excel":                                                familyOLE,
 	"application/msword":                                                      familyOLE,
 	"text/csv":                                                                familyText,
@@ -274,7 +280,7 @@ func AcceptedMime(kind Kind, mime string) bool {
 	f := FamilyOf(mime)
 	switch kind {
 	case KindDocument:
-		return f == familyPDF || f == familyZip || f == familyOLE || f == familyText
+		return f == familyPDF || f == familyZip || f == family7z || f == familyOLE || f == familyText
 	case KindMedia:
 		return f == familyImage || f == familyAudio || f == familyVideo
 	}
@@ -289,6 +295,8 @@ func Sniff(head []byte) Detected {
 		return Detected{"application/pdf", familyPDF}
 	case has("PK\x03\x04"), has("PK\x05\x06"):
 		return Detected{"application/zip", familyZip}
+	case has("7z\xBC\xAF\x27\x1C"):
+		return Detected{"application/x-7z-compressed", family7z}
 	case has("\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1"):
 		return Detected{"application/vnd.ms-excel", familyOLE}
 	case has("\xFF\xD8\xFF"):

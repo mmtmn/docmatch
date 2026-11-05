@@ -64,7 +64,8 @@
     {
       "name": "documento.docx",
       "hex": "504b030414000600",
-      "reason": "errors.file_type_unknown"
+      "kind": "doc",
+      "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     },
     {
       "name": "pedido.eml",
@@ -171,6 +172,90 @@
       "name": "binario.xml",
       "hex": "0001020304",
       "reason": "errors.file_extension_mismatch"
+    },
+    {
+      "name": "relatorio.odt",
+      "hex": "504b03041400000800006d696d65747970656170706c69636174696f6e2f766e642e6f617369732e6f70656e646f63756d656e742e74657874",
+      "kind": "doc",
+      "mime": "application/vnd.oasis.opendocument.text"
+    },
+    {
+      "name": "pedido.msg",
+      "hex": "d0cf11e0a1b11ae1000000000000000000000000000000003e000300feff0900",
+      "kind": "msg",
+      "mime": "application/vnd.ms-outlook"
+    },
+    {
+      "name": "texto-renomeado.msg",
+      "hex": "46726f6d3a20636f6d70726173406578616d706c652e636f6d0d0a546f3a2066696e616e636569726f406578616d706c652e636f6d0d0a5375626a6563743a2050656469646f2034330d0a0d0a5365677565206f2070656469646f2e0d0a",
+      "reason": "errors.file_extension_mismatch"
+    },
+    {
+      "name": "titulos.json",
+      "hex": "5b7b22636c69656e7465223a2278227d5d0a",
+      "kind": "json",
+      "mime": "application/json"
+    },
+    {
+      "name": "lancamentos.jsonl",
+      "hex": "7b2264617461223a22323032362d30372d3031222c2276616c6f72223a2231302c3030227d0a7b2264617461223a22323032362d30372d3032222c2276616c6f72223a2232302c3030227d0a",
+      "kind": "json",
+      "mime": "application/json"
+    },
+    {
+      "name": "lancamentos.ndjson",
+      "hex": "7b2264617461223a22323032362d30372d3031222c2276616c6f72223a2231302c3030227d0a7b2264617461223a22323032362d30372d3032222c2276616c6f72223a2232302c3030227d0a",
+      "kind": "json",
+      "mime": "application/json"
+    },
+    {
+      "name": "texto.json",
+      "hex": "636f6e746575646f207175616c717565720a",
+      "reason": "errors.file_type_unknown"
+    },
+    {
+      "name": "binario.json",
+      "hex": "0001020304",
+      "reason": "errors.file_extension_mismatch"
+    },
+    {
+      "name": "extrato.html",
+      "hex": "3c21444f43545950452068746d6c3e3c68746d6c206c616e673d2270742d4252223e3c686561643e3c6d65746120636861727365743d227574662d38223e3c7469746c653e4578747261746f3c2f7469746c653e",
+      "kind": "html",
+      "mime": "text/html"
+    },
+    {
+      "name": "pagina.htm",
+      "hex": "3c68746d6c3e3c626f64793e3c7461626c653e3c74723e3c74643e5049583c2f74643e3c74643e31302c30303c2f74643e3c2f74723e",
+      "kind": "html",
+      "mime": "text/html"
+    },
+    {
+      "name": "lote.7z",
+      "hex": "377abcaf271c000400000000000000000000000000000000000000000000000000000000",
+      "kind": "7z",
+      "mime": "application/x-7z-compressed"
+    },
+    {
+      "name": "zip-renomeado.7z",
+      "hex": "504b030414000000",
+      "reason": "errors.file_type_unknown"
+    },
+    {
+      "name": "sete-renomeado.zip",
+      "hex": "377abcaf271c0004",
+      "reason": "errors.file_extension_mismatch"
+    },
+    {
+      "name": "lote-sete.bin",
+      "hex": "377abcaf271c0004",
+      "reason": "errors.file_type_unknown"
+    },
+    {
+      "name": "dados.xml",
+      "hex": "3c3f786d6c2076657273696f6e3d22312e30223f3e3c6c616e63616d656e746f733e",
+      "kind": "xml",
+      "mime": "application/xml"
     }
   ]
 }

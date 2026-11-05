@@ -146,19 +146,35 @@ export function FileKindIcon({ kind, ...props }: IconProps & { kind: FileKind })
           <path d="M9 12h6v6H9zM12 12v6M9 15h6" />
         </DocumentFrame>
       );
+    case 'doc':
+      return (
+        <DocumentFrame {...props}>
+          <path d="M9 11h6M9 13.5h6M9 16h6M9 18.5h4" />
+        </DocumentFrame>
+      );
     case 'pdf':
       return (
         <DocumentFrame {...props}>
           <path d="M9 17v-5h1.6a1.5 1.5 0 0 1 0 3H9M14 17v-5h1.4" />
         </DocumentFrame>
       );
+    case 'xml':
+    case 'json':
+    case 'html':
+      return (
+        <DocumentFrame {...props}>
+          <path d="M10.5 12l-2 2.5 2 2.5M13.5 12l2 2.5-2 2.5" />
+        </DocumentFrame>
+      );
     case 'zip':
+    case '7z':
       return (
         <DocumentFrame {...props}>
           <path d="M11 9h2M11 11h2M11 13h2M11 15h2M12 15v3" />
         </DocumentFrame>
       );
     case 'eml':
+    case 'msg':
       return (
         <Svg {...props}>
           <rect x="3" y="5" width="18" height="14" rx="2" />
