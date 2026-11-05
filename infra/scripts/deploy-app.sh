@@ -105,7 +105,14 @@ remote="$(cat <<EOF
 set -euo pipefail
 export AWS_REGION='$region' AWS_DEFAULT_REGION='$region' AWS_PAGER=''
 work="\$(mktemp -d)"
-trap 'rm -rf "\$work"' EXIT
+elevated=""
+cleanup() {
+  if [[ -n "\$elevated" ]]; then
+    runuser -u postgres -- psql -qAt -c "ALTER ROLE \"\$elevated\" NOSUPERUSER" || true
+  fi
+  rm -rf "\$work"
+}
+trap cleanup EXIT
 aws s3 cp --recursive --only-show-errors 's3://$bucket/$prefix/' "\$work/"
 cd "\$work"
 sha256sum --check --strict --quiet SHA256SUMS
@@ -116,8 +123,24 @@ for b in docmatch-api docmatch-worker docmatch-migrate docmatch-harness; do
 done
 install -m 0644 -o root -g root pricing.yaml models.yaml '$config_dir/'
 systemctl restart docmatch-env.service
+db_url="\$(sed -n 's/^DATABASE_URL="\(.*\)"\$/\1/p' '$env_file')"
+[[ "\$db_url" =~ ^postgres(ql)?://([^:/@]+):[^@]*@[^/]+/([^?]+) ]] || { echo "DATABASE_URL fora do formato esperado"; exit 1; }
+db_user="\${BASH_REMATCH[2]}"
+db_name="\${BASH_REMATCH[3]}"
+systemctl stop docmatch-worker.service docmatch-api.service
+# The first migration creates the RLS role with attributes only a superuser may set
+# (NOSUPERUSER, NOBYPASSRLS), so on the very first deploy the owner is superuser for that one
+# run, with the application stopped; cleanup() takes it back even if the migration fails.
+if [[ "\$(runuser -u postgres -- psql -d "\$db_name" -qAt -c "SELECT to_regclass('public.schema_migrations') IS NULL")" == t ]]; then
+  runuser -u postgres -- psql -v ON_ERROR_STOP=1 -qAt -c "ALTER ROLE \"\$db_user\" SUPERUSER"
+  elevated="\$db_user"
+fi
 systemd-run --wait --pipe --quiet --collect --uid='$app_user' --gid='$app_group' \\
   -p EnvironmentFile='$env_file' -p WorkingDirectory='$app_home' '$bin_dir/docmatch-migrate' up
+if [[ -n "\$elevated" ]]; then
+  runuser -u postgres -- psql -v ON_ERROR_STOP=1 -qAt -c "ALTER ROLE \"\$elevated\" NOSUPERUSER"
+  elevated=""
+fi
 systemctl restart docmatch-harness.service docmatch-api.service docmatch-worker.service
 ok=0
 for _ in \$(seq 1 30); do
