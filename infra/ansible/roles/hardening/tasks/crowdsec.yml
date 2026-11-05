@@ -95,6 +95,15 @@
   when: hardening_caddy_bouncer_key is not skipped
   no_log: true
 
+- name: Create the CrowdSec drop-in directories first
+  ansible.builtin.file:
+    path: "/etc/systemd/system/{{ item }}.service.d"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: [crowdsec, crowdsec-firewall-bouncer]
+
 - name: Harden the CrowdSec units
   ansible.builtin.template:
     src: "crowdsec-override.conf.j2"
@@ -104,15 +113,6 @@
     mode: "0644"
   loop: [crowdsec, crowdsec-firewall-bouncer]
   notify: Reload systemd
-
-- name: Create the CrowdSec drop-in directories first
-  ansible.builtin.file:
-    path: "/etc/systemd/system/{{ item }}.service.d"
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
-  loop: [crowdsec, crowdsec-firewall-bouncer]
 
 - name: Enable the bouncer
   ansible.builtin.systemd_service:
