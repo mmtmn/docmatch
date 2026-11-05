@@ -177,7 +177,12 @@
     "col_value": "Valor",
     "col_document": "Documento",
     "feedback_saved": "Decisão registrada.",
-    "back_to_form": "Nova conciliação"
+    "back_to_form": "Nova conciliação",
+    "live_loading": "Carregando a conciliação…",
+    "live_running": "Conciliando: {message}",
+    "live_failed": "A conciliação falhou: {message}",
+    "live_missing": "Nenhuma conciliação selecionada.",
+    "live_unconfigured": "Esta instalação não está ligada a uma API."
   },
   "auth": {
     "sign_in": "Entrar",
@@ -190,7 +195,25 @@
     "password_help": "Entre {min} e {max} caracteres.",
     "magic_link_sent": "Enviamos um link de acesso para {email}.",
     "account": "Minha conta",
-    "signed_in_as": "Conectado como {name}"
+    "signed_in_as": "Conectado como {name}",
+    "dialog_title": "Entre para conciliar",
+    "dialog_text": "Seus arquivos e regras continuam guardados neste navegador.",
+    "or": "ou",
+    "send_code": "Enviar código",
+    "code_label": "Código de 6 dígitos",
+    "code_sent": "Enviamos um código e um link de acesso para {email}. Eles valem por 15 minutos.",
+    "verify": "Entrar",
+    "change_email": "Usar outro e-mail",
+    "google_unavailable": "O login com Google ainda não está disponível."
+  },
+  "app": {
+    "uploading": "Enviando {done} de {total} arquivo(s)…",
+    "scanning": "Verificando {name}…",
+    "estimating": "Calculando o orçamento…",
+    "confirm_run": "Esta conciliação deve usar cerca de {expected} tokens (no máximo {cap}). Continuar?",
+    "starting": "Iniciando a conciliação…",
+    "rejected": "{name} foi recusado pela verificação de segurança ({reason}).",
+    "cancelled": "Conciliação não iniciada."
   },
   "how": {
     "heading": "Como funciona",

@@ -1,0 +1,16 @@
+/* Progress of the run outside the first screen's grid, so the layout never moves. */
+.status {
+  position: fixed;
+  left: 50%;
+  bottom: var(--space-4);
+  z-index: 50;
+  max-width: calc(100vw - 2 * var(--gutter));
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  transform: translateX(-50%);
+  border-radius: var(--radius-pill);
+  background: var(--color-fg);
+  color: var(--color-bg);
+  font-size: var(--fs-sm);
+  box-shadow: var(--shadow-2);
+}

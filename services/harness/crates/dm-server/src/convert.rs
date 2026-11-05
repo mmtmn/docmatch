@@ -38,6 +38,29 @@ fn source_of(run: &Run, key: &str, index: &SourceIndex) -> String {
         .unwrap_or_default()
 }
 
+/// Structured fields of an evidence row, for clients that render tables: `date` (ISO),
+/// `description`, `amount` (centavos, negative for debits) and `document`.
+fn values(date: String, description: &str, amount: Option<i64>, document: &str) -> Option<Struct> {
+    let mut fields = BTreeMap::new();
+    fields.insert("date".to_string(), text(&date));
+    fields.insert("description".to_string(), text(description));
+    if let Some(a) = amount {
+        // Centavos fit an f64 exactly up to 2^53.
+        #[allow(clippy::cast_precision_loss)]
+        let n = a as f64;
+        fields.insert(
+            "amount".to_string(),
+            Value {
+                kind: Some(Kind::NumberValue(n)),
+            },
+        );
+    }
+    if !document.is_empty() {
+        fields.insert("document".to_string(), text(document));
+    }
+    Some(Struct { fields })
+}
+
 fn row(n: usize) -> Option<pb::Locator> {
     Some(pb::Locator {
         locator: Some(pb::locator::Locator::Row(pb::RowLocator {
@@ -67,7 +90,16 @@ pub fn evidence(run: &Run, reference: &str, index: &SourceIndex) -> Option<pb::E
                     brl(line.amount.centavos())
                 ),
                 label: format!("Linha {n} do extrato"),
-                values: None,
+                values: values(
+                    line.date.format("%Y-%m-%d").to_string(),
+                    &line.description,
+                    Some(if line.side == dm_recon::sources::Side::Debit {
+                        -line.amount.centavos()
+                    } else {
+                        line.amount.centavos()
+                    }),
+                    line.document.as_deref().unwrap_or_default(),
+                ),
             })
         }
         "title" => {
@@ -87,7 +119,12 @@ pub fn evidence(run: &Run, reference: &str, index: &SourceIndex) -> Option<pb::E
                 } else {
                     t.reference.clone()
                 },
-                values: None,
+                values: values(
+                    t.due.format("%Y-%m-%d").to_string(),
+                    &t.customer,
+                    Some(t.amount.centavos()),
+                    &t.reference,
+                ),
             })
         }
         "email" => {
@@ -98,7 +135,13 @@ pub fn evidence(run: &Run, reference: &str, index: &SourceIndex) -> Option<pb::E
                 locator: None,
                 excerpt: format!("{} — {}", e.subject, e.from),
                 label: format!("E-mail {n}"),
-                values: None,
+                values: values(
+                    e.at.map(|a| a.format("%Y-%m-%dT%H:%M").to_string())
+                        .unwrap_or_default(),
+                    &e.subject,
+                    None,
+                    &e.from,
+                ),
             })
         }
         "chat" => {
@@ -111,7 +154,12 @@ pub fn evidence(run: &Run, reference: &str, index: &SourceIndex) -> Option<pb::E
                 locator: None,
                 excerpt: m.text.clone(),
                 label: format!("Mensagem de {} ({})", m.at.format("%d/%m %H:%M"), m.author),
-                values: None,
+                values: values(
+                    m.at.format("%Y-%m-%dT%H:%M").to_string(),
+                    &m.text,
+                    None,
+                    &m.author,
+                ),
             })
         }
         _ => None,

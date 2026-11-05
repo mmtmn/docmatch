@@ -1,17 +1,19 @@
 ---
-// Results screen behind PUBLIC_DM_FEATURE_RESULTS: when the flag is off, no page is generated.
+// Results of a run (/resultados?run=<id>) when the build knows the API; the demo screen behind
+// PUBLIC_DM_FEATURE_RESULTS otherwise. Without either, no page is generated.
 import { ResultsDemo } from '../../components/results/ResultsDemo';
+import { ResultsLive } from '../../components/results/ResultsLive';
 import Base from '../../layouts/Base.astro';
-import { featureResults } from '../../lib/env';
+import { apiBaseUrl, featureResults } from '../../lib/env';
 import { t } from '../../lib/i18n';
 
 export function getStaticPaths() {
-  return featureResults ? [{ params: { rest: undefined } }] : [];
+  return apiBaseUrl || featureResults ? [{ params: { rest: undefined } }] : [];
 }
 ---
 
 <Base title={t('results.title')} noindex>
   <main id="conteudo" class="container">
-    <ResultsDemo client:load />
+    {apiBaseUrl ? <ResultsLive client:only="react" /> : <ResultsDemo client:load />}
   </main>
 </Base>
