@@ -7,7 +7,7 @@ import { formatBytes } from './format';
 import { resolveFileCaps, type FileCaps } from './limits';
 
 export type FileKind =
-  'csv' | 'txt' | 'xlsx' | 'pdf' | 'zip' | 'eml' | 'ofx' | 'image' | 'audio' | 'video';
+  'csv' | 'txt' | 'xlsx' | 'pdf' | 'zip' | 'eml' | 'ofx' | 'xml' | 'image' | 'audio' | 'video';
 
 export type FileFamily = 'document' | 'media';
 
@@ -50,6 +50,7 @@ export const KIND_LABEL_KEY: Record<FileKind, MessageKey> = {
   zip: 'dropzone.kind_zip',
   eml: 'dropzone.kind_eml',
   ofx: 'dropzone.kind_ofx',
+  xml: 'dropzone.kind_xml',
   image: 'dropzone.kind_image',
   audio: 'dropzone.kind_audio',
   video: 'dropzone.kind_video',
@@ -73,10 +74,13 @@ const EXTENSIONS: Readonly<Record<string, FileKind>> = {
   xlsx: 'xlsx',
   xlsm: 'xlsx',
   xls: 'xlsx',
+  ods: 'xlsx',
   pdf: 'pdf',
   zip: 'zip',
   eml: 'eml',
+  mbox: 'eml',
   ofx: 'ofx',
+  xml: 'xml',
   png: 'image',
   jpg: 'image',
   jpeg: 'image',
@@ -104,7 +108,7 @@ const EXTENSIONS: Readonly<Record<string, FileKind>> = {
   avi: 'video',
 };
 
-const TEXT_KINDS: ReadonlySet<FileKind> = new Set(['csv', 'txt', 'eml', 'ofx']);
+const TEXT_KINDS: ReadonlySet<FileKind> = new Set(['csv', 'txt', 'eml', 'ofx', 'xml']);
 
 /** Value for `<input type="file" accept>`: every known extension plus the media families. */
 export const ACCEPT_ATTRIBUTE = [
@@ -148,15 +152,17 @@ export function uploadMime(kind: FileKind, name: string, browserType = ''): stri
     case 'txt':
       return 'text/plain';
     case 'xlsx':
-      return ext === 'xls'
-        ? 'application/vnd.ms-excel'
-        : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      if (ext === 'xls') return 'application/vnd.ms-excel';
+      if (ext === 'ods') return 'application/vnd.oasis.opendocument.spreadsheet';
+      return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
     case 'pdf':
       return 'application/pdf';
     case 'zip':
       return 'application/zip';
     case 'eml':
-      return 'message/rfc822';
+      return ext === 'mbox' ? 'application/mbox' : 'message/rfc822';
+    case 'xml':
+      return 'application/xml';
     case 'ofx':
       return 'application/x-ofx';
     case 'audio':
@@ -275,6 +281,15 @@ export function sniffKind(bytes: Uint8Array, ext: string | null): FileKind | nul
     const text = decoder.decode(bytes);
     if (looksLikeEmail(text)) return 'eml';
     if (looksLikeOfx(text)) return 'ofx';
+    // NF-e, CT-e and other XML: markup from the first character (after a BOM).
+    if (
+      extKind === 'xml' &&
+      text
+        .replace(/^\uFEFF/, '')
+        .trimStart()
+        .startsWith('<')
+    )
+      return 'xml';
     if (extKind === 'csv' || extKind === 'txt') return extKind;
     if (extKind === null && ext === null) return 'txt';
     if (extKind === 'eml' || extKind === 'ofx') return 'txt'; // reported as a mismatch below

@@ -137,6 +137,40 @@
       "name": "texto.xyz",
       "hex": "636f6e746575646f207175616c717565720a",
       "reason": "errors.file_type_unknown"
+    },
+    {
+      "name": "nfe-35260700000000000000550010000001231000001234.xml",
+      "hex": "3c3f786d6c2076657273696f6e3d22312e302220656e636f64696e673d225554462d38223f3e3c6e666550726f632076657273616f3d22342e30302220786d6c6e733d22687474703a2f2f7777772e706f7274616c66697363616c2e696e662e62722f6e6665223e3c4e46653e",
+      "kind": "xml",
+      "mime": "application/xml"
+    },
+    {
+      "name": "cte-com-bom.xml",
+      "hex": "efbbbf3c3f786d6c2076657273696f6e3d22312e30223f3e3c63746550726f632076657273616f3d22342e3030223e",
+      "kind": "xml",
+      "mime": "application/xml"
+    },
+    {
+      "name": "planilha.ods",
+      "hex": "504b03041400000800006d696d65747970656170706c69636174696f6e2f766e642e6f617369732e6f70656e646f63756d656e742e7370726561647368656574",
+      "kind": "xlsx",
+      "mime": "application/vnd.oasis.opendocument.spreadsheet"
+    },
+    {
+      "name": "caixa-financeiro.mbox",
+      "hex": "46726f6d20636f6d70726173406578616d706c652e636f6d204d6f6e204a756c2020362031303a30303a303020323032360a46726f6d3a20636f6d70726173406578616d706c652e636f6d0a546f3a2066696e616e636569726f406578616d706c652e636f6d0a5375626a6563743a20426f6c65746f206a756c686f0a0a5365677565206f20626f6c65746f2e0a",
+      "kind": "eml",
+      "mime": "application/mbox"
+    },
+    {
+      "name": "planilha-renomeada.xml",
+      "hex": "613b620a313b320a",
+      "reason": "errors.file_type_unknown"
+    },
+    {
+      "name": "binario.xml",
+      "hex": "0001020304",
+      "reason": "errors.file_extension_mismatch"
     }
   ]
 }
