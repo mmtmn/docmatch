@@ -82,11 +82,7 @@ fn odt_json_html_and_docx_score_100() {
 fn ledgers_in_a_7z_and_statement_in_an_outlook_message_score_100() {
     let variant = twin().with_file_name("vantara-twin-msg-7z");
     let warnings = scores_like_the_twin(&variant);
-    // The banker's e-mail is an inbox too; the exported one has more messages and wins.
-    assert_eq!(
-        warnings,
-        vec!["03_extrato_bancario_jul2026.msg: segunda caixa de entrada; só 04_caixa_de_entrada_contas_a_pagar.txt entra nesta conciliação".to_string()]
-    );
+    assert!(warnings.is_empty(), "{warnings:?}");
     assert_eq!(
         read(&variant.join("04_caixa_de_entrada_contas_a_pagar.txt")),
         read(&twin().join("04_caixa_de_entrada_contas_a_pagar.txt"))
@@ -101,6 +97,22 @@ fn ledgers_in_a_7z_and_statement_in_an_outlook_message_score_100() {
     assert_eq!(
         ds.sources.get("protheus").map(String::as_str),
         Some("01_carteira_jul2026.7z/carteiras/01_contas_a_receber_protheus_jul2026.xml")
+    );
+    // The banker's e-mail joins the exported inbox, after its three e-mails (it is the
+    // latest), and brings no finding.
+    let files: Vec<&str> = ds.emails.iter().map(|e| e.file.as_str()).collect();
+    assert_eq!(
+        files,
+        vec![
+            "04_caixa_de_entrada_contas_a_pagar.txt",
+            "04_caixa_de_entrada_contas_a_pagar.txt",
+            "04_caixa_de_entrada_contas_a_pagar.txt",
+            "03_extrato_bancario_jul2026.msg",
+        ]
+    );
+    assert_eq!(
+        ds.sources.get("ap_inbox").map(String::as_str),
+        Some("04_caixa_de_entrada_contas_a_pagar.txt")
     );
 }
 

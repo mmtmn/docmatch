@@ -1001,6 +1001,7 @@ dependencies = [
 name = "dm-eval"
 version = "0.1.0"
 dependencies = [
+ "dm-ingest",
  "dm-normalize",
  "dm-recon",
  "encoding_rs",

@@ -139,7 +139,8 @@ pub fn evidence(run: &Run, reference: &str, index: &SourceIndex) -> Option<pb::E
             let n: usize = value.parse().ok()?;
             let e = ds.emails.get(n.checked_sub(1)?)?;
             Some(pb::Evidence {
-                source_id: source_of(run, "ap_inbox", index),
+                // The inbox may join several files: each e-mail points at its own.
+                source_id: upload_of(&e.file, index).unwrap_or_default(),
                 locator: None,
                 excerpt: format!("{} — {}", e.subject, e.from),
                 label: format!("E-mail {n}"),
@@ -158,7 +159,7 @@ pub fn evidence(run: &Run, reference: &str, index: &SourceIndex) -> Option<pb::E
                 .iter()
                 .find(|m| m.at.format("%Y-%m-%dT%H:%M").to_string() == value)?;
             Some(pb::Evidence {
-                source_id: source_of(run, "ap_inbox", index),
+                source_id: upload_of(&m.file, index).unwrap_or_default(),
                 locator: None,
                 excerpt: m.text.clone(),
                 label: format!("Mensagem de {} ({})", m.at.format("%d/%m %H:%M"), m.author),

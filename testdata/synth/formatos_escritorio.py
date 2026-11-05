@@ -890,9 +890,9 @@ Gerada por `testdata/synth/formatos_escritorio.py` a partir do gêmeo público
 | `{statement}` | E-mail do gerente do banco (Outlook, `.msg`) com o extrato de julho anexado em CSV (`{attached}`, cópia do gêmeo) e o logotipo da assinatura como imagem embutida. |
 | `04_caixa_de_entrada_contas_a_pagar.txt` | Cópia do gêmeo. |
 
-O e-mail do gerente também é uma caixa de entrada (uma mensagem); a do arquivo 04 tem mais
-mensagens e é a que entra, com um aviso para o `.msg`. O harness atinge 100% quando reproduz as
-mesmas 18 linhas, 17 títulos e 23 achados do gêmeo.
+O e-mail do gerente entra na caixa de entrada junto com as mensagens do arquivo 04 (é a mais
+recente e não gera achado). O harness atinge 100% quando reproduz as mesmas 18 linhas, 17
+títulos e 23 achados do gêmeo.
 """
     write(os.path.join(VARIANT_MSG, "00_LEIA-ME.md"), readme.encode("utf-8"))
 
