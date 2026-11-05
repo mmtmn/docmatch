@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -62,17 +63,21 @@ type fixture struct {
 	credits  *credits.Service
 	jobs     *jobargs.Recorder
 	fake     *harnesstest.Server
+	mail     *fakeMailer
 	org      uuid.UUID
 	user     uuid.UUID
 	plan     string
 	now      time.Time
+	// clock is the real clock of the service; every read advances it a second.
+	clock time.Time
 }
 
 func newFixture(t *testing.T, opts harnesstest.Options, client harness.Client) *fixture {
 	t.Helper()
 	p := repoPricing(t)
 	signer, _ := estimate.NewSigner("chave-de-teste-com-16-chars")
-	f := &fixture{store: NewMemStore(), uploads: uploads.NewMemStore(), estStore: estimate.NewMemStore(), jobs: &jobargs.Recorder{}, org: uuid.New(), user: uuid.New(), plan: "pro", now: time.Date(2026, 11, 4, 12, 0, 0, 0, time.UTC)}
+	f := &fixture{store: NewMemStore(), uploads: uploads.NewMemStore(), estStore: estimate.NewMemStore(), jobs: &jobargs.Recorder{}, mail: &fakeMailer{}, org: uuid.New(), user: uuid.New(), plan: "pro", now: time.Date(2026, 11, 4, 12, 0, 0, 0, time.UTC)}
+	f.clock = f.now
 	if client == nil {
 		f.fake = harnesstest.NewServer(harnesstest.MustLoadGolden(), opts)
 		sock, cleanup, err := harnesstest.SocketPath()
@@ -102,7 +107,7 @@ func newFixture(t *testing.T, opts harnesstest.Options, client harness.Client) *
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.est, err = estimate.New(estimate.Deps{Store: f.estStore, Harness: client, Pricing: p, Signer: signer, Sources: upSvc, Logger: logx.Discard(), Now: now})
+	f.est, err = estimate.New(estimate.Deps{Store: f.estStore, Harness: client, Pricing: p, Throughput: repoThroughput(t), Signer: signer, Sources: upSvc, Logger: logx.Discard(), Now: now})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +116,17 @@ func newFixture(t *testing.T, opts harnesstest.Options, client harness.Client) *
 		t.Fatal(err)
 	}
 	f.credits = credits.New(credits.NewMemoryStore(), credits.WithClock(now))
-	f.svc, err = New(Deps{Store: f.store, Uploads: upSvc, Estimates: f.est, Rules: f.rules, Credits: f.credits, Jobs: f.jobs, Harness: client, Logger: logx.Discard(), Now: now})
+	var clockMu sync.Mutex
+	tick := func() time.Time {
+		clockMu.Lock()
+		defer clockMu.Unlock()
+		f.clock = f.clock.Add(time.Second)
+		return f.clock
+	}
+	f.svc, err = New(Deps{
+		Store: f.store, Uploads: upSvc, Estimates: f.est, Rules: f.rules, Credits: f.credits, Jobs: f.jobs, Harness: client,
+		Mailer: f.mail, ResultsURL: func(id string) string { return "https://example.com/resultados?run=" + id }, Logger: logx.Discard(), Now: now, Clock: tick,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

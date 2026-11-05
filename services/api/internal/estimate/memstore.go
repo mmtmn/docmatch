@@ -2,6 +2,7 @@ package estimate
 
 import (
 	"context"
+	"sort"
 	"sync"
 	"time"
 
@@ -14,6 +15,8 @@ type MemStore struct {
 	quotes   map[uuid.UUID]Record
 	prices   []ModelPrice
 	overruns []Overrun
+	timings  []RunTiming
+	inFlight int64
 }
 
 // NewMemStore returns an empty store.
@@ -86,6 +89,59 @@ func (m *MemStore) AddOverruns(rows ...Overrun) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.overruns = append(m.overruns, rows...)
+}
+
+// RecentTimings implements Store: completed runs since a time, newest first.
+func (m *MemStore) RecentTimings(_ context.Context, since time.Time, limit int) ([]TimingSample, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	rows := append([]RunTiming(nil), m.timings...)
+	sort.SliceStable(rows, func(i, j int) bool { return rows[i].FinishedAt.After(rows[j].FinishedAt) })
+	out := []TimingSample{}
+	for _, t := range rows {
+		if t.Status != TimingCompleted || !t.FinishedAt.After(since) {
+			continue
+		}
+		if limit > 0 && len(out) >= limit {
+			break
+		}
+		out = append(out, TimingSample{Units: t.Units, ActiveSeconds: t.ActiveSeconds})
+	}
+	return out, nil
+}
+
+// InsertTiming implements Store (once per run).
+func (m *MemStore) InsertTiming(_ context.Context, t RunTiming) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, row := range m.timings {
+		if row.RunID == t.RunID {
+			return nil
+		}
+	}
+	m.timings = append(m.timings, t)
+	return nil
+}
+
+// RunsInFlight implements Store.
+func (m *MemStore) RunsInFlight(context.Context) (int64, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.inFlight, nil
+}
+
+// SetRunsInFlight sets what RunsInFlight answers (tests).
+func (m *MemStore) SetRunsInFlight(n int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.inFlight = n
+}
+
+// Timings returns a snapshot of the stored run timings (tests).
+func (m *MemStore) Timings() []RunTiming {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]RunTiming(nil), m.timings...)
 }
 
 // Quotes returns a snapshot of the stored quotes (tests).

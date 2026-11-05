@@ -104,6 +104,9 @@ const (
 	VarInfraRate            = "DM_INFRA_RATE"
 	VarOpenRouterFee        = "DM_OPENROUTER_FEE"
 	VarPricingFile          = "DM_PRICING_FILE"
+	// VarThroughputFile is config/throughput.yaml (timing of quotes); unset,
+	// ThroughputFileName next to DM_PRICING_FILE is used when present.
+	VarThroughputFile = "DM_THROUGHPUT_FILE"
 
 	VarResendAPIKey    = "RESEND_API_KEY"
 	VarEmailFrom       = "DM_EMAIL_FROM"
@@ -123,6 +126,9 @@ const (
 	DefaultLLMMode     = LLMModeLocal
 	DefaultModelsFile  = "config/models.yaml"
 	DefaultPricingFile = "config/pricing.yaml"
+	// ThroughputFileName is looked up next to the pricing file when
+	// DM_THROUGHPUT_FILE is unset (the release installs both side by side).
+	ThroughputFileName = "throughput.yaml"
 	DefaultLLMCacheDir = ".cache/llm"
 	// DefaultMediaLocalDir receives media uploads when R2 is not configured (dev).
 	DefaultMediaLocalDir = ".cache/media"
@@ -254,6 +260,9 @@ type Billing struct {
 	InfraRate     *float64
 	OpenRouterFee *float64
 	PricingFile   string
+	// ThroughputFile is DM_THROUGHPUT_FILE; empty means ThroughputFileName
+	// next to PricingFile, optional (no timing when missing).
+	ThroughputFile string
 }
 
 // Email holds the transactional e-mail settings.
@@ -362,6 +371,7 @@ func LoadFrom(lookup Lookup) (*Config, error) {
 	cfg.Billing.InfraRate = r.rate(VarInfraRate)
 	cfg.Billing.OpenRouterFee = r.rate(VarOpenRouterFee)
 	cfg.Billing.PricingFile = r.optional(VarPricingFile, DefaultPricingFile)
+	cfg.Billing.ThroughputFile = r.optional(VarThroughputFile, "")
 
 	cfg.Email.ResendAPIKey = r.secret(VarResendAPIKey, false)
 	cfg.Email.From = r.address(VarEmailFrom)
@@ -512,6 +522,7 @@ func (c *Config) redacted() [][2]string {
 		{VarInfraRate, rateString(c.Billing.InfraRate)},
 		{VarOpenRouterFee, rateString(c.Billing.OpenRouterFee)},
 		{VarPricingFile, c.Billing.PricingFile},
+		{VarThroughputFile, c.Billing.ThroughputFile},
 		{VarResendAPIKey, presence(c.Email.ResendAPIKey)},
 		{VarEmailFrom, addrString(c.Email.From)},
 		{VarSecurityContact, addrString(c.Email.SecurityContact)},
@@ -863,7 +874,7 @@ func KnownVars() []string {
 		VarGoogleClientID, VarGoogleClientSecret, VarAppleTeamID, VarAppleClientID, VarAppleKeyID, VarApplePrivateKey, VarSessionSecret,
 		VarGoogleNativeClientIDs, VarAppleNativeClientIDs, VarDevLogin,
 		VarStripeSecretKey, VarStripeWebhookSecret, VarStripePublishableKey,
-		VarTargetMargin, VarIncomeTaxRate, VarPaymentRate, VarInfraRate, VarOpenRouterFee, VarPricingFile,
+		VarTargetMargin, VarIncomeTaxRate, VarPaymentRate, VarInfraRate, VarOpenRouterFee, VarPricingFile, VarThroughputFile,
 		VarResendAPIKey, VarEmailFrom, VarSecurityContact, VarSMTPAddr,
 		VarQuoteHMACKey, VarAPIKeyPepper, VarWebhookSigningKey,
 	}

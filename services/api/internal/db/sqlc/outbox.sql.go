@@ -22,7 +22,7 @@ WHERE id IN (
   LIMIT $2
   FOR UPDATE SKIP LOCKED
 )
-RETURNING id, org_id, kind, payload, available_at, attempts, last_error, created_at, sent_at
+RETURNING id, org_id, kind, payload, available_at, attempts, last_error, created_at, sent_at, dedupe_key
 `
 
 type ClaimOutboxParams struct {
@@ -51,6 +51,7 @@ func (q *Queries) ClaimOutbox(ctx context.Context, arg ClaimOutboxParams) ([]Out
 			&i.LastError,
 			&i.CreatedAt,
 			&i.SentAt,
+			&i.DedupeKey,
 		); err != nil {
 			return nil, err
 		}
@@ -89,7 +90,7 @@ const enqueueOutbox = `-- name: EnqueueOutbox :one
 
 INSERT INTO outbox (org_id, kind, payload, available_at)
 VALUES ($1, $2, $3, coalesce($4::timestamptz, now()))
-RETURNING id, org_id, kind, payload, available_at, attempts, last_error, created_at, sent_at
+RETURNING id, org_id, kind, payload, available_at, attempts, last_error, created_at, sent_at, dedupe_key
 `
 
 type EnqueueOutboxParams struct {
@@ -119,6 +120,45 @@ func (q *Queries) EnqueueOutbox(ctx context.Context, arg EnqueueOutboxParams) (O
 		&i.LastError,
 		&i.CreatedAt,
 		&i.SentAt,
+		&i.DedupeKey,
+	)
+	return i, err
+}
+
+const enqueueOutboxOnce = `-- name: EnqueueOutboxOnce :one
+INSERT INTO outbox (org_id, kind, payload, dedupe_key)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (dedupe_key) WHERE dedupe_key IS NOT NULL DO NOTHING
+RETURNING id, org_id, kind, payload, available_at, attempts, last_error, created_at, sent_at, dedupe_key
+`
+
+type EnqueueOutboxOnceParams struct {
+	OrgID     *uuid.UUID
+	Kind      string
+	Payload   []byte
+	DedupeKey *string
+}
+
+// Enfileira só se a chave ainda não existe; sem linha de volta, já estava lá.
+func (q *Queries) EnqueueOutboxOnce(ctx context.Context, arg EnqueueOutboxOnceParams) (Outbox, error) {
+	row := q.db.QueryRow(ctx, enqueueOutboxOnce,
+		arg.OrgID,
+		arg.Kind,
+		arg.Payload,
+		arg.DedupeKey,
+	)
+	var i Outbox
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.Kind,
+		&i.Payload,
+		&i.AvailableAt,
+		&i.Attempts,
+		&i.LastError,
+		&i.CreatedAt,
+		&i.SentAt,
+		&i.DedupeKey,
 	)
 	return i, err
 }

@@ -11,7 +11,7 @@ hardening_app_user: docmatch
 hardening_app_group: docmatch
 hardening_app_home: /var/lib/docmatch
 hardening_app_bin_dir: /opt/docmatch/bin
-# Release files read by the API and the worker (pricing.yaml, models.yaml), installed with the
+# Release files read by the API and the worker (pricing.yaml, models.yaml, throughput.yaml), installed with the
 # binaries by infra/scripts/deploy-app.sh.
 hardening_app_config_dir: /opt/docmatch/config
 # Local root shared by the API, the worker and the harness (DM_MEDIA_LOCAL_DIR): media while R2

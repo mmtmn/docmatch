@@ -95,6 +95,8 @@ type Querier interface {
 	CountRecentMagicLinks(ctx context.Context, arg CountRecentMagicLinksParams) (int64, error)
 	CountRecentUploads(ctx context.Context, arg CountRecentUploadsParams) (int64, error)
 	CountRunsByWorkflow(ctx context.Context, arg CountRunsByWorkflowParams) (int64, error)
+	// Execuções na frente de uma nova (modo sistema): em fila ou rodando.
+	CountRunsInFlight(ctx context.Context) (int64, error)
 	CountUnsentOutbox(ctx context.Context) (int64, error)
 	// Chaves de API. GetAPIKey roda antes de conhecer a organização (é a própria
 	// autenticação), portanto em modo sistema; o resto dentro de WithOrgTx.
@@ -125,6 +127,8 @@ type Querier interface {
 	// Outbox transacional: a aplicação enfileira na mesma transação do dado; o
 	// worker (modo sistema) reivindica com SKIP LOCKED e marca como enviado.
 	EnqueueOutbox(ctx context.Context, arg EnqueueOutboxParams) (Outbox, error)
+	// Enfileira só se a chave ainda não existe; sem linha de volta, já estava lá.
+	EnqueueOutboxOnce(ctx context.Context, arg EnqueueOutboxOnceParams) (Outbox, error)
 	EnsureCreditAccount(ctx context.Context, orgID uuid.UUID) (CreditAccount, error)
 	FinishIdempotencyKey(ctx context.Context, arg FinishIdempotencyKeyParams) error
 	FinishRun(ctx context.Context, arg FinishRunParams) (Run, error)
@@ -181,6 +185,9 @@ type Querier interface {
 	// Execuções, eventos (SSE), achados, casamentos e feedback.
 	InsertRun(ctx context.Context, arg InsertRunParams) (Run, error)
 	InsertRunEvent(ctx context.Context, arg InsertRunEventParams) (RunEvent, error)
+	// Durações das execuções terminadas (tempo esperado dos orçamentos) e a fila
+	// de execuções que o estimador conta para a espera.
+	InsertRunTiming(ctx context.Context, arg InsertRunTimingParams) error
 	// Eventos Stripe: a chave primária é o id do evento. InsertStripeEvent não
 	// devolve linha quando o evento já existe (pgx.ErrNoRows = duplicado).
 	InsertStripeEvent(ctx context.Context, arg InsertStripeEventParams) (string, error)
@@ -219,6 +226,8 @@ type Querier interface {
 	// Execuções concluídas recentes (modo sistema): razão gasto/estimado para o
 	// teto no percentil 99.
 	ListRecentRunOverruns(ctx context.Context, arg ListRecentRunOverrunsParams) ([]ListRecentRunOverrunsRow, error)
+	// Concluídas recentes de todas as contas (modo sistema), mais novas primeiro.
+	ListRecentRunTimings(ctx context.Context, arg ListRecentRunTimingsParams) ([]ListRecentRunTimingsRow, error)
 	ListRecentRuns(ctx context.Context, arg ListRecentRunsParams) ([]Run, error)
 	ListRecentRunsBefore(ctx context.Context, arg ListRecentRunsBeforeParams) ([]Run, error)
 	ListRecentlyUsedRules(ctx context.Context, arg ListRecentlyUsedRulesParams) ([]Rule, error)

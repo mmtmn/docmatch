@@ -50,6 +50,7 @@ func validEnv() map[string]string {
 		VarInfraRate:         "0.10",
 		VarOpenRouterFee:     "0.055",
 		VarPricingFile:       "config/pricing.yaml",
+		VarThroughputFile:    "config/throughput.yaml",
 		VarEmailFrom:         "docmatch <no-reply@example.com>",
 		VarSecurityContact:   "security@example.com",
 		VarQuoteHMACKey:      "quote-hmac-key-with-length",
@@ -108,6 +109,9 @@ func TestLoadValidDev(t *testing.T) {
 	if cfg.Billing.TargetMargin == nil || *cfg.Billing.TargetMargin != 0.30 || cfg.Billing.PaymentRate == nil || *cfg.Billing.PaymentRate != 0.076 {
 		t.Fatalf("Billing = %+v", cfg.Billing)
 	}
+	if cfg.Billing.ThroughputFile != "config/throughput.yaml" {
+		t.Fatalf("ThroughputFile = %q", cfg.Billing.ThroughputFile)
+	}
 	if cfg.Email.From == nil || cfg.Email.From.Name != "docmatch" || cfg.Email.SecurityContact == nil {
 		t.Fatalf("Email = %+v", cfg.Email)
 	}
@@ -122,12 +126,12 @@ func TestLoadValidDev(t *testing.T) {
 func TestLoadDefaults(t *testing.T) {
 	t.Parallel()
 	env := validEnv()
-	for _, k := range []string{VarEnv, VarLLMMode, VarModelsFile, VarPricingFile, VarLLMCacheDir, VarTargetMargin, VarAWSRegion, VarEmailFrom, VarSecurityContact} {
+	for _, k := range []string{VarEnv, VarLLMMode, VarModelsFile, VarPricingFile, VarThroughputFile, VarLLMCacheDir, VarTargetMargin, VarAWSRegion, VarEmailFrom, VarSecurityContact} {
 		delete(env, k)
 	}
 	cfg := mustLoad(t, env)
 	if cfg.Env != DefaultEnv || cfg.LLM.Mode != DefaultLLMMode || cfg.LLM.ModelsFile != DefaultModelsFile ||
-		cfg.Billing.PricingFile != DefaultPricingFile || cfg.LLM.CacheDir != DefaultLLMCacheDir {
+		cfg.Billing.PricingFile != DefaultPricingFile || cfg.Billing.ThroughputFile != "" || cfg.LLM.CacheDir != DefaultLLMCacheDir {
 		t.Fatalf("defaults não aplicados: %+v", cfg)
 	}
 	if cfg.Billing.TargetMargin != nil {

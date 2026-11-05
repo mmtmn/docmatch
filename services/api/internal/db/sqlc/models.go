@@ -379,6 +379,7 @@ type Outbox struct {
 	LastError   *string
 	CreatedAt   time.Time
 	SentAt      *time.Time
+	DedupeKey   *string
 }
 
 type Plan struct {
@@ -509,6 +510,17 @@ type RunEventsDefault struct {
 	Event     string
 	Data      []byte
 	CreatedAt time.Time
+}
+
+type RunTiming struct {
+	RunID           uuid.UUID
+	OrgID           uuid.UUID
+	Status          string
+	Units           []byte
+	ActiveSeconds   float64
+	ExpectedSeconds int64
+	FinishedAt      time.Time
+	CreatedAt       time.Time
 }
 
 type Session struct {

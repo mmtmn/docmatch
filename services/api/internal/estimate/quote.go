@@ -104,7 +104,14 @@ type Quote struct {
 	Fingerprint      string    `json:"fingerprint"`
 	RequiresApproval bool      `json:"requires_approval"`
 	ApprovalReasons  []string  `json:"approval_reasons,omitempty"`
-	CreatedAt        string    `json:"created_at"`
+	// ExpectedSeconds is how long the run should take, queue included
+	// (config/throughput.yaml); absent on additional quotes and on quotes
+	// issued before the field existed.
+	ExpectedSeconds int64 `json:"expected_seconds,omitempty"`
+	// Large is ExpectedSeconds above large_after_seconds: the clients show the
+	// duration and the person gets an e-mail when the run ends.
+	Large     bool   `json:"large"`
+	CreatedAt string `json:"created_at"`
 }
 
 // Expiry parses ExpiresAt.
@@ -281,4 +288,11 @@ type Store interface {
 	// SeedModelPrices inserts rows only when the table is empty.
 	SeedModelPrices(ctx context.Context, rows []ModelPrice) error
 	RecentOverruns(ctx context.Context, since time.Time, limit int) ([]Overrun, error)
+	// RecentTimings lists completed runs since a time, newest first (system mode).
+	RecentTimings(ctx context.Context, since time.Time, limit int) ([]TimingSample, error)
+	// InsertTiming stores the measured duration of a finished run; a second
+	// call for the same run changes nothing.
+	InsertTiming(ctx context.Context, t RunTiming) error
+	// RunsInFlight counts the runs queued or running in every organization.
+	RunsInFlight(ctx context.Context) (int64, error)
 }

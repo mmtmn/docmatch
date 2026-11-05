@@ -13,6 +13,7 @@ import (
 	contracts "github.com/mmtmn/docmatch/packages/contracts/gen"
 	"github.com/mmtmn/docmatch/services/api/internal/audit"
 	"github.com/mmtmn/docmatch/services/api/internal/credits"
+	"github.com/mmtmn/docmatch/services/api/internal/email"
 	"github.com/mmtmn/docmatch/services/api/internal/estimate"
 	"github.com/mmtmn/docmatch/services/api/internal/harness"
 	"github.com/mmtmn/docmatch/services/api/internal/httpx"
@@ -44,6 +45,15 @@ type Outbox interface {
 	Enqueue(ctx context.Context, orgID *uuid.UUID, kind string, payload any) error
 }
 
+// Mailer writes e-mail inside the transaction that saves a run (emailpg.TxMailer;
+// a nil tx comes from the memory store).
+type Mailer interface {
+	// UserEmail returns the address of an active user, "" when the user is gone.
+	UserEmail(ctx context.Context, tx pgx.Tx, userID uuid.UUID) (string, error)
+	// EnqueueOnce writes msg to the e-mail outbox unless key was already used.
+	EnqueueOnce(ctx context.Context, tx pgx.Tx, orgID uuid.UUID, key string, msg email.Message) error
+}
+
 // Deps are the collaborators of the service.
 type Deps struct {
 	Store     Store
@@ -58,8 +68,16 @@ type Deps struct {
 	Limits    *limits.Limits
 	Audit     Recorder
 	Outbox    Outbox
-	Logger    *slog.Logger
-	Now       func() time.Time
+	// Mailer and ResultsURL send the e-mail at the end of a long run; either
+	// nil turns that e-mail off.
+	Mailer Mailer
+	// ResultsURL renders the results page of a run for the e-mail.
+	ResultsURL func(runID string) string
+	Logger     *slog.Logger
+	// Now is the business clock (timestamps of the run).
+	Now func() time.Time
+	// Clock is the real clock that measures the active time of a run.
+	Clock func() time.Time
 	// URI renders the storage URI of an upload for the harness.
 	URI func(u uploads.Upload) string
 	// RunDeadline overrides DefaultRunDeadline.
@@ -90,6 +108,9 @@ func New(d Deps) (*Service, error) {
 	}
 	if d.Now == nil {
 		d.Now = time.Now
+	}
+	if d.Clock == nil {
+		d.Clock = time.Now
 	}
 	if d.URI == nil {
 		d.URI = func(u uploads.Upload) string { return estimate.SourceURI(u, d.Uploads.StoreFor(u).URI) }
@@ -171,6 +192,9 @@ func (s *Service) Create(ctx context.Context, p apix.Principal, req CreateReques
 		Inputs:    Inputs{Request: req.Request, Plan: p.Plan, UserID: p.UserID, APIKeyID: p.APIKeyID, Lanes: p.Lanes},
 		ExpiresAt: &expires, CreatedAt: now, UpdatedAt: now,
 	}
+	// The run keeps the timing of its initial quote: an approval later swaps
+	// QuoteID for an additional quote that carries none.
+	run.SetTiming(Timing{ExpectedSeconds: rec.Quote.ExpectedSeconds, Large: rec.Quote.Large, Units: s.d.Estimates.Units(loaded, rec.Quote.Breakdown.Items)})
 	created, err := s.d.Store.CreateRun(ctx, run, func(ctx context.Context, tx pgx.Tx) error {
 		return s.d.Jobs.EnqueueTx(ctx, tx, jobargs.RunArgs{OrgID: p.OrgID, RunID: id})
 	})

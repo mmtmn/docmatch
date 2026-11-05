@@ -20,6 +20,13 @@ WHERE id IN (
 )
 RETURNING *;
 
+-- Enfileira só se a chave ainda não existe; sem linha de volta, já estava lá.
+-- name: EnqueueOutboxOnce :one
+INSERT INTO outbox (org_id, kind, payload, dedupe_key)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (dedupe_key) WHERE dedupe_key IS NOT NULL DO NOTHING
+RETURNING *;
+
 -- name: MarkOutboxSent :exec
 UPDATE outbox SET sent_at = now(), last_error = NULL WHERE id = $1;
 

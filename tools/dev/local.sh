@@ -88,7 +88,7 @@ up() {
   export DM_ENV=dev DM_DEV_LOGIN=1 DM_LLM_MODE="${DM_LOCAL_LLM_MODE:-off}"
   export DM_S3_UPLOADS_BUCKET="" DM_S3_ENDPOINT="" AWS_ACCESS_KEY_ID="" AWS_SECRET_ACCESS_KEY=""
   export DM_MEDIA_LOCAL_DIR="$state/media" DM_HARNESS_SOCKET="$state/harness.sock" DM_LLM_CACHE_DIR="$state/llm"
-  export DM_PRICING_FILE="$root/config/pricing.yaml" DM_MODELS_FILE="$root/config/models.yaml"
+  export DM_PRICING_FILE="$root/config/pricing.yaml" DM_MODELS_FILE="$root/config/models.yaml" DM_THROUGHPUT_FILE="$root/config/throughput.yaml"
   local api_port web_port
   api_port="$(port_of "$DM_API_LISTEN")"
   web_port="$(port_of "$DM_PUBLIC_BASE_URL")"
