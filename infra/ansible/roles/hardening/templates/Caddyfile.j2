@@ -49,6 +49,10 @@ origin.{$DM_DOMAIN}:{{ hardening_https_port }} {
 			wait_for_propagation true
 			max_wait_dur 2m
 		}
+		# The provider already waits for Route 53 to report INSYNC (GetChange). Caddy's own check
+		# queries the zone's nameservers directly, which nftables refuses to every user but
+		# systemd-resolve.
+		propagation_timeout -1
 		protocols tls1.2 tls1.3
 	}
 

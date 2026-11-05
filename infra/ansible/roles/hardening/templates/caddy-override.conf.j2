@@ -1,11 +1,17 @@
 # {{ ansible_managed }}
 [Unit]
-After=docmatch-env.service
-Wants=docmatch-env.service
+# ACME goes through the egress proxy: started before it, the first order failed with
+# "connection refused" and Caddy moved its retries to the staging CA.
+After=docmatch-env.service tinyproxy.service
+Wants=docmatch-env.service tinyproxy.service
 
 [Service]
 EnvironmentFile={{ hardening_caddy_env_file }}
 EnvironmentFile=-/etc/caddy/crowdsec.env
+# The packaged unit runs `caddy run --environ`, which prints the whole environment (origin secret,
+# CrowdSec key) to the journal at every start.
+ExecStart=
+ExecStart=/usr/bin/caddy run --config /etc/caddy/Caddyfile
 ExecReload=
 ExecReload=/usr/bin/caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile --address unix//run/caddy/admin.sock --force
 RuntimeDirectory=caddy

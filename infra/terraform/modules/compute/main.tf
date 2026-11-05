@@ -16,6 +16,7 @@ locals {
     data_volume_id    = aws_ebs_volume.data.id
     eip_allocation_id = aws_eip.app.allocation_id
     data_mount_point  = local.data_mount_point
+    releases_bucket   = var.releases_bucket_name
   })
 
   user_data_worker = templatefile("${path.module}/templates/user-data.sh.tftpl", {
@@ -27,6 +28,7 @@ locals {
     data_volume_id    = ""
     eip_allocation_id = ""
     data_mount_point  = local.data_mount_point
+    releases_bucket   = var.releases_bucket_name
   })
 }
 

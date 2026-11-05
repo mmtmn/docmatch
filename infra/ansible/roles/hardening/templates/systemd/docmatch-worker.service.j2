@@ -14,6 +14,8 @@ Group={{ hardening_app_group }}
 EnvironmentFile={{ hardening_env_file }}
 EnvironmentFile={{ hardening_instance_env_file }}
 Environment=DM_HARNESS_SOCKET={{ hardening_harness_socket }} DM_LLM_CACHE_DIR={{ hardening_app_home }}/cache/llm GOMEMLIMIT=120MiB
+# The worker shares the API's configuration loader, which requires both addresses; it binds neither.
+Environment=DM_API_LISTEN={{ hardening_api_listen }} DM_ADMIN_LISTEN={{ hardening_admin_listen }}
 Environment=DM_MEDIA_LOCAL_DIR={{ hardening_media_dir }} DM_PRICING_FILE={{ hardening_app_config_dir }}/pricing.yaml DM_MODELS_FILE={{ hardening_app_config_dir }}/models.yaml
 WorkingDirectory={{ hardening_app_home }}
 ExecStart={{ hardening_app_bin_dir }}/docmatch-worker
