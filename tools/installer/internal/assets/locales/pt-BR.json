@@ -56,7 +56,7 @@
     "title": "Solte os arquivos aqui",
     "hint": "ou clique para escolher. Você também pode colar.",
     "hint_short": "Toque para escolher arquivos",
-    "accepted": "Extratos, planilhas, PDFs, ZIPs, e-mails, imagens, áudios e vídeos",
+    "accepted": "Extratos, planilhas, PDFs, notas fiscais (XML), ZIPs, e-mails, imagens, áudios e vídeos",
     "add_more": "Adicionar mais",
     "files_count_one": "1 arquivo",
     "files_count_many": "{count} arquivos",
@@ -77,7 +77,8 @@
     "kind_image": "Imagem",
     "kind_audio": "Áudio",
     "kind_video": "Vídeo",
-    "kind_ofx": "Extrato OFX"
+    "kind_ofx": "Extrato OFX",
+    "kind_xml": "Nota fiscal (XML)"
   },
   "picker": {
     "label": "Regras salvas",
@@ -100,7 +101,7 @@
     "size_gb": "{n} GB"
   },
   "errors": {
-    "file_type_unknown": "{name}: formato não reconhecido. Aceitamos CSV, TXT, XLSX, PDF, ZIP, EML, OFX, imagens, áudios e vídeos.",
+    "file_type_unknown": "{name}: formato não reconhecido. Aceitamos CSV, TXT, XLSX, ODS, PDF, XML de NF-e, ZIP, EML, MBOX, OFX, imagens, áudios e vídeos.",
     "file_extension_mismatch": "{name}: o conteúdo não corresponde à extensão .{ext}.",
     "file_empty": "{name}: o arquivo está vazio.",
     "file_too_large": "{name}: maior que o limite de {max}.",
@@ -183,7 +184,8 @@
     "live_running": "Conciliando: {message}",
     "live_failed": "A conciliação falhou: {message}",
     "live_missing": "Nenhuma conciliação selecionada.",
-    "live_unconfigured": "Esta instalação não está ligada a uma API."
+    "live_unconfigured": "Esta instalação não está ligada a uma API.",
+    "source_warnings_title": "Alguns arquivos não entraram na conciliação:"
   },
   "auth": {
     "sign_in": "Entrar",
@@ -246,9 +248,16 @@
     "scanning": "Verificando {name}…",
     "estimating": "Calculando o orçamento…",
     "confirm_run": "Esta conciliação deve usar cerca de {expected} tokens (no máximo {cap}). Continuar?",
+    "confirm_large": "Pedido grande: deve levar cerca de {duration}. Avisamos por e-mail quando terminar.",
     "starting": "Iniciando a conciliação…",
     "rejected": "{name} foi recusado pela verificação de segurança ({reason}).",
     "cancelled": "Conciliação não iniciada."
+  },
+  "duration": {
+    "minute": "1 minuto",
+    "minutes": "{minutes} minutos",
+    "hours": "{hours} h",
+    "hours_minutes": "{hours} h {minutes} min"
   },
   "how": {
     "heading": "Como funciona",
