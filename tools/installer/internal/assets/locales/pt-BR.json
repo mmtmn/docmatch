@@ -837,6 +837,8 @@
       "doctor_install": "Instalação",
       "doctor_state": "{mode} · projeto {project} · {dir}",
       "doctor_images": "imagens de {registry} (tag {tag}, {how})",
+      "doctor_images_built": "compiladas nesta máquina",
+      "doctor_images_pulled": "baixadas do registro",
       "demo_start": "conciliando o gêmeo da Vantara em {url}",
       "demo_phase_login": "login local",
       "demo_phase_upload": "enviando",

@@ -546,7 +546,14 @@ func runDoctor(ctx context.Context, w world, args []string, b Build) (int, error
 		p.Line(text.T("cli.not_installed", "dir", o.Dir))
 	} else {
 		p.Line(text.T("cli.doctor_state", "mode", text.T("mode."+modeKey(o.Mode)+"_name"), "project", o.Project, "dir", o.Dir))
-		p.Line(text.T("cli.doctor_images", "registry", o.Registry, "tag", o.Tag, "how", first(r.st.Images, "-")))
+		how := "-"
+		switch r.st.Images {
+		case "built":
+			how = text.T("cli.doctor_images_built")
+		case "pulled":
+			how = text.T("cli.doctor_images_pulled")
+		}
+		p.Line(text.T("cli.doctor_images", "registry", o.Registry, "tag", o.Tag, "how", how))
 		u := o.URLs()
 		if v, err := demo.New(u.API, u.Site).Version(ctx); err == nil {
 			p.Line(ui.PlainMark("ok") + " " + text.T("cli.status_api", "version", v.Version, "url", u.App))
