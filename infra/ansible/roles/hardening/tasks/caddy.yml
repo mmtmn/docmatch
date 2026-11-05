@@ -11,17 +11,63 @@
   register: hardening_caddy_modules
   changed_when: false
 
-- name: Add the Route 53 DNS and CrowdSec modules to Caddy (official build service)
+# The packaged Caddy no longer has add-package (a binary owned by dpkg must not rewrite itself).
+# The image takes the official custom build instead, the way the Caddy docs describe it for apt
+# installs: the packaged binary is diverted to caddy.default and the build with the Route 53 DNS
+# and CrowdSec modules becomes /usr/bin/caddy through update-alternatives. The apt source is
+# disabled after the install, so only a new AMI changes either binary.
+- name: Decide whether Caddy needs the custom build
+  ansible.builtin.set_fact:
+    hardening_caddy_needs_modules: >-
+      {{ 'dns.providers.route53' not in hardening_caddy_modules.stdout
+         or 'http.handlers.crowdsec' not in hardening_caddy_modules.stdout }}
+
+- name: Download Caddy with the Route 53 DNS and CrowdSec modules (official build service)
+  ansible.builtin.get_url:
+    url: >-
+      {{ hardening_caddy_build_url }}?{{ (['os=linux', 'arch=arm64']
+      + (hardening_caddy_build_packages | map('urlencode') | map('regex_replace', '^', 'p=') | list))
+      | join('&') }}
+    dest: /usr/bin/caddy.custom
+    owner: root
+    group: root
+    mode: "0755"
+    timeout: 600
+  register: hardening_caddy_download
+  until: hardening_caddy_download is succeeded
+  retries: 3
+  delay: 15
+  when: hardening_caddy_needs_modules | bool
+
+- name: Divert the packaged Caddy binary to caddy.default
   ansible.builtin.command:
-    cmd: >-
-      caddy add-package
-      {{ hardening_caddy_dns_module }}@{{ hardening_caddy_dns_module_version }}
-      {{ hardening_caddy_crowdsec_module }}/http@{{ hardening_caddy_crowdsec_module_version }}
-      {{ hardening_caddy_crowdsec_module }}/crowdsec@{{ hardening_caddy_crowdsec_module_version }}
-  when: >-
-    'dns.providers.route53' not in hardening_caddy_modules.stdout
-    or 'http.handlers.crowdsec' not in hardening_caddy_modules.stdout
-  changed_when: true
+    cmd: dpkg-divert --local --divert /usr/bin/caddy.default --rename --add /usr/bin/caddy
+    creates: /usr/bin/caddy.default
+  when: hardening_caddy_needs_modules | bool
+
+- name: Register both Caddy binaries as alternatives (the custom build is selected)
+  community.general.alternatives:
+    name: caddy
+    link: /usr/bin/caddy
+    path: "{{ item.path }}"
+    priority: "{{ item.priority }}"
+    state: "{{ item.state }}"
+  loop:
+    - { path: /usr/bin/caddy.default, priority: 10, state: present }
+    - { path: /usr/bin/caddy.custom, priority: 50, state: selected }
+  loop_control:
+    label: "{{ item.path }}"
+  when: hardening_caddy_needs_modules | bool
+
+- name: List the modules of the Caddy binary in use
+  ansible.builtin.command:
+    cmd: caddy list-modules --skip-standard
+  register: hardening_caddy_modules_final
+  changed_when: false
+  failed_when: >-
+    hardening_caddy_modules_final.rc != 0
+    or 'dns.providers.route53' not in hardening_caddy_modules_final.stdout
+    or 'http.handlers.crowdsec' not in hardening_caddy_modules_final.stdout
 
 - name: Create Caddy directories
   ansible.builtin.file:
@@ -58,6 +104,14 @@
     group: root
     mode: "0750"
 
+- name: Create the Caddy drop-in directory first
+  ansible.builtin.file:
+    path: /etc/systemd/system/caddy.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
 - name: Harden the Caddy unit
   ansible.builtin.template:
     src: caddy-override.conf.j2
@@ -66,14 +120,6 @@
     group: root
     mode: "0644"
   notify: Reload systemd
-
-- name: Create the Caddy drop-in directory first
-  ansible.builtin.file:
-    path: /etc/systemd/system/caddy.service.d
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
 
 - name: Validate the Caddyfile
   ansible.builtin.command:

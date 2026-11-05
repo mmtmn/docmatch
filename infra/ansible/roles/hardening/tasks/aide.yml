@@ -9,6 +9,12 @@
     group: root
     mode: "0644"
 
+- name: Use SHA-512 for every AIDE checksum
+  ansible.builtin.lineinfile:
+    path: /etc/aide/aide.conf
+    regexp: '^Checksums\s*='
+    line: Checksums = sha512
+
 - name: Mail the daily report to root and keep the database read-only to root
   ansible.builtin.lineinfile:
     path: /etc/default/aide
@@ -20,6 +26,14 @@
     - { key: COPYNEWDB, value: "no" }
   loop_control:
     label: "{{ item.key }}"
+
+- name: Create the AIDE timer drop-in directory first
+  ansible.builtin.file:
+    path: /etc/systemd/system/dailyaidecheck.timer.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
 
 - name: Schedule the daily check at the maintenance hour
   ansible.builtin.copy:
@@ -33,14 +47,6 @@
     group: root
     mode: "0644"
   notify: Reload systemd
-
-- name: Create the AIDE timer drop-in directory first
-  ansible.builtin.file:
-    path: /etc/systemd/system/dailyaidecheck.timer.d
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
 
 - name: Enable the daily check
   ansible.builtin.systemd_service:

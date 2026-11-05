@@ -19,6 +19,7 @@ hardening_base_packages:
   - fail2ban
   - unattended-upgrades
   - needrestart
+  - apt-listchanges
   - debsums
   - libpam-pwquality
   - libpam-tmpdir

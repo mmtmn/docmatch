@@ -12,6 +12,10 @@
     fstype: tmpfs
     opts: defaults,rw,nodev,nosuid,noexec,relatime,size=512M,mode=1777
     state: mounted
+  # libpam-tmpdir points root's TMPDIR at /tmp/user/0, where the module unpacks itself; the new
+  # mount would hide that copy before the module finishes, so it unpacks outside the mount points.
+  environment:
+    TMPDIR: /root
 
 - name: Mount /var/tmp as tmpfs
   ansible.posix.mount:
@@ -20,6 +24,10 @@
     fstype: tmpfs
     opts: defaults,rw,nodev,nosuid,noexec,relatime,size=256M,mode=1777
     state: mounted
+  # libpam-tmpdir points root's TMPDIR at /tmp/user/0, where the module unpacks itself; the new
+  # mount would hide that copy before the module finishes, so it unpacks outside the mount points.
+  environment:
+    TMPDIR: /root
 
 - name: Harden /dev/shm
   ansible.posix.mount:

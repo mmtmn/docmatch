@@ -93,7 +93,15 @@ por `aws iam get-user` e depois por `aws ec2 describe-security-groups`.
    políticas de guardrail viajam em mapas com chaves fixas e os alarmes têm interruptores booleanos).
 3. **AMI**: copie `packer/example.pkrvars.hcl` para `packer/build.auto.pkrvars.hcl` com os três
    outputs acima e rode `make -C infra packer-build` (exige o `session-manager-plugin` da AWS na
-   máquina de build). O Packer entra pela SSM (nada de porta 22),
+   máquina de build). Sem o plugin: `ssh_interface = "public_ip"`, `security_group_id = ""` e
+   `ansible_use_proxy = true`; o Packer cria um grupo de segurança temporário que só admite SSH
+   do IP público da máquina de build e o apaga com a instância, e o Ansible passa pela única
+   conexão do Packer (o nftables do papel mantém conexões estabelecidas). A AMI sai igual, sem
+   OpenSSH. Com a CLI autenticada por `aws login`, o SDK do plugin do Packer não lê essas
+   credenciais: use um perfil com
+   `credential_process = aws configure export-credentials --format process` (num
+   `AWS_CONFIG_FILE` à parte, com `AWS_SDK_LOAD_CONFIG=1`), que renova as credenciais
+   temporárias durante a construção inteira. O Packer entra pela SSM (nada de porta 22),
    aplica o papel `hardening`, roda o portão do Lynis (índice ≥ 90, senão a AMI não é criada),
    remove o OpenSSH e inicializa o AIDE. O id da AMI fica em `packer/manifest.json`. O papel
    termina com asserções que derrubam a construção se as regras do auditd não carregaram inteiras
@@ -107,7 +115,12 @@ por `aws iam get-user` e depois por `aws ec2 describe-security-groups`.
    valida: volte `wait_for_certificate_validation = true` e aplique (o Terraform espera até 75 min
    pela validação e então troca a distribuição para o certificado ACM com os aliases do domínio;
    o output `custom_domain_enabled` confirma). Para o dev, adicione o NS de `dev` em
-   `extra_dns_records` do prod.
+   `extra_dns_records` do prod. Se o domínio já estiver delegado a uma zona do Route 53 criada
+   à mão, adote-a em vez de trocar o NS no registrador:
+   `terraform state rm module.edge.aws_route53_zone.this`,
+   `terraform import module.edge.aws_route53_zone.this <id da zona delegada>` e um apply, que
+   move registros e DNSSEC para ela; depois apague a zona que o primeiro apply criou (só NS e
+   SOA). O DS continua o mesmo: a chave KSK vem da mesma chave KMS.
 6. **Aplicação**: `infra/scripts/deploy-app.sh --env prod` compila API, worker, migrações
    (`GOOS=linux GOARCH=arm64`) e o harness (`aarch64-unknown-linux-musl`, ligado pelo `rust-lld`,
    sem toolchain C cruzada), publica em `s3://<releases>/releases/<sha>/` com `SHA256SUMS` e
