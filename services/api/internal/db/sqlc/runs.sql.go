@@ -43,7 +43,7 @@ const createRun = `-- name: CreateRun :one
 
 INSERT INTO runs (org_id, workflow_id, user_id, api_key_id, quote_id, hold_id, lane, credits_held)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, org_id, workflow_id, user_id, api_key_id, quote_id, hold_id, lane, status, credits_held, credits_settled, error_code, stats, started_at, finished_at, created_at, updated_at
+RETURNING id, org_id, workflow_id, user_id, api_key_id, quote_id, hold_id, lane, status, credits_held, credits_settled, error_code, stats, started_at, finished_at, created_at, updated_at, estimated_credits, credits_spent, credits_refunded, last_seq, inputs, progress, summary, error, pending_quote_id, cancel_requested, expires_at
 `
 
 type CreateRunParams struct {
@@ -88,6 +88,17 @@ func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (Run, erro
 		&i.FinishedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EstimatedCredits,
+		&i.CreditsSpent,
+		&i.CreditsRefunded,
+		&i.LastSeq,
+		&i.Inputs,
+		&i.Progress,
+		&i.Summary,
+		&i.Error,
+		&i.PendingQuoteID,
+		&i.CancelRequested,
+		&i.ExpiresAt,
 	)
 	return i, err
 }
@@ -95,7 +106,7 @@ func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (Run, erro
 const createUpload = `-- name: CreateUpload :one
 INSERT INTO uploads (org_id, user_id, run_id, file_name, content_type, size_bytes, sha256, storage_key)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, org_id, user_id, run_id, file_name, content_type, size_bytes, sha256, storage_key, status, scan_result, created_at, scanned_at, deleted_at
+RETURNING id, org_id, user_id, run_id, file_name, content_type, size_bytes, sha256, storage_key, status, scan_result, created_at, scanned_at, deleted_at, kind, store, role, detected_mime, rejected_reason, duration_ms, ticket_expires_at, completed_at, expires_at
 `
 
 type CreateUploadParams struct {
@@ -136,6 +147,15 @@ func (q *Queries) CreateUpload(ctx context.Context, arg CreateUploadParams) (Upl
 		&i.CreatedAt,
 		&i.ScannedAt,
 		&i.DeletedAt,
+		&i.Kind,
+		&i.Store,
+		&i.Role,
+		&i.DetectedMime,
+		&i.RejectedReason,
+		&i.DurationMs,
+		&i.TicketExpiresAt,
+		&i.CompletedAt,
+		&i.ExpiresAt,
 	)
 	return i, err
 }
@@ -143,7 +163,7 @@ func (q *Queries) CreateUpload(ctx context.Context, arg CreateUploadParams) (Upl
 const finishRun = `-- name: FinishRun :one
 UPDATE runs SET status = $3, finished_at = now(), error_code = $4, credits_settled = $5, stats = $6
 WHERE org_id = $1 AND id = $2 AND status IN ('queued', 'running')
-RETURNING id, org_id, workflow_id, user_id, api_key_id, quote_id, hold_id, lane, status, credits_held, credits_settled, error_code, stats, started_at, finished_at, created_at, updated_at
+RETURNING id, org_id, workflow_id, user_id, api_key_id, quote_id, hold_id, lane, status, credits_held, credits_settled, error_code, stats, started_at, finished_at, created_at, updated_at, estimated_credits, credits_spent, credits_refunded, last_seq, inputs, progress, summary, error, pending_quote_id, cancel_requested, expires_at
 `
 
 type FinishRunParams struct {
@@ -183,12 +203,23 @@ func (q *Queries) FinishRun(ctx context.Context, arg FinishRunParams) (Run, erro
 		&i.FinishedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EstimatedCredits,
+		&i.CreditsSpent,
+		&i.CreditsRefunded,
+		&i.LastSeq,
+		&i.Inputs,
+		&i.Progress,
+		&i.Summary,
+		&i.Error,
+		&i.PendingQuoteID,
+		&i.CancelRequested,
+		&i.ExpiresAt,
 	)
 	return i, err
 }
 
 const getRun = `-- name: GetRun :one
-SELECT id, org_id, workflow_id, user_id, api_key_id, quote_id, hold_id, lane, status, credits_held, credits_settled, error_code, stats, started_at, finished_at, created_at, updated_at FROM runs WHERE org_id = $1 AND id = $2
+SELECT id, org_id, workflow_id, user_id, api_key_id, quote_id, hold_id, lane, status, credits_held, credits_settled, error_code, stats, started_at, finished_at, created_at, updated_at, estimated_credits, credits_spent, credits_refunded, last_seq, inputs, progress, summary, error, pending_quote_id, cancel_requested, expires_at FROM runs WHERE org_id = $1 AND id = $2
 `
 
 type GetRunParams struct {
@@ -217,12 +248,23 @@ func (q *Queries) GetRun(ctx context.Context, arg GetRunParams) (Run, error) {
 		&i.FinishedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EstimatedCredits,
+		&i.CreditsSpent,
+		&i.CreditsRefunded,
+		&i.LastSeq,
+		&i.Inputs,
+		&i.Progress,
+		&i.Summary,
+		&i.Error,
+		&i.PendingQuoteID,
+		&i.CancelRequested,
+		&i.ExpiresAt,
 	)
 	return i, err
 }
 
 const getUpload = `-- name: GetUpload :one
-SELECT id, org_id, user_id, run_id, file_name, content_type, size_bytes, sha256, storage_key, status, scan_result, created_at, scanned_at, deleted_at FROM uploads WHERE org_id = $1 AND id = $2 AND deleted_at IS NULL
+SELECT id, org_id, user_id, run_id, file_name, content_type, size_bytes, sha256, storage_key, status, scan_result, created_at, scanned_at, deleted_at, kind, store, role, detected_mime, rejected_reason, duration_ms, ticket_expires_at, completed_at, expires_at FROM uploads WHERE org_id = $1 AND id = $2 AND deleted_at IS NULL
 `
 
 type GetUploadParams struct {
@@ -248,12 +290,21 @@ func (q *Queries) GetUpload(ctx context.Context, arg GetUploadParams) (Upload, e
 		&i.CreatedAt,
 		&i.ScannedAt,
 		&i.DeletedAt,
+		&i.Kind,
+		&i.Store,
+		&i.Role,
+		&i.DetectedMime,
+		&i.RejectedReason,
+		&i.DurationMs,
+		&i.TicketExpiresAt,
+		&i.CompletedAt,
+		&i.ExpiresAt,
 	)
 	return i, err
 }
 
 const listRecentRuns = `-- name: ListRecentRuns :many
-SELECT id, org_id, workflow_id, user_id, api_key_id, quote_id, hold_id, lane, status, credits_held, credits_settled, error_code, stats, started_at, finished_at, created_at, updated_at FROM runs WHERE org_id = $1 ORDER BY created_at DESC LIMIT $2
+SELECT id, org_id, workflow_id, user_id, api_key_id, quote_id, hold_id, lane, status, credits_held, credits_settled, error_code, stats, started_at, finished_at, created_at, updated_at, estimated_credits, credits_spent, credits_refunded, last_seq, inputs, progress, summary, error, pending_quote_id, cancel_requested, expires_at FROM runs WHERE org_id = $1 ORDER BY created_at DESC LIMIT $2
 `
 
 type ListRecentRunsParams struct {
@@ -288,6 +339,17 @@ func (q *Queries) ListRecentRuns(ctx context.Context, arg ListRecentRunsParams) 
 			&i.FinishedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.EstimatedCredits,
+			&i.CreditsSpent,
+			&i.CreditsRefunded,
+			&i.LastSeq,
+			&i.Inputs,
+			&i.Progress,
+			&i.Summary,
+			&i.Error,
+			&i.PendingQuoteID,
+			&i.CancelRequested,
+			&i.ExpiresAt,
 		); err != nil {
 			return nil, err
 		}
@@ -300,7 +362,7 @@ func (q *Queries) ListRecentRuns(ctx context.Context, arg ListRecentRunsParams) 
 }
 
 const listRecentRunsBefore = `-- name: ListRecentRunsBefore :many
-SELECT id, org_id, workflow_id, user_id, api_key_id, quote_id, hold_id, lane, status, credits_held, credits_settled, error_code, stats, started_at, finished_at, created_at, updated_at FROM runs WHERE org_id = $1 AND created_at < $2 ORDER BY created_at DESC LIMIT $3
+SELECT id, org_id, workflow_id, user_id, api_key_id, quote_id, hold_id, lane, status, credits_held, credits_settled, error_code, stats, started_at, finished_at, created_at, updated_at, estimated_credits, credits_spent, credits_refunded, last_seq, inputs, progress, summary, error, pending_quote_id, cancel_requested, expires_at FROM runs WHERE org_id = $1 AND created_at < $2 ORDER BY created_at DESC LIMIT $3
 `
 
 type ListRecentRunsBeforeParams struct {
@@ -336,6 +398,17 @@ func (q *Queries) ListRecentRunsBefore(ctx context.Context, arg ListRecentRunsBe
 			&i.FinishedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.EstimatedCredits,
+			&i.CreditsSpent,
+			&i.CreditsRefunded,
+			&i.LastSeq,
+			&i.Inputs,
+			&i.Progress,
+			&i.Summary,
+			&i.Error,
+			&i.PendingQuoteID,
+			&i.CancelRequested,
+			&i.ExpiresAt,
 		); err != nil {
 			return nil, err
 		}
@@ -348,7 +421,7 @@ func (q *Queries) ListRecentRunsBefore(ctx context.Context, arg ListRecentRunsBe
 }
 
 const listRunUploads = `-- name: ListRunUploads :many
-SELECT id, org_id, user_id, run_id, file_name, content_type, size_bytes, sha256, storage_key, status, scan_result, created_at, scanned_at, deleted_at FROM uploads WHERE org_id = $1 AND run_id = $2 AND deleted_at IS NULL ORDER BY created_at
+SELECT id, org_id, user_id, run_id, file_name, content_type, size_bytes, sha256, storage_key, status, scan_result, created_at, scanned_at, deleted_at, kind, store, role, detected_mime, rejected_reason, duration_ms, ticket_expires_at, completed_at, expires_at FROM uploads WHERE org_id = $1 AND run_id = $2 AND deleted_at IS NULL ORDER BY created_at
 `
 
 type ListRunUploadsParams struct {
@@ -380,6 +453,15 @@ func (q *Queries) ListRunUploads(ctx context.Context, arg ListRunUploadsParams) 
 			&i.CreatedAt,
 			&i.ScannedAt,
 			&i.DeletedAt,
+			&i.Kind,
+			&i.Store,
+			&i.Role,
+			&i.DetectedMime,
+			&i.RejectedReason,
+			&i.DurationMs,
+			&i.TicketExpiresAt,
+			&i.CompletedAt,
+			&i.ExpiresAt,
 		); err != nil {
 			return nil, err
 		}
@@ -392,7 +474,7 @@ func (q *Queries) ListRunUploads(ctx context.Context, arg ListRunUploadsParams) 
 }
 
 const nextQueuedRun = `-- name: NextQueuedRun :one
-SELECT id, org_id, workflow_id, user_id, api_key_id, quote_id, hold_id, lane, status, credits_held, credits_settled, error_code, stats, started_at, finished_at, created_at, updated_at FROM runs WHERE status = 'queued' ORDER BY created_at LIMIT 1 FOR UPDATE SKIP LOCKED
+SELECT id, org_id, workflow_id, user_id, api_key_id, quote_id, hold_id, lane, status, credits_held, credits_settled, error_code, stats, started_at, finished_at, created_at, updated_at, estimated_credits, credits_spent, credits_refunded, last_seq, inputs, progress, summary, error, pending_quote_id, cancel_requested, expires_at FROM runs WHERE status = 'queued' ORDER BY created_at LIMIT 1 FOR UPDATE SKIP LOCKED
 `
 
 // Próxima execução da fila (modo sistema; o worker define app.org_id depois).
@@ -417,6 +499,17 @@ func (q *Queries) NextQueuedRun(ctx context.Context) (Run, error) {
 		&i.FinishedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EstimatedCredits,
+		&i.CreditsSpent,
+		&i.CreditsRefunded,
+		&i.LastSeq,
+		&i.Inputs,
+		&i.Progress,
+		&i.Summary,
+		&i.Error,
+		&i.PendingQuoteID,
+		&i.CancelRequested,
+		&i.ExpiresAt,
 	)
 	return i, err
 }
@@ -445,7 +538,7 @@ func (q *Queries) SetUploadScan(ctx context.Context, arg SetUploadScanParams) er
 const startRun = `-- name: StartRun :one
 UPDATE runs SET status = 'running', started_at = now()
 WHERE org_id = $1 AND id = $2 AND status = 'queued'
-RETURNING id, org_id, workflow_id, user_id, api_key_id, quote_id, hold_id, lane, status, credits_held, credits_settled, error_code, stats, started_at, finished_at, created_at, updated_at
+RETURNING id, org_id, workflow_id, user_id, api_key_id, quote_id, hold_id, lane, status, credits_held, credits_settled, error_code, stats, started_at, finished_at, created_at, updated_at, estimated_credits, credits_spent, credits_refunded, last_seq, inputs, progress, summary, error, pending_quote_id, cancel_requested, expires_at
 `
 
 type StartRunParams struct {
@@ -474,6 +567,17 @@ func (q *Queries) StartRun(ctx context.Context, arg StartRunParams) (Run, error)
 		&i.FinishedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EstimatedCredits,
+		&i.CreditsSpent,
+		&i.CreditsRefunded,
+		&i.LastSeq,
+		&i.Inputs,
+		&i.Progress,
+		&i.Summary,
+		&i.Error,
+		&i.PendingQuoteID,
+		&i.CancelRequested,
+		&i.ExpiresAt,
 	)
 	return i, err
 }

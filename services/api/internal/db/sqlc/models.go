@@ -218,6 +218,7 @@ type Feedback struct {
 	Verdict          string
 	Note             *string
 	CreatedAt        time.Time
+	Reason           *string
 }
 
 type Finding struct {
@@ -234,6 +235,15 @@ type Finding struct {
 	Verified     bool
 	Verification []byte
 	CreatedAt    time.Time
+	Code         string
+	Confidence   float32
+	Status       string
+	RuleID       *uuid.UUID
+	MatchID      *uuid.UUID
+	SourceIds    []byte
+	Details      []byte
+	Feedback     []byte
+	UpdatedAt    time.Time
 }
 
 type FindingsDefault struct {
@@ -258,6 +268,17 @@ type GeoPrice struct {
 	Currency     string
 	Note         *string
 	UpdatedAt    time.Time
+}
+
+type IdempotencyKey struct {
+	OrgID          uuid.UUID
+	Key            string
+	RequestHash    []byte
+	Status         string
+	ResponseStatus *int32
+	ResponseBody   []byte
+	CreatedAt      time.Time
+	ExpiresAt      time.Time
 }
 
 type LibraryRequest struct {
@@ -287,16 +308,21 @@ type MagicLink struct {
 }
 
 type Match struct {
-	ID         uuid.UUID
-	OrgID      uuid.UUID
-	RunID      uuid.UUID
-	LeftRef    string
-	RightRef   string
-	RuleID     *uuid.UUID
-	Confidence float32
-	Amount     *int64
-	Meta       []byte
-	CreatedAt  time.Time
+	ID            uuid.UUID
+	OrgID         uuid.UUID
+	RunID         uuid.UUID
+	LeftRef       string
+	RightRef      string
+	RuleID        *uuid.UUID
+	Confidence    float32
+	Amount        *int64
+	Meta          []byte
+	CreatedAt     time.Time
+	Kind          string
+	LeftEvidence  []byte
+	RightEvidence []byte
+	Currency      string
+	Explanation   *string
 }
 
 type MediaAsset struct {
@@ -378,6 +404,10 @@ type Quote struct {
 	ExpiresAt        time.Time
 	AcceptedAt       *time.Time
 	CreatedAt        time.Time
+	Fingerprint      *string
+	Quote            []byte
+	RunID            *uuid.UUID
+	Kind             string
 }
 
 type Rule struct {
@@ -395,6 +425,15 @@ type Rule struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	DeletedAt   *time.Time
+	Version     int32
+	Status      string
+	Scope       string
+	AppliesTo   []byte
+	Compiled    []byte
+	Stats       []byte
+	Provenance  []byte
+	RunID       *uuid.UUID
+	PromotedAt  *time.Time
 }
 
 type RuleUse struct {
@@ -408,24 +447,68 @@ type RuleUse struct {
 	CreatedAt       time.Time
 }
 
+type RuleVersion struct {
+	ID        uuid.UUID
+	OrgID     uuid.UUID
+	RuleID    uuid.UUID
+	Version   int32
+	Title     string
+	Body      string
+	Compiled  []byte
+	Status    string
+	CreatedBy *uuid.UUID
+	CreatedAt time.Time
+}
+
 type Run struct {
-	ID             uuid.UUID
-	OrgID          uuid.UUID
-	WorkflowID     *uuid.UUID
-	UserID         *uuid.UUID
-	ApiKeyID       *uuid.UUID
-	QuoteID        *uuid.UUID
-	HoldID         *uuid.UUID
-	Lane           string
-	Status         string
-	CreditsHeld    int64
-	CreditsSettled int64
-	ErrorCode      *string
-	Stats          []byte
-	StartedAt      *time.Time
-	FinishedAt     *time.Time
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	ID               uuid.UUID
+	OrgID            uuid.UUID
+	WorkflowID       *uuid.UUID
+	UserID           *uuid.UUID
+	ApiKeyID         *uuid.UUID
+	QuoteID          *uuid.UUID
+	HoldID           *uuid.UUID
+	Lane             string
+	Status           string
+	CreditsHeld      int64
+	CreditsSettled   int64
+	ErrorCode        *string
+	Stats            []byte
+	StartedAt        *time.Time
+	FinishedAt       *time.Time
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+	EstimatedCredits int64
+	CreditsSpent     int64
+	CreditsRefunded  int64
+	LastSeq          int64
+	Inputs           []byte
+	Progress         []byte
+	Summary          []byte
+	Error            []byte
+	PendingQuoteID   *uuid.UUID
+	CancelRequested  bool
+	ExpiresAt        *time.Time
+}
+
+type RunEvent struct {
+	ID        uuid.UUID
+	OrgID     uuid.UUID
+	RunID     uuid.UUID
+	Seq       int64
+	Event     string
+	Data      []byte
+	CreatedAt time.Time
+}
+
+type RunEventsDefault struct {
+	ID        uuid.UUID
+	OrgID     uuid.UUID
+	RunID     uuid.UUID
+	Seq       int64
+	Event     string
+	Data      []byte
+	CreatedAt time.Time
 }
 
 type Session struct {
@@ -540,20 +623,29 @@ type ToolVersion struct {
 }
 
 type Upload struct {
-	ID          uuid.UUID
-	OrgID       uuid.UUID
-	UserID      *uuid.UUID
-	RunID       *uuid.UUID
-	FileName    string
-	ContentType *string
-	SizeBytes   int64
-	Sha256      []byte
-	StorageKey  string
-	Status      string
-	ScanResult  []byte
-	CreatedAt   time.Time
-	ScannedAt   *time.Time
-	DeletedAt   *time.Time
+	ID              uuid.UUID
+	OrgID           uuid.UUID
+	UserID          *uuid.UUID
+	RunID           *uuid.UUID
+	FileName        string
+	ContentType     *string
+	SizeBytes       int64
+	Sha256          []byte
+	StorageKey      string
+	Status          string
+	ScanResult      []byte
+	CreatedAt       time.Time
+	ScannedAt       *time.Time
+	DeletedAt       *time.Time
+	Kind            string
+	Store           string
+	Role            *string
+	DetectedMime    *string
+	RejectedReason  *string
+	DurationMs      *int64
+	TicketExpiresAt *time.Time
+	CompletedAt     *time.Time
+	ExpiresAt       *time.Time
 }
 
 type User struct {

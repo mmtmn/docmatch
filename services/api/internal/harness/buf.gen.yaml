@@ -1,0 +1,17 @@
+# Gera os stubs Go do gRPC do harness a partir de packages/contracts/harness.proto.
+# Rode `make -C services/api proto` (buf, protoc-gen-go e protoc-gen-go-grpc em ~/go/bin):
+#   buf generate ../../../../packages/contracts --template buf.gen.yaml --path ../../../../packages/contracts/harness.proto
+# O pacote proto declara go_package apontando para packages/contracts/gen/harnessv1,
+# que não é commitado; aqui o M= redireciona a saída para internal/harness/pb.
+version: v2
+plugins:
+  - local: protoc-gen-go
+    out: pb
+    opt:
+      - paths=source_relative
+      - Mharness.proto=github.com/mmtmn/docmatch/services/api/internal/harness/pb;harnesspb
+  - local: protoc-gen-go-grpc
+    out: pb
+    opt:
+      - paths=source_relative
+      - Mharness.proto=github.com/mmtmn/docmatch/services/api/internal/harness/pb;harnesspb

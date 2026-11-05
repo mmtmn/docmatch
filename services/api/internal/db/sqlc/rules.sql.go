@@ -15,7 +15,7 @@ const createRule = `-- name: CreateRule :one
 
 INSERT INTO rules (org_id, title, body, compiled_sql, kind, source, created_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, org_id, title, body, compiled_sql, kind, source, enabled, created_by, use_count, last_used_at, created_at, updated_at, deleted_at
+RETURNING id, org_id, title, body, compiled_sql, kind, source, enabled, created_by, use_count, last_used_at, created_at, updated_at, deleted_at, version, status, scope, applies_to, compiled, stats, provenance, run_id, promoted_at
 `
 
 type CreateRuleParams struct {
@@ -56,12 +56,21 @@ func (q *Queries) CreateRule(ctx context.Context, arg CreateRuleParams) (Rule, e
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.Version,
+		&i.Status,
+		&i.Scope,
+		&i.AppliesTo,
+		&i.Compiled,
+		&i.Stats,
+		&i.Provenance,
+		&i.RunID,
+		&i.PromotedAt,
 	)
 	return i, err
 }
 
 const getRule = `-- name: GetRule :one
-SELECT id, org_id, title, body, compiled_sql, kind, source, enabled, created_by, use_count, last_used_at, created_at, updated_at, deleted_at FROM rules WHERE org_id = $1 AND id = $2 AND deleted_at IS NULL
+SELECT id, org_id, title, body, compiled_sql, kind, source, enabled, created_by, use_count, last_used_at, created_at, updated_at, deleted_at, version, status, scope, applies_to, compiled, stats, provenance, run_id, promoted_at FROM rules WHERE org_id = $1 AND id = $2 AND deleted_at IS NULL
 `
 
 type GetRuleParams struct {
@@ -87,6 +96,15 @@ func (q *Queries) GetRule(ctx context.Context, arg GetRuleParams) (Rule, error) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.Version,
+		&i.Status,
+		&i.Scope,
+		&i.AppliesTo,
+		&i.Compiled,
+		&i.Stats,
+		&i.Provenance,
+		&i.RunID,
+		&i.PromotedAt,
 	)
 	return i, err
 }
@@ -130,7 +148,7 @@ func (q *Queries) InsertRuleUse(ctx context.Context, arg InsertRuleUseParams) (R
 }
 
 const listRecentlyUsedRules = `-- name: ListRecentlyUsedRules :many
-SELECT id, org_id, title, body, compiled_sql, kind, source, enabled, created_by, use_count, last_used_at, created_at, updated_at, deleted_at FROM rules
+SELECT id, org_id, title, body, compiled_sql, kind, source, enabled, created_by, use_count, last_used_at, created_at, updated_at, deleted_at, version, status, scope, applies_to, compiled, stats, provenance, run_id, promoted_at FROM rules
 WHERE org_id = $1 AND deleted_at IS NULL
 ORDER BY last_used_at DESC NULLS LAST, created_at DESC
 LIMIT $2
@@ -165,6 +183,15 @@ func (q *Queries) ListRecentlyUsedRules(ctx context.Context, arg ListRecentlyUse
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.Version,
+			&i.Status,
+			&i.Scope,
+			&i.AppliesTo,
+			&i.Compiled,
+			&i.Stats,
+			&i.Provenance,
+			&i.RunID,
+			&i.PromotedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -216,7 +243,7 @@ func (q *Queries) ListRuleUses(ctx context.Context, arg ListRuleUsesParams) ([]R
 }
 
 const searchRules = `-- name: SearchRules :many
-SELECT rules.id, rules.org_id, rules.title, rules.body, rules.compiled_sql, rules.kind, rules.source, rules.enabled, rules.created_by, rules.use_count, rules.last_used_at, rules.created_at, rules.updated_at, rules.deleted_at, similarity(rules.title, $2::text)::real AS score
+SELECT rules.id, rules.org_id, rules.title, rules.body, rules.compiled_sql, rules.kind, rules.source, rules.enabled, rules.created_by, rules.use_count, rules.last_used_at, rules.created_at, rules.updated_at, rules.deleted_at, rules.version, rules.status, rules.scope, rules.applies_to, rules.compiled, rules.stats, rules.provenance, rules.run_id, rules.promoted_at, similarity(rules.title, $2::text)::real AS score
 FROM rules
 WHERE rules.org_id = $1 AND rules.deleted_at IS NULL
   AND (rules.title % $2::text OR rules.title ILIKE '%' || $2::text || '%')
@@ -259,6 +286,15 @@ func (q *Queries) SearchRules(ctx context.Context, arg SearchRulesParams) ([]Sea
 			&i.Rule.CreatedAt,
 			&i.Rule.UpdatedAt,
 			&i.Rule.DeletedAt,
+			&i.Rule.Version,
+			&i.Rule.Status,
+			&i.Rule.Scope,
+			&i.Rule.AppliesTo,
+			&i.Rule.Compiled,
+			&i.Rule.Stats,
+			&i.Rule.Provenance,
+			&i.Rule.RunID,
+			&i.Rule.PromotedAt,
 			&i.Score,
 		); err != nil {
 			return nil, err
@@ -305,7 +341,7 @@ func (q *Queries) TouchRule(ctx context.Context, arg TouchRuleParams) error {
 const updateRule = `-- name: UpdateRule :one
 UPDATE rules SET title = $3, body = $4, compiled_sql = $5, enabled = $6
 WHERE org_id = $1 AND id = $2 AND deleted_at IS NULL
-RETURNING id, org_id, title, body, compiled_sql, kind, source, enabled, created_by, use_count, last_used_at, created_at, updated_at, deleted_at
+RETURNING id, org_id, title, body, compiled_sql, kind, source, enabled, created_by, use_count, last_used_at, created_at, updated_at, deleted_at, version, status, scope, applies_to, compiled, stats, provenance, run_id, promoted_at
 `
 
 type UpdateRuleParams struct {
@@ -342,6 +378,15 @@ func (q *Queries) UpdateRule(ctx context.Context, arg UpdateRuleParams) (Rule, e
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.Version,
+		&i.Status,
+		&i.Scope,
+		&i.AppliesTo,
+		&i.Compiled,
+		&i.Stats,
+		&i.Provenance,
+		&i.RunID,
+		&i.PromotedAt,
 	)
 	return i, err
 }

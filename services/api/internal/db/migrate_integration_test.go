@@ -73,8 +73,9 @@ func TestMigratorDownUpRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	ms := migrations.MustLoad()
-	reverted, err := m.Down(ctx, ms, 1)
-	if err != nil || len(reverted) != 1 {
+	// Every migration goes down (newest first) and back up.
+	reverted, err := m.Down(ctx, ms, len(ms))
+	if err != nil || len(reverted) != len(ms) {
 		t.Fatalf("Down: %v %v", reverted, err)
 	}
 	var n int
@@ -83,7 +84,7 @@ func TestMigratorDownUpRoundTrip(t *testing.T) {
 		t.Fatalf("tabelas restantes após down: %d (%v)", n, err)
 	}
 	applied, err := m.Up(ctx, ms)
-	if err != nil || len(applied) != 1 {
+	if err != nil || len(applied) != len(ms) {
 		t.Fatalf("Up após Down: %v %v", applied, err)
 	}
 	if err := d.Admin.QueryRow(ctx, "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'").Scan(&n); err != nil || n < 40 {
@@ -245,8 +246,9 @@ func TestPartitions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(parts) != 4*5 {
-		t.Fatalf("esperava 20 partições (4 tabelas × 5 meses), veio %d", len(parts))
+	// credit_ledger, findings, api_usage, audit_log and run_events.
+	if len(parts) != 5*5 {
+		t.Fatalf("esperava 25 partições (5 tabelas × 5 meses), veio %d", len(parts))
 	}
 	again, err := db.EnsureMonthPartitions(ctx, d.App, 3, 1)
 	if err != nil {

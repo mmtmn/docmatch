@@ -21,6 +21,8 @@ path:.*/LICENSE$
 path:LICENSE$
 # Esquemas e namespaces públicos usados por bibliotecas e protocolos.
 literal:https?://(www\.)?(w3\.org|schema\.org|json-schema\.org|xmlns\.com|purl\.org|example\.(com|org|net)|localhost)
+# Namespaces OOXML do exportador XLSX (services/api/internal/export): identificadores do formato, não URLs acessadas.
+literal:https?://schemas\.openxmlformats\.org/
 literal:https?://(openrouter\.ai/api|api\.stripe\.com|api\.resend\.com|accounts\.google\.com|oauth2\.googleapis\.com|www\.googleapis\.com|appleid\.apple\.com)
 literal:https?://(registry\.npmjs\.org|pypi\.org|crates\.io|proxy\.golang\.org|github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)
 literal:127\.0\.0\.1|0\.0\.0\.0|255\.255\.255\.255|169\.254\.169\.254

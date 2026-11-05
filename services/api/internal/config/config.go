@@ -50,6 +50,8 @@ const (
 	VarDatabaseURL       = "DATABASE_URL"
 	VarDBAppRole         = "DM_DB_APP_ROLE"
 	VarAWSRegion         = "AWS_REGION"
+	VarAWSAccessKeyID    = "AWS_ACCESS_KEY_ID"
+	VarAWSSecretKey      = "AWS_SECRET_ACCESS_KEY"
 	VarS3UploadsBucket   = "DM_S3_UPLOADS_BUCKET"
 	VarS3BackupsBucket   = "DM_S3_BACKUPS_BUCKET"
 	VarS3Endpoint        = "DM_S3_ENDPOINT"
@@ -57,6 +59,12 @@ const (
 	VarR2AccessKeyID     = "R2_ACCESS_KEY_ID"
 	VarR2SecretAccessKey = "R2_SECRET_ACCESS_KEY"
 	VarR2MediaBucket     = "DM_R2_MEDIA_BUCKET"
+	VarR2Endpoint        = "DM_R2_ENDPOINT"
+	VarMediaLocalDir     = "DM_MEDIA_LOCAL_DIR"
+
+	VarHarnessSocket = "DM_HARNESS_SOCKET"
+	VarScanQueueURL  = "DM_SCAN_QUEUE_URL"
+	VarScannerBin    = "DM_SCANNER_BIN"
 
 	VarLLMMode         = "DM_LLM_MODE"
 	VarOpenRouterKey   = "OPENROUTER_API_KEY"
@@ -101,6 +109,10 @@ const (
 	DefaultModelsFile  = "config/models.yaml"
 	DefaultPricingFile = "config/pricing.yaml"
 	DefaultLLMCacheDir = ".cache/llm"
+	// DefaultMediaLocalDir receives media uploads when R2 is not configured (dev).
+	DefaultMediaLocalDir = ".cache/media"
+	// DefaultScannerBin is looked up on PATH by the dev scanner.
+	DefaultScannerBin = "dm-scanner"
 
 	// minSessionSecretBytes is the decoded length DM_SESSION_SECRET must reach.
 	minSessionSecretBytes = 32
@@ -127,11 +139,29 @@ type Config struct {
 
 	Database Database
 	Storage  Storage
+	Harness  Harness
+	Scan     Scan
 	LLM      LLM
 	Auth     Auth
 	Billing  Billing
 	Email    Email
 	Signing  Signing
+}
+
+// Harness holds the connection to the reconciliation engine.
+type Harness struct {
+	// Socket is the Unix socket path of the harness gRPC server. Empty in
+	// dev means "no harness": estimates and runs answer harness_unavailable.
+	Socket string
+}
+
+// Scan holds the scanner integration: the SQS verdict queue in production
+// and the local scanner binary in dev.
+type Scan struct {
+	// QueueURL is the SQS queue with scanner verdicts; empty disables the consumer.
+	QueueURL string
+	// ScannerBin is the dev scanner binary looked up on PATH.
+	ScannerBin string
 }
 
 // Database holds the PostgreSQL connection settings.
@@ -145,7 +175,11 @@ type Database struct {
 
 // Storage holds S3 (documents) and Cloudflare R2 (media) settings.
 type Storage struct {
-	AWSRegion       string
+	AWSRegion string
+	// AWSAccessKeyID/AWSSecretKey are the static S3 credentials of the local
+	// S3 in dev; empty in production (instance role via the default chain).
+	AWSAccessKeyID  string
+	AWSSecretKey    Secret
 	S3UploadsBucket string
 	S3BackupsBucket string
 	S3Endpoint      *url.URL // MinIO in dev; nil in prod
@@ -153,6 +187,15 @@ type Storage struct {
 	R2AccessKeyID   string
 	R2SecretKey     Secret
 	R2MediaBucket   string
+	// R2Endpoint is the S3 API endpoint of R2; nil derives it from the account id.
+	R2Endpoint *url.URL
+	// MediaLocalDir is the filesystem fallback for media when R2 is not configured.
+	MediaLocalDir string
+}
+
+// R2Configured reports whether every R2 setting needed by the media store is present.
+func (s Storage) R2Configured() bool {
+	return s.R2AccountID != "" && s.R2AccessKeyID != "" && s.R2SecretKey.IsSet() && s.R2MediaBucket != ""
 }
 
 // LLM holds model routing settings.
@@ -241,6 +284,8 @@ func LoadFrom(lookup Lookup) (*Config, error) {
 	cfg.Database.AppRole = r.identifier(VarDBAppRole, DefaultDBAppRole)
 
 	cfg.Storage.AWSRegion = r.optional(VarAWSRegion, "")
+	cfg.Storage.AWSAccessKeyID = r.optional(VarAWSAccessKeyID, "")
+	cfg.Storage.AWSSecretKey = r.secret(VarAWSSecretKey, false)
 	cfg.Storage.S3UploadsBucket = r.optional(VarS3UploadsBucket, "")
 	cfg.Storage.S3BackupsBucket = r.optional(VarS3BackupsBucket, "")
 	cfg.Storage.S3Endpoint = r.urlOptional(VarS3Endpoint, false)
@@ -251,6 +296,15 @@ func LoadFrom(lookup Lookup) (*Config, error) {
 	cfg.Storage.R2AccessKeyID = r.optional(VarR2AccessKeyID, "")
 	cfg.Storage.R2SecretKey = r.secret(VarR2SecretAccessKey, false)
 	cfg.Storage.R2MediaBucket = r.optional(VarR2MediaBucket, "")
+	cfg.Storage.R2Endpoint = r.urlOptional(VarR2Endpoint, prod)
+	cfg.Storage.MediaLocalDir = r.optional(VarMediaLocalDir, DefaultMediaLocalDir)
+
+	// Harness and scanner settings are optional: without them the affected
+	// features answer harness_unavailable / use the local scanner, and the
+	// rest keeps working (deploy checks belong to infra, not to boot).
+	cfg.Harness.Socket = r.optional(VarHarnessSocket, "")
+	cfg.Scan.QueueURL = r.optional(VarScanQueueURL, "")
+	cfg.Scan.ScannerBin = r.optional(VarScannerBin, DefaultScannerBin)
 
 	cfg.LLM.Mode = r.enum(VarLLMMode, DefaultLLMMode, LLMModeOpenRouter, LLMModeLocal, LLMModeOff)
 	cfg.LLM.OpenRouterKey = r.secret(VarOpenRouterKey, cfg.LLM.Mode == LLMModeOpenRouter)
@@ -389,6 +443,8 @@ func (c *Config) redacted() [][2]string {
 		{VarDatabaseURL, presence(c.Database.URL)},
 		{VarDBAppRole, c.Database.AppRole},
 		{VarAWSRegion, c.Storage.AWSRegion},
+		{VarAWSAccessKeyID, c.Storage.AWSAccessKeyID},
+		{VarAWSSecretKey, presence(c.Storage.AWSSecretKey)},
 		{VarS3UploadsBucket, c.Storage.S3UploadsBucket},
 		{VarS3BackupsBucket, c.Storage.S3BackupsBucket},
 		{VarS3Endpoint, urlString(c.Storage.S3Endpoint)},
@@ -396,6 +452,11 @@ func (c *Config) redacted() [][2]string {
 		{VarR2AccessKeyID, c.Storage.R2AccessKeyID},
 		{VarR2SecretAccessKey, presence(c.Storage.R2SecretKey)},
 		{VarR2MediaBucket, c.Storage.R2MediaBucket},
+		{VarR2Endpoint, urlString(c.Storage.R2Endpoint)},
+		{VarMediaLocalDir, c.Storage.MediaLocalDir},
+		{VarHarnessSocket, c.Harness.Socket},
+		{VarScanQueueURL, c.Scan.QueueURL},
+		{VarScannerBin, c.Scan.ScannerBin},
 		{VarLLMMode, c.LLM.Mode},
 		{VarOpenRouterKey, presence(c.LLM.OpenRouterKey)},
 		{VarLocalLLMBaseURL, urlString(c.LLM.LocalBaseURL)},
@@ -738,8 +799,9 @@ func KnownVars() []string {
 	return []string{
 		VarEnv, VarPublicBaseURL, VarAPIBaseURL, VarAPIListen, VarAdminListen, VarOriginSecret, VarVantaraPath,
 		VarKillFlags, VarMaintenance,
-		VarDatabaseURL, VarDBAppRole, VarAWSRegion, VarS3UploadsBucket, VarS3BackupsBucket, VarS3Endpoint,
-		VarR2AccountID, VarR2AccessKeyID, VarR2SecretAccessKey, VarR2MediaBucket,
+		VarDatabaseURL, VarDBAppRole, VarAWSRegion, VarAWSAccessKeyID, VarAWSSecretKey, VarS3UploadsBucket, VarS3BackupsBucket, VarS3Endpoint,
+		VarR2AccountID, VarR2AccessKeyID, VarR2SecretAccessKey, VarR2MediaBucket, VarR2Endpoint, VarMediaLocalDir,
+		VarHarnessSocket, VarScanQueueURL, VarScannerBin,
 		VarLLMMode, VarOpenRouterKey, VarLocalLLMBaseURL, VarModelsFile, VarLLMCacheDir,
 		VarGoogleClientID, VarGoogleClientSecret, VarAppleTeamID, VarAppleClientID, VarAppleKeyID, VarApplePrivateKey, VarSessionSecret,
 		VarStripeSecretKey, VarStripeWebhookSecret, VarStripePublishableKey,

@@ -83,14 +83,18 @@ type Querier interface {
 	AuthUpdateOrgName(ctx context.Context, arg AuthUpdateOrgNameParams) error
 	// Forma canônica de um jsonb (chaves ordenadas, sem espaços redundantes).
 	CanonicalJSON(ctx context.Context, dollar_1 []byte) (string, error)
-	ClaimOutbox(ctx context.Context, limit int32) ([]Outbox, error)
+	// Kinds owned by a dedicated worker (e-mail) are skipped: claiming them here
+	// would mark them sent without delivering.
+	ClaimOutbox(ctx context.Context, arg ClaimOutboxParams) ([]Outbox, error)
 	CloseCreditHold(ctx context.Context, arg CloseCreditHoldParams) (CreditHold, error)
 	ConsumeMagicLink(ctx context.Context, tokenHash []byte) (MagicLink, error)
 	CountActiveAPIKeys(ctx context.Context, orgID uuid.UUID) (int64, error)
 	CountActiveRuns(ctx context.Context, orgID uuid.UUID) (int64, error)
 	CountFindingsByRun(ctx context.Context, arg CountFindingsByRunParams) (int64, error)
+	CountModelPrices(ctx context.Context) (int64, error)
 	CountRecentMagicLinks(ctx context.Context, arg CountRecentMagicLinksParams) (int64, error)
 	CountRecentUploads(ctx context.Context, arg CountRecentUploadsParams) (int64, error)
+	CountRunsByWorkflow(ctx context.Context, arg CountRunsByWorkflowParams) (int64, error)
 	CountUnsentOutbox(ctx context.Context) (int64, error)
 	// Chaves de API. GetAPIKey roda antes de conhecer a organização (é a própria
 	// autenticação), portanto em modo sistema; o resto dentro de WithOrgTx.
@@ -112,13 +116,17 @@ type Querier interface {
 	// Usuários são globais (um usuário pertence a várias organizações); a tabela
 	// não tem RLS.
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	DeleteExpiredIdempotencyKeys(ctx context.Context, expiresAt time.Time) (int64, error)
 	DeleteExpiredMagicLinks(ctx context.Context) (int64, error)
 	DeleteExpiredSessions(ctx context.Context) (int64, error)
+	// Libera a chave quando a operação falhou antes de responder, para o cliente repetir.
+	DeleteIdempotencyKey(ctx context.Context, arg DeleteIdempotencyKeyParams) error
 	DeleteSentOutbox(ctx context.Context, sentAt *time.Time) (int64, error)
 	// Outbox transacional: a aplicação enfileira na mesma transação do dado; o
 	// worker (modo sistema) reivindica com SKIP LOCKED e marca como enviado.
 	EnqueueOutbox(ctx context.Context, arg EnqueueOutboxParams) (Outbox, error)
 	EnsureCreditAccount(ctx context.Context, orgID uuid.UUID) (CreditAccount, error)
+	FinishIdempotencyKey(ctx context.Context, arg FinishIdempotencyKeyParams) error
 	FinishRun(ctx context.Context, arg FinishRunParams) (Run, error)
 	GetAPIKey(ctx context.Context, id uuid.UUID) (ApiKey, error)
 	GetActiveSubscription(ctx context.Context, orgID uuid.UUID) (Subscription, error)
@@ -133,35 +141,63 @@ type Querier interface {
 	GetCreditGrantByIdempotencyKey(ctx context.Context, arg GetCreditGrantByIdempotencyKeyParams) (CreditGrant, error)
 	GetCreditHold(ctx context.Context, arg GetCreditHoldParams) (CreditHold, error)
 	GetCreditHoldForUpdate(ctx context.Context, arg GetCreditHoldForUpdateParams) (CreditHold, error)
+	GetFindingByID(ctx context.Context, arg GetFindingByIDParams) (Finding, error)
+	GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyParams) (IdempotencyKey, error)
 	GetMembership(ctx context.Context, arg GetMembershipParams) (Membership, error)
 	GetOrg(ctx context.Context, id uuid.UUID) (Org, error)
 	GetOrgBySlug(ctx context.Context, slug string) (Org, error)
+	GetQuoteByID(ctx context.Context, arg GetQuoteByIDParams) (Quote, error)
 	GetRule(ctx context.Context, arg GetRuleParams) (Rule, error)
 	GetRun(ctx context.Context, arg GetRunParams) (Run, error)
+	GetRunSystem(ctx context.Context, id uuid.UUID) (Run, error)
 	GetSession(ctx context.Context, id uuid.UUID) (Session, error)
 	GetSessionByRefreshHash(ctx context.Context, refreshHash []byte) (Session, error)
 	GetStripeEvent(ctx context.Context, id string) (StripeEvent, error)
 	GetUpload(ctx context.Context, arg GetUploadParams) (Upload, error)
+	GetUploadSystem(ctx context.Context, id uuid.UUID) (Upload, error)
 	GetUser(ctx context.Context, id uuid.UUID) (User, error)
 	GetUserByAppleSub(ctx context.Context, appleSub *string) (User, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByGoogleSub(ctx context.Context, googleSub *string) (User, error)
+	GetWorkflow(ctx context.Context, arg GetWorkflowParams) (Workflow, error)
 	InsertAPIUsage(ctx context.Context, arg InsertAPIUsageParams) error
 	InsertCreditGrant(ctx context.Context, arg InsertCreditGrantParams) (CreditGrant, error)
 	InsertCreditHold(ctx context.Context, arg InsertCreditHoldParams) (CreditHold, error)
 	InsertFeedback(ctx context.Context, arg InsertFeedbackParams) (Feedback, error)
 	// Achados de uma execução, do maior valor em risco para o menor.
 	InsertFinding(ctx context.Context, arg InsertFindingParams) (Finding, error)
+	InsertFindingFeedback(ctx context.Context, arg InsertFindingFeedbackParams) (Feedback, error)
+	InsertFindingFull(ctx context.Context, arg InsertFindingFullParams) (Finding, error)
+	// Chaves de idempotência das operações que gastam créditos (24 h).
+	InsertIdempotencyKey(ctx context.Context, arg InsertIdempotencyKeyParams) (IdempotencyKey, error)
 	InsertMatch(ctx context.Context, arg InsertMatchParams) (Match, error)
+	InsertMatchFull(ctx context.Context, arg InsertMatchFullParams) (Match, error)
+	InsertModelPrice(ctx context.Context, arg InsertModelPriceParams) error
+	// Orçamentos assinados e tabela de preços de modelos usada pelo estimador.
+	InsertQuote(ctx context.Context, arg InsertQuoteParams) (Quote, error)
+	InsertRuleFull(ctx context.Context, arg InsertRuleFullParams) (Rule, error)
 	InsertRuleUse(ctx context.Context, arg InsertRuleUseParams) (RuleUse, error)
+	InsertRuleVersion(ctx context.Context, arg InsertRuleVersionParams) (RuleVersion, error)
+	// Execuções, eventos (SSE), achados, casamentos e feedback.
+	InsertRun(ctx context.Context, arg InsertRunParams) (Run, error)
+	InsertRunEvent(ctx context.Context, arg InsertRunEventParams) (RunEvent, error)
 	// Eventos Stripe: a chave primária é o id do evento. InsertStripeEvent não
 	// devolve linha quando o evento já existe (pgx.ErrNoRows = duplicado).
 	InsertStripeEvent(ctx context.Context, arg InsertStripeEventParams) (string, error)
+	// Uploads do pipeline de execuções (ticket pré-assinado, conclusão, veredito
+	// do scanner). Consultas por organização rodam dentro de WithOrgTx; as de
+	// sistema (veredito vindo da fila) dentro de WithSystemTx.
+	InsertUploadTicket(ctx context.Context, arg InsertUploadTicketParams) (Upload, error)
+	// Fluxos de trabalho e regras versionadas (busca por trigrama em título e corpo).
+	InsertWorkflow(ctx context.Context, arg InsertWorkflowParams) (Workflow, error)
+	LatestFeedbackForFinding(ctx context.Context, arg LatestFeedbackForFindingParams) (Feedback, error)
 	LinkUserAppleSub(ctx context.Context, arg LinkUserAppleSubParams) error
 	LinkUserGoogleSub(ctx context.Context, arg LinkUserGoogleSubParams) error
 	ListAPIKeys(ctx context.Context, orgID uuid.UUID) ([]ApiKey, error)
 	ListAPIUsage(ctx context.Context, arg ListAPIUsageParams) ([]ApiUsage, error)
 	ListActiveSessions(ctx context.Context, userID uuid.UUID) ([]Session, error)
+	ListAllFindingsByRun(ctx context.Context, arg ListAllFindingsByRunParams) ([]Finding, error)
+	ListAllMatchesByRun(ctx context.Context, arg ListAllMatchesByRunParams) ([]Match, error)
 	ListAuditByOrg(ctx context.Context, arg ListAuditByOrgParams) ([]AuditLog, error)
 	ListAuditRange(ctx context.Context, arg ListAuditRangeParams) ([]ListAuditRangeRow, error)
 	ListCreditLedger(ctx context.Context, arg ListCreditLedgerParams) ([]CreditLedger, error)
@@ -169,26 +205,41 @@ type Querier interface {
 	ListExpiredOpenCreditGrantsForUpdate(ctx context.Context, arg ListExpiredOpenCreditGrantsForUpdateParams) ([]CreditGrant, error)
 	ListFeedbackByFinding(ctx context.Context, arg ListFeedbackByFindingParams) ([]Feedback, error)
 	ListFindingsByRun(ctx context.Context, arg ListFindingsByRunParams) ([]Finding, error)
+	// Ordem do contrato: severidade, depois valor em risco.
+	ListFindingsPage(ctx context.Context, arg ListFindingsPageParams) ([]Finding, error)
+	ListFindingsWithFeedback(ctx context.Context, arg ListFindingsWithFeedbackParams) ([]Finding, error)
+	// Preço mais recente de cada modelo (histórico por fetched_at).
+	ListLatestModelPrices(ctx context.Context) ([]ModelPrice, error)
 	ListMatchesByRun(ctx context.Context, arg ListMatchesByRunParams) ([]Match, error)
 	// Concessões abertas na ordem de consumo (vence primeiro, depois a mais antiga).
 	ListOpenCreditGrantsForUpdate(ctx context.Context, orgID uuid.UUID) ([]CreditGrant, error)
 	ListOpenCreditHolds(ctx context.Context, orgID uuid.UUID) ([]CreditHold, error)
 	// Organizações com concessões vencidas (modo sistema; job periódico).
 	ListOrgsWithExpiredGrants(ctx context.Context, expiresAt *time.Time) ([]uuid.UUID, error)
+	// Execuções concluídas recentes (modo sistema): razão gasto/estimado para o
+	// teto no percentil 99.
+	ListRecentRunOverruns(ctx context.Context, arg ListRecentRunOverrunsParams) ([]ListRecentRunOverrunsRow, error)
 	ListRecentRuns(ctx context.Context, arg ListRecentRunsParams) ([]Run, error)
 	ListRecentRunsBefore(ctx context.Context, arg ListRecentRunsBeforeParams) ([]Run, error)
 	ListRecentlyUsedRules(ctx context.Context, arg ListRecentlyUsedRulesParams) ([]Rule, error)
 	ListRuleUses(ctx context.Context, arg ListRuleUsesParams) ([]RuleUse, error)
+	ListRulesByIDs(ctx context.Context, arg ListRulesByIDsParams) ([]Rule, error)
+	ListRunEventsAfter(ctx context.Context, arg ListRunEventsAfterParams) ([]RunEvent, error)
 	ListRunUploads(ctx context.Context, arg ListRunUploadsParams) ([]Upload, error)
+	ListRunsPage(ctx context.Context, arg ListRunsPageParams) ([]Run, error)
+	ListTrustedRules(ctx context.Context, orgID uuid.UUID) ([]Rule, error)
 	ListUnprocessedStripeEvents(ctx context.Context, limit int32) ([]StripeEvent, error)
+	ListUploadsByIDs(ctx context.Context, arg ListUploadsByIDsParams) ([]Upload, error)
 	// Lista as organizações de um usuário (atravessa locatários: modo sistema).
 	ListUserMemberships(ctx context.Context, userID uuid.UUID) ([]ListUserMembershipsRow, error)
+	ListWorkflowsPage(ctx context.Context, arg ListWorkflowsPageParams) ([]Workflow, error)
 	MarkCreditGrantExpired(ctx context.Context, arg MarkCreditGrantExpiredParams) error
 	MarkOutboxSent(ctx context.Context, id uuid.UUID) error
 	MarkStripeEventFailed(ctx context.Context, arg MarkStripeEventFailedParams) error
 	MarkStripeEventProcessed(ctx context.Context, id string) error
 	// Próxima execução da fila (modo sistema; o worker define app.org_id depois).
 	NextQueuedRun(ctx context.Context) (Run, error)
+	PromoteRule(ctx context.Context, arg PromoteRuleParams) (Rule, error)
 	RemoveMembership(ctx context.Context, arg RemoveMembershipParams) (int64, error)
 	RetryOutboxLater(ctx context.Context, arg RetryOutboxLaterParams) error
 	RevokeAPIKey(ctx context.Context, arg RevokeAPIKeyParams) (int64, error)
@@ -196,7 +247,13 @@ type Querier interface {
 	RevokeSessionFamily(ctx context.Context, familyID uuid.UUID) (int64, error)
 	RevokeUserSessions(ctx context.Context, userID uuid.UUID) (int64, error)
 	RotateSession(ctx context.Context, arg RotateSessionParams) (Session, error)
+	// Grava todo o estado mutável de uma execução (o serviço carrega, altera e salva).
+	SaveRunState(ctx context.Context, arg SaveRunStateParams) (Run, error)
 	SearchRules(ctx context.Context, arg SearchRulesParams) ([]SearchRulesRow, error)
+	// Sem termo: as usadas recentemente primeiro (lista "já usadas" do seletor).
+	// Com termo: trigrama em título e corpo, mais parecidas primeiro.
+	SearchRulesPage(ctx context.Context, arg SearchRulesPageParams) ([]Rule, error)
+	SetQuoteStatus(ctx context.Context, arg SetQuoteStatusParams) (Quote, error)
 	SetSessionOrg(ctx context.Context, arg SetSessionOrgParams) error
 	SetUploadScan(ctx context.Context, arg SetUploadScanParams) error
 	SetUserDisplayName(ctx context.Context, arg SetUserDisplayNameParams) error
@@ -210,12 +267,17 @@ type Querier interface {
 	SumCreditLedger(ctx context.Context, orgID uuid.UUID) (SumCreditLedgerRow, error)
 	TouchAPIKey(ctx context.Context, id uuid.UUID) error
 	TouchRule(ctx context.Context, arg TouchRuleParams) error
+	TouchRules(ctx context.Context, arg TouchRulesParams) error
 	TouchSession(ctx context.Context, id uuid.UUID) error
 	TouchUserLogin(ctx context.Context, id uuid.UUID) error
 	UpdateCreditAccount(ctx context.Context, arg UpdateCreditAccountParams) (CreditAccount, error)
 	UpdateCreditGrantRemaining(ctx context.Context, arg UpdateCreditGrantRemainingParams) error
+	UpdateFindingFeedback(ctx context.Context, arg UpdateFindingFeedbackParams) (Finding, error)
 	UpdateOrgPlan(ctx context.Context, arg UpdateOrgPlanParams) error
 	UpdateRule(ctx context.Context, arg UpdateRuleParams) (Rule, error)
+	UpdateRuleVersion(ctx context.Context, arg UpdateRuleVersionParams) (Rule, error)
+	UpdateUploadState(ctx context.Context, arg UpdateUploadStateParams) (Upload, error)
+	UpdateWorkflowConfig(ctx context.Context, arg UpdateWorkflowConfigParams) (Workflow, error)
 	UpsertSubscription(ctx context.Context, arg UpsertSubscriptionParams) (Subscription, error)
 }
 

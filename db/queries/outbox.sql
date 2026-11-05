@@ -6,13 +6,16 @@ INSERT INTO outbox (org_id, kind, payload, available_at)
 VALUES ($1, $2, $3, coalesce(sqlc.narg(available_at)::timestamptz, now()))
 RETURNING *;
 
+-- Kinds owned by a dedicated worker (e-mail) are skipped: claiming them here
+-- would mark them sent without delivering.
 -- name: ClaimOutbox :many
 UPDATE outbox SET attempts = attempts + 1
 WHERE id IN (
   SELECT id FROM outbox
   WHERE sent_at IS NULL AND available_at <= now()
+    AND NOT (kind = ANY(sqlc.arg(skip_kinds)::text[]))
   ORDER BY available_at
-  LIMIT $1
+  LIMIT sqlc.arg(max_rows)
   FOR UPDATE SKIP LOCKED
 )
 RETURNING *;

@@ -22,6 +22,7 @@ import (
 	"github.com/mmtmn/docmatch/services/api/internal/audit"
 	"github.com/mmtmn/docmatch/services/api/internal/credits"
 	"github.com/mmtmn/docmatch/services/api/internal/db"
+	"github.com/mmtmn/docmatch/services/api/internal/jobs/jobargs"
 	"github.com/mmtmn/docmatch/services/api/internal/version"
 )
 
@@ -81,6 +82,9 @@ type Deps struct {
 	Audit       Recorder
 	Hostname    string
 	Now         func() time.Time
+	// Pipeline wires the upload, run, learning and outbox jobs (nil in
+	// processes that only insert them).
+	Pipeline *Pipeline
 }
 
 func (d *Deps) defaults() {
@@ -272,6 +276,10 @@ func NewWorkers(d Deps) *river.Workers {
 	river.AddWorker(workers, &HeartbeatWorker{deps: d, started: d.Now()})
 	river.AddWorker(workers, &PartitionWorker{deps: d})
 	river.AddWorker(workers, &ExpireGrantsWorker{deps: d})
+	river.AddWorker(workers, &ScanWorker{deps: d})
+	river.AddWorker(workers, &RunWorker{deps: d})
+	river.AddWorker(workers, &LearnWorker{deps: d})
+	river.AddWorker(workers, &OutboxWorker{deps: d})
 	return workers
 }
 
@@ -290,6 +298,9 @@ func PeriodicJobs() []*river.PeriodicJob {
 		river.NewPeriodicJob(river.PeriodicInterval(ExpireGrantsInterval),
 			func() (river.JobArgs, *river.InsertOpts) { return ExpireGrantsArgs{}, nil },
 			&river.PeriodicJobOpts{ID: KindExpireGrants, RunOnStart: true}),
+		river.NewPeriodicJob(river.PeriodicInterval(OutboxInterval),
+			func() (river.JobArgs, *river.InsertOpts) { return jobargs.OutboxArgs{}, nil },
+			&river.PeriodicJobOpts{ID: jobargs.KindOutbox, RunOnStart: true}),
 	}
 }
 

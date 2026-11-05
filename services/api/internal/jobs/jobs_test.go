@@ -183,9 +183,10 @@ func TestWiring(t *testing.T) {
 	if NewWorkers(Deps{}) == nil {
 		t.Fatal("NewWorkers")
 	}
+	// Heartbeat, partitions, grant expiry and the outbox drain.
 	jobs := PeriodicJobs()
-	if len(jobs) != 3 {
-		t.Fatalf("esperava 3 jobs periódicos, veio %d", len(jobs))
+	if len(jobs) != 4 {
+		t.Fatalf("esperava 4 jobs periódicos, veio %d", len(jobs))
 	}
 	if _, err := NewClient(nil, Deps{}, ClientOptions{}); err == nil {
 		t.Fatal("pool nulo deveria falhar")

@@ -63,7 +63,9 @@ func NewHandler(d Deps) http.Handler {
 	r.HandleFunc(http.MethodGet, "/readyz", httpx.BodyNone, readyz(d))
 	r.HandleFunc(http.MethodGet, "/v1/version", httpx.BodyNone, versionHandler)
 	for _, mount := range d.Mount {
-		mount(r)
+		if mount != nil {
+			mount(r)
+		}
 	}
 
 	mws := httpx.Standard(httpx.StandardOptions{
