@@ -140,6 +140,8 @@ data class RunSummary(
     val currency: String = "BRL",
     @SerialName("lines_total") val linesTotal: Int = 0,
     @SerialName("lines_matched") val linesMatched: Int = 0,
+    /** Per file, in pt-BR, what did not take part in the reconciliation. */
+    @SerialName("source_warnings") val sourceWarnings: List<String> = emptyList(),
 )
 
 @Serializable

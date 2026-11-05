@@ -63,6 +63,8 @@ export interface RunResults {
   fileCount: number;
   findings: Finding[];
   cleanMatches: CleanMatch[];
+  /** Per file, in pt-BR, what did not take part in the reconciliation. */
+  sourceWarnings?: string[];
   /** True while the data is mocked. */
   demo?: boolean;
 }

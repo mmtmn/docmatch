@@ -95,6 +95,9 @@ type Summary struct {
 	LinesMatched       int            `json:"lines_matched"`
 	NewToolIDs         []string       `json:"new_tool_ids,omitempty"`
 	ProposedRuleIDs    []string       `json:"proposed_rule_ids,omitempty"`
+	// SourceWarnings says, in pt-BR and per file, what did not take part in
+	// the reconciliation (a scanned PDF, a ledger with no open titles...).
+	SourceWarnings []string `json:"source_warnings,omitempty"`
 }
 
 // RunError is openapi RunError.

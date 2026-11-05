@@ -176,6 +176,7 @@ func SummaryFromProto(s *pb.RunSummary) *Summary {
 		FindingsTotal: int(s.GetFindingsTotal()), FindingsBySeverity: by, AmountAtRisk: max(s.GetAmountAtRisk(), 0), Currency: s.GetCurrency(),
 		MatchesTotal: int(s.GetMatchesTotal()), LinesTotal: int(s.GetLinesTotal()), LinesMatched: int(s.GetLinesMatched()),
 		NewToolIDs: append([]string(nil), s.GetNewToolIds()...), ProposedRuleIDs: append([]string(nil), s.GetProposedRuleIds()...),
+		SourceWarnings: sourceWarnings(s.GetSourceWarnings()),
 	}
 	if out.Currency == "" {
 		out.Currency = "BRL"
@@ -265,4 +266,33 @@ func mustJSON(v any) json.RawMessage {
 		return json.RawMessage("{}")
 	}
 	return data
+}
+
+// Bounds of the warnings a run keeps: enough to name every skipped file of a
+// large order, never an unbounded payload.
+const (
+	maxSourceWarnings     = 100
+	maxSourceWarningRunes = 500
+)
+
+// sourceWarnings copies the harness's per-file warnings within those bounds.
+func sourceWarnings(in []string) []string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]string, 0, min(len(in), maxSourceWarnings))
+	for _, w := range in {
+		if len(out) == maxSourceWarnings {
+			break
+		}
+		w = strings.TrimSpace(w)
+		if w == "" {
+			continue
+		}
+		if r := []rune(w); len(r) > maxSourceWarningRunes {
+			w = string(r[:maxSourceWarningRunes-1]) + "…"
+		}
+		out = append(out, w)
+	}
+	return out
 }

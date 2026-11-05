@@ -282,18 +282,22 @@ public struct RunSummary: Decodable, Sendable, Equatable {
     public let findingsTotal: Int
     public let amountAtRisk: Int64
     public let currency: String
+    /// Per file, in pt-BR, what did not take part in the reconciliation.
+    public let sourceWarnings: [String]
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         findingsTotal = try c.value(.findingsTotal, 0)
         amountAtRisk = try c.value(.amountAtRisk, 0)
         currency = try c.value(.currency, "BRL")
+        sourceWarnings = try c.value(.sourceWarnings, [])
     }
 
     private enum CodingKeys: String, CodingKey {
         case currency
         case findingsTotal = "findings_total"
         case amountAtRisk = "amount_at_risk"
+        case sourceWarnings = "source_warnings"
     }
 }
 

@@ -3327,6 +3327,13 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/RuleId"
+        source_warnings:
+          type: array
+          maxItems: 100
+          description: Em pt-BR, por arquivo, o que não entrou na conciliação (PDF digitalizado, carteira sem títulos em aberto, arquivo não reconhecido).
+          items:
+            type: string
+            maxLength: 500
       additionalProperties: false
     RunError:
       type: object

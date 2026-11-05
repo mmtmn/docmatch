@@ -184,7 +184,8 @@
     "live_running": "Conciliando: {message}",
     "live_failed": "A conciliação falhou: {message}",
     "live_missing": "Nenhuma conciliação selecionada.",
-    "live_unconfigured": "Esta instalação não está ligada a uma API."
+    "live_unconfigured": "Esta instalação não está ligada a uma API.",
+    "source_warnings_title": "Alguns arquivos não entraram na conciliação:"
   },
   "auth": {
     "sign_in": "Entrar",
