@@ -6,18 +6,14 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, Context, Result};
 use chrono::NaiveDate;
 use clap::{Parser, Subcommand, ValueEnum};
-use dm_core::{ColumnRole, Item, Table};
-use dm_ingest::{parse_file, sniff, table_items, InboxContext, ParsedSource};
-use dm_match::{
-    exact_match, explain_difference, AmountContext, KeySpec, KeyTransform, ToleranceRule,
-};
+use dm_ingest::{parse_file, sniff, InboxContext, ParsedSource};
 use dm_normalize::{date_ptbr, DateContext};
+use dm_recon::{run_dir, EngineConfig};
 use dm_sandbox::{Sandbox, SandboxConfig};
 use dm_validators::{business_days, cnpj_dv, cpf_dv, nfe_key_dv, parse_boleto, Verdict};
-use serde::Serialize;
 
 #[derive(Parser)]
 #[command(
@@ -73,16 +69,46 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
-    /// Ingere todos os arquivos de uma pasta e roda o casamento exato
+    /// Concilia uma pasta (títulos a receber, extrato, caixa de contas a pagar) e grava o resultado
     Run {
         /// Pasta com os arquivos
         dir: PathBuf,
-        /// Arquivo JSON de saída
-        #[arg(long, default_value = "report.json")]
+        /// Arquivo JSON de saída (formato dourado)
+        #[arg(long, default_value = "result.json")]
         out: PathBuf,
-        /// Ano de referência para datas sem ano (dd/mm)
+        /// Configuração YAML do motor (padrões em services/harness/config/recon.yaml)
         #[arg(long)]
-        year: Option<i32>,
+        config: Option<PathBuf>,
+    },
+    /// Avalia resultados contra gabaritos
+    Eval {
+        #[command(subcommand)]
+        command: EvalCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum EvalCommand {
+    /// Compara um result.json com um expected.yaml e lista as diferenças
+    Score {
+        /// Gabarito (expected.yaml)
+        #[arg(long)]
+        expected: PathBuf,
+        /// Resultado (result.json)
+        #[arg(long)]
+        actual: PathBuf,
+    },
+    /// Roda o gêmeo público e, com DM_VANTARA_PATH, o caso privado; exige 100% e execuções idênticas
+    Golden {
+        /// Execuções por caso
+        #[arg(long, default_value_t = 10)]
+        runs: usize,
+        /// Pastas de casos (padrão: o gêmeo público e DM_VANTARA_PATH)
+        #[arg(long = "dir")]
+        dirs: Vec<PathBuf>,
+        /// Configuração YAML do motor
+        #[arg(long)]
+        config: Option<PathBuf>,
     },
 }
 
@@ -118,7 +144,13 @@ fn run(cli: Cli) -> Result<i32> {
         Command::Validate { kind, value } => cmd_validate(kind, &value),
         Command::Bizdays { from, to } => cmd_bizdays(&from, &to),
         Command::Probe { sql, tables, json } => cmd_probe(&sql, &tables, json),
-        Command::Run { dir, out, year } => cmd_run(&dir, &out, year),
+        Command::Run { dir, out, config } => cmd_run(&dir, &out, config.as_deref()),
+        Command::Eval { command } => match command {
+            EvalCommand::Score { expected, actual } => cmd_eval_score(&expected, &actual),
+            EvalCommand::Golden { runs, dirs, config } => {
+                cmd_eval_golden(runs, &dirs, config.as_deref())
+            }
+        },
     }
 }
 
@@ -312,254 +344,124 @@ fn cmd_probe(sql: &str, tables: &[String], json: bool) -> Result<i32> {
     }
 }
 
-#[derive(Serialize)]
-struct RunReport {
-    sources: Vec<SourceReport>,
-    matches: Vec<TableMatch>,
-    findings: Vec<dm_core::Finding>,
-    /// Every row of every parsed table, with or without a document column.
-    table_rows: usize,
-    /// Rows that an exact match paired.
-    explained_rows: usize,
-    /// `table_rows - explained_rows`.
-    unexplained_rows: usize,
-    /// Text items (e-mails, chat lines); exact matching never explains them, so all of
-    /// them are unexplained at this stage.
-    text_items: usize,
-    warnings: Vec<String>,
-}
-
-#[derive(Serialize)]
-struct SourceReport {
-    name: String,
-    kind: String,
-    tables: Vec<String>,
-    items: usize,
-    warnings: Vec<String>,
-}
-
-#[derive(Serialize)]
-struct TableMatch {
-    left: String,
-    right: String,
-    key_left: String,
-    key_right: String,
-    pairs: Vec<PairReport>,
-    ambiguous_groups: usize,
-    unmatched_left: Vec<String>,
-    unmatched_right: Vec<String>,
-}
-
-#[derive(Serialize)]
-struct PairReport {
-    left_id: String,
-    right_id: String,
-    key: String,
-    amount_rule: Option<String>,
-    amount_residual: Option<String>,
-}
-
-fn cmd_run(dir: &Path, out: &Path, year: Option<i32>) -> Result<i32> {
-    let mut entries: Vec<PathBuf> = std::fs::read_dir(dir)
-        .with_context(|| format!("lendo a pasta {}", dir.display()))?
-        .filter_map(|e| e.ok().map(|e| e.path()))
-        .filter(|p| p.is_file())
-        .collect();
-    entries.sort();
-    if entries.is_empty() {
-        bail!("nenhum arquivo em {}", dir.display());
-    }
-    let ctx = inbox_context(year);
-    let mut report = RunReport {
-        sources: Vec::new(),
-        matches: Vec::new(),
-        findings: Vec::new(),
-        table_rows: 0,
-        explained_rows: 0,
-        unexplained_rows: 0,
-        text_items: 0,
-        warnings: Vec::new(),
-    };
-    let mut tables: Vec<Table> = Vec::new();
-    let mut text_items: Vec<Item> = Vec::new();
-    for path in &entries {
-        match parse_file(path, &ctx) {
-            Ok(src) => {
-                print_source_summary(&src);
-                report.sources.push(SourceReport {
-                    name: src.name.clone(),
-                    kind: src.sniff.kind.id().to_string(),
-                    tables: src.tables.iter().map(|t| t.name.clone()).collect(),
-                    items: src.items.len(),
-                    warnings: src.warnings.clone(),
-                });
-                tables.extend(src.tables);
-                text_items.extend(src.items);
-            }
-            Err(e) => report.warnings.push(format!("{}: {e}", path.display())),
+fn load_config(path: Option<&Path>) -> Result<EngineConfig> {
+    match path {
+        None => Ok(EngineConfig::default()),
+        Some(p) => {
+            let text =
+                std::fs::read_to_string(p).with_context(|| format!("lendo {}", p.display()))?;
+            EngineConfig::from_yaml(&text).map_err(|e| anyhow!(e))
         }
     }
-    // Injected instructions in text sources become findings and are never acted upon.
-    let guard = dm_guard::screen_document(&text_items);
-    report.findings.extend(guard.findings);
+}
 
-    // Exact matching on document numbers between every pair of tables that have one.
-    struct TableItems {
-        name: String,
-        items: Vec<Item>,
-        doc_col: Option<String>,
-        amount_col: Option<String>,
-    }
-    let items_by_table: Vec<TableItems> = tables
+fn cmd_run(dir: &Path, out: &Path, config: Option<&Path>) -> Result<i32> {
+    let cfg = load_config(config)?;
+    let run = run_dir(dir, &cfg).map_err(|e| anyhow!(e))?;
+    let result = &run.result;
+    std::fs::write(out, result.to_json()).with_context(|| format!("gravando {}", out.display()))?;
+    let explained = result
+        .bank_lines
         .iter()
-        .map(|t| TableItems {
-            name: t.name.clone(),
-            items: table_items(t),
-            doc_col: t
-                .first_column_with_role(ColumnRole::DocumentId)
-                .map(|i| t.columns[i].name.clone()),
-            amount_col: t
-                .first_column_with_role(ColumnRole::Amount)
-                .map(|i| t.columns[i].name.clone()),
-        })
-        .collect();
-    // Every table row starts unexplained, including rows of tables without a document
-    // column: the tally below must say what the run could not explain, not only what it
-    // tried to.
-    let mut explained: BTreeMap<String, bool> = items_by_table
-        .iter()
-        .flat_map(|t| t.items.iter())
-        .map(|item| (item.id.clone(), false))
-        .collect();
-    for (i, left) in items_by_table.iter().enumerate() {
-        let (left_name, left_items, left_amount) = (&left.name, &left.items, &left.amount_col);
-        let Some(left_doc) = &left.doc_col else {
-            continue;
-        };
-        for right in items_by_table.iter().skip(i + 1) {
-            let (right_name, right_items, right_amount) =
-                (&right.name, &right.items, &right.amount_col);
-            let Some(right_doc) = &right.doc_col else {
-                continue;
-            };
-            let left_spec = KeySpec::single(left_doc.clone(), KeyTransform::DocNumber);
-            let right_spec = KeySpec::single(right_doc.clone(), KeyTransform::DocNumber);
-            let m = exact_match(left_items, right_items, &left_spec, &right_spec);
-            let mut pairs = Vec::with_capacity(m.pairs.len());
-            for p in &m.pairs {
-                explained.insert(p.left_id.clone(), true);
-                explained.insert(p.right_id.clone(), true);
-                let (rule, residual) = match (left_amount, right_amount) {
-                    (Some(la), Some(ra)) => {
-                        let find = |items: &[Item], id: &str, col: &str| {
-                            items
-                                .iter()
-                                .find(|it| it.id == id)
-                                .and_then(|it| it.field(col))
-                                .and_then(dm_core::Value::as_money)
-                        };
-                        match (
-                            find(left_items, &p.left_id, la),
-                            find(right_items, &p.right_id, ra),
-                        ) {
-                            (Some(left_value), Some(right_value)) => {
-                                // Bank debits are negative: the positive side is the title
-                                // (expected), the other side the payment (observed).
-                                let (expected, observed) =
-                                    if left_value.is_negative() && !right_value.is_negative() {
-                                        (right_value.abs(), left_value.abs())
-                                    } else {
-                                        (left_value.abs(), right_value.abs())
-                                    };
-                                let ctx = AmountContext {
-                                    expected,
-                                    observed,
-                                    due: None,
-                                    paid: None,
-                                };
-                                match explain_difference(&ctx, &ToleranceRule::defaults()) {
-                                    Some(e) => (
-                                        Some(
-                                            e.rules
-                                                .iter()
-                                                .map(ToleranceRule::label_ptbr)
-                                                .collect::<Vec<_>>()
-                                                .join(" + "),
-                                        ),
-                                        Some(e.residual.format_brl()),
-                                    ),
-                                    None => (None, Some(expected.abs_diff(observed).format_brl())),
-                                }
-                            }
-                            _ => (None, None),
-                        }
-                    }
-                    _ => (None, None),
-                };
-                pairs.push(PairReport {
-                    left_id: p.left_id.clone(),
-                    right_id: p.right_id.clone(),
-                    key: p.key.clone(),
-                    amount_rule: rule,
-                    amount_residual: residual,
-                });
-            }
-            report.matches.push(TableMatch {
-                left: left_name.clone(),
-                right: right_name.clone(),
-                key_left: left_doc.clone(),
-                key_right: right_doc.clone(),
-                pairs,
-                ambiguous_groups: m.groups.len(),
-                unmatched_left: m.unmatched_left,
-                unmatched_right: m.unmatched_right,
-            });
-        }
+        .filter(|l| l.kind != "unapplied")
+        .count();
+    let mut status: BTreeMap<&str, usize> = BTreeMap::new();
+    for t in &result.titles {
+        *status.entry(t.status.as_str()).or_default() += 1;
     }
-    report.table_rows = explained.len();
-    report.explained_rows = explained.values().filter(|v| **v).count();
-    report.unexplained_rows = report.table_rows - report.explained_rows;
-    report.text_items = text_items.len();
-    std::fs::write(out, serde_json::to_vec_pretty(&report)?)
-        .with_context(|| format!("gravando {}", out.display()))?;
-
-    println!();
+    let mut severity: BTreeMap<&str, usize> = BTreeMap::new();
+    for f in &result.findings {
+        *severity.entry(f.severity.as_str()).or_default() += 1;
+    }
+    println!("{} ({})", result.case, result.run_id);
     println!(
-        "fontes: {} | tabelas: {} | itens de texto: {}",
-        report.sources.len(),
-        tables.len(),
-        text_items.len()
+        "  extrato: {explained}/{} linhas explicadas · títulos: {}",
+        result.bank_lines.len(),
+        status
+            .iter()
+            .map(|(k, v)| format!("{v} {k}"))
+            .collect::<Vec<_>>()
+            .join(", ")
     );
-    for m in &report.matches {
-        println!("{} x {} (chave {} = {}): {} par(es) exatos, {} grupo(s) ambíguo(s), {} sem par à esquerda, {} sem par à direita", m.left, m.right, m.key_left, m.key_right, m.pairs.len(), m.ambiguous_groups, m.unmatched_left.len(), m.unmatched_right.len());
-        for p in m.pairs.iter().take(10) {
-            match (&p.amount_rule, &p.amount_residual) {
-                (Some(rule), Some(res)) => println!(
-                    "  {} <-> {} [{}] explicado por {rule} (resíduo {res})",
-                    p.left_id, p.right_id, p.key
-                ),
-                (None, Some(res)) => println!(
-                    "  {} <-> {} [{}] valores divergem em {res}: não explicado",
-                    p.left_id, p.right_id, p.key
-                ),
-                _ => println!("  {} <-> {} [{}]", p.left_id, p.right_id, p.key),
-            }
-        }
-    }
-    if report.matches.is_empty() {
-        println!("nenhum par de tabelas com número de documento para casar");
-    }
     println!(
-        "linhas de tabela: {} | explicadas: {} | não explicadas: {} | itens de texto ainda sem casamento: {} | achados de injeção: {}",
-        report.table_rows,
-        report.explained_rows,
-        report.unexplained_rows,
-        report.text_items,
-        report.findings.len()
+        "  achados: {} ({})",
+        result.findings.len(),
+        severity
+            .iter()
+            .map(|(k, v)| format!("{v} {k}"))
+            .collect::<Vec<_>>()
+            .join(", ")
     );
-    for w in &report.warnings {
-        println!("aviso: {w}");
+    let mut top: Vec<_> = result.findings.iter().collect();
+    top.sort_by(|a, b| {
+        b.amount_at_risk_brl
+            .cmp(&a.amount_at_risk_brl)
+            .then(a.code.cmp(&b.code))
+    });
+    for f in top.iter().take(5) {
+        println!(
+            "    {} [{}] R$ {} — {}",
+            f.code, f.severity, f.amount_at_risk_brl, f.title_ptbr
+        );
     }
-    println!("relatório gravado em {}", out.display());
+    println!("  resultado em {}", out.display());
     Ok(0)
+}
+
+fn cmd_eval_score(expected: &Path, actual: &Path) -> Result<i32> {
+    let e = dm_eval::load(expected).map_err(|e| anyhow!(e))?;
+    let a = dm_eval::load(actual).map_err(|e| anyhow!(e))?;
+    let card = dm_eval::score(&e, &a);
+    print!("{}", card.report());
+    Ok(i32::from(!card.perfect()))
+}
+
+fn cmd_eval_golden(runs: usize, dirs: &[PathBuf], config: Option<&Path>) -> Result<i32> {
+    let cfg = load_config(config)?;
+    // (folder, private): private cases print only counts, never their values.
+    let mut cases: Vec<(PathBuf, bool)> = dirs.iter().map(|d| (d.clone(), false)).collect();
+    if cases.is_empty() {
+        let cwd = std::env::current_dir()?;
+        let twin = dm_eval::find_twin_dir(&cwd).ok_or_else(|| {
+            anyhow!(
+                "testdata/golden/vantara-twin não encontrado a partir de {}",
+                cwd.display()
+            )
+        })?;
+        cases.push((twin, false));
+        match std::env::var("DM_VANTARA_PATH") {
+            Ok(p) if !p.is_empty() => cases.push((PathBuf::from(p), true)),
+            _ => println!("caso privado: pulado (DM_VANTARA_PATH não definido)"),
+        }
+    }
+    let mut code = 0;
+    for (dir, private) in &cases {
+        let run = dm_eval::run_golden(dir, &cfg, runs).map_err(|e| anyhow!(e))?;
+        let label = if *private {
+            "caso privado".to_string()
+        } else {
+            dir.display().to_string()
+        };
+        let ok = run.scorecard.perfect() && run.identical;
+        println!(
+            "{label}: {} · totais {}/{} · {} execuções {} · {}",
+            run.scorecard.summary(),
+            run.scorecard.totals.ok,
+            run.scorecard.totals.total,
+            run.runs,
+            if run.identical {
+                "idênticas"
+            } else {
+                "DIFERENTES"
+            },
+            if ok { "100%" } else { "FALHOU" }
+        );
+        if !ok {
+            code = 1;
+            if !*private {
+                print!("{}", run.scorecard.report());
+            }
+        }
+    }
+    Ok(code)
 }
