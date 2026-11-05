@@ -121,9 +121,12 @@ const FIXTURES: [&str; 9] = [
 ];
 
 fn fixture(which: usize) -> Vec<u8> {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../../testdata/golden")
-        .join(FIXTURES[which]);
+    let path = std::path::Path::new(
+        &std::env::var("CARGO_MANIFEST_DIR")
+            .expect("cargo define CARGO_MANIFEST_DIR ao rodar os testes"),
+    )
+    .join("../../../../testdata/golden")
+    .join(FIXTURES[which]);
     std::fs::read(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
 }
 

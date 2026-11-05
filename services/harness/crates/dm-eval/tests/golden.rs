@@ -6,8 +6,11 @@ use dm_eval::{find_twin_dir, run_golden};
 use dm_recon::EngineConfig;
 
 fn twin() -> PathBuf {
-    find_twin_dir(Path::new(env!("CARGO_MANIFEST_DIR")))
-        .unwrap_or_else(|| panic!("testdata/golden/vantara-twin não encontrado"))
+    find_twin_dir(Path::new(
+        &std::env::var("CARGO_MANIFEST_DIR")
+            .expect("cargo define CARGO_MANIFEST_DIR ao rodar os testes"),
+    ))
+    .unwrap_or_else(|| panic!("testdata/golden/vantara-twin não encontrado"))
 }
 
 #[test]

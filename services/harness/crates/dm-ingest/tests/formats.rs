@@ -9,9 +9,12 @@ use dm_core::{ColumnRole, ItemKind, Locator, Money, Table, Value};
 use dm_ingest::{parse_bytes, InboxContext, ParsedSource, SourceKind};
 
 fn golden(path: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../../testdata/golden")
-        .join(path)
+    PathBuf::from(
+        std::env::var("CARGO_MANIFEST_DIR")
+            .expect("cargo define CARGO_MANIFEST_DIR ao rodar os testes"),
+    )
+    .join("../../../../testdata/golden")
+    .join(path)
 }
 
 fn parse(path: &str) -> ParsedSource {

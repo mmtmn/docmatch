@@ -39,7 +39,11 @@ struct Case {
 }
 
 fn corpus_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/injection")
+    Path::new(
+        &std::env::var("CARGO_MANIFEST_DIR")
+            .expect("cargo define CARGO_MANIFEST_DIR ao rodar os testes"),
+    )
+    .join("tests/data/injection")
 }
 
 fn load_cases() -> Vec<Case> {
