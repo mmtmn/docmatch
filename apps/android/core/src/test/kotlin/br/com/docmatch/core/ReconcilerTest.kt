@@ -40,7 +40,7 @@ class ReconcilerTest {
 
         val steps = mutableListOf<Step>()
         val bytes = "data;valor\n16/07/2026;1.000,00\n".encodeToByteArray()
-        val prepared = reconciler(dm).prepare(listOf(LocalFile("extrato.csv", "text/csv", bytes)), "", steps::add)
+        val prepared = reconciler(dm).prepare(listOf(LocalFile.of("extrato.csv", bytes)), RunOptions(), steps::add)
         assertEquals(40, prepared.quote.expectedCredits)
         assertEquals(listOf("upl_1"), prepared.uploadIds)
         assertEquals(listOf(Step.Uploading(1, 1), Step.Scanning("extrato.csv"), Step.Estimating), steps)
@@ -69,7 +69,7 @@ class ReconcilerTest {
         server.enqueue(json(200, """{"items":[{"id":"fnd_2","title":"Duplicado","amount_at_risk":0}],"next_cursor":null}"""))
 
         val run = reconciler(dm).start(prepared, steps::add)
-        val done = reconciler(dm).await(run.id, steps::add)
+        val done = reconciler(dm).follow(run.id, steps::add)
         assertEquals(RunStatus.COMPLETED, done.status)
         assertEquals(Step.Running("Conferindo títulos"), steps.last())
         assertEquals(listOf("fnd_1", "fnd_2"), dm.api.findings(run.id).map { it.id })
@@ -84,7 +84,7 @@ class ReconcilerTest {
         server.enqueue(json(200, """{"id":"upl_2","file_name":"x.csv","status":"rejected","rejected_reason":"malware"}"""))
         val e =
             assertFailsWith<ApiException> {
-                reconciler(dm).prepare(listOf(LocalFile("x.csv", "text/csv", byteArrayOf(1))), "")
+                reconciler(dm).prepare(listOf(LocalFile.of("x.csv", "a;b\n".encodeToByteArray())), RunOptions())
             }
         assertEquals(ApiException.UPLOAD_REJECTED, e.code)
         assertTrue("x.csv" in e.message && "malware" in e.message, e.message)
@@ -96,7 +96,54 @@ class ReconcilerTest {
         val presigned = server.url("/presigned/bucket").toString()
         server.enqueue(json(201, """{"id":"upl_3","method":"POST","url":"$presigned","fields":{}}"""))
         server.enqueue(MockResponse().setResponseCode(403).setBody("<Error>AccessDenied</Error>"))
-        val e = assertFailsWith<ApiException> { reconciler(dm).upload(LocalFile("y.csv", "text/csv", byteArrayOf(1))) }
+        val e = assertFailsWith<ApiException> { reconciler(dm).upload(LocalFile.of("y.csv", "a;b\n".encodeToByteArray())) }
         assertEquals(403, e.status)
+    }
+
+    @Test
+    fun `media goes up as a PUT without a hash`() = runTest {
+        val dm = newClient(server)
+        val presigned = server.url("/presigned/media").toString()
+        server.enqueue(json(201, """{"id":"upl_m","method":"PUT","url":"$presigned","headers":{"Content-Type":"audio/mpeg"}}"""))
+        server.enqueue(MockResponse().setResponseCode(200))
+        server.enqueue(json(200, """{"id":"upl_m","file_name":"nota.mp3","status":"ready"}"""))
+        val audio = byteArrayOf(0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0, 0) + ByteArray(2048) { 7 }
+        reconciler(dm).upload(LocalFile.of("nota.mp3", audio))
+        val create = server.takeRequest().body.readUtf8()
+        assertTrue(""""kind":"media"""" in create && """"mime":"audio/mpeg"""" in create && "sha256" !in create, create)
+        val put = server.takeRequest()
+        assertEquals("PUT", put.method)
+        assertEquals(audio.size.toLong(), put.bodySize)
+        assertEquals("{}", server.takeRequest().body.readUtf8())
+    }
+
+    @Test
+    fun `a run waiting for approval stops the polling and resumes once approved`() = runTest {
+        val dm = newClient(server)
+        server.enqueue(json(200, """{"id":"run_9","status":"running"}"""))
+        server.enqueue(json(200, """{"id":"run_9","status":"needs_approval","pending_quote":{"id":"quo_2","expected_credits":90,"cap_credits":120,"signature":"v1=ab"}}"""))
+        val parked = reconciler(dm).follow("run_9")
+        assertEquals(RunStatus.NEEDS_APPROVAL, parked.status)
+        assertEquals(120, parked.pendingQuote!!.capCredits)
+        server.takeRequest()
+        server.takeRequest()
+        server.enqueue(json(200, """{"id":"run_9","status":"running"}"""))
+        dm.api.approveQuote("run_9", parked.pendingQuote!!, "key-1")
+        val approve = server.takeRequest()
+        assertEquals("/v1/runs/run_9/approve-quote", approve.path)
+        assertEquals("key-1", approve.getHeader("Idempotency-Key"))
+        assertEquals("""{"quote_id":"quo_2","quote_signature":"v1=ab"}""", approve.body.readUtf8())
+    }
+
+    @Test
+    fun `confirming the same estimate twice sends the same key`() = runTest {
+        val dm = newClient(server)
+        val prepared = Prepared(listOf("upl_1"), Quote("quo_1", 40, 50, "sig"), RunOptions())
+        server.enqueue(MockResponse().setResponseCode(504))
+        assertFailsWith<ApiException> { reconciler(dm).start(prepared) }
+        server.enqueue(json(202, """{"id":"run_1","status":"queued"}"""))
+        reconciler(dm).start(prepared)
+        val first = server.takeRequest().getHeader("Idempotency-Key")
+        assertEquals(first, server.takeRequest().getHeader("Idempotency-Key"), "um orçamento aceito vira uma execução só")
     }
 }

@@ -25,8 +25,11 @@ sealed interface SessionState {
     data class SignedIn(val me: Me) : SessionState
 }
 
-/** Who is signed in on this device. Every sign-in lands on the same account as on the site. */
-class SessionViewModel(private val dm: Docmatch) : ViewModel() {
+/**
+ * Who is signed in on this device. Every sign-in lands on the same account as on the site.
+ * [cleanup] removes what the session left on the device (exported reports) whenever it ends.
+ */
+class SessionViewModel(private val dm: Docmatch, private val cleanup: () -> Unit = {}) : ViewModel() {
     private val _state = MutableStateFlow<SessionState>(SessionState.Loading)
     val state: StateFlow<SessionState> = _state
 
@@ -36,6 +39,7 @@ class SessionViewModel(private val dm: Docmatch) : ViewModel() {
         // with the API's own message, wherever the user was.
         viewModelScope.launch {
             dm.sessionEnded.collect { e ->
+                cleanup()
                 if (_state.value is SessionState.SignedIn) _state.value = SessionState.SignedOut(dm.api.methods(), error = e.message)
             }
         }
@@ -50,6 +54,7 @@ class SessionViewModel(private val dm: Docmatch) : ViewModel() {
 
     /** After a sign-out (here or from another device): back to the sign-in, with a notice. */
     fun signedOut(notice: String? = null) {
+        cleanup()
         viewModelScope.launch { _state.value = SessionState.SignedOut(dm.api.methods(), error = notice) }
     }
 
@@ -76,7 +81,8 @@ class SessionViewModel(private val dm: Docmatch) : ViewModel() {
 
     fun googleIdToken(token: String) = signingIn { dm.api.googleNative(token).let { null } }
 
-    fun failed(message: String) {
+    /** A sign-in that ended before the API (the user closed the account picker: [message] null). */
+    fun failed(message: String?) {
         (state.value as? SessionState.SignedOut)?.let { _state.value = it.copy(busy = false, error = message) }
     }
 
@@ -86,6 +92,7 @@ class SessionViewModel(private val dm: Docmatch) : ViewModel() {
      */
     private fun signingIn(keepEmail: String? = null, step: suspend () -> SessionState.SignedOut?) {
         val current = state.value as? SessionState.SignedOut ?: return
+        if (current.busy) return
         _state.value = current.copy(busy = true, error = null, email = keepEmail ?: current.email)
         viewModelScope.launch {
             _state.value =

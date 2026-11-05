@@ -48,6 +48,8 @@ fun LoginScreen(state: SessionState.SignedOut, session: SessionViewModel, server
     var localError by remember { mutableStateOf<String?>(null) }
     val m = state.methods
     val google = m.google && BuildConfig.GOOGLE_SERVER_CLIENT_ID.isNotEmpty()
+    // What this app can offer: Apple is web-only on Android, Google needs this build's client id.
+    val usable = m.email || m.dev || google
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(DmSize.space3),
@@ -66,9 +68,12 @@ fun LoginScreen(state: SessionState.SignedOut, session: SessionViewModel, server
                 onClick = {
                     val host = activity ?: return@OutlinedButton
                     scope.launch {
-                        runCatching { GoogleSignIn.idToken(host, BuildConfig.GOOGLE_SERVER_CLIENT_ID) }
-                            .onSuccess(session::googleIdToken)
-                            .onFailure { e -> session.failed(texts.t("mobile.google_failed", mapOf("message" to (e.message ?: "")))) }
+                        when (val outcome = GoogleSignIn.idToken(host, BuildConfig.GOOGLE_SERVER_CLIENT_ID)) {
+                            is GoogleSignIn.Outcome.Token -> session.googleIdToken(outcome.idToken)
+                            GoogleSignIn.Outcome.Cancelled -> session.failed(null)
+                            GoogleSignIn.Outcome.NoAccount -> session.failed(texts.t("mobile.google_no_account"))
+                            GoogleSignIn.Outcome.Failed -> session.failed(texts.t("auth.error_generic"))
+                        }
                     }
                 },
                 enabled = !state.busy,
@@ -103,7 +108,7 @@ fun LoginScreen(state: SessionState.SignedOut, session: SessionViewModel, server
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text(t("auth.send_code")) }
             } else {
-                Text(t("auth.code_sent", mapOf("email" to state.email)))
+                Text(t("mobile.code_sent", mapOf("email" to state.email)))
                 OutlinedTextField(
                     value = code,
                     onValueChange = { v -> code = v.filter(Char::isDigit).take(6) },
@@ -121,8 +126,8 @@ fun LoginScreen(state: SessionState.SignedOut, session: SessionViewModel, server
             }
         }
 
-        if (!m.any) {
-            // Nothing offered usually means the API is out of reach: let the user try again.
+        if (!usable) {
+            // Nothing this app can use; usually the API is out of reach: let the user try again.
             Text(t("auth.none_available"))
             OutlinedButton(onClick = session::refresh, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) { Text(t("mobile.retry")) }
         }

@@ -35,13 +35,15 @@ class KeystoreSecretStore(context: Context) : SecretStore {
 
     override fun write(bytes: ByteArray?) {
         if (bytes == null) {
-            prefs.edit { remove(KEY_DATA) }
+            prefs.edit(commit = true) { remove(KEY_DATA) }
             return
         }
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, key())
         val sealed = cipher.iv + cipher.doFinal(bytes)
-        prefs.edit { putString(KEY_DATA, Base64.encodeToString(sealed, Base64.NO_WRAP)) }
+        // commit, not apply: a rotated refresh cookie lost to a process death would present the
+        // old secret on the next launch, and the server revokes the whole session for that.
+        prefs.edit(commit = true) { putString(KEY_DATA, Base64.encodeToString(sealed, Base64.NO_WRAP)) }
     }
 
     private fun key(): SecretKey {

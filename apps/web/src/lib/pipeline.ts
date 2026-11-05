@@ -3,7 +3,7 @@
 import { api, ApiError } from './api';
 import { apiUrl } from './env';
 import { t } from './i18n';
-import type { AcceptedFile } from './precheck';
+import { uploadMime, type AcceptedFile } from './precheck';
 
 /** openapi UploadStatus: `ready` is a file that passed the security scan. */
 export type UploadStatus = 'pending' | 'scanning' | 'ready' | 'rejected' | 'expired';
@@ -150,7 +150,7 @@ export async function uploadFile(
       kind: media ? 'media' : 'document',
       file_name: file.name,
       size_bytes: file.size,
-      mime: file.file.type || 'application/octet-stream',
+      mime: uploadMime(file.kind, file.name, file.file.type),
       ...(sha256 ? { sha256 } : {}),
     },
     ...(signal ? { signal } : {}),

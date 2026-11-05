@@ -24,6 +24,9 @@ class Docmatch(
     companion object {
         /** The User-Agent the API turns into "App Android · <model>" in every device list. */
         fun androidUserAgent(versionName: String, model: String, release: String): String =
-            "docmatch-android/$versionName (${model.replace(Regex("[;()]"), " ").trim()}; Android $release)"
+            "docmatch-android/${ascii(versionName)} (${ascii(model)}; Android ${ascii(release)})"
+
+        /** Header values must be printable ASCII (OkHttp refuses the rest); `;()` delimit the UA. */
+        private fun ascii(s: String): String = s.map { if (it in ' '..'~' && it !in ";()") it else ' ' }.joinToString("").trim().replace(Regex(" +"), " ")
     }
 }

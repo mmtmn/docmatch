@@ -1,12 +1,18 @@
 package br.com.docmatch.core
 
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -55,7 +61,12 @@ class ApiTest {
         signedIn(dm)
         val announced = async(start = CoroutineStart.UNDISPATCHED) { dm.sessionEnded.first() }
         server.enqueue(json(401, """{"code":"session_expired","message":"Sua sessão expirou. Entre de novo."}"""))
-        server.enqueue(json(401, unauthenticated))
+        // The API clears both cookies in the refusal itself (session.Manager.Clear).
+        server.enqueue(
+            json(401, unauthenticated)
+                .addHeader("Set-Cookie", "dm_session=; Path=/; Max-Age=0")
+                .addHeader("Set-Cookie", "dm_refresh=; Path=/v1/auth/refresh; Max-Age=0"),
+        )
         assertFailsWith<ApiException> { dm.api.devices() }
         assertEquals("/v1/me/sessions", server.takeRequest().path)
         assertEquals("/v1/auth/refresh", server.takeRequest().path)
@@ -71,6 +82,56 @@ class ApiTest {
         assertNull(dm.api.me())
         assertNull(withTimeoutOrNull(1_000) { announced.await() })
         announced.cancel()
+    }
+
+    @Test
+    fun `calls in flight when the access window closes refresh once and keep the session`() = runTest {
+        val dm = newClient(server)
+        signedIn(dm)
+        val refreshes = java.util.concurrent.atomic.AtomicInteger()
+        server.dispatcher =
+            object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse {
+                    val cookie = request.getHeader("Cookie").orEmpty()
+                    return when {
+                        request.path == "/v1/auth/refresh" -> {
+                            refreshes.incrementAndGet()
+                            Thread.sleep(150) // the others' 401s arrive while this rotates
+                            MockResponse().setResponseCode(204).addHeader("Set-Cookie", sessionCookie("s1.rotated"))
+                        }
+                        "s1.rotated" in cookie -> json(200, """{"items":[]}""")
+                        else -> json(401, """{"code":"session_expired","message":"Sua sessão expirou. Entre de novo."}""")
+                    }
+                }
+            }
+        val results = withContext(Dispatchers.IO) { (1..4).map { async { dm.api.devices() } }.awaitAll() }
+        assertEquals(List(4) { emptyList<Device>() }, results)
+        assertEquals(1, refreshes.get(), "uma renovação só: a segunda com o segredo antigo derrubaria a sessão")
+        assertEquals("s1.rotated", dm.cookies.sessionValue())
+    }
+
+    @Test
+    fun `a 401 for a session another call already rotated retries instead of signing out`() = runTest {
+        val dm = newClient(server)
+        signedIn(dm)
+        val events = java.util.concurrent.CopyOnWriteArrayList<ApiException>()
+        val watcher = launch(Dispatchers.IO, start = CoroutineStart.UNDISPATCHED) { dm.sessionEnded.collect { events += it } }
+        server.dispatcher =
+            object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse =
+                    when {
+                        request.path == "/v1/me/sessions" && "s1.secret" in request.getHeader("Cookie").orEmpty() -> {
+                            // Meanwhile another call refreshed: the old access secret is refused.
+                            dm.cookies.saveFromResponse(server.url("/"), listOf(okhttp3.Cookie.parse(server.url("/"), sessionCookie("s1.rotated"))!!))
+                            json(401, unauthenticated)
+                        }
+                        else -> json(200, """{"items":[]}""")
+                    }
+            }
+        assertEquals(emptyList(), dm.api.devices())
+        assertTrue(dm.cookies.hasSession(), "a sessão nova continua")
+        watcher.cancel()
+        assertTrue(events.isEmpty(), "nada de sair: outra chamada já renovou")
     }
 
     @Test
@@ -118,6 +179,7 @@ class ApiTest {
     @Test
     fun `an expired access window is refreshed once and the call retried`() = runTest {
         val dm = newClient(server)
+        signedIn(dm)
         server.enqueue(json(401, """{"code":"session_expired","message":"Sessão expirada."}"""))
         server.enqueue(MockResponse().setResponseCode(204).addHeader("Set-Cookie", sessionCookie("s1.rotated")))
         server.enqueue(json(200, """{"items":[]}"""))
@@ -131,14 +193,14 @@ class ApiTest {
     fun `errors keep the server code and its pt-BR message`() = runTest {
         val dm = newClient(server)
         server.enqueue(json(402, """{"code":"insufficient_credits","message":"Saldo insuficiente.","request_id":"r1"}"""))
-        val e = assertFailsWith<ApiException> { dm.api.estimate(listOf("upl_1"), "") }
+        val e = assertFailsWith<ApiException> { dm.api.estimate(listOf("upl_1"), RunOptions()) }
         assertEquals(402, e.status)
         assertEquals("insufficient_credits", e.code)
         assertEquals("Saldo insuficiente.", e.message)
         assertEquals("r1", e.requestId)
 
         server.enqueue(MockResponse().setResponseCode(502).setBody("<html>"))
-        val bad = assertFailsWith<ApiException> { dm.api.estimate(listOf("upl_1"), "") }
+        val bad = assertFailsWith<ApiException> { dm.api.estimate(listOf("upl_1"), RunOptions()) }
         assertEquals("server", bad.code)
         assertTrue(bad.message.contains("502"), bad.message)
     }
@@ -168,13 +230,14 @@ class ApiTest {
     fun `runs are created with an idempotency key and the signed quote`() = runTest {
         val dm = newClient(server)
         server.enqueue(json(202, """{"id":"run_1","status":"queued","sources":[]}"""))
-        dm.api.createRun(Quote("quo_1", 40, 50, "sig"), listOf("upl_1", "upl_2"), "  tarifa é despesa ")
+        dm.api.createRun(Quote("quo_1", 40, 50, "sig"), listOf("upl_1", "upl_2"), RunOptions("  tarifa é despesa ", webSearch = true), "key-1")
         val req = server.takeRequest()
-        assertTrue(req.getHeader("Idempotency-Key")!!.length >= 32)
+        assertEquals("key-1", req.getHeader("Idempotency-Key"))
         val body = req.body.readUtf8()
         assertTrue(""""sources":[{"upload_id":"upl_1"},{"upload_id":"upl_2"}]""" in body, body)
         assertTrue(""""rules_text":"tarifa é despesa"""" in body, body)
         assertTrue(""""quote_id":"quo_1"""" in body && """"quote_signature":"sig"""" in body, body)
+        assertTrue(""""options":{"web_search":true,"use_rules":true}""" in body, body)
     }
 
     @Test

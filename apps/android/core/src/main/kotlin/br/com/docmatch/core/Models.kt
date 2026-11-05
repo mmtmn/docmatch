@@ -114,7 +114,13 @@ object RunStatus {
     const val CANCELLED = "cancelled"
 
     fun terminal(status: String): Boolean = status == COMPLETED || status == FAILED || status == CANCELLED
+
+    /** Nothing changes without the user: finished, or parked until the extra estimate is approved. */
+    fun settled(status: String): Boolean = terminal(status) || status == NEEDS_APPROVAL
 }
+
+/** The run options of the form, the same as the site's (rules text, "Usar regras", web search). */
+data class RunOptions(val rulesText: String = "", val useRules: Boolean = true, val webSearch: Boolean = false)
 
 @Serializable
 data class RunProgress(val stage: String = "", val percent: Int = 0, val message: String? = null)
@@ -139,6 +145,8 @@ data class Run(
     val progress: RunProgress? = null,
     val summary: RunSummary? = null,
     val error: RunError? = null,
+    /** The extra estimate a run parked at needs_approval waits for (POST /runs/{id}/approve-quote). */
+    @SerialName("pending_quote") val pendingQuote: Quote? = null,
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("finished_at") val finishedAt: String? = null,
 )

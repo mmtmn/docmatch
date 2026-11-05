@@ -268,6 +268,10 @@ func TestTemplatesAndJobs(t *testing.T) {
 	if err := m.Validate(); err != nil {
 		t.Fatal(err)
 	}
+	app := LoginMessage("a@example.com", LoginData{Code: "123456", Minutes: 15})
+	if strings.Contains(app.Text, "link") || strings.Contains(app.HTML, "href") || !strings.Contains(app.Text, "Digite o código no app") || app.Validate() != nil {
+		t.Fatalf("login pelo app: só o código: %+v", app)
+	}
 	short := LoginMessage("a@example.com", LoginData{Code: "12", Link: "l", Minutes: 1})
 	if !strings.Contains(short.Subject, "12") {
 		t.Fatal("código curto fica como está")

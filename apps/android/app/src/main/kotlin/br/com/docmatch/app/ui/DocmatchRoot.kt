@@ -15,6 +15,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -22,6 +23,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import br.com.docmatch.app.Exports
 import br.com.docmatch.core.Docmatch
 
 private data class Tab(val route: String, val label: String, val icon: ImageVector)
@@ -31,7 +33,9 @@ private data class Tab(val route: String, val label: String, val icon: ImageVect
 fun DocmatchRoot(dm: Docmatch) {
     CompositionLocalProvider(LocalTexts provides dm.texts) {
         DocmatchTheme {
-            val session: SessionViewModel = viewModel { SessionViewModel(dm) }
+            val app = LocalContext.current.applicationContext
+            // Whenever the session ends (here or from another device) its exports go too.
+            val session: SessionViewModel = viewModel { SessionViewModel(dm) { Exports.clear(app) } }
             when (val s = session.state.collectAsState().value) {
                 SessionState.Loading -> Scaffold { p -> androidx.compose.foundation.layout.Box(Modifier.padding(p)) { Loading(t("mobile.loading")) } }
                 is SessionState.SignedOut -> Scaffold { p -> androidx.compose.foundation.layout.Box(Modifier.padding(p)) { LoginScreen(s, session, dm.baseUrl) } }

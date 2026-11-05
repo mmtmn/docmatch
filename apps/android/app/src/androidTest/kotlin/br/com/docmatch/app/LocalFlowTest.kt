@@ -71,7 +71,7 @@ class LocalFlowTest {
         ActivityScenario.launch(MainActivity::class.java).use {
             // No key and no account: the local sign-in.
             click(hasText(t("auth.dev_sign_in")))
-            await(hasText(t("mobile.new_title")))
+            await(hasText(t("common.app_title")))
 
             // The twin's inputs through the system picker (answered with this app's own provider).
             intending(hasAction(Intent.ACTION_OPEN_DOCUMENT)).respondWith(Instrumentation.ActivityResult(Activity.RESULT_OK, pickedInputs()))
@@ -80,7 +80,7 @@ class LocalFlowTest {
             click(hasText(t("form.submit")))
 
             // The estimate, confirmed; the run, to the answer key.
-            click(hasText(t("mobile.confirm_continue")) and hasAnyAncestor(isDialog()), timeoutMs = RUN_TIMEOUT_MS)
+            click(hasText(t("form.submit")) and hasAnyAncestor(isDialog()), timeoutMs = RUN_TIMEOUT_MS)
             await(hasText(t("mobile.run_findings", mapOf("count" to expectedFindings()))), timeoutMs = RUN_TIMEOUT_MS)
 
             // A decision, recorded on the API.

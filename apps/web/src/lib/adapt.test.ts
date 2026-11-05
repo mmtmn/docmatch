@@ -21,7 +21,7 @@ const finding: FindingView = {
   title: 'Pagamento parcial de exatamente 50%',
   explanation: 'Metade recebida.',
   confidence: 0.97,
-  confidence_label: 'confirmed',
+  confidence_label: 'Confirmado',
   status: 'open',
   evidence: [
     {
@@ -51,6 +51,13 @@ describe('toResults', () => {
     expect(f?.right).toMatchObject({ kind: 'table', sourceName: 'titulos.csv' });
     if (f?.right.kind === 'table')
       expect(f.right.rows[0]).toMatchObject({ amount: 98_000, document: 'NF 1', cited: true });
+  });
+
+  it('reads the pt-BR confidence labels the API sends', () => {
+    const levels = ['Confirmado', 'Provável', 'Precisa de você'].map(
+      (label) => toResults(run, [{ ...finding, confidence_label: label }]).findings[0]?.confidence,
+    );
+    expect(levels).toEqual(['high', 'medium', 'low']);
   });
 
   it('maps duplicates, missing items and dates', () => {

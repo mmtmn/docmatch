@@ -79,7 +79,10 @@ class PersistentCookieJar(
     }
 
     /** Whether a session cookie is held (the account may still have revoked it server-side). */
-    fun hasSession(): Boolean = synchronized(lock) { cookies.any { it.name == SESSION_COOKIE && it.expiresAt > now() } }
+    fun hasSession(): Boolean = sessionValue() != null
+
+    /** The session cookie's value, which changes on every refresh; null without a session. */
+    fun sessionValue(): String? = synchronized(lock) { cookies.firstOrNull { it.name == SESSION_COOKIE && it.expiresAt > now() }?.value }
 
     private fun load(): MutableList<Cookie> {
         val bytes = store.read() ?: return mutableListOf()

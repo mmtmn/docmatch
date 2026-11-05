@@ -49,8 +49,10 @@ e2e-local: sdk-check ## make local + o app num emulador gerenciado: login local,
 release: sdk-check ## AAB de release para a origem do ambiente (outputs do Terraform; DOCMATCH_API_BASE_URL sobrepõe)
 	@url="$${DOCMATCH_API_BASE_URL:-$$(terraform -chdir=$(ROOT)/infra/terraform/envs/$(ENV) output -raw site_url)}"; \
 	  [[ -n "$$url" ]] || { echo "sem origem da API: aplique o ambiente $(ENV) ou defina DOCMATCH_API_BASE_URL" >&2; exit 1; }; \
+	  google="$${GOOGLE_OAUTH_CLIENT_ID:-}"; \
+	  [[ -n "$$google" ]] || echo "AVISO: GOOGLE_OAUTH_CLIENT_ID vazio; o release sai sem o botão do Google" >&2; \
 	  echo "release para $$url"; \
-	  $(GRADLE) :app:bundleRelease -Pdocmatch.apiBaseUrl="$$url"
+	  $(GRADLE) :app:bundleRelease -Pdocmatch.apiBaseUrl="$$url" -Pdocmatch.googleServerClientId="$$google"
 	@echo "AAB em app/build/outputs/bundle/release/ (assinatura: README)"
 
 clean: ## apaga os builds

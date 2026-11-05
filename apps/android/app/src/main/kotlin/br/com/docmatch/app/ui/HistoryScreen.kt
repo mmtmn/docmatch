@@ -13,10 +13,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.ViewModel
@@ -33,7 +36,7 @@ import kotlinx.coroutines.launch
 sealed interface HistoryState {
     data object Loading : HistoryState
 
-    data class Ready(val runs: List<Run>, val next: String?) : HistoryState
+    data class Ready(val runs: List<Run>, val next: String?, val notice: String? = null) : HistoryState
 
     data class Failed(val message: String) : HistoryState
 }
@@ -43,32 +46,33 @@ class HistoryViewModel(private val dm: Docmatch) : ViewModel() {
     private val _state = MutableStateFlow<HistoryState>(HistoryState.Loading)
     val state: StateFlow<HistoryState> = _state
 
-    init {
-        refresh()
+    /** Reloads the first page; what is on screen stays while it loads. */
+    suspend fun refresh() {
+        if (_state.value !is HistoryState.Ready) _state.value = HistoryState.Loading
+        _state.value =
+            try {
+                dm.api.runs().let { HistoryState.Ready(it.items, it.nextCursor) }
+            } catch (e: ApiException) {
+                (_state.value as? HistoryState.Ready)?.copy(notice = e.message) ?: HistoryState.Failed(e.message)
+            }
     }
 
-    fun refresh() {
-        viewModelScope.launch {
-            _state.value = HistoryState.Loading
-            _state.value =
-                try {
-                    dm.api.runs().let { HistoryState.Ready(it.items, it.nextCursor) }
-                } catch (e: ApiException) {
-                    HistoryState.Failed(e.message)
-                }
-        }
+    fun retry() {
+        viewModelScope.launch { refresh() }
     }
 
     fun more() {
         val ready = _state.value as? HistoryState.Ready ?: return
         val cursor = ready.next ?: return
         viewModelScope.launch {
-            try {
-                val page = dm.api.runs(cursor)
-                _state.value = HistoryState.Ready(ready.runs + page.items, page.nextCursor)
-            } catch (_: ApiException) {
-                // Keep what is shown; the next tap tries again.
-            }
+            _state.value =
+                try {
+                    val page = dm.api.runs(cursor)
+                    // Offset pages shift when a run starts meanwhile: never show one twice.
+                    ready.copy(runs = (ready.runs + page.items).distinctBy { it.id }, next = page.nextCursor, notice = null)
+                } catch (_: ApiException) {
+                    ready.copy(notice = dm.texts.t("mobile.load_more_failed"))
+                }
         }
     }
 }
@@ -76,9 +80,11 @@ class HistoryViewModel(private val dm: Docmatch) : ViewModel() {
 @Composable
 fun HistoryScreen(vm: HistoryViewModel, onOpen: (String) -> Unit) {
     val state by vm.state.collectAsState()
+    // Every time the tab is shown: runs started on the site or another device appear.
+    LaunchedEffect(Unit) { vm.refresh() }
     when (val s = state) {
         HistoryState.Loading -> Loading(t("mobile.loading"))
-        is HistoryState.Failed -> ErrorState(s.message, vm::refresh)
+        is HistoryState.Failed -> ErrorState(s.message, vm::retry)
         is HistoryState.Ready ->
             LazyColumn(contentPadding = PaddingValues(DmSize.space3), verticalArrangement = Arrangement.spacedBy(DmSize.space2)) {
                 item { Text(t("mobile.tab_history"), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() }) }
@@ -92,7 +98,8 @@ fun HistoryScreen(vm: HistoryViewModel, onOpen: (String) -> Unit) {
                         }
                     }
                 }
-                if (s.next != null) item { TextButton(onClick = vm::more) { Text(t("mobile.loading")) } }
+                s.notice?.let { item { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) } }
+                if (s.next != null) item { TextButton(onClick = vm::more) { Text(t("mobile.load_more")) } }
             }
     }
 }

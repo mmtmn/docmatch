@@ -23,13 +23,19 @@ object Format {
     /** An ISO date (2026-07-16) as 16/07/2026. */
     fun date(iso: String?): String = iso?.let { runCatching { date.format(LocalDate.parse(it.take(10))) }.getOrNull() } ?: ""
 
-    /** Bytes as "5,3 KB" / "1,2 MB". */
-    fun size(bytes: Long): String {
-        val nf = NumberFormat.getNumberInstance(PtBr).apply { maximumFractionDigits = 1 }
+    /** Bytes the site's way (apps/web/src/lib/format.ts): binary units, one decimal under 10. */
+    fun size(texts: Texts, bytes: Long): String {
+        fun scaled(v: Double): String =
+            NumberFormat.getNumberInstance(PtBr).apply { maximumFractionDigits = if (v < 10) 1 else 0 }.format(v)
         return when {
-            bytes < 1024 -> "$bytes B"
-            bytes < 1024 * 1024 -> "${nf.format(bytes / 1024.0)} KB"
-            else -> "${nf.format(bytes / (1024.0 * 1024.0))} MB"
+            bytes >= GB -> texts.t("files.size_gb", mapOf("n" to scaled(bytes.toDouble() / GB)))
+            bytes >= MB -> texts.t("files.size_mb", mapOf("n" to scaled(bytes.toDouble() / MB)))
+            bytes >= KB -> texts.t("files.size_kb", mapOf("n" to scaled(bytes.toDouble() / KB)))
+            else -> texts.t("files.size_bytes", mapOf("n" to NumberFormat.getIntegerInstance(PtBr).format(bytes)))
         }
     }
+
+    private const val KB = 1024L
+    private const val MB = 1024 * KB
+    private const val GB = 1024 * MB
 }

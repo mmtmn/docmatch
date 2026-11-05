@@ -1,8 +1,10 @@
 # apps/android
 
 App Android da docmatch: Kotlin e Jetpack Compose, Android 8.0+ (minSdk 26), só em pt-BR. Envia
-documentos, confirma a estimativa de tokens, acompanha a conciliação, mostra os achados com as
-evidências, registra decisões, exporta XLSX/PDF e mostra a conta com todos os aparelhos.
+documentos, áudios e vídeos, confirma a estimativa de tokens (e o orçamento adicional de uma
+execução parada), acompanha a conciliação, mostra os achados com as evidências, registra decisões
+(aceitar, rejeitar, editar com observação), exporta XLSX/CSV e mostra a conta com todos os
+aparelhos.
 
 O app diz o que o site diz: os textos vêm de [`packages/locales/pt-BR.json`](../../packages/locales)
 (lido em tempo de execução, com os mesmos `{nome}`), os limites de cada campo de
@@ -13,7 +15,7 @@ aplicam) e as cores de `packages/design-tokens/tokens.json` (via `tools/mobile/t
 
 | Módulo | O que tem |
 | --- | --- |
-| `core/` | JVM puro, sem SDK: cliente da API, sessão por cookies, textos, formatação pt-BR, tipos de arquivo e o fluxo envio → verificação → estimativa → execução. Testado com MockWebServer. |
+| `core/` | JVM puro, sem SDK: cliente da API, sessão por cookies, textos, formatação pt-BR, a pré-checagem do site (tipo pelo conteúdo, tetos de `limits.yaml`, as mesmas mensagens; vetores em `testdata/precheck/cases.json`) e o fluxo envio → verificação → estimativa → execução, com os arquivos lidos em fluxo, nunca inteiros na memória. Testado com MockWebServer. |
 | `app/` | Telas em Compose, cookies cifrados no Android Keystore, login Google pelo Credential Manager, exportação pelo FileProvider. |
 
 ## A mesma conta em todos os aparelhos
@@ -26,7 +28,14 @@ aplicam) e as cores de `packages/design-tokens/tokens.json` (via `tools/mobile/t
   site e nos outros aparelhos.
 - A aba Conta lista todos os aparelhos ("App Android · Pixel 8", "Firefox · Linux"...) e encerra
   qualquer um. Um aparelho encerrado em outro lugar volta para o login na próxima requisição, e os
-  cookies saem dele.
+  cookies e os relatórios exportados saem dele.
+- A sessão se renova uma vez só: chamadas simultâneas no fim da janela de acesso esperam a mesma
+  renovação, em vez de apresentar o segredo antigo (o que faria a API derrubar a sessão).
+- O código por e-mail pedido pelo app chega sem link: um link aberto no celular entraria pelo
+  navegador e gastaria o código que o app espera.
+- O login com a Apple ainda não existe no Android (só no site e no iOS). Quem criou a conta com a
+  Apple entra no Android pelo código por e-mail, no endereço que a conta mostra (inclusive o de
+  retransmissão da Apple, que entrega no e-mail de verdade).
 
 O `make e2e-local` prova isso num emulador: login local, o gêmeo público da Vantara até o gabarito,
 uma decisão, o aparelho na conta; depois um segundo aparelho (um navegador) entra na mesma conta,
@@ -65,7 +74,7 @@ Tudo por propriedade do Gradle (`-P` ou `~/.gradle/gradle.properties`), nada no 
 | Propriedade | Para quê |
 | --- | --- |
 | `docmatch.apiBaseUrl` | Origem da API. Debug: `http://10.0.2.2:8080`. Release: obrigatória e `https://` (o `make release` lê do Terraform). |
-| `docmatch.googleServerClientId` | Client ID web do Google (o mesmo `GOOGLE_OAUTH_CLIENT_ID` da API). Vazio esconde o botão do Google. |
+| `docmatch.googleServerClientId` | Client ID web do Google (o mesmo `GOOGLE_OAUTH_CLIENT_ID` da API; o `make release` lê do ambiente). Vazio esconde o botão do Google. |
 
 Para o Google, crie também um client OAuth do tipo Android no mesmo projeto do Google Cloud
 (pacote `br.com.docmatch`, SHA-1 da chave que assina o app). O token que o celular recebe é emitido

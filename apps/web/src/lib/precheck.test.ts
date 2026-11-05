@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { t } from './i18n';
 import { fileCaps } from './limits';
@@ -8,6 +11,8 @@ import {
   looksLikeOfx,
   precheckFiles,
   sniffKind,
+  uploadMime,
+  type FileKind,
 } from './precheck';
 
 type Bytes = Uint8Array<ArrayBuffer>;
@@ -196,5 +201,23 @@ describe('precheckFiles', () => {
     });
     const result = await precheckFiles([broken]);
     expect(result.rejected[0]!.reason).toBe(t('errors.read_failed', { name: 'x.pdf' }));
+  });
+});
+
+describe('shared precheck cases (testdata/precheck/cases.json)', () => {
+  const file = join(dirname(fileURLToPath(import.meta.url)), '../../../../testdata/precheck/cases.json');
+  const { cases } = JSON.parse(readFileSync(file, 'utf8')) as {
+    cases: { name: string; hex: string; kind?: string; reason?: string; mime?: string }[];
+  };
+
+  it.each(cases)('$name', ({ name, hex, kind, reason, mime }) => {
+    const bytes = new Uint8Array((hex.match(/../g) ?? []).map((h) => parseInt(h, 16)));
+    const verdict = classify(name, bytes);
+    if (kind) {
+      expect(verdict).toEqual({ kind });
+      if (mime) expect(uploadMime(kind as FileKind, name)).toBe(mime);
+    } else {
+      expect('reason' in verdict && verdict.reason).toBe(reason);
+    }
   });
 });

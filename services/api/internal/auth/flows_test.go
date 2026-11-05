@@ -355,6 +355,20 @@ func TestAppleLogin(t *testing.T) {
 	}
 }
 
+func TestEmailLoginFromAnAppSendsOnlyTheCode(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	rec := h.do(req{method: http.MethodPost, path: EmailStartPath, body: `{"email":"app@example.com"}`,
+		headers: map[string]string{"User-Agent": "docmatch-android/1.0.0 (Pixel 8; Android 15)"}})
+	if rec.Code != 202 || len(h.store.Sent) != 1 {
+		t.Fatalf("start pelo app: %d %+v", rec.Code, h.store.Sent)
+	}
+	// A link opened on the phone would sign in its browser and spend the app's challenge.
+	if msg := h.store.Sent[0]; strings.Contains(msg.Text, DefaultMagicLinkPath) || strings.Contains(msg.HTML, DefaultMagicLinkPath) {
+		t.Fatalf("o e-mail do app não leva link: %s", msg.Text)
+	}
+}
+
 func TestAppleNative(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)

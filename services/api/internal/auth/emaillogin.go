@@ -77,6 +77,11 @@ func (s *Service) emailStart(w http.ResponseWriter, r *http.Request) {
 	}
 	public := publicid.Encode(publicid.PrefixChallenge, id)
 	link := s.webURL(s.d.MagicLinkPath) + "?challenge_id=" + public + "&code=" + url.QueryEscape(token)
+	if PlatformOf(r) != PlatformWeb {
+		// Asked from an app: only the code. A link opened on the phone would sign in its browser
+		// and spend the challenge the app is waiting for.
+		link = ""
+	}
 	msg := email.LoginMessage(addr, email.LoginData{Code: code, Link: link, Expires: ch.ExpiresAt, Minutes: int(ChallengeTTL / time.Minute)})
 	if err := s.d.Store.CreateChallenge(r.Context(), ch, msg); err != nil {
 		apierr.Internal(w, r, err)

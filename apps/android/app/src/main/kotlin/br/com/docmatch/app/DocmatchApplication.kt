@@ -11,6 +11,7 @@ class DocmatchApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        Exports.clear(this)
         val texts = assets.open("pt-BR.json").use { it.readBytes().decodeToString() }
         docmatch =
             Docmatch(

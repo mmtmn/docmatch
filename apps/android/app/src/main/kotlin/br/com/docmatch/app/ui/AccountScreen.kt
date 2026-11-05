@@ -14,6 +14,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -49,24 +50,23 @@ class AccountViewModel(private val dm: Docmatch, private val onSignedOut: (Strin
     private val _state = MutableStateFlow<AccountState>(AccountState.Loading)
     val state: StateFlow<AccountState> = _state
 
-    init {
-        refresh()
+    /** Reloads the account (credits, devices); what is on screen stays while it loads. */
+    suspend fun load(notice: String? = null) {
+        _state.value =
+            try {
+                val me = dm.api.me()
+                if (me == null) {
+                    onSignedOut(dm.texts.t("account.signed_out"))
+                    return
+                }
+                AccountState.Ready(me, dm.api.devices(), notice)
+            } catch (e: ApiException) {
+                (_state.value as? AccountState.Ready)?.copy(notice = e.message) ?: AccountState.Failed(e.message)
+            }
     }
 
     fun refresh(notice: String? = null) {
-        viewModelScope.launch {
-            _state.value =
-                try {
-                    val me = dm.api.me()
-                    if (me == null) {
-                        onSignedOut(dm.texts.t("account.signed_out"))
-                        return@launch
-                    }
-                    AccountState.Ready(me, dm.api.devices(), notice)
-                } catch (e: ApiException) {
-                    AccountState.Failed(e.message)
-                }
-        }
+        viewModelScope.launch { load(notice) }
     }
 
     fun revoke(device: Device) {
@@ -91,6 +91,8 @@ class AccountViewModel(private val dm: Docmatch, private val onSignedOut: (Strin
 @Composable
 fun AccountScreen(vm: AccountViewModel) {
     val state by vm.state.collectAsState()
+    // Every time the tab is shown: credits spent and devices added elsewhere appear.
+    LaunchedEffect(Unit) { vm.load() }
     when (val s = state) {
         AccountState.Loading -> Loading(t("account.loading"))
         is AccountState.Failed -> ErrorState(s.message) { vm.refresh() }
@@ -103,15 +105,15 @@ fun AccountScreen(vm: AccountViewModel) {
                 item {
                     Card(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(DmSize.space2), verticalArrangement = Arrangement.spacedBy(DmSize.space1)) {
-                            Text(t("account.profile"), fontWeight = FontWeight.SemiBold)
-                            if (s.me.user.displayName.isNotBlank()) Text(s.me.user.displayName)
-                            Text(s.me.user.email)
-                            s.me.credits?.let { Text(t("account.credits_available", mapOf("available" to it.available))) }
+                            Text(t("account.profile"), fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
+                            if (s.me.user.displayName.isNotBlank()) Labeled(t("account.name_label"), s.me.user.displayName)
+                            Labeled(t("account.email_label"), s.me.user.email)
+                            s.me.credits?.let { Labeled(t("account.credits"), t("account.credits_available", mapOf("available" to it.available))) }
                         }
                     }
                 }
                 item {
-                    Text(t("account.devices"), fontWeight = FontWeight.SemiBold)
+                    Text(t("account.devices"), fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
                     Text(t("account.devices_text"), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 items(s.devices, key = { it.id }) { d ->
@@ -131,5 +133,14 @@ fun AccountScreen(vm: AccountViewModel) {
                 }
                 item { Button(onClick = vm::signOut) { Text(t("account.sign_out")) } }
             }
+    }
+}
+
+/** A value with its label, read together. */
+@Composable
+private fun Labeled(label: String, value: String) {
+    Column(Modifier.semantics(mergeDescendants = true) {}) {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value)
     }
 }

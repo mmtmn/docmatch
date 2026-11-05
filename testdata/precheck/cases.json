@@ -1,0 +1,142 @@
+{
+  "description": "Vetores compartilhados da pré-checagem de arquivos (apps/web/src/lib/precheck.ts, apps/android core Precheck.kt, apps/ios DocmatchKit Precheck.swift): o mesmo arquivo recebe o mesmo veredito e o mesmo MIME em todo cliente.",
+  "cases": [
+    {
+      "name": "extrato.csv",
+      "hex": "646174613b686973746f7269636f3b76616c6f720a30312f30372f323032363b5049583b31302c30300a",
+      "kind": "csv",
+      "mime": "text/csv"
+    },
+    {
+      "name": "planilha.tsv",
+      "hex": "6109620a3109320a",
+      "kind": "csv",
+      "mime": "text/tab-separated-values"
+    },
+    {
+      "name": "notas.txt",
+      "hex": "6c696e686120756d0a6c696e686120646f69730a",
+      "kind": "txt",
+      "mime": "text/plain"
+    },
+    {
+      "name": "retorno.ret",
+      "hex": "30325245544f524e4f3031434f4252414e43412020202020202030303030303030303030303030300a",
+      "kind": "txt",
+      "mime": "text/plain"
+    },
+    {
+      "name": "sem-extensao",
+      "hex": "746578746f206c697672650a",
+      "kind": "txt",
+      "mime": "text/plain"
+    },
+    {
+      "name": "contrato.pdf",
+      "hex": "255044462d312e370a25e2e3cfd30a",
+      "kind": "pdf",
+      "mime": "application/pdf"
+    },
+    {
+      "name": "titulos.xlsx",
+      "hex": "504b030414000600",
+      "kind": "xlsx",
+      "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    },
+    {
+      "name": "macros.xlsm",
+      "hex": "504b030414000600",
+      "kind": "xlsx",
+      "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    },
+    {
+      "name": "antigo.xls",
+      "hex": "d0cf11e0a1b11ae10000",
+      "kind": "xlsx",
+      "mime": "application/vnd.ms-excel"
+    },
+    {
+      "name": "lote.zip",
+      "hex": "504b030414000000",
+      "kind": "zip",
+      "mime": "application/zip"
+    },
+    {
+      "name": "documento.docx",
+      "hex": "504b030414000600",
+      "reason": "errors.file_type_unknown"
+    },
+    {
+      "name": "pedido.eml",
+      "hex": "46726f6d3a20636f6d70726173406578616d706c652e636f6d0d0a546f3a2066696e616e636569726f406578616d706c652e636f6d0d0a5375626a6563743a2050656469646f2034320d0a0d0a5365677565206f2070656469646f2e0d0a",
+      "kind": "eml",
+      "mime": "message/rfc822"
+    },
+    {
+      "name": "extrato.ofx",
+      "hex": "4f46584845414445523a3130300a444154413a4f465853474d4c0a56455253494f4e3a3130320a",
+      "kind": "ofx",
+      "mime": "application/x-ofx"
+    },
+    {
+      "name": "foto.png",
+      "hex": "89504e470d0a1a0a0000000d49484452",
+      "kind": "image"
+    },
+    {
+      "name": "nota.mp3",
+      "hex": "49443304000000000000",
+      "kind": "audio",
+      "mime": "audio/mpeg"
+    },
+    {
+      "name": "reuniao.m4a",
+      "hex": "00000020667479704d34412000000000",
+      "kind": "audio",
+      "mime": "audio/mp4"
+    },
+    {
+      "name": "chamada.mp4",
+      "hex": "000000186674797069736f6d00000200",
+      "kind": "video",
+      "mime": "video/mp4"
+    },
+    {
+      "name": "tela.webm",
+      "hex": "1a45dfa39f428681",
+      "kind": "video",
+      "mime": "video/webm"
+    },
+    {
+      "name": "audio.wav",
+      "hex": "524946462400000057415645666d7420",
+      "kind": "audio",
+      "mime": "audio/wav"
+    },
+    {
+      "name": "renomeado.pdf",
+      "hex": "613b620a313b320a",
+      "reason": "errors.file_extension_mismatch"
+    },
+    {
+      "name": "binario.csv",
+      "hex": "000102030405",
+      "reason": "errors.file_extension_mismatch"
+    },
+    {
+      "name": "planilha.pdf",
+      "hex": "504b030414000600",
+      "reason": "errors.file_type_unknown"
+    },
+    {
+      "name": "programa.exe",
+      "hex": "4d5a900003000000",
+      "reason": "errors.file_type_unknown"
+    },
+    {
+      "name": "texto.xyz",
+      "hex": "636f6e746575646f207175616c717565720a",
+      "reason": "errors.file_type_unknown"
+    }
+  ]
+}

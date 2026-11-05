@@ -1,4 +1,5 @@
-// Every API call the app makes, one method per route of packages/contracts/openapi.yaml.
+// Every API call the app makes, one method per route of packages/contracts/openapi.yaml: the same
+// requests the site and the iOS app send.
 package br.com.docmatch.core
 
 import kotlinx.coroutines.Dispatchers
@@ -8,10 +9,14 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
+import okhttp3.MediaType
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.RequestBody
+import okio.BufferedSink
+import okio.source
+import java.io.InputStream
 import java.net.URLEncoder
 
 class DocmatchApi(private val http: HttpTransport) {
@@ -77,32 +82,33 @@ class DocmatchApi(private val http: HttpTransport) {
 
     // ------------------------------------------------------------------ uploads
 
-    suspend fun createUpload(file: LocalFile, sha256: String): UploadTicket =
+    /** A document (with its SHA-256) or media (audio, video: a PUT, no hash) upload ticket. */
+    suspend fun createUpload(file: LocalFile, sha256: String?): UploadTicket =
         http.call(
             "POST",
             "/v1/uploads",
             buildJsonObject {
-                put("kind", "document")
+                put("kind", if (file.kind.media) "media" else "document")
                 put("file_name", file.name)
-                put("size_bytes", file.bytes.size)
+                put("size_bytes", file.size)
                 put("mime", file.mime)
-                put("sha256", sha256)
+                if (sha256 != null) put("sha256", sha256)
             },
             UploadTicket.serializer(),
         )!!
 
-    /** Sends the bytes to the presigned ticket (S3 in production, the API's local folder in dev). */
+    /** Streams the file to the presigned ticket (S3 in production, the API's local folder in dev). */
     suspend fun putObject(ticket: UploadTicket, file: LocalFile) {
         withContext(Dispatchers.IO) {
-            val type = file.mime.toMediaTypeOrNull()
+            val body = StreamBody(file.mime.toMediaTypeOrNull(), file.size, file.open)
             val request =
                 if (ticket.method.equals("POST", ignoreCase = true)) {
                     val form = MultipartBody.Builder().setType(MultipartBody.FORM)
                     ticket.fields.forEach { (k, v) -> form.addFormDataPart(k, v) }
-                    form.addFormDataPart("file", file.name, file.bytes.toRequestBody(type)) // last: S3 ignores later fields
+                    form.addFormDataPart("file", file.name, body) // last: S3 ignores later fields
                     Request.Builder().url(http.presignedUrl(ticket.url)).post(form.build()).build()
                 } else {
-                    val b = Request.Builder().url(http.presignedUrl(ticket.url)).put(file.bytes.toRequestBody(type))
+                    val b = Request.Builder().url(http.presignedUrl(ticket.url)).put(body)
                     ticket.headers.forEach { (k, v) -> b.header(k, v) }
                     b.build()
                 }
@@ -120,20 +126,34 @@ class DocmatchApi(private val http: HttpTransport) {
 
     // ------------------------------------------------------------------ runs
 
-    suspend fun estimate(uploadIds: List<String>, rulesText: String): Quote =
-        http.call("POST", "/v1/runs/estimate", runBody(uploadIds, rulesText), Quote.serializer())!!
+    suspend fun estimate(uploadIds: List<String>, options: RunOptions): Quote =
+        http.call("POST", "/v1/runs/estimate", runBody(uploadIds, options), Quote.serializer())!!
 
-    suspend fun createRun(quote: Quote, uploadIds: List<String>, rulesText: String): Run {
+    /** Starts the run of an accepted estimate; the same key on a retry never starts a second run. */
+    suspend fun createRun(quote: Quote, uploadIds: List<String>, options: RunOptions, idempotencyKey: String): Run {
         val body =
             JsonObject(
-                runBody(uploadIds, rulesText) +
+                runBody(uploadIds, options) +
                     buildJsonObject {
                         put("quote_id", quote.id)
                         put("quote_signature", quote.signature)
                     },
             )
-        return http.call("POST", "/v1/runs", body, Run.serializer(), idempotent = true)!!
+        return http.call("POST", "/v1/runs", body, Run.serializer(), idempotencyKey = idempotencyKey)!!
     }
+
+    /** Approves the extra estimate of a run parked at needs_approval; it resumes from its checkpoint. */
+    suspend fun approveQuote(runId: String, quote: Quote, idempotencyKey: String): Run =
+        http.call(
+            "POST",
+            "/v1/runs/${enc(runId)}/approve-quote",
+            buildJsonObject {
+                put("quote_id", quote.id)
+                put("quote_signature", quote.signature)
+            },
+            Run.serializer(),
+            idempotencyKey = idempotencyKey,
+        )!!
 
     suspend fun run(id: String): Run = http.call("GET", "/v1/runs/${enc(id)}", null, Run.serializer())!!
 
@@ -166,34 +186,37 @@ class DocmatchApi(private val http: HttpTransport) {
                     },
                 )!!
             out += page.items
-            cursor = page.nextCursor ?: return out
+            cursor = page.nextCursor ?: return out.distinctBy { it.id }
         }
-        return out
+        return out.distinctBy { it.id }
     }
 
-    /** Records a decision (confirmed, dismissed, resolved) the web and the other apps then see. */
+    /** Records a decision (confirmed, dismissed, resolved with a note) the site and the other apps see. */
     suspend fun feedback(runId: String, findingId: String, decision: String, note: String? = null) {
         http.call<Unit>(
             "POST",
             "/v1/runs/${enc(runId)}/findings/${enc(findingId)}/feedback",
             buildJsonObject {
                 put("status", decision)
-                if (!note.isNullOrBlank()) put("note", note)
+                if (!note.isNullOrBlank()) put("note", note.trim())
             },
             null,
             idempotent = true,
         )
     }
 
-    /** The run's report as XLSX or PDF bytes. */
+    /** The run's report as XLSX or CSV bytes (the formats the API exports). */
     suspend fun export(runId: String, format: String): ByteArray =
         http.bytes("/v1/runs/${enc(runId)}/export", mapOf("format" to format))
 
-    private fun runBody(uploadIds: List<String>, rulesText: String): JsonObject =
+    private fun runBody(uploadIds: List<String>, options: RunOptions): JsonObject =
         buildJsonObject {
             putJsonArray("sources") { uploadIds.forEach { add(buildJsonObject { put("upload_id", it) }) } }
-            if (rulesText.isNotBlank()) put("rules_text", rulesText.trim())
-            putJsonObject("options") { put("use_rules", true) }
+            if (options.rulesText.isNotBlank()) put("rules_text", options.rulesText.trim())
+            putJsonObject("options") {
+                put("web_search", options.webSearch)
+                put("use_rules", options.useRules)
+            }
         }
 
     private fun enc(segment: String): String = URLEncoder.encode(segment, Charsets.UTF_8).replace("+", "%20")
@@ -203,5 +226,29 @@ class DocmatchApi(private val http: HttpTransport) {
     }
 }
 
-/** A file picked on the phone, read into memory (documents are capped at tens of MB). */
-class LocalFile(val name: String, val mime: String, val bytes: ByteArray)
+/**
+ * A file picked on the phone. Only its name, size and kind are kept; the bytes are streamed from
+ * [open] while hashing and uploading, so a large file never sits in memory.
+ */
+class LocalFile(val name: String, val mime: String, val size: Long, val kind: FileKind, val open: () -> InputStream) {
+    companion object {
+        /** A file from bytes already in memory (tests, pasted text), classified like a picked one. */
+        fun of(name: String, bytes: ByteArray): LocalFile {
+            val (kind, refusal) = Precheck.classify(name, bytes.copyOf(minOf(bytes.size, Precheck.HEAD_BYTES)))
+            require(kind != null) { "arquivo recusado: ${refusal?.key}" }
+            val mime = requireNotNull(Precheck.mime(kind, name)) { "tipo sem MIME: $kind" }
+            return LocalFile(name, mime, bytes.size.toLong(), kind) { bytes.inputStream() }
+        }
+    }
+}
+
+/** A request body streamed from the file, reopened on each attempt (OkHttp may retry). */
+private class StreamBody(private val type: MediaType?, private val size: Long, private val open: () -> InputStream) : RequestBody() {
+    override fun contentType(): MediaType? = type
+
+    override fun contentLength(): Long = size
+
+    override fun writeTo(sink: BufferedSink) {
+        open().source().use { sink.writeAll(it) }
+    }
+}
