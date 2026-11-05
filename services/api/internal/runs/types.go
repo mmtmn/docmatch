@@ -151,7 +151,20 @@ type Timing struct {
 	Large           bool           `json:"large,omitempty"`
 	Units           estimate.Units `json:"units,omitempty"`
 	ActiveMs        int64          `json:"active_ms,omitempty"`
+	// LocalSeconds is the expected time on the main box: a run quoted for the
+	// pool may fall back to it, so deadlines scale with the larger of the two.
+	LocalSeconds int64 `json:"local_seconds,omitempty"`
+	// Placement is where the run executes ("burst" or "local") and Reason why.
+	Placement string `json:"placement,omitempty"`
+	Reason    string `json:"placement_reason,omitempty"`
+	// Interruptions counts the pool instances the run lost (Spot
+	// interruptions, expired leases); past a limit it stays on the main box.
+	Interruptions int `json:"interruptions,omitempty"`
 }
+
+// Budget is the expected time the deadline scales with: the larger of the
+// quoted time and the main-box time.
+func (t Timing) Budget() int64 { return max(t.ExpectedSeconds, t.LocalSeconds) }
 
 const statsTiming = "timing"
 

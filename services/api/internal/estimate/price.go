@@ -3,6 +3,7 @@ package estimate
 import (
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strings"
 
@@ -97,16 +98,46 @@ func (pr Pricer) ItemUSD(it Item, lane string, rates ModelRates) (usd float64, m
 // and the lane multiplier only ever raise revenue, so the margin of the
 // formula holds for every cost vector (see TestPricingMarginProperty).
 func (pr Pricer) Price(items []Item, lane string, rates ModelRates) (Breakdown, error) {
+	return pr.PriceWithInstance(items, lane, rates, 0)
+}
+
+// instanceCarriers are the items that carry the instance minutes of a burst
+// run, in order of preference: the heavy work the instance is there for.
+var instanceCarriers = []string{ItemDocuments, ItemVideoMinutes, ItemAudioMinutes, ItemFrames}
+
+// PriceWithInstance is Price with the minutes a run spends on a pool
+// instance: their cost (estimates.instance_minute_usd) joins the first
+// carrier item present (documents, then video, audio, frames, then the first
+// item), with a note, so the breakdown keeps its items and its invariants.
+func (pr Pricer) PriceWithInstance(items []Item, lane string, rates ModelRates, instanceMinutes float64) (Breakdown, error) {
 	mult, ok := pr.P.LaneMultiplier(lane)
 	if !ok {
 		return Breakdown{}, fmt.Errorf("estimate: faixa desconhecida %q", lane)
 	}
+	carrier := -1
+	if instanceMinutes > 0 && pr.P.Estimates.InstanceMinuteUSD > 0 && len(items) > 0 {
+		carrier = 0
+		for _, name := range instanceCarriers {
+			if i := slices.IndexFunc(items, func(it Item) bool { return it.Item == name }); i >= 0 {
+				carrier = i
+				break
+			}
+		}
+	}
 	out := make([]Item, 0, len(items))
 	var subtotal int64
-	for _, it := range items {
+	for i, it := range items {
 		usd, model := pr.ItemUSD(it, lane, rates)
 		if model {
 			usd = pr.P.ModelCost(usd)
+		}
+		if i == carrier {
+			usd += instanceMinutes * pr.P.Estimates.InstanceMinuteUSD
+			note := fmt.Sprintf("inclui %.0f min de instância dedicada", math.Ceil(instanceMinutes))
+			if it.Note != "" {
+				note = it.Note + "; " + note
+			}
+			it.Note = note
 		}
 		it.Credits = pr.P.Tokens(usd)
 		subtotal += it.Credits

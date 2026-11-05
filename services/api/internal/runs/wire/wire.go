@@ -72,6 +72,8 @@ type System struct {
 	Rules      *rules.Service
 	Workflows  *workflows.Service
 	Runs       *runs.Service
+	// Pool is the pool of on-demand workers; nil when it is off (burst.go).
+	Pool *Pool
 
 	cfg  *config.Config
 	log  *slog.Logger
@@ -140,7 +142,15 @@ func New(ctx context.Context, o Options) (*System, error) {
 	if err != nil {
 		return nil, err
 	}
-	sys.Estimates, err = estimate.New(estimate.Deps{Store: sys.Store, Harness: sys.Harness, Pricing: pr, Throughput: sys.Throughput, Signer: signer, Sources: sys.Uploads, Limits: o.Limits, Audit: sys.Audit, Logger: log})
+	if sys.Pool, err = newPool(cfg, sys); err != nil {
+		return nil, err
+	}
+	var placer estimate.Placer
+	var remote runs.Remote
+	if sys.Pool != nil && sys.Pool.Dispatcher != nil {
+		placer, remote = sys.Pool.Router, sys.Pool.Dispatcher
+	}
+	sys.Estimates, err = estimate.New(estimate.Deps{Store: sys.Store, Harness: sys.Harness, Pricing: pr, Throughput: sys.Throughput, Signer: signer, Sources: sys.Uploads, Limits: o.Limits, Audit: sys.Audit, Logger: log, Placer: placer})
 	if err != nil {
 		return nil, err
 	}
@@ -162,6 +172,7 @@ func New(ctx context.Context, o Options) (*System, error) {
 		Store: sys.Store, Uploads: sys.Uploads, Estimates: sys.Estimates, Rules: sys.Rules, Credits: sys.Credits, Jobs: sys.Jobs,
 		Harness: sys.Harness, Broker: sys.Broker, Idem: sys.Store, Limits: o.Limits, Audit: sys.Audit, Outbox: sys.Store,
 		Mailer: emailpg.NewTxMailer(mailInserter), ResultsURL: ResultsURL(cfg.PublicBaseURL), Logger: log,
+		Deadlines: deadlines(cfg), Remote: remote,
 	})
 	if err != nil {
 		return nil, err
@@ -224,21 +235,12 @@ func (s *System) buildStores(ctx context.Context) error {
 // openRemote opens an s3:// or r2:// source of one of the configured stores
 // for the harness; ok is false for local:// and unknown URIs.
 func (s *System) openRemote(ctx context.Context, uri string) (io.ReadCloser, bool, error) {
-	scheme, rest, ok := strings.Cut(uri, "://")
-	if !ok || scheme == storage.NameLocal {
+	st, key, ok := s.storeFor(uri)
+	if !ok || st.Name() == storage.NameLocal {
 		return nil, false, nil
 	}
-	bucket, key, ok := strings.Cut(rest, "/")
-	if !ok || key == "" {
-		return nil, false, nil
-	}
-	for _, st := range []storage.Store{s.Stores.Documents, s.Stores.Media} {
-		if st != nil && st.Name() == scheme && st.Bucket() == bucket {
-			rc, err := st.Open(ctx, key)
-			return rc, true, err
-		}
-	}
-	return nil, false, nil
+	rc, err := st.Open(ctx, key)
+	return rc, true, err
 }
 
 // Mount returns the route groups for api.Deps.Mount.

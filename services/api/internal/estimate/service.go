@@ -65,6 +65,9 @@ type Deps struct {
 	Audit      Recorder
 	Logger     *slog.Logger
 	Now        func() time.Time
+	// Placer routes heavy runs to the pool of on-demand workers; nil keeps
+	// every run on the main box.
+	Placer Placer
 }
 
 // Service builds, signs and verifies quotes.
@@ -387,11 +390,12 @@ func (s *Service) Estimate(ctx context.Context, p apix.Principal, req Request, u
 		}
 		return Quote{}, fmt.Errorf("estimate: harness: %w", err)
 	}
-	q, err := s.PriceQuote(ctx, pbq, v.Lane)
+	qt := s.Timing(ctx, s.Units(loaded, ItemsFromProto(pbq.GetBreakdown())))
+	q, err := s.priceQuote(ctx, pbq, v.Lane, s.instanceMinutes(qt))
 	if err != nil {
 		return Quote{}, err
 	}
-	q.ExpectedSeconds, q.Large = s.Time(ctx, s.Units(loaded, q.Breakdown.Items))
+	q.ExpectedSeconds, q.Large = qt.Seconds, qt.Large
 	rawReq, _ := json.Marshal(req)
 	rec, err := s.Issue(ctx, p, v.Lane, KindInitial, rawReq, Fingerprint(req, loaded.Hashes), q, nil)
 	if err != nil {
@@ -402,8 +406,14 @@ func (s *Service) Estimate(ctx context.Context, p apix.Principal, req Request, u
 
 // PriceQuote re-prices the harness breakdown with the current table.
 func (s *Service) PriceQuote(ctx context.Context, pbq *pb.Quote, lane string) (Quote, error) {
+	return s.priceQuote(ctx, pbq, lane, 0)
+}
+
+// priceQuote prices the breakdown, folding instanceMinutes of the burst pool
+// into the heavy work when pricing.yaml charges them (InstanceMinutes).
+func (s *Service) priceQuote(ctx context.Context, pbq *pb.Quote, lane string, instanceMinutes float64) (Quote, error) {
 	items := ItemsFromProto(pbq.GetBreakdown())
-	bd, err := Pricer{P: s.d.Pricing}.Price(items, lane, s.Rates(ctx))
+	bd, err := Pricer{P: s.d.Pricing}.PriceWithInstance(items, lane, s.Rates(ctx), instanceMinutes)
 	if err != nil {
 		return Quote{}, err
 	}
@@ -513,21 +523,30 @@ func (s *Service) Units(loaded Loaded, items []Item) Units {
 	return MeasureUnits(s.d.Throughput, loaded.Docs, loaded.Media, items)
 }
 
-// Time returns the expected seconds of a run with these units and whether
-// that makes a large order; (0, false) when timing is off.
+// Time returns the expected seconds of a run with these units (where it will
+// execute) and whether that makes a large order; (0, false) when timing is off.
 func (s *Service) Time(ctx context.Context, units Units) (int64, bool) {
-	cfg := s.d.Throughput
-	if cfg == nil {
-		return 0, false
-	}
-	tp := s.throughputRates(ctx)
+	t := s.Timing(ctx, units)
+	return t.Seconds, t.Large
+}
+
+// localSeconds is the expected time on the main box, its queue included.
+func (s *Service) localSeconds(ctx context.Context, cfg *throughput.Config, tp Throughput, units Units) int64 {
 	inFlight, err := s.d.Store.RunsInFlight(ctx, s.d.Now().Add(-inFlightFreshness))
 	if err != nil {
 		s.d.Logger.Warn("fila de execuções indisponível; estimativa sem espera", slog.String("err", err.Error()))
 		inFlight = 0
 	}
-	seconds := ExpectedSeconds(cfg, tp, units, QueueWait(cfg, tp, inFlight))
-	return seconds, cfg.Large(seconds)
+	return ExpectedSeconds(cfg, tp, units, QueueWait(cfg, tp, inFlight))
+}
+
+// instanceMinutes is what a burst run adds to the price: its minutes on the
+// pool when pricing.yaml charges them (burst.charge_instance_minutes), else 0.
+func (s *Service) instanceMinutes(t QuoteTiming) float64 {
+	if !t.Placement.Burst || !s.d.Pricing.Burst.ChargeInstanceMinutes {
+		return 0
+	}
+	return float64(t.Seconds) / 60
 }
 
 // throughputRates returns the cached per-kind rates, relearning them from

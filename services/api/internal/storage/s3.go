@@ -152,6 +152,21 @@ func (s *S3Store) PresignPut(ctx context.Context, key string, size int64, conten
 	return PresignedPut{URL: req.URL, Headers: headers, ExpiresAt: time.Now().Add(ttl)}, nil
 }
 
+// PresignGet returns a download URL for key valid for ttl (the burst workers
+// read a run's inputs with it, without credentials of their own).
+func (s *S3Store) PresignGet(ctx context.Context, key string, ttl time.Duration) (string, error) {
+	if err := ValidateKey(key); err != nil {
+		return "", err
+	}
+	ctx, cancel := s.withTimeout(ctx)
+	defer cancel()
+	req, err := s.presign.PresignGetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(s.bucket), Key: aws.String(key)}, s3.WithPresignExpires(ttl))
+	if err != nil {
+		return "", fmt.Errorf("storage: GET pré-assinado: %w", err)
+	}
+	return req.URL, nil
+}
+
 // Head implements Store.
 func (s *S3Store) Head(ctx context.Context, key string) (Object, bool, error) {
 	if err := ValidateKey(key); err != nil {

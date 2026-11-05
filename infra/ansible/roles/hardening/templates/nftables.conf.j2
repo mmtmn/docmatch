@@ -4,6 +4,11 @@
 #   inbound : 443 from CloudFront's origin-facing ranges (the security group enforces the same)
 #   outbound: VPC link-local services, AWS endpoints for the listed users, the egress proxy for
 #             everything else. No DNS, NTP or HTTP leaves otherwise.
+#   internal: the chains internal_in / internal_out are empty in the image; the user-data of each
+#             role fills them at its first boot in {{ hardening_nft_internal_file }} (persistent, so
+#             every reboot keeps them; AIDE ignores that one file): the application admits the
+#             burst workers' subnet on the internal endpoint port, a burst worker's own user may
+#             reach that port (docs/escala.md). The security groups do the same.
 # Only the docmatch table is replaced on reload: the CrowdSec bouncer keeps its own tables.
 table inet docmatch {}
 delete table inet docmatch
@@ -25,12 +30,21 @@ table inet docmatch {
 		udp sport 67 udp dport 68 accept
 		udp sport 547 udp dport 546 accept
 		tcp dport {{ hardening_https_port }} ip saddr @cloudfront_v4 accept
+		jump internal_in
 		jump breakglass
 		limit rate 5/minute log prefix "nft-in-drop " level warn
 	}
 
 	chain breakglass {
 		# Filled by /etc/nftables.d/20-breakglass.nft when the break-glass path is enabled.
+	}
+
+	chain internal_in {
+		# Filled at boot by user-data (application role): the internal endpoint for the pool.
+	}
+
+	chain internal_out {
+		# Filled at boot by user-data (burst worker role): the application's internal endpoint.
 	}
 
 	chain output {
@@ -52,6 +66,7 @@ table inet docmatch {
 		# AWS endpoints (S3 through the gateway endpoint, SSM, EC2, SQS, Lambda, Route 53)
 		ip daddr @aws_v4 tcp dport 443 meta skuid { {{ hardening_egress_direct_users | map('regex_replace', '^(.*)$', '"\\1"') | join(', ') }} } accept
 		ip6 daddr @aws_v6 tcp dport 443 meta skuid { {{ hardening_egress_direct_users | map('regex_replace', '^(.*)$', '"\\1"') | join(', ') }} } accept
+		jump internal_out
 		# Everything else goes through the egress proxy (allowlisted hosts only)
 		tcp dport { 80, 443 } meta skuid "{{ hardening_proxy_user }}" accept
 		limit rate 5/minute log prefix "nft-out-drop " level warn

@@ -14,6 +14,25 @@
     create_home: false
     password_lock: true
 
+- name: Create the burst worker group
+  ansible.builtin.group:
+    name: "{{ hardening_burst_user }}"
+    system: true
+
+# The burst worker (pool of on-demand workers) never shares the harness's uid: an exploit in a
+# parser cannot read the pool secret or open the internal endpoint port.
+- name: Create the burst worker user (no shell, no password, in the application group)
+  ansible.builtin.user:
+    name: "{{ hardening_burst_user }}"
+    group: "{{ hardening_burst_user }}"
+    groups: ["{{ hardening_app_group }}"]
+    append: true
+    system: true
+    shell: /usr/sbin/nologin
+    home: "{{ hardening_burst_home }}"
+    create_home: false
+    password_lock: true
+
 - name: Create the su group
   ansible.builtin.group:
     name: "{{ hardening_su_group }}"
@@ -35,6 +54,9 @@
     - { path: "{{ hardening_media_dir }}", owner: "{{ hardening_app_user }}", group: "{{ hardening_app_group }}", mode: "0700" }
     - { path: /etc/docmatch, owner: root, group: "{{ hardening_app_group }}", mode: "0750" }
     - { path: /var/log/docmatch, owner: "{{ hardening_app_user }}", group: "{{ hardening_app_group }}", mode: "0750" }
+    # Staged inputs of a pool job: written by the burst worker, read by the harness (setgid group).
+    - { path: "{{ hardening_burst_home }}", owner: "{{ hardening_burst_user }}", group: "{{ hardening_app_group }}", mode: "0750" }
+    - { path: "{{ hardening_burst_staging_dir }}", owner: "{{ hardening_burst_user }}", group: "{{ hardening_app_group }}", mode: "2750" }
   loop_control:
     label: "{{ item.path }}"
 

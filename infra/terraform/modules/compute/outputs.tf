@@ -9,8 +9,18 @@ output "app_autoscaling_group_name" {
 }
 
 output "worker_autoscaling_group_name" {
-  description = "Name of the spot worker Auto Scaling group (empty before the AMI exists)."
+  description = "Name of the burst (spot) worker Auto Scaling group (empty before the AMI exists)."
   value       = local.app_enabled ? aws_autoscaling_group.worker[0].name : ""
+}
+
+output "worker_asg_name" {
+  description = "Fixed name of the burst worker Auto Scaling group (known before it exists; DM_BURST_ASG_NAME)."
+  value       = local.worker_asg_name
+}
+
+output "burst_api_url_parameter" {
+  description = "SSM parameter the application writes its internal endpoint to at boot (DM_BURST_API_URL)."
+  value       = aws_ssm_parameter.burst_api_url.name
 }
 
 output "app_role_arn" {

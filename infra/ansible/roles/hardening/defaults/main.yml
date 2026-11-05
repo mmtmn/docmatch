@@ -18,6 +18,13 @@ hardening_app_config_dir: /opt/docmatch/config
 # is not configured, and the per-call copies of remote sources the harness reads.
 hardening_media_dir: /var/lib/docmatch/media
 hardening_env_file: /run/docmatch/env
+# The burst worker of the pool runs as its own user: its environment (the pool secret, the
+# internal endpoint) is a subset only it can read, never the harness's. Member of the
+# application group to reach the harness socket and share the staged inputs (2750, group docmatch).
+hardening_burst_user: docmatch-burst
+hardening_burst_home: /var/lib/docmatch-burst
+hardening_burst_staging_dir: /var/lib/docmatch-burst/staging
+hardening_burst_env_file: /run/docmatch/env.burst
 hardening_caddy_env_file: /run/docmatch/env.caddy
 hardening_instance_env_file: /etc/docmatch/instance.env
 
@@ -39,6 +46,9 @@ hardening_api_listen: "127.0.0.1:8080"
 hardening_admin_listen: "127.0.0.1:8443"
 hardening_harness_socket: /run/docmatch-harness/harness.sock
 hardening_https_port: 443
+# Internal endpoint rules of the role (pool of on-demand workers), written by user-data at the
+# first boot of each instance; persistent, so a reboot keeps them.
+hardening_nft_internal_file: /etc/nftables.d/30-internal.nft
 
 # Egress proxy (tinyproxy on loopback). The allowlist comes from DM_EGRESS_ALLOWLIST at boot.
 hardening_proxy_port: 8118
@@ -51,6 +61,7 @@ hardening_no_proxy: "localhost,127.0.0.1,169.254.169.254,.amazonaws.com"
 hardening_egress_direct_users:
   - root
   - "{{ hardening_app_user }}"
+  - "{{ hardening_burst_user }}"
   - postgres
   - caddy
   - _chrony
@@ -59,6 +70,7 @@ hardening_egress_direct_users:
 hardening_imds_users:
   - root
   - "{{ hardening_app_user }}"
+  - "{{ hardening_burst_user }}"
   - postgres
   - caddy
 

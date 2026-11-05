@@ -11,7 +11,8 @@ enrolação. Identificadores de código e comentários em código ficam em ingl�
 | [plano-mestre.md](plano-mestre.md) | O plano condensado: fases e portões (sem datas), o que cada subsistema faz, a fórmula de preço com exemplo, a tabela de papéis de modelo, os estágios de infraestrutura. |
 | [decisoes/](decisoes/README.md) | Registros de decisão de arquitetura (ADR-0001 a ADR-0012): contexto, decisão, consequências. |
 | [seguranca/](seguranca/README.md) | Perfil NIST CSF 2.0, checklist ASVS 5.0, OWASP LLM Top 10, modelo de ameaças e testes de aceitação com comandos. |
-| [runbooks/](runbooks/README.md) | Procedimentos operacionais: implantar, restaurar backup, rotacionar segredos, responder a incidente, trocar modelo, kill switches. |
+| [escala.md](escala.md) | Trabalhadores sob demanda: execuções pesadas em instâncias Spot que só existem enquanto há trabalho, roteamento, protocolo, tetos que nunca recusam, prazos e custos. |
+| [runbooks/](runbooks/README.md) | Procedimentos operacionais: implantar, restaurar backup, rotacionar segredos, responder a incidente, trocar modelo, kill switches, pool sob demanda. |
 
 Fora desta pasta, mas parte da mesma leitura: [README.md](../README.md) (mapa do repositório),
 [CONTRIBUTING.md](../CONTRIBUTING.md), [SECURITY.md](../SECURITY.md), [.env.example](../.env.example)

@@ -37,6 +37,9 @@ func (s *Service) Execute(ctx context.Context, orgID, runID uuid.UUID, lastAttem
 		return fmt.Errorf("runs: ler execução: %w", err)
 	}
 	if !ok || r.Status.Terminal() || r.Status == StatusNeedsApproval {
+		if ok && r.Status.Terminal() {
+			s.dropRemote(ctx, r, "execução já encerrada")
+		}
 		return nil
 	}
 	log := s.d.Logger.With(slog.String("run_id", r.PublicID()))
@@ -73,16 +76,36 @@ func (s *Service) Execute(ctx context.Context, orgID, runID uuid.UUID, lastAttem
 	if r.WorkflowID != nil {
 		workflowID = apix.Encode(apix.PrefixWorkflow, *r.WorkflowID)
 	}
-	// Deadlines cross processes, so they come from the real clock; s.d.Now is
-	// the business clock (timestamps of the run), which tests pin in the past.
-	deadline := time.Now().Add(s.d.RunDeadline)
+	// The deadline scales with the expected time (the larger of the quoted
+	// and the main-box time, so a fallback never times out). Deadlines cross
+	// processes, so they come from the real clock; s.d.Now is the business
+	// clock (timestamps of the run), which tests pin in the past.
+	timing := r.Timing()
+	budget := s.d.Deadlines.For(timing.Budget())
+	deadline := time.Now().Add(budget)
+	// On the pool the job may first wait for a worker (Deadlines.Wait).
+	window := budget
+	if s.d.Remote != nil {
+		window += s.d.Deadlines.Wait
+	}
+	runCtx, cancel := context.WithTimeout(ctx, window)
+	defer cancel()
+	// A job the pool already has for this run wins over a new decision.
+	place, attached, err := s.attachOrPlace(runCtx, &r, timing, budget)
+	if err != nil {
+		return s.streamFailure(ctx, &r, err, lastAttempt)
+	}
 	req := &pb.RunRequest{
 		RunId: r.PublicID(), TenantId: apix.Encode(apix.PrefixOrg, orgID),
 		Sources: append(estimate.BuildSources(r.Inputs.Request.Sources, loaded.Docs, s.d.URI), estimate.BuildSources(r.Inputs.Request.MediaSources, loaded.Media, s.d.URI)...),
 		Options: estimate.BuildOptions(p, r.Inputs.Request, v, r.CreditsHeld, &deadline, workflowID),
-		Quote:   QuoteToProto(quoteRec.Quote), Rules: pbRules, Resume: resume,
+		Quote:   QuoteToProto(quoteRec.Quote), Rules: pbRules, Resume: resume && sameHarness(timing, place),
 	}
-	if r.Status == StatusQueued {
+	moved := timing.Placement != place.Name() || timing.Reason != place.Reason
+	if moved {
+		s.setPlacement(&r, place)
+	}
+	if r.Status == StatusQueued || moved {
 		now := s.d.Now().UTC()
 		r.Status = StatusRunning
 		if r.StartedAt == nil {
@@ -92,16 +115,20 @@ func (s *Service) Execute(ctx context.Context, orgID, runID uuid.UUID, lastAttem
 			return fmt.Errorf("runs: marcar em execução: %w", err)
 		}
 	}
-	runCtx, cancel := context.WithTimeout(ctx, s.d.RunDeadline)
-	defer cancel()
-	stream, err := s.d.Harness.Run(runCtx, req)
+	stream, remote, err := s.open(runCtx, &r, req, place, budget, attached)
 	if err != nil {
 		return s.streamFailure(ctx, &r, err, lastAttempt)
+	}
+	stop := func(reason string) {
+		if remote != nil {
+			remote.Stop(context.WithoutCancel(ctx), reason)
+		}
 	}
 	if err := s.d.Rules.Touch(ctx, orgID, ruleIDs); err != nil {
 		log.Warn("registrar uso das regras falhou", slog.String("err", err.Error()))
 	}
-	log.Info("execução iniciada no harness", slog.Bool("resume", resume), slog.Int("sources", len(req.Sources)), slog.Int("rules", len(pbRules)))
+	log.Info("execução iniciada no harness", slog.Bool("resume", resume), slog.Int("sources", len(req.Sources)), slog.Int("rules", len(pbRules)),
+		slog.String("placement", place.Name()), slog.String("reason", place.Reason), slog.Duration("deadline", budget))
 	for {
 		ev, err := stream.Recv()
 		if err != nil {
@@ -115,7 +142,18 @@ func (s *Service) Execute(ctx context.Context, orgID, runID uuid.UUID, lastAttem
 				return ctx.Err()
 			}
 			if errors.Is(runCtx.Err(), context.DeadlineExceeded) {
+				stop("prazo esgotado")
 				return s.fail(ctx, &r, contracts.ErrRunTimeout, "prazo da execução esgotado")
+			}
+			if errors.Is(err, ErrRemoteCancelled) {
+				log.Info("execução cancelada pelo cliente enquanto aguardava um trabalhador")
+				return nil
+			}
+			if errors.Is(err, ErrInterrupted) {
+				return s.requeue(ctx, &r, err)
+			}
+			if lastAttempt || !harness.IsUnavailable(err) {
+				stop("falha do lado principal") // the run fails here: the pool job stops too
 			}
 			return s.streamFailure(ctx, &r, err, lastAttempt)
 		}
@@ -124,6 +162,7 @@ func (s *Service) Execute(ctx context.Context, orgID, runID uuid.UUID, lastAttem
 		}
 		if cur, ok, gerr := s.d.Store.GetRun(ctx, orgID, runID); gerr == nil && ok && (cur.CancelRequested || cur.Status == StatusCancelled) {
 			log.Info("execução cancelada pelo cliente; fluxo interrompido")
+			stop("cancelada pelo cliente")
 			return nil
 		}
 		terminal, err := s.applyEvent(ctx, &r, p, ev, a)
@@ -134,6 +173,15 @@ func (s *Service) Execute(ctx context.Context, orgID, runID uuid.UUID, lastAttem
 			return nil
 		}
 	}
+}
+
+// sameHarness reports whether this segment of the run executes on the
+// harness that ran the previous one, the only one holding its checkpoint
+// (RunRequest.resume). On the pool every attempt may land on another
+// instance, so it is a replay: the harness is deterministic and the events
+// already saved are skipped by seq (applyEvent).
+func sameHarness(previous Timing, place estimate.Placement) bool {
+	return !place.Burst && previous.Placement != estimate.PlacementBurst
 }
 
 // streamFailure decides between a retry and a permanent failure.

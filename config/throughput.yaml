@@ -28,14 +28,27 @@ queue:
   parallel_runs: 2             # execuções simultâneas no harness (MAX_CONCURRENT_RUNS do dm-server)
   default_run_seconds: 60      # duração típica até haver histórico
 
-# Padrões por tipo de entrada, antes de haver histórico.
+# Trabalhadores sob demanda (docs/escala.md). Uma execução pesada vai para uma instância Spot do pool
+# e o orçamento mostra o tempo de lá:
+#
+#   segundos_no_pool = boot_seconds (sem instância quente) + overhead_seconds
+#                      + Σ_tipo quantidade(tipo) × segundos_por_unidade(tipo) × speed_factor
+#
+# A memória estimada (base_memory_mb + Σ quantidade × memory_mb_per_unit) acima da folga da máquina
+# principal (DM_BURST_MEMORY_HEADROOM_MB) também manda a execução para o pool.
+burst:
+  speed_factor: 0.5            # 2 vCPU dedicadas e 4 GiB contra a t4g.small que divide CPU com API e PostgreSQL
+  boot_seconds: 180            # Spot pedida, boot da AMI, release instalada e primeiro pedido de trabalho
+  base_memory_mb: 96           # harness em repouso com o grafo vazio
+
+# Padrões por tipo de entrada, antes de haver histórico. memory_mb_per_unit: memória do harness por unidade.
 kinds:
-  table:        { unit: mb, seconds_per_unit: 3 }        # CSV, TSV, XLSX: ~10 mil linhas por MB na cascata determinística
-  document:     { unit: mb, seconds_per_unit: 20 }       # PDF e texto: ~10 páginas por MB, extração e leitura
-  email:        { unit: mb, seconds_per_unit: 6 }        # .eml e .msg
-  archive:      { unit: mb, seconds_per_unit: 15 }       # ZIP: desempacotar e ler o conteúdo misto
-  audio:        { unit: minutes, seconds_per_unit: 12, mb_per_minute: 1 }    # transcrição ~5× o tempo real
-  video:        { unit: minutes, seconds_per_unit: 30, mb_per_minute: 20 }   # transcrição + quadros
+  table:        { unit: mb, seconds_per_unit: 3, memory_mb_per_unit: 12 }       # CSV, TSV, XLSX: ~10 mil linhas por MB na cascata determinística
+  document:     { unit: mb, seconds_per_unit: 20, memory_mb_per_unit: 8 }       # PDF e texto: ~10 páginas por MB, extração e leitura
+  email:        { unit: mb, seconds_per_unit: 6, memory_mb_per_unit: 6 }        # .eml e .msg
+  archive:      { unit: mb, seconds_per_unit: 15, memory_mb_per_unit: 10 }      # ZIP: desempacotar e ler o conteúdo misto
+  audio:        { unit: minutes, seconds_per_unit: 12, mb_per_minute: 1, memory_mb_per_unit: 2 }    # transcrição ~5× o tempo real
+  video:        { unit: minutes, seconds_per_unit: 30, mb_per_minute: 20, memory_mb_per_unit: 4 }   # transcrição + quadros
   llm:          { unit: ktokens, seconds_per_unit: 1.5 } # resíduo para o modelo e a verificação cruzada
   new_tools:    { unit: tools, seconds_per_unit: 240 }   # ferramenta nova escrita, testada e revisada em sandbox
   web_requests: { unit: requests, seconds_per_unit: 4 }

@@ -27,3 +27,8 @@ output "app_log_group_name" {
   description = "Name of the application log group."
   value       = aws_cloudwatch_log_group.app.name
 }
+
+output "burst_budget_name" {
+  description = "Name of the budget of the pool of on-demand workers (empty when burst_budget_usd is 0)."
+  value       = var.burst_budget_usd > 0 ? aws_budgets_budget.burst[0].name : ""
+}

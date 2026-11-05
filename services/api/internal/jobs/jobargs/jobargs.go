@@ -51,6 +51,9 @@ type RunArgs struct {
 	OrgID  uuid.UUID `json:"org_id"`
 	RunID  uuid.UUID `json:"run_id"`
 	Resume bool      `json:"resume"`
+	// ExpectedSeconds sizes the job timeout (the deadline scales with it);
+	// zero in jobs enqueued before it existed, which get the floor.
+	ExpectedSeconds int64 `json:"expected_seconds,omitempty"`
 }
 
 // Kind implements river.JobArgs.

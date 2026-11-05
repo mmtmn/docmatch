@@ -132,21 +132,75 @@ variable "guardrail_policy_arns" {
 }
 
 variable "worker_instance_types" {
-  description = "Spot instance types for the stage-1 worker group, in order of preference."
+  description = "Spot instance types the burst pool may use (4 GiB each, never burstable: a T type's unlimited credits bill outside the hours cap). price-capacity-optimized picks among them; the order does not matter."
   type        = list(string)
-  default     = ["t4g.medium", "m7g.medium", "c7g.large"]
+  default     = ["m7g.medium", "c7g.large"]
+
+  validation {
+    condition     = length(var.worker_instance_types) > 0 && alltrue([for t in var.worker_instance_types : !startswith(t, "t")])
+    error_message = "worker_instance_types needs at least one type and no burstable (t*) type."
+  }
+}
+
+variable "launch_tags" {
+  description = "Tags every instance, volume and network interface the groups launch carry (Project, Environment): provider default_tags do not reach them."
+  type        = map(string)
+  default     = {}
 }
 
 variable "worker_max_size" {
-  description = "Maximum number of spot workers."
+  description = "Maximum number of burst (spot) workers; DM_BURST_MAX_INSTANCES carries the same number."
   type        = number
   default     = 2
 }
 
 variable "worker_desired_capacity" {
-  description = "Desired number of spot workers (0 at the tiny stage; raise by hand or by a later queue-depth policy)."
+  description = "Desired number of burst workers when the group is created (0). Afterwards the main worker owns it (ignore_changes)."
   type        = number
   default     = 0
+}
+
+variable "burst_security_group_id" {
+  description = "Security group of the burst workers (module network); empty uses security_group_id."
+  type        = string
+  default     = ""
+}
+
+variable "burst_internal_port" {
+  description = "TCP port of the application's internal endpoint for the burst workers (DM_BURST_LISTEN)."
+  type        = number
+  default     = 8444
+}
+
+# The three below mirror the hardening role's defaults (infra/ansible/roles/hardening/defaults):
+# the AMI creates the user, the directory and the include the user-data fills.
+variable "burst_user" {
+  description = "System user of the burst worker on a pool instance (hardening_burst_user); only it may reach the internal endpoint port."
+  type        = string
+  default     = "docmatch-burst"
+}
+
+variable "burst_staging_dir" {
+  description = "Where the burst worker stages a job's inputs for the harness (hardening_burst_staging_dir)."
+  type        = string
+  default     = "/var/lib/docmatch-burst/staging"
+}
+
+variable "nft_internal_file" {
+  description = "nftables include the user-data writes with the internal endpoint rules (hardening_nft_internal_file)."
+  type        = string
+  default     = "/etc/nftables.d/30-internal.nft"
+}
+
+variable "burst_parameter_names" {
+  description = "SSM parameters (names under ssm_path_prefix) a burst worker may read: DM_SSM_NAMES of its render-env and the only ones its role may get. DM_BURST_API_URL is always added."
+  type        = list(string)
+  default     = ["DM_ENV", "AWS_REGION", "DM_PUBLIC_BASE_URL", "DM_EGRESS_ALLOWLIST", "DM_LLM_MODE", "OPENROUTER_API_KEY", "DM_BURST_POOL_SECRET"]
+
+  validation {
+    condition     = alltrue([for n in var.burst_parameter_names : can(regex("^[A-Z][A-Z0-9_]{0,127}$", n))]) && !contains(var.burst_parameter_names, "DATABASE_URL")
+    error_message = "burst_parameter_names holds variable names (A-Z, 0-9, _) and never DATABASE_URL."
+  }
 }
 
 variable "enable_ebs_snapshots" {

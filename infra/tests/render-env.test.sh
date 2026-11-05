@@ -127,4 +127,51 @@ if command -v systemd-run >/dev/null 2>&1 && systemd-run --user --pipe --wait --
 else
   note "aviso: systemd-run --user indisponível aqui; só o parser equivalente foi usado"
 fi
+# fetch_params with a list (the burst workers): GetParameters ten names per call, merged; a missing
+# name fails; without a list the whole path is read. `aws` is stubbed: it records each call and
+# answers from the names it was given.
+aws_calls="$tmp/aws-calls"
+aws() {
+  printf '%s\n' "$*" >> "$aws_calls"
+  if [[ "$2" == get-parameters-by-path ]]; then
+    printf '%s\n' '{"Parameters":[{"Name":"/docmatch/test/ALL","Value":"1"}]}'
+    return
+  fi
+  local names=()
+  shift 2
+  while [[ $# -gt 0 ]]; do
+    if [[ "$1" == --names ]]; then
+      shift
+      while [[ $# -gt 0 && "$1" != --* ]]; do names+=("$1"); shift; done
+      continue
+    fi
+    shift
+  done
+  jq -n '{Parameters: [$ARGS.positional[] | select(endswith("MISSING") | not) | {Name: ., Value: (split("/") | last)}],
+          InvalidParameters: [$ARGS.positional[] | select(endswith("MISSING"))]}' --args "${names[@]}"
+}
+wanted="A1,A2,A3,A4,A5,A6,A7,A8,A9,A10,A11,A12"
+got="$(fetch_params /docmatch/test "$wanted" | jq -r '[.Parameters[].Name | split("/") | last] | join(",")')"
+[[ "$got" == "$wanted" ]] || fail "fetch_params por nomes devolveu $got"
+[[ "$(grep -c 'get-parameters --names' "$aws_calls")" -eq 2 ]] || fail "esperava 2 chamadas de dez nomes"
+if grep -q 'get-parameters-by-path' "$aws_calls"; then fail "com lista não pode ler o caminho inteiro"; fi
+if (fetch_params /docmatch/test "A1,B_MISSING" >/dev/null 2>&1); then fail "nome inexistente deveria falhar"; fi
+if (fetch_params /docmatch/test "a-minusculo" >/dev/null 2>&1); then fail "nome inválido deveria falhar"; fi
+[[ "$(fetch_params /docmatch/test "" | jq -r '.Parameters[0].Name')" == /docmatch/test/ALL ]] || fail "sem lista lê o caminho"
+note "lista de parâmetros (trabalhadores sob demanda) lida por GetParameters, dez por vez"
+
+# The pool secret is created as the empty sentinel (module secrets, optional_secret_names): it must
+# never block the boot like the Terraform placeholder does, and the service receives it empty.
+boot_params='{"Parameters":[{"Name":"/docmatch/test/DM_BURST_POOL_SECRET","Value":"__EMPTY__"},{"Name":"/docmatch/test/DATABASE_URL","Value":"postgres://x"}]}'
+[[ -z "$(unset_keys_of "$boot_params" __UNSET__)" ]] || fail "o segredo vazio do pool bloquearia o boot"
+params="$boot_params"
+[[ "$(render '.Parameters[] | select(.Name | endswith("DM_BURST_POOL_SECRET"))')" == 'DM_BURST_POOL_SECRET=""' ]] || fail "o segredo vazio do pool deveria chegar vazio"
+blocked='{"Parameters":[{"Name":"/docmatch/test/DM_SESSION_SECRET","Value":"__UNSET__"}]}'
+[[ "$(unset_keys_of "$blocked" __UNSET__)" == DM_SESSION_SECRET ]] || fail "o espaço reservado continua bloqueando"
+# DM_ENV_EXCLUDE: the main file of a burst worker carries neither the pool secret nor the endpoint.
+params='{"Parameters":[{"Name":"/docmatch/test/DM_BURST_POOL_SECRET","Value":"s"},{"Name":"/docmatch/test/DM_LLM_MODE","Value":"off"}]}'
+main_file="$(render ".Parameters[] | select((.Name | split(\"/\") | last) as \$n | $(keys_json DM_BURST_POOL_SECRET,DM_BURST_API_URL) | index(\$n) | not)")"
+[[ "$main_file" == 'DM_LLM_MODE="off"' ]] || fail "DM_ENV_EXCLUDE não tirou o segredo do arquivo principal: $main_file"
+[[ "$(keys_json "")" == "[]" ]] || fail "lista vazia"
+note "segredo opcional vazio não bloqueia o boot; DM_ENV_EXCLUDE mantém o segredo do pool fora do harness"
 note "ok"

@@ -31,6 +31,10 @@ CloudFront com `node --test`, `render-env.sh` com `systemd-run`), e nunca toca a
                                         │  nftables deny/deny · proxy de saída      │
                                         │  auditd · AIDE · rkhunter · ClamAV · Falco│
                                         └──────────┬──────────────────────────────┘
+                                        │ :8444 só do grupo burst (TLS fixado)       │
+                                        ▼                                           │
+                      pool sob demanda docmatch-<env>-worker (Spot, 0..N, docs/escala.md)
+                      docmatch-worker burst + harness; sem banco, fontes por URL pré-assinada
                                  SSM Session Manager (sem SSH)      │ S3 (IGW; endpoint opcional)
                                                                     │
         VPC 10.40.0.0/16 (dual-stack)                               │
@@ -61,6 +65,7 @@ compõe os nove módulos de `terraform/modules`.
 | S3 (5 buckets, pouco uso) | ~US$ 0,50 | SSE-S3, sem versionamento exceto backups |
 | ECR (5 imagens arm64) | ~US$ 0,30 | além dos 500 MB gratuitos |
 | CloudFront | US$ 0 | plano gratuito (1 TB, 10 M requisições) |
+| Pool sob demanda (Spot) | US$ 0 ocioso | grupo em zero; com o teto padrão de 60 h/mês, no máximo ~US$ 4,75 ([docs/escala.md](../docs/escala.md)) |
 | Lambda, SQS, SNS, EventBridge | US$ 0 | nível gratuito permanente |
 | CloudTrail (1 trilha), Budgets (até 2), alarmes (até 10), SSM Standard | US$ 0 | |
 | Transferência de saída (API → OpenRouter, Stripe, Resend) | ~US$ 0,50 | |
@@ -169,6 +174,16 @@ no prod) cria o perfil da construção, e os outputs `app_subnet_id`, `app_secur
   `tests/render-env.test.sh` mede isso com o próprio `systemd-run`.
 - O papel da instância só lê `/docmatch/<env>/*`; a política gerenciada
   `AmazonSSMManagedInstanceCore` foi evitada de propósito porque dá `GetParameter` em toda a conta.
+- As instâncias do pool sob demanda leem menos ainda: o user-data grava `DM_SSM_NAMES` em
+  `instance.env` e o `render-env.sh` busca só esses nomes por `GetParameters`, os únicos que o
+  papel `docmatch-<env>-worker` pode ler (`burst_parameter_names`: nada de `DATABASE_URL`). Lá,
+  `DM_ENV_EXCLUDE` tira o segredo do pool e o endpoint do arquivo do harness; eles vão só para
+  `/run/docmatch/env.burst`, do usuário `docmatch-burst`. A aplicação grava o próprio endereço
+  interno em `DM_BURST_API_URL` no primeiro boot de cada instância (o user-data roda uma vez por
+  instância; um reinício mantém o IP).
+- Segredos opcionais (`optional_secret_names` do módulo `secrets`, hoje só
+  `DM_BURST_POOL_SECRET`) nascem como `__EMPTY__`, não como `__UNSET__`: chegam vazios e nunca
+  bloqueiam o boot; a funcionalidade deles fica desligada até o segredo ser preenchido.
 
 ## Como trocar a AMI
 
@@ -178,7 +193,8 @@ no prod) cria o perfil da construção, e os outputs `app_subnet_id`, `app_secur
 3. Como há um só volume de dados, a instância antiga é encerrada antes da nova subir
    (`min_healthy_percentage = 0`): cerca de dois minutos de indisponibilidade. O user-data da nova
    instância reassocia o EIP, espera o volume ser liberado, monta `/var/lib/postgresql` e sobe os
-   serviços. Os workers spot (mínimo 0) seguem o mesmo launch template.
+   serviços. O pool sob demanda (mínimo 0) usa a mesma AMI no próprio launch template; desça-o
+   antes do refresh (`infra/scripts/burst.sh down`, [runbook](../docs/runbooks/burst.md)).
 4. Rollback: volte o `ami_id` anterior e aplique. AMIs têm `deprecate_at` em 90 dias.
 
 Pacotes de terceiros (Caddy, PGDG, CrowdSec, Falco) só mudam com AMI nova: as fontes ficam
@@ -277,7 +293,7 @@ infra/
 │   └── envs/{dev,prod}   composição, backend parcial, terraform.tfvars.example, backend.hcl.example
 ├── packer/               docmatch.pkr.hcl (amazon-ebs via SSM, ansible, lynis-gate, finalize), variables, exemplo
 ├── ansible/              site.yml, ansible.cfg, requirements.yml (collections fixadas), roles/hardening
-├── scripts/              bootstrap-state.sh · render-env.sh · lynis-gate.sh · deploy-site.sh · lib.sh
+├── scripts/              bootstrap-state.sh · render-env.sh · lynis-gate.sh · deploy-app.sh · deploy-site.sh · burst.sh · lib.sh
 └── tests/                viewer-request.test.mjs (função de borda, node --test) · render-env.test.sh
 ```
 

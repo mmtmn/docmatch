@@ -28,7 +28,16 @@ type Pricing struct {
 	Plans           map[string]Plan    `yaml:"plans"`
 	Rollover        Rollover           `yaml:"rollover"`
 	Estimates       Estimates          `yaml:"estimates"`
+	Burst           Burst              `yaml:"burst"`
 	version         string
+}
+
+// Burst is the pricing hook of the pool of on-demand workers (docs/escala.md):
+// with ChargeInstanceMinutes, the minutes a heavy run spends on a pool
+// instance are priced at estimates.instance_minute_usd and folded into its
+// heavy work; off, the instances are paid by the infra share of the formula.
+type Burst struct {
+	ChargeInstanceMinutes bool `yaml:"charge_instance_minutes"`
 }
 
 // Rates are the components of the price formula.
@@ -74,6 +83,9 @@ type Estimates struct {
 	NewToolUSD          float64 `yaml:"new_tool_usd"`
 	ScanFileUSD         float64 `yaml:"scan_file_usd"`
 	WebSearchRequestUSD float64 `yaml:"web_search_request_usd"`
+	// InstanceMinuteUSD is one minute of a pool instance (worst case: the
+	// on-demand price of the largest type, its disk and its public IPv4).
+	InstanceMinuteUSD float64 `yaml:"instance_minute_usd"`
 }
 
 // Overrides replace file rates when set (DM_TARGET_MARGIN etc.).
@@ -134,6 +146,12 @@ func (p *Pricing) Validate() error {
 		if v < 0 || v >= 1 || math.IsNaN(v) {
 			problems = append(problems, fmt.Errorf("rates.%s precisa estar entre 0 e 1", name))
 		}
+	}
+	if p.Estimates.InstanceMinuteUSD < 0 || math.IsNaN(p.Estimates.InstanceMinuteUSD) {
+		problems = append(problems, errors.New("estimates.instance_minute_usd precisa ser >= 0"))
+	}
+	if p.Burst.ChargeInstanceMinutes && p.Estimates.InstanceMinuteUSD <= 0 {
+		problems = append(problems, errors.New("burst.charge_instance_minutes precisa de estimates.instance_minute_usd positivo"))
 	}
 	if p.Divisor() <= 0 {
 		problems = append(problems, errors.New("as taxas somadas não deixam margem (divisor <= 0)"))
