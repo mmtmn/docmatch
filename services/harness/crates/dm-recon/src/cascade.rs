@@ -452,7 +452,10 @@ fn for_entity(st: &State<'_>, i: usize, entity: usize) -> Option<LineOutcome> {
         return Some(State::receipt(rule, vec![st.whole(t, amount)]));
     }
     for &t in &titles {
-        if !is_service(&st.ds.titles[t].kind, st.cfg) {
+        // A title of unknown kind (no type column, a CNAB return without species) may be a
+        // service invoice too; a known product title never is.
+        let kind = &st.ds.titles[t].kind;
+        if !kind.is_empty() && !is_service(kind, st.cfg) {
             continue;
         }
         let open = st.open[t];
