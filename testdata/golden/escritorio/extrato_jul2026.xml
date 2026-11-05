@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<extrato xmlns="urn:exemplo:extrato:1">
+  <conta banco="999" agencia="0001" numero="12345-6" titular="Exemplo Sintético Ltda"/>
+  <lancamentos>
+    <lancamento seq="1"><data>10/07/2026</data><historico>LIQUIDACAO COBRANCA SIMPLES</historico><documento>000098765001</documento><valor moeda="BRL">24.300,00</valor><tipo>C</tipo></lancamento>
+    <lancamento seq="2"><data>10/07/2026</data><historico>PIX RECEBIDO PAO E ARTE PANIFICAD</historico><valor moeda="BRL">2.700,00</valor><tipo>C</tipo></lancamento>
+    <lancamento seq="3"><data>13/07/2026</data><historico>LIQUIDACAO COBRANCA SIMPLES</historico><documento>000098765004</documento><valor moeda="BRL">8.450,00</valor><tipo>C</tipo></lancamento>
+    <lancamento seq="4"><data>14/07/2026</data><historico>TED RECEBIDA CONFEITARIA LUA CHEI</historico><valor moeda="BRL">43.760,50</valor><tipo>C</tipo></lancamento>
+    <lancamento seq="5"><data>15/07/2026</data><historico>LIQUIDACAO COBRANCA SIMPLES</historico><documento>000098765005</documento><valor moeda="BRL">71.900,00</valor><tipo>C</tipo></lancamento>
+    <lancamento seq="6"><data>15/07/2026</data><historico>TARIFA PACOTE COBRANCA JUL</historico><valor moeda="BRL">980,00</valor><tipo>D</tipo></lancamento>
+  </lancamentos>
+  <!-- saldo calculado pelo banco -->
+  <saldo><![CDATA[Saldo & conferência: 150.000,00]]></saldo>
+</extrato>

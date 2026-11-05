@@ -12,7 +12,7 @@ token; modelos de linguagem só veem o resíduo, sempre atrás de uma guarda.
 | `dm-core` | implementado | `Money` em centavos (`rust_decimal`, nunca float), `Table`/`Column`/`Value` com papéis inferidos, modelo de evidência (`Item`, `Entity`, `Fact`, `Finding`, `Rule`, `Locator`) com os nomes de campo do contrato JSON |
 | `dm-validators` | implementado | dígitos verificadores de CNPJ (numérico e alfanumérico), CPF, chave NF-e, linha digitável de boleto (47) e arrecadação (48) com os dois ciclos do fator de vencimento, PIS, CEP, dias úteis bancários (computus) |
 | `dm-normalize` | implementado | dinheiro pt-BR, datas em todos os formatos usuais (inclusive `dd/mm hh:mm` sem ano), CNPJ/CPF com zeros restaurados, chave de nome com abreviações corporativas e prefixo truncado, número de documento, percentuais, status |
-| `dm-ingest` | implementado | `sniff` (formato, codificação, separador, cabeçalho, estilo decimal/data, idioma), CSV, XLSX/XLS/ODS, dumps de inbox e WhatsApp, `.eml`/mbox, OFX e NF-e XML mínimos, PDF com camada de texto (extrato vira tabela, o resto vira itens com caixa na página), CNAB 240 (cobrança T/U e P/Q, pagamentos A/B e J/J-52), CNAB 400 (retorno de cobrança com layout por banco), SPED (EFD ICMS/IPI, EFD Contribuições, ECD) e ZIP (cada entrada é uma fonte); todo parser é total |
+| `dm-ingest` | implementado | `sniff` (formato, codificação, separador, cabeçalho, estilo decimal/data, idioma), CSV, XLSX/XLS/ODS, dumps de inbox e WhatsApp, `.eml`/mbox, OFX e NF-e XML mínimos, PDF com camada de texto (extrato vira tabela, o resto vira itens com caixa na página), CNAB 240 (cobrança T/U e P/Q, pagamentos A/B e J/J-52), CNAB 400 (retorno de cobrança com layout por banco), SPED (EFD ICMS/IPI, EFD Contribuições, ECD), DOCX e ODT, HTML, JSON, JSON Lines e XML genérico, `.msg` do Outlook (anexos viram fontes) e ZIP e 7z (cada entrada é uma fonte); todo parser é total |
 | `dm-match` | implementado | chaves exatas (`KeySpec`), tolerâncias (multa, juros pro rata, retenções, arredondamento, D+1), soma de subconjuntos (meet-in-the-middle, ≤ 12), pontuação Fellegi–Sunter, atribuição um-para-um (húngaro) |
 | `dm-guard` | implementado | spotlighting do texto não confiável, detector de injeção pt-BR/en afinado por corpus versionado (60 injeções, 30 benignos parecidos; detecção ≥ 95% e zero falso positivo são portões do CI), achados `injected_instructions` (nunca executados), triagem de saídas (URLs, comandos, idioma, limites) |
 | `dm-llm` | implementado | `LlmClient` com OpenRouter (preferências de provedor `data_collection=deny`, tentativas com jitter, fallback), endpoint local compatível com OpenAI e modo `off`; cache em disco por `sha256(modelo, prompt, schema)` com modo *replay*; medição de tokens e custo |
@@ -88,8 +88,11 @@ O gêmeo também passa em oito variações (linhas embaralhadas, colunas reorden
 Windows-1252, cabeçalhos no outro idioma, coluna vazia, ponto decimal, extrato invertido e
 todas as empresas renomeadas, inclusive nos históricos truncados do extrato) e em outros
 formatos: com o extrato em PDF e a carteira principal como retorno CNAB 240
-(`testdata/golden/vantara-twin-pdf-cnab240`, mesmo gabarito) e com todos os arquivos dentro de
-um ZIP.
+(`testdata/golden/vantara-twin-pdf-cnab240`, mesmo gabarito), com todos os arquivos dentro de
+um ZIP, em formatos de escritório (`vantara-twin-escritorio`: carteira em tabela de ODT,
+carteira da unidade Norte em JSON aninhado, extrato em página HTML salva e caixa de entrada
+colada num DOCX) e com as carteiras em XML e JSON Lines dentro de um 7z e o extrato como anexo
+de um `.msg` do Outlook (`vantara-twin-msg-7z`).
 
 ## Formatos de arquivo (`dm-ingest`)
 
@@ -100,6 +103,11 @@ um ZIP.
 | CNAB 400 | a mesma tabela de cobrança | layout comum em `crates/dm-ingest/src/cnab/layouts/comum.yaml` e um YAML por banco (Itaú, Bradesco, Santander, Banco do Brasil); Caixa, Sicoob e bancos sem arquivo usam só o comum, com aviso; remessa 400 é recusada com aviso |
 | SPED | uma tabela por registro (`<arquivo>:C100`) | nomes oficiais em 0000, 0150, C100, C170, C190, E110, I200 e I250; posicionais no resto; `LINHA_PAI` liga filho e pai; contagens do bloco 9 conferidas |
 | ZIP | uma fonte por entrada (`pacote.zip/pasta/arquivo`) | limites de `packages/contracts/limits.yaml` (entradas, tamanho, razão, profundidade 1, caminhos seguros), os mesmos do scanner de uploads |
+| 7z | uma fonte por entrada, como o ZIP | `sevenz-rust2` (puro Rust) só com LZMA, LZMA2 e filtros BCJ/delta; os mesmos limites do ZIP, conferidos aqui porque o scanner de uploads não lê 7z, mais um teto de 16 MB para o cabeçalho compactado, lido antes de a biblioteca descompactá-lo; bloco com AES, BZip2, PPMd ou Deflate vira aviso por entrada |
+| DOCX, ODT | tabelas com cabeçalho reconhecível (`<arquivo>:tabela N`) e o texto, um parágrafo por linha, lido como um dump de texto: um e-mail ou uma conversa colados viram mensagens da caixa de entrada | `word/document.xml` e `content.xml` lidos do pacote ZIP com quick-xml, em fluxo, sob os limites do ZIP; tabela sem cabeçalho (layout, assinatura) fica no texto, e o texto das tabelas com cabeçalho vai em partes próprias (`text_parts`), que a conciliação devolve ao texto quando a tabela não é carteira nem extrato; grade de duas colunas só com palavras (dados bancários) não é tabela; exclusões rastreadas, comentários e cópias de reserva de caixas de texto não entram; células mescladas e repetidas (`gridSpan`, `vMerge`, `number-columns-repeated`, `number-rows-spanned`) mantêm as colunas alinhadas e repetem o valor nas linhas cobertas, com teto de 200 mil células e 8 MB de texto das tabelas por documento, repetições incluídas |
+| HTML | as tabelas com cabeçalho e o texto da página (um bloco por linha, sem script, estilo, `head` ou elementos escondidos) | DOM do html5ever (via `scraper`), percorrido sem recursão; tabelas aninhadas são grades próprias, `rowspan` repete o valor nas linhas cobertas; codificação pelo BOM ou `<meta charset>`; o parser recebe a página em blocos de 256 bytes e a árvore que ele monta é medida entre um bloco e outro: acima de 8 MB, de 512 níveis ou de 400 mil nós (o tree builder é quadrático na profundidade) o resto é cortado com aviso; o corpo HTML de `.msg` passa pelo mesmo caminho |
+| JSON, JSON Lines, XML | uma tabela por lista de registros (`<arquivo>:titulos`, `<arquivo>:extrato.lancamentos.lancamento`) | chaves aninhadas viram colunas com ponto (`cliente.cnpj`) até 4 níveis, e o papel da coluna sai da última chave; ordem das chaves preservada; lista de listas é uma grade com cabeçalho; linhas inválidas do JSON Lines são contadas no aviso; atributos XML vêm depois dos campos e só ganham papel pelo nome; limites de 64 MB (JSON inteiro e cada linha de JSON Lines: 8 MB e 96 MB de memória estimada), 256 colunas, 200 mil linhas e 2 milhões de células por arquivo; XML com 16 KB de texto por elemento e 500 mil atributos |
+| `.msg` do Outlook | um item `event` (remetente, destinatários, data, assunto, corpo) e um `text_span` por parágrafo, como o `.eml`; cada anexo é uma fonte (`mensagem.msg/anexo.pdf`) | Compound File pelo crate `cfb`, propriedades MAPI ([MS-OXMSG]); corpo em texto, senão HTML, senão RTF compactado ([MS-OXRTFCP]); data local do cabeçalho de transporte, senão a de envio convertida de UTC para o fuso de Brasília; strings de 8 bits pelo `PR_MESSAGE_CODEPAGE` (o `PR_INTERNET_CPID` só no corpo); orçamento de bytes lidos por arquivo (o dobro dele, até 64 MB), até 200 destinatários, 50 mensagens anexadas e 4 mil caracteres por campo de cabeçalho; imagens embutidas da assinatura não são anexos; mensagem anexada vira fonte com seu e-mail, sem abrir os anexos dela (profundidade 1) |
 
 Toda fonte que não rende nada leva um aviso em pt-BR com o nome do arquivo; o motor junta esses
 avisos (e os de arquivos que não entraram na conciliação) em `Dataset::warnings`, e o servidor os
@@ -159,6 +167,19 @@ DM_HARNESS_SOCKET=.cache/harness.sock DM_MEDIA_LOCAL_DIR=.cache/media make serve
 - Layouts CNAB 400 são dados (YAML embutido com `include_str!`), não código: banco novo é um
   arquivo novo. Só entram posições conferidas no manual; o que não foi conferido fica no layout
   comum e vira aviso, nunca palpite.
+- A caixa de entrada junta todas as fontes de mensagens (dump de texto, `.eml`, mbox, `.msg`),
+  sem repetir (Message-ID, ou remetente, minuto, assunto e corpo) e em ordem de horário, cada
+  fonte na sua ordem; documentos com mensagens (DOCX, ODT, HTML, PDF) só entram quando não há
+  fonte de mensagens. Cada e-mail guarda o arquivo de onde veio, para a evidência.
+- O extrato é a tabela com mais linhas (empate: ordem dos arquivos); tabela de DOCX, ODT ou
+  HTML só é extrato com coluna de crédito/débito, saldo ou ao menos 5 linhas: um cronograma de
+  parcelas numa carta não toma o lugar do extrato.
+- O prazo da execução no servidor cancela o trabalho de verdade: um sinal por thread que os
+  parsers olham entre fontes, entradas, páginas e nos laços longos. Cada fonte é lida dentro de
+  `catch_unwind`, então um pânico vira aviso daquele arquivo.
+- Um `.xls` é copiado, só com o fluxo da planilha, para um Compound File novo escrito pelo
+  crate `cfb` antes de ir ao calamine: o leitor de Compound File do calamine fatia além do fim
+  de um arquivo truncado (pânico, não erro), e a cópia é bem formada por construção.
 - Formatos com significado próprio não passam pela inferência de colunas: OFX e PDF são
   extrato, cobrança CNAB é razão a receber, pagamentos CNAB e SPED ficam fora da conciliação
   (com aviso). O OFX nomeia o favorecido e seria lido como razão pelas colunas.

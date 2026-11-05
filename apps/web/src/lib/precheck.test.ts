@@ -28,6 +28,7 @@ const PDF = text('%PDF-1.7\n');
 const PNG = bytes(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2);
 const ZIP = bytes(0x50, 0x4b, 0x03, 0x04, 0, 0);
 const CFB = bytes(0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1);
+const SEVEN_Z = bytes(0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c, 0x00, 0x04);
 const MP3 = text('ID3\u0003\u0000');
 const EBML = bytes(0x1a, 0x45, 0xdf, 0xa3, 0, 0);
 const MP4 = Uint8Array.from([0, 0, 0, 0x18, ...text('ftypisom'), 0, 0, 0, 0]);
@@ -58,9 +59,30 @@ describe('sniffKind', () => {
     expect(sniffKind(ZIP, 'xlsx')).toBe('xlsx');
     expect(sniffKind(ZIP, 'xlsm')).toBe('xlsx');
     expect(sniffKind(ZIP, 'zip')).toBe('zip');
-    expect(sniffKind(ZIP, 'docx')).toBeNull();
+    expect(sniffKind(ZIP, 'docx')).toBe('doc');
+    expect(sniffKind(ZIP, 'odt')).toBe('doc');
+    expect(sniffKind(ZIP, '7z')).toBeNull();
+    expect(sniffKind(ZIP, 'pptx')).toBeNull();
     expect(sniffKind(CFB, 'xls')).toBe('xlsx');
+    expect(sniffKind(CFB, 'msg')).toBe('msg');
     expect(sniffKind(CFB, 'doc')).toBeNull();
+  });
+
+  it('recognises 7z by its signature, whatever the extension', () => {
+    expect(sniffKind(SEVEN_Z, '7z')).toBe('7z');
+    expect(sniffKind(SEVEN_Z, 'zip')).toBe('7z');
+    expect(sniffKind(SEVEN_Z, null)).toBe('7z');
+  });
+
+  it('accepts JSON and HTML only when the content starts like them', () => {
+    expect(sniffKind(text('\uFEFF  [{"a":1}]'), 'json')).toBe('json');
+    expect(sniffKind(text('{"a":1}\n{"a":2}\n'), 'jsonl')).toBe('json');
+    expect(sniffKind(text('{"a":1}\n'), 'ndjson')).toBe('json');
+    expect(sniffKind(text('a;b\n'), 'json')).toBeNull();
+    expect(sniffKind(text('\n<!DOCTYPE html><html>'), 'html')).toBe('html');
+    expect(sniffKind(text('<html><body>'), 'htm')).toBe('html');
+    expect(sniffKind(text('a;b\n'), 'html')).toBeNull();
+    expect(sniffKind(text('<html>'), 'json')).toBeNull();
   });
 
   it('classifies text by content first, then by extension', () => {
@@ -97,6 +119,15 @@ describe('classify', () => {
     expect(classify('mensagem.eml', text(CSV))).toMatchObject({
       reason: 'errors.file_extension_mismatch',
     });
+    expect(classify('mensagem.msg', text(EML))).toMatchObject({
+      reason: 'errors.file_extension_mismatch',
+    });
+    expect(classify('lote.zip', SEVEN_Z)).toMatchObject({
+      reason: 'errors.file_extension_mismatch',
+    });
+    expect(classify('dados.json', BINARY)).toMatchObject({
+      reason: 'errors.file_extension_mismatch',
+    });
   });
 
   it('rejects unknown formats', () => {
@@ -104,7 +135,33 @@ describe('classify', () => {
       reason: 'errors.file_type_unknown',
       vars: { name: 'programa.exe' },
     });
-    expect(classify('doc.docx', ZIP)).toMatchObject({ reason: 'errors.file_type_unknown' });
+    expect(classify('apresentacao.pptx', ZIP)).toMatchObject({
+      reason: 'errors.file_type_unknown',
+    });
+    expect(classify('lote.7z', ZIP)).toMatchObject({ reason: 'errors.file_type_unknown' });
+    expect(classify('dados.json', text(CSV))).toMatchObject({
+      reason: 'errors.file_type_unknown',
+    });
+  });
+
+  it('never trusts containers by content alone under an unknown extension', () => {
+    expect(classify('lote.bin', SEVEN_Z)).toMatchObject({ reason: 'errors.file_type_unknown' });
+    expect(classify('lote.bin', ZIP)).toMatchObject({ reason: 'errors.file_type_unknown' });
+    expect(classify('pedido.bin', CFB)).toMatchObject({ reason: 'errors.file_type_unknown' });
+  });
+
+  it('accepts text documents, Outlook messages, JSON, HTML and 7z with their MIME', () => {
+    expect(classify('documento.docx', ZIP)).toEqual({ kind: 'doc' });
+    expect(uploadMime('doc', 'documento.docx')).toBe(
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    );
+    expect(uploadMime('doc', 'relatorio.odt')).toBe('application/vnd.oasis.opendocument.text');
+    expect(classify('pedido.msg', CFB)).toEqual({ kind: 'msg' });
+    expect(uploadMime('msg', 'pedido.msg')).toBe('application/vnd.ms-outlook');
+    expect(classify('lote.7z', SEVEN_Z)).toEqual({ kind: '7z' });
+    expect(uploadMime('7z', 'lote.7z')).toBe('application/x-7z-compressed');
+    expect(uploadMime('json', 'lancamentos.ndjson')).toBe('application/json');
+    expect(uploadMime('html', 'pagina.htm')).toBe('text/html');
   });
 
   it('accepts unambiguous content under an unknown or missing extension', () => {

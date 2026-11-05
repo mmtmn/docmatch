@@ -1,6 +1,6 @@
 [package]
 name = "dm-ingest"
-description = "docmatch: detecção de formato e ingestão (CSV, XLSX, texto, e-mail, OFX, NF-e)"
+description = "docmatch: detecção de formato e ingestão (CSV, planilhas, texto, e-mail, MSG, OFX, NF-e, PDF, CNAB, SPED, DOCX, ODT, HTML, JSON, XML, ZIP, 7z)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -32,9 +32,15 @@ hex.workspace = true
 indexmap.workspace = true
 lopdf.workspace = true
 zip.workspace = true
+cfb.workspace = true
+sevenz-rust2.workspace = true
+scraper.workspace = true
+html5ever.workspace = true
+ego-tree.workspace = true
 serde-saphyr.workspace = true
 
 [dev-dependencies]
+cap.workspace = true
 proptest.workspace = true
 rust_xlsxwriter.workspace = true
 tempfile.workspace = true

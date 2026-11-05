@@ -10,11 +10,16 @@ enum class FileKind(val id: String) {
     CSV("csv"),
     TXT("txt"),
     XLSX("xlsx"),
+    DOC("doc"),
     PDF("pdf"),
     ZIP("zip"),
+    SEVEN_Z("7z"),
     EML("eml"),
+    MSG("msg"),
     OFX("ofx"),
     XML("xml"),
+    JSON("json"),
+    HTML("html"),
     IMAGE("image"),
     AUDIO("audio"),
     VIDEO("video"),
@@ -39,6 +44,7 @@ object Precheck {
     const val HEAD_BYTES = 4096
 
     private const val OOXML = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    private const val WORDPROCESSINGML = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     private const val KB = 1024L
     private const val MB = 1024 * KB
     private const val GB = 1024 * MB
@@ -54,18 +60,26 @@ object Precheck {
             listOf("csv", "tsv").forEach { put(it, FileKind.CSV) }
             listOf("txt", "text", "md", "log", "ret", "rem", "cnab").forEach { put(it, FileKind.TXT) }
             listOf("xlsx", "xlsm", "xls", "ods").forEach { put(it, FileKind.XLSX) }
+            listOf("docx", "odt").forEach { put(it, FileKind.DOC) }
             put("pdf", FileKind.PDF)
             put("zip", FileKind.ZIP)
+            put("7z", FileKind.SEVEN_Z)
             put("eml", FileKind.EML)
             put("mbox", FileKind.EML)
+            put("msg", FileKind.MSG)
             put("ofx", FileKind.OFX)
             put("xml", FileKind.XML)
+            listOf("json", "jsonl", "ndjson").forEach { put(it, FileKind.JSON) }
+            listOf("html", "htm").forEach { put(it, FileKind.HTML) }
             listOf("png", "jpg", "jpeg", "gif", "webp", "heic", "heif", "tif", "tiff", "bmp").forEach { put(it, FileKind.IMAGE) }
             listOf("mp3", "wav", "m4a", "aac", "flac", "ogg", "oga", "opus", "weba").forEach { put(it, FileKind.AUDIO) }
             listOf("mp4", "m4v", "mov", "webm", "mkv", "avi").forEach { put(it, FileKind.VIDEO) }
         }
 
-    private val textKinds = setOf(FileKind.CSV, FileKind.TXT, FileKind.EML, FileKind.OFX, FileKind.XML)
+    private val textKinds = setOf(FileKind.CSV, FileKind.TXT, FileKind.EML, FileKind.OFX, FileKind.XML, FileKind.JSON, FileKind.HTML)
+
+    /** Container kinds: never trusted by content alone under an unknown extension. */
+    private val containerKinds = setOf(FileKind.ZIP, FileKind.XLSX, FileKind.DOC, FileKind.MSG, FileKind.SEVEN_Z)
     private val audioMime =
         mapOf(
             "mp3" to "audio/mpeg", "wav" to "audio/wav", "m4a" to "audio/mp4", "aac" to "audio/aac", "flac" to "audio/flac",
@@ -94,7 +108,7 @@ object Precheck {
         }
         if (extKind != null && extKind != detected) return null to mismatch
         // Unknown extension: trust unambiguous content, never containers or plain text.
-        if (extKind == null && ext != null && (detected == FileKind.ZIP || detected == FileKind.XLSX || detected in textKinds)) {
+        if (extKind == null && ext != null && (detected in containerKinds || detected in textKinds)) {
             return null to unknown
         }
         return detected to null
@@ -112,10 +126,15 @@ object Precheck {
                     "ods" -> "application/vnd.oasis.opendocument.spreadsheet"
                     else -> OOXML
                 }
+            FileKind.DOC -> if (ext == "odt") "application/vnd.oasis.opendocument.text" else WORDPROCESSINGML
             FileKind.PDF -> "application/pdf"
             FileKind.ZIP -> "application/zip"
+            FileKind.SEVEN_Z -> "application/x-7z-compressed"
             FileKind.EML -> if (ext == "mbox") "application/mbox" else "message/rfc822"
+            FileKind.MSG -> "application/vnd.ms-outlook"
             FileKind.XML -> "application/xml"
+            FileKind.JSON -> "application/json"
+            FileKind.HTML -> "text/html"
             FileKind.OFX -> "application/x-ofx"
             FileKind.AUDIO -> audioMime[ext] ?: "audio/mpeg"
             FileKind.VIDEO -> videoMime[ext] ?: "video/mp4"
@@ -236,14 +255,23 @@ object Precheck {
             buildString { for (i in offset until minOf(bytes.size, offset + length)) append((bytes[i].toInt() and 0xff).toChar()) }
 
         if (starts(0x25, 0x50, 0x44, 0x46)) return FileKind.PDF
+        if (starts(0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c)) return FileKind.SEVEN_Z
         if (starts(0x50, 0x4b, 0x03, 0x04) || starts(0x50, 0x4b, 0x05, 0x06) || starts(0x50, 0x4b, 0x07, 0x08)) {
             return when (extKind) {
                 FileKind.XLSX -> FileKind.XLSX
+                FileKind.DOC -> FileKind.DOC // DOCX / ODT
                 FileKind.ZIP -> FileKind.ZIP
                 else -> null // other OOXML/zip-based formats are not accepted
             }
         }
-        if (starts(0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1)) return if (extKind == FileKind.XLSX) FileKind.XLSX else null
+        // CFB container: legacy Excel or an Outlook message.
+        if (starts(0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1)) {
+            return when (extKind) {
+                FileKind.XLSX -> FileKind.XLSX
+                FileKind.MSG -> FileKind.MSG
+                else -> null
+            }
+        }
         if (starts(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)) return FileKind.IMAGE
         if (starts(0xff, 0xd8, 0xff)) return FileKind.IMAGE
         if (starts(0x47, 0x49, 0x46, 0x38)) return FileKind.IMAGE
@@ -273,8 +301,11 @@ object Precheck {
             val text = bytes.decodeToString()
             if (looksLikeEmail(text)) return FileKind.EML
             if (looksLikeOfx(text)) return FileKind.OFX
-            // NF-e, CT-e and other XML: markup from the first character (after a BOM).
-            if (extKind == FileKind.XML && text.removePrefix("\uFEFF").trimStart().startsWith("<")) return FileKind.XML
+            // XML (NF-e, CT-e, other data) and HTML: markup from the first character (after a BOM);
+            // JSON / JSON Lines: an object or an array from the first character.
+            val lead = text.removePrefix("\uFEFF").trimStart()
+            if ((extKind == FileKind.XML || extKind == FileKind.HTML) && lead.startsWith("<")) return extKind
+            if (extKind == FileKind.JSON && (lead.startsWith("{") || lead.startsWith("["))) return FileKind.JSON
             if (extKind == FileKind.CSV || extKind == FileKind.TXT) return extKind
             if (extKind == null && ext == null) return FileKind.TXT
             if (extKind == FileKind.EML || extKind == FileKind.OFX) return FileKind.TXT // reported as a mismatch

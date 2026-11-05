@@ -20,7 +20,8 @@ pub struct ParsedSource {
     /// Deterministic source id (`src_...`), from the file name and content hash (for an
     /// archive entry: from the archive's id and the entry path).
     pub source_id: String,
-    /// File name (stem used for table names); `archive.zip/path/in/archive` for an entry.
+    /// File name (stem used for table names); `archive.zip/path/in/archive` for an entry,
+    /// `mensagem.msg/anexo.pdf` for an attachment.
     pub name: String,
     /// What was sniffed.
     pub sniff: Sniff,
@@ -30,9 +31,40 @@ pub struct ParsedSource {
     pub items: Vec<Item>,
     /// Non-fatal problems, in pt-BR, each naming the file.
     pub warnings: Vec<String>,
-    /// Sources inside a container (ZIP entries), each parsed as its own source.
+    /// Sources inside a container (ZIP and 7z entries, attachments of an Outlook message),
+    /// each parsed as its own source.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub entries: Vec<ParsedSource>,
+    /// The text of a document (DOCX, ODT, HTML) in parts, the data tables apart, when it has
+    /// data tables: [`ParsedSource::items`] leave them out, and a reader that decides a table
+    /// is not one it uses can read the document again with it ([`document_text`],
+    /// [`text_items`]).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub text_parts: Vec<TextPart>,
+}
+
+/// A piece of the text of a document: prose (paragraphs, layout tables) or the text of one of
+/// its data tables, named like the [`Table`] it became.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TextPart {
+    /// The table this is the text of; `None` for prose.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub table: Option<String>,
+    /// Lines, each ending in `\n`.
+    pub text: String,
+}
+
+/// The text of a document with the data tables `keep` accepts (by table name); every other
+/// table leaves a blank line.
+pub fn document_text(parts: &[TextPart], keep: impl Fn(&str) -> bool) -> String {
+    let mut out = String::new();
+    for part in parts {
+        match &part.table {
+            Some(name) if !keep(name) => out.push('\n'),
+            _ => out.push_str(&part.text),
+        }
+    }
+    out
 }
 
 impl ParsedSource {
@@ -54,8 +86,9 @@ pub fn source_id_for(name: &str, bytes: &[u8]) -> String {
 
 /// Sniffs and parses bytes under a file name. Unknown and unreadable formats produce a source
 /// with no tables and a warning naming the file and the reason, never an error (except for
-/// empty input), so a run can continue with the other files. A ZIP archive yields one entry
-/// per file inside it, each parsed as its own source.
+/// empty input), so a run can continue with the other files. A ZIP or 7z archive yields one
+/// entry per file inside it, and an Outlook message one entry per attachment, each parsed as
+/// its own source.
 pub fn parse_bytes(
     name: &str,
     bytes: &[u8],
@@ -70,7 +103,29 @@ pub fn parse_bytes(
         .and_then(|s| s.to_str())
         .unwrap_or(name)
         .to_string();
-    Ok(parse_inner(name, &stem, source_id, bytes, ctx, 0))
+    Ok(guarded(name, &source_id, || {
+        parse_inner(name, &stem, source_id.clone(), bytes, ctx, 0)
+    }))
+}
+
+/// Runs a parse so that a panic in it (a bug a file triggers) becomes that file's warning: the
+/// run goes on with the other files.
+fn guarded(name: &str, source_id: &str, parse: impl FnOnce() -> ParsedSource) -> ParsedSource {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(parse)) {
+        Ok(parsed) => parsed,
+        Err(_) => ParsedSource {
+            source_id: source_id.to_string(),
+            name: name.to_string(),
+            sniff: sniff(b""),
+            tables: Vec::new(),
+            items: Vec::new(),
+            warnings: vec![format!(
+                "{name}: falha interna ao ler o arquivo; ele ficou fora desta conciliação"
+            )],
+            entries: Vec::new(),
+            text_parts: Vec::new(),
+        },
+    }
 }
 
 /// The table-name stem of an archive entry: its path without the extension, so row
@@ -99,6 +154,7 @@ fn parse_inner(
         items: Vec::new(),
         warnings: Vec::new(),
         entries: Vec::new(),
+        text_parts: Vec::new(),
     };
     let note = |out: &mut ParsedSource, e: IngestError| out.warnings.push(format!("{name}: {e}"));
     let extend = |out: &mut ParsedSource, warnings: Vec<String>| {
@@ -169,7 +225,48 @@ fn parse_inner(
             Err(e) => note(&mut out, e),
         },
         SourceKind::Zip => parse_zip(&mut out, &source_id, bytes, ctx, depth),
-        SourceKind::Xml | SourceKind::Json | SourceKind::Unknown => note(
+        SourceKind::SevenZ => parse_7z(&mut out, &source_id, bytes, ctx, depth),
+        SourceKind::Docx | SourceKind::Odt => {
+            let parsed = if sniffed.kind == SourceKind::Docx {
+                crate::office::parse_docx(bytes, stem, &source_id)
+            } else {
+                crate::office::parse_odt(bytes, stem, &source_id)
+            };
+            match parsed {
+                Ok(d) => {
+                    out.tables.extend(d.tables);
+                    out.items = text_items(&d.text, &source_id, ctx);
+                    out.text_parts = d.parts;
+                    extend(&mut out, d.warnings);
+                }
+                Err(e) => note(&mut out, e),
+            }
+        }
+        SourceKind::Html => match crate::html::parse_html(bytes, stem, &source_id) {
+            Ok(h) => {
+                out.tables.extend(h.tables);
+                out.items = text_items(&h.text, &source_id, ctx);
+                out.text_parts = h.parts;
+                extend(&mut out, h.warnings);
+            }
+            Err(e) => note(&mut out, e),
+        },
+        SourceKind::Json | SourceKind::Jsonl | SourceKind::Xml => {
+            let parsed = match sniffed.kind {
+                SourceKind::Json => crate::structured::parse_json(bytes, stem, &source_id),
+                SourceKind::Jsonl => crate::structured::parse_jsonl(bytes, stem, &source_id),
+                _ => crate::structured::parse_xml(bytes, stem, &source_id),
+            };
+            match parsed {
+                Ok(p) => {
+                    out.tables.extend(p.tables);
+                    extend(&mut out, p.warnings);
+                }
+                Err(e) => note(&mut out, e),
+            }
+        }
+        SourceKind::Msg => parse_msg(&mut out, &source_id, bytes, ctx, depth),
+        SourceKind::Unknown => note(
             &mut out,
             IngestError::Unrecognized(sniffed.kind.label_ptbr().to_string()),
         ),
@@ -217,7 +314,134 @@ fn parse_zip(
         out.warnings
             .push(format!("{name}: arquivo zip sem arquivos aproveitáveis"));
     }
+    push_entries(out, source_id, entries, ctx, depth);
+}
+
+/// Opens a 7z archive and parses every entry as its own source, like a ZIP.
+fn parse_7z(
+    out: &mut ParsedSource,
+    source_id: &str,
+    bytes: &[u8],
+    ctx: &InboxContext,
+    depth: usize,
+) {
+    let name = out.name.clone();
+    let limits = crate::archive::ZipLimits::default();
+    if depth + 1 > limits.max_depth {
+        out.warnings.push(format!(
+            "{name}: 7z dentro de outro arquivo compactado não é aberto (profundidade máxima {})",
+            limits.max_depth
+        ));
+        return;
+    }
+    let (entries, warnings) = match crate::sevenz::read_7z(bytes, &limits) {
+        Ok(r) => r,
+        Err(e) => {
+            out.warnings.push(format!("{name}: {e}"));
+            return;
+        }
+    };
+    out.warnings
+        .extend(warnings.into_iter().map(|w| format!("{name}: {w}")));
+    if entries.is_empty() {
+        out.warnings
+            .push(format!("{name}: arquivo 7z sem arquivos aproveitáveis"));
+    }
+    push_entries(out, source_id, entries, ctx, depth);
+}
+
+/// An Outlook message: its own e-mail item, attached files as sources of their own (one
+/// level: a message inside a container keeps its attachments closed) and attached messages
+/// as sources with their e-mail item.
+fn parse_msg(
+    out: &mut ParsedSource,
+    source_id: &str,
+    bytes: &[u8],
+    ctx: &InboxContext,
+    depth: usize,
+) {
+    let name = out.name.clone();
+    let limits = crate::archive::ZipLimits::default();
+    let open = depth < limits.max_depth;
+    let parsed = match crate::msg::parse_msg(bytes, open, &limits) {
+        Ok(p) => p,
+        Err(e) => {
+            out.warnings.push(format!("{name}: {e}"));
+            return;
+        }
+    };
+    out.items = crate::msg::message_items(&parsed.message, source_id, bytes.len(), ctx);
+    out.warnings
+        .extend(parsed.warnings.into_iter().map(|w| format!("{name}: {w}")));
+    if !open && !parsed.message.attachments.is_empty() {
+        out.warnings.push(format!(
+            "{name}: os anexos de uma mensagem dentro de outro arquivo não são abertos (profundidade máxima {})",
+            limits.max_depth
+        ));
+    }
+    let attachments: Vec<crate::archive::ZipEntry> = parsed
+        .attachments
+        .into_iter()
+        .map(|a| crate::archive::ZipEntry {
+            path: a.name,
+            bytes: a.bytes,
+        })
+        .collect();
+    push_entries(out, source_id, attachments, ctx, depth);
+    for embedded in parsed.embedded {
+        let entry_name = format!("{name}/{}", embedded.name);
+        let id = stable_id("src", &[source_id, &embedded.name]);
+        let mut sniffed = sniff(b"");
+        sniffed.kind = SourceKind::Msg;
+        let mut items = crate::msg::message_items(&embedded.message, &id, 0, ctx);
+        for item in &mut items {
+            item.fields.insert(
+                "archive_entry".to_string(),
+                Value::Text(embedded.name.clone()),
+            );
+        }
+        out.entries.push(ParsedSource {
+            source_id: id,
+            name: entry_name.clone(),
+            sniff: sniffed,
+            tables: Vec::new(),
+            items,
+            warnings: embedded
+                .warnings
+                .into_iter()
+                .map(|w| format!("{entry_name}: {w}"))
+                .collect(),
+            entries: Vec::new(),
+            text_parts: Vec::new(),
+        });
+    }
+}
+
+/// The text of a document read like a text dump: an e-mail thread or a chat becomes
+/// messages, anything else paragraphs.
+pub fn text_items(text: &str, source_id: &str, ctx: &InboxContext) -> Vec<Item> {
+    if text.trim().is_empty() {
+        return Vec::new();
+    }
+    crate::inbox::parse_txt_inbox(text, source_id, ctx)
+}
+
+/// Parses the files of a container (archive entries, message attachments) as sources of
+/// their own, one level deeper.
+fn push_entries(
+    out: &mut ParsedSource,
+    source_id: &str,
+    entries: Vec<crate::archive::ZipEntry>,
+    ctx: &InboxContext,
+    depth: usize,
+) {
+    let name = out.name.clone();
     for entry in entries {
+        if crate::cancel::cancelled() {
+            out.warnings
+                .push(format!("{name}: {}", crate::cancel::STOPPED));
+            break;
+        }
         let entry_name = format!("{name}/{}", entry.path);
         if entry.bytes.is_empty() {
             out.warnings
@@ -225,14 +449,16 @@ fn parse_zip(
             continue;
         }
         let id = stable_id("src", &[source_id, &entry.path]);
-        let mut child = parse_inner(
-            &entry_name,
-            &entry_stem(&entry.path),
-            id,
-            &entry.bytes,
-            ctx,
-            depth + 1,
-        );
+        let mut child = guarded(&entry_name, &id, || {
+            parse_inner(
+                &entry_name,
+                &entry_stem(&entry.path),
+                id.clone(),
+                &entry.bytes,
+                ctx,
+                depth + 1,
+            )
+        });
         for item in &mut child.items {
             item.fields
                 .insert("archive_entry".to_string(), Value::Text(entry.path.clone()));
@@ -405,6 +631,51 @@ mod tests {
         assert_eq!(
             it.field("valor").and_then(Value::as_money),
             Some(dm_core::Money::from_centavos(1_000))
+        );
+    }
+
+    #[test]
+    fn a_panic_in_a_parser_is_that_file_s_warning() {
+        let src = guarded("quebrado.pdf", "src_x", || {
+            panic!("falha simulada no parser")
+        });
+        assert_eq!(src.name, "quebrado.pdf");
+        assert!(src.tables.is_empty() && src.items.is_empty());
+        assert_eq!(
+            src.warnings,
+            vec![
+                "quebrado.pdf: falha interna ao ler o arquivo; ele ficou fora desta conciliação"
+                    .to_string()
+            ]
+        );
+        let ok = guarded("a.csv", "src_a", || {
+            parse_inner(
+                "a.csv",
+                "a",
+                "src_a".into(),
+                b"a;b\n1;2\n",
+                &InboxContext::default(),
+                0,
+            )
+        });
+        assert_eq!(ok.tables.len(), 1);
+    }
+
+    #[test]
+    fn a_cancelled_run_stops_between_entries() {
+        use std::sync::atomic::AtomicBool;
+        use std::sync::Arc;
+        let zip =
+            crate::archive::tests::zip_of(&[("a.csv", b"a;b\n1;2\n"), ("b.csv", b"a;b\n1;2\n")]);
+        let src = crate::cancel::scope(Arc::new(AtomicBool::new(true)), || {
+            parse_bytes("lote.zip", &zip, &InboxContext::default())
+        })
+        .unwrap_or_else(|e| panic!("{e}"));
+        assert!(src.entries.is_empty());
+        assert!(
+            src.warnings.iter().any(|w| w.contains("passou do prazo")),
+            "{:?}",
+            src.warnings
         );
     }
 

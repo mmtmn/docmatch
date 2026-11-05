@@ -308,6 +308,18 @@ fn message_items(
     items
 }
 
+/// Brazil's offset from UTC (UTC-03:00, no daylight saving since 2019). A message keeps the
+/// sender's wall-clock time when its `Date` says it; a time known only in UTC (a date the RFC
+/// parser could not read, an Outlook message without transport headers) is shown at this
+/// offset, so every inbox format puts the same message at the same time.
+pub(crate) const LOCAL_UTC_OFFSET_SECS: i32 = -3 * 3600;
+
+/// A UTC instant as local wall-clock time ([`LOCAL_UTC_OFFSET_SECS`]).
+pub(crate) fn local_time(at: chrono::DateTime<chrono::Utc>) -> Option<chrono::NaiveDateTime> {
+    let offset = chrono::FixedOffset::east_opt(LOCAL_UTC_OFFSET_SECS)?;
+    Some(at.with_timezone(&offset).naive_local())
+}
+
 fn parse_date(value: &str, ctx: &DateContext) -> Option<TimeRef> {
     if let Ok(dt) = chrono::DateTime::parse_from_rfc2822(value) {
         return Some(TimeRef::Instant {
@@ -316,7 +328,8 @@ fn parse_date(value: &str, ctx: &DateContext) -> Option<TimeRef> {
     }
     if let Ok(secs) = mailparse::dateparse(value) {
         return chrono::DateTime::from_timestamp(secs, 0)
-            .map(|dt| TimeRef::Instant { at: dt.naive_utc() });
+            .and_then(local_time)
+            .map(|at| TimeRef::Instant { at });
     }
     let p = dm_normalize::date_ptbr(value, ctx).ok()?;
     Some(match p.time {
@@ -382,5 +395,20 @@ mod tests {
         assert_eq!(events[1].text(), Some("ok"));
         assert_eq!(mbox_ranges(b"x").len(), 1);
         assert!(parse_mbox(b"", "s", &InboxContext::default()).is_err());
+    }
+
+    #[test]
+    fn times_known_in_utc_are_shown_at_the_local_offset() {
+        let utc = chrono::DateTime::from_timestamp(1_784_401_200, 0).unwrap_or_default();
+        assert_eq!(
+            local_time(utc).map(|t| t.format("%d/%m/%Y %H:%M").to_string()),
+            Some("18/07/2026 16:00".to_string())
+        );
+        // An RFC 2822 date keeps the sender's own wall clock.
+        let ctx = DateContext::default();
+        assert!(matches!(
+            parse_date("Sat, 18 Jul 2026 16:52:00 -0300", &ctx),
+            Some(TimeRef::Instant { at }) if at.format("%H:%M").to_string() == "16:52"
+        ));
     }
 }

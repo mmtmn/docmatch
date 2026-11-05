@@ -14,6 +14,36 @@ use crate::IngestError;
 /// Rows sampled for role inference.
 const SAMPLE_ROWS: usize = 200;
 
+const CFB_MAGIC: &[u8] = b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1";
+
+/// A legacy `.xls` copied into a fresh Compound File holding only its workbook stream.
+///
+/// calamine's own Compound File reader slices past the end of a truncated or damaged file
+/// (a panic, not an error); the `cfb` crate reads it with checked chains, and the copy it
+/// writes is well formed by construction.
+fn rebuilt_xls(bytes: &[u8]) -> Result<Vec<u8>, IngestError> {
+    use std::io::{Read, Write};
+    let unreadable = |e: std::io::Error| IngestError::Parse {
+        format: "xls",
+        detail: format!("planilha .xls ilegível ({e})"),
+    };
+    let mut file = cfb::CompoundFile::open(Cursor::new(bytes)).map_err(unreadable)?;
+    let stream_name = ["/Workbook", "/Book"]
+        .into_iter()
+        .find(|n| file.is_stream(n))
+        .ok_or_else(|| IngestError::Unrecognized("arquivo do Office sem planilha".to_string()))?;
+    let mut data = Vec::new();
+    file.open_stream(stream_name)
+        .and_then(|mut s| (&mut s).take(bytes.len() as u64).read_to_end(&mut data))
+        .map_err(unreadable)?;
+    let mut copy = cfb::CompoundFile::create(Cursor::new(Vec::new())).map_err(unreadable)?;
+    copy.create_stream(stream_name)
+        .and_then(|mut s| s.write_all(&data))
+        .map_err(unreadable)?;
+    copy.flush().map_err(unreadable)?;
+    Ok(copy.into_inner().into_inner())
+}
+
 /// Parses every sheet of a workbook. Sheets without a header row are skipped with a warning
 /// returned in the second element.
 pub fn parse_xlsx(
@@ -24,7 +54,12 @@ pub fn parse_xlsx(
     if bytes.is_empty() {
         return Err(IngestError::Empty);
     }
-    let cursor = Cursor::new(bytes.to_vec());
+    let owned = if bytes.starts_with(CFB_MAGIC) {
+        rebuilt_xls(bytes)?
+    } else {
+        bytes.to_vec()
+    };
+    let cursor = Cursor::new(owned);
     let mut workbook = open_workbook_auto_from_rs(cursor).map_err(|e| IngestError::Parse {
         format: "xlsx",
         detail: e.to_string(),

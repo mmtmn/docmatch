@@ -52,7 +52,7 @@ pub struct ZipEntry {
 }
 
 /// Entries that are noise in every archive made on a Mac or by a file manager.
-fn is_noise(path: &str) -> bool {
+pub(crate) fn is_noise(path: &str) -> bool {
     path.starts_with("__MACOSX/")
         || path
             .rsplit('/')
@@ -64,14 +64,34 @@ fn refuse(reason: String) -> IngestError {
     IngestError::Unrecognized(format!("arquivo zip recusado: {reason}"))
 }
 
-fn safe_path(name: &str) -> Option<String> {
+pub(crate) fn safe_path(name: &str) -> Option<String> {
     let unified = name.replace('\\', "/");
     // The same test as the upload scanner (`..` or absolute): nothing is written to disk, so
     // a drive letter is just part of a name.
     if unified.starts_with('/') || unified.split('/').any(|part| part == "..") {
         return None;
     }
-    Some(unified.trim_start_matches("./").to_string())
+    Some(clean_name(unified.trim_start_matches("./")))
+}
+
+/// Characters kept of a name that came from inside a file (an archive entry path, an
+/// attachment name): names end up in warnings, table names and reports. ZIP and 7z entries
+/// and `.msg` attachments (`msg::safe_name`) are cleaned by the same rule.
+pub(crate) const MAX_NAME_CHARS: usize = 200;
+
+/// A name without control characters and at most [`MAX_NAME_CHARS`] long; a longer one keeps
+/// its start and its end (the extension).
+pub(crate) fn clean_name(raw: &str) -> String {
+    let chars: Vec<char> = raw.chars().filter(|c| !c.is_control()).collect();
+    if chars.len() <= MAX_NAME_CHARS {
+        return chars.into_iter().collect();
+    }
+    let head = MAX_NAME_CHARS / 2;
+    let tail = MAX_NAME_CHARS - head - 1;
+    let mut out: String = chars[..head].iter().collect();
+    out.push('…');
+    out.extend(&chars[chars.len() - tail..]);
+    out
 }
 
 /// Entry name as written (UTF-8, or CP437 decoded by the zip crate); invalid bytes are
@@ -141,6 +161,10 @@ pub fn read_zip(
     let mut warnings = Vec::new();
     let mut read_total: u64 = 0;
     for (i, locked) in encrypted.into_iter().enumerate() {
+        if crate::cancel::cancelled() {
+            warnings.push(crate::cancel::STOPPED.to_string());
+            break;
+        }
         if locked {
             // The zip crate refuses to open it without the password; say so in pt-BR.
             let name = archive
@@ -149,7 +173,8 @@ pub fn read_zip(
                 .unwrap_or_default();
             if !is_noise(&name) && !name.ends_with('/') {
                 warnings.push(format!(
-                    "{name}: entrada protegida por senha não foi aberta"
+                    "{}: entrada protegida por senha não foi aberta",
+                    clean_name(&name)
                 ));
             }
             continue;
@@ -191,7 +216,86 @@ pub fn read_zip(
         }
     }
     entries.sort_by(|a, b| a.path.cmp(&b.path));
+    unique_paths(&mut entries);
     Ok((entries, warnings))
+}
+
+/// Entries whose cleaned paths collide (two long names cut to the same) get ` (2)`, ` (3)`…
+/// before the extension, so each stays a source of its own.
+pub(crate) fn unique_paths(entries: &mut [ZipEntry]) {
+    let mut seen = std::collections::HashSet::new();
+    for e in entries.iter_mut() {
+        if seen.insert(e.path.clone()) {
+            continue;
+        }
+        let (stem, ext) = match e.path.rsplit_once('.') {
+            Some((stem, ext)) if !ext.contains('/') => (stem.to_string(), format!(".{ext}")),
+            _ => (e.path.clone(), String::new()),
+        };
+        let mut k = 2;
+        while !seen.insert(format!("{stem} ({k}){ext}")) {
+            k += 1;
+        }
+        e.path = format!("{stem} ({k}){ext}");
+    }
+}
+
+/// Reads one member of a ZIP package (the `word/document.xml` of a DOCX, the `content.xml` of
+/// an ODT) under the shared limits: entry count, compression ratio and at most `max_bytes`
+/// (declared and actually read). `Ok(None)` when the package has no such member.
+pub fn read_zip_member(
+    bytes: &[u8],
+    path: &str,
+    max_bytes: u64,
+    lim: &ZipLimits,
+) -> Result<Option<Vec<u8>>, IngestError> {
+    let mut archive = ZipArchive::new(Cursor::new(bytes)).map_err(|e| IngestError::Parse {
+        format: "zip",
+        detail: format!("pacote zip ilegível ({e})"),
+    })?;
+    if archive.len() > lim.max_entries {
+        return Err(refuse(format!(
+            "{} entradas (máximo {})",
+            archive.len(),
+            lim.max_entries
+        )));
+    }
+    let mut file = match archive.by_name(path) {
+        Ok(f) => f,
+        Err(zip::result::ZipError::FileNotFound) => return Ok(None),
+        Err(e) => {
+            return Err(IngestError::Parse {
+                format: "zip",
+                detail: format!("{path}: {e}"),
+            })
+        }
+    };
+    let declared = file.size();
+    let max_mb = (max_bytes >> 20).max(1);
+    if declared > max_bytes {
+        return Err(refuse(format!("{path} acima de {max_mb} MB")));
+    }
+    let compressed = file.compressed_size();
+    if compressed > 0 && declared / compressed > lim.max_ratio {
+        return Err(refuse(format!(
+            "razão de compressão acima de {}x",
+            lim.max_ratio
+        )));
+    }
+    let mut buf = Vec::with_capacity(usize::try_from(declared.min(16 << 20)).unwrap_or(0));
+    match (&mut file)
+        .take(declared.saturating_add(1))
+        .read_to_end(&mut buf)
+    {
+        Ok(n) if n as u64 > declared => {
+            Err(refuse(format!("{path}: conteúdo maior que o declarado")))
+        }
+        Ok(_) => Ok(Some(buf)),
+        Err(e) => Err(IngestError::Parse {
+            format: "zip",
+            detail: format!("{path}: não foi possível descompactar ({e})"),
+        }),
+    }
 }
 
 #[cfg(test)]
@@ -322,6 +426,31 @@ pub(crate) mod tests {
         assert_eq!(safe_path("a\\b.csv").as_deref(), Some("a/b.csv"));
         assert_eq!(safe_path("C:/x.csv").as_deref(), Some("C:/x.csv"));
         assert_eq!(safe_path("a/../../x"), None);
+        assert_eq!(
+            safe_path("a\u{0}b\n/c\u{1b}[31m.csv").as_deref(),
+            Some("ab/c[31m.csv")
+        );
+        let long = format!("{}.csv", "x".repeat(10_000));
+        let cleaned = safe_path(&long).unwrap_or_default();
+        assert_eq!(cleaned.chars().count(), MAX_NAME_CHARS);
+        assert!(cleaned.ends_with("x.csv") && cleaned.contains('…'));
+        let mut entries = vec![
+            ZipEntry {
+                path: "a/x.csv".into(),
+                bytes: Vec::new(),
+            },
+            ZipEntry {
+                path: "a/x.csv".into(),
+                bytes: Vec::new(),
+            },
+            ZipEntry {
+                path: "a/x.csv".into(),
+                bytes: Vec::new(),
+            },
+        ];
+        unique_paths(&mut entries);
+        let paths: Vec<&str> = entries.iter().map(|e| e.path.as_str()).collect();
+        assert_eq!(paths, vec!["a/x.csv", "a/x (2).csv", "a/x (3).csv"]);
         assert!(is_noise("__MACOSX/x"));
         assert!(is_noise("pasta/.hidden"));
         assert!(!is_noise("pasta/extrato.pdf"));

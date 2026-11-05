@@ -2,17 +2,27 @@
 //! statement, inbox), extracts titles, bank lines, e-mails and chat messages, and resolves
 //! customers across ledgers into entities (tax id first, then name).
 //!
-//! Every format the ingest stage reads goes through the same classification: CSV and
-//! spreadsheets by their inferred columns, OFX and PDF statements as bank statements, CNAB
-//! collection files as receivables ledgers, ZIP entries as files of their own. A file that
-//! does not take part in the run is never dropped silently: the reason goes to
-//! [`Dataset::warnings`].
+//! Every format the ingest stage reads goes through the same classification: CSV,
+//! spreadsheets, tables of DOCX/ODT documents and HTML pages and records of JSON/XML files by
+//! their inferred columns, OFX and PDF statements as bank statements, CNAB collection files as
+//! receivables ledgers, e-mails and chats (text dumps, `.eml`, `.mbox`, `.msg`, a thread pasted
+//! in a document) as the inbox, ZIP and 7z entries and `.msg` attachments as files of their
+//! own. A file that does not take part in the run is never dropped silently: the reason goes
+//! to [`Dataset::warnings`].
+//!
+//! An incidental document must not change the run: a table in a DOCX, ODT or HTML page is a
+//! bank statement only with the signs of one (a credit/debit side, a balance or enough lines),
+//! the statement is the table with the most lines, and the inbox is every message source
+//! together (deduplicated, in time order); documents holding messages make the inbox only
+//! when no message source does. Each file is read on its own: a parser failure is that file's
+//! warning, and a cancelled run stops between files.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::borrow::Cow;
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::Path;
 
 use chrono::{Datelike, Months, NaiveDate, NaiveDateTime};
-use dm_core::{ColumnRole, Item, Money, Table, Value};
+use dm_core::{ColumnRole, Item, Money, Table, TimeRef, Value};
 use dm_ingest::{parse_bytes, InboxContext, ParsedSource, SourceKind};
 use dm_normalize::{doc_number, fold_ascii, money_ptbr, name_key, tax_id, TaxIdKind};
 use sha2::{Digest, Sha256};
@@ -118,6 +128,8 @@ pub struct BankLine {
 pub struct Email {
     /// One-based position in the inbox.
     pub n: usize,
+    /// The file (or archive entry, or attachment) it came from.
+    pub file: String,
     /// Sender address, lowercase.
     pub from: String,
     /// Sender domain, lowercase.
@@ -135,6 +147,8 @@ pub struct Email {
 /// One chat message.
 #[derive(Clone, Debug)]
 pub struct ChatMessage {
+    /// The file it came from.
+    pub file: String,
     /// When it was sent.
     pub at: NaiveDateTime,
     /// Author.
@@ -203,6 +217,28 @@ struct RawChat {
     text: String,
 }
 
+/// Lines a table of a document needs to be read as a bank statement when it has neither a
+/// credit/debit side nor a balance column (a payment schedule in a letter has a few).
+const MIN_DOCUMENT_STATEMENT_LINES: usize = 5;
+
+/// A source that brings e-mails or chat messages.
+struct InboxSource {
+    file: String,
+    /// A message format (mailbox or chat dump, `.eml`, `.mbox`, `.msg`), not a document that
+    /// holds a pasted thread.
+    message: bool,
+    items: Vec<Item>,
+}
+
+/// What one input file (and everything inside it) brought.
+#[derive(Default)]
+struct FileOutcome {
+    ledgers: Vec<(String, Table)>,
+    banks: Vec<(String, Table)>,
+    inboxes: Vec<InboxSource>,
+    warnings: Vec<String>,
+}
+
 /// Reads and classifies every input file of `dir`.
 pub fn load_dir(dir: &Path, cfg: &EngineConfig) -> Result<Dataset, ReconError> {
     let mut paths: Vec<std::path::PathBuf> = std::fs::read_dir(dir)
@@ -224,9 +260,12 @@ pub fn load_dir(dir: &Path, cfg: &EngineConfig) -> Result<Dataset, ReconError> {
     };
     let mut ledger_tables: Vec<(String, Table)> = Vec::new();
     let mut bank_tables: Vec<(String, Table)> = Vec::new();
-    let mut inbox_items: Vec<(String, Vec<Item>)> = Vec::new();
+    let mut inbox_sources: Vec<InboxSource> = Vec::new();
 
     for path in &paths {
+        if dm_ingest::cancel::cancelled() {
+            return Err(ReconError::Cancelled);
+        }
         let name = path
             .file_name()
             .and_then(|n| n.to_str())
@@ -235,90 +274,40 @@ pub fn load_dir(dir: &Path, cfg: &EngineConfig) -> Result<Dataset, ReconError> {
         let bytes = std::fs::read(path).map_err(|e| ReconError::Io(format!("{name}: {e}")))?;
         ds.inputs
             .insert(name.clone(), hex::encode(Sha256::digest(&bytes)));
-        let parsed = match parse_bytes(&name, &bytes, &InboxContext::default()) {
-            Ok(p) => p,
-            Err(e) => {
-                ds.warnings.push(format!("{name}: {e}"));
-                continue;
+        // One file's failure is that file's warning; the run goes on with the others.
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| read_file(&name, &bytes))) {
+            Ok(outcome) => {
+                ledger_tables.extend(outcome.ledgers);
+                bank_tables.extend(outcome.banks);
+                inbox_sources.extend(outcome.inboxes);
+                ds.warnings.extend(outcome.warnings);
             }
-        };
-        for src in flatten(parsed) {
-            // Entries of an archive follow the same rules as the files of the folder: a
-            // zipped case folder brings its README and answer key along.
-            let base = src.name.rsplit('/').next().unwrap_or(&src.name);
-            if src.name.contains('/') && !is_input_name(base) {
-                continue;
-            }
-            ds.warnings.extend(src.warnings.iter().cloned());
-            let kind = src.sniff.kind;
-            if kind == SourceKind::Zip {
-                // A container: its entries come next, each with its own outcome.
-                continue;
-            }
-            let mut used = false;
-            let mut unused_tables: Vec<&str> = Vec::new();
-            if matches!(
-                kind,
-                SourceKind::TxtInbox | SourceKind::Text | SourceKind::Eml | SourceKind::Mbox
-            ) {
-                // Only e-mails and chat messages make an inbox; notes or a README do not.
-                if src.items.iter().any(is_message) {
-                    inbox_items.push((src.name.clone(), src.items.clone()));
-                    used = true;
-                }
-            } else {
-                for table in &src.tables {
-                    match classify_for(kind, table) {
-                        TableRole::Ledger => {
-                            // A CNAB collection file has one row per movement; the ledger
-                            // wants one per título.
-                            let table = if matches!(kind, SourceKind::Cnab240 | SourceKind::Cnab400)
-                            {
-                                dm_ingest::cnab::titles_view(table)
-                            } else {
-                                table.clone()
-                            };
-                            ledger_tables.push((src.name.clone(), table));
-                        }
-                        TableRole::Bank => bank_tables.push((src.name.clone(), table.clone())),
-                        TableRole::Unknown => {
-                            unused_tables.push(&table.name);
-                            continue;
-                        }
-                    }
-                    used = true;
-                }
-            }
-            if used {
-                if !unused_tables.is_empty() {
-                    ds.warnings.push(format!(
-                        "{}: tabela(s) {} não reconhecida(s) como títulos a receber ou extrato bancário; ficaram fora desta conciliação",
-                        src.name,
-                        unused_tables.join(", ")
-                    ));
-                }
-                continue;
-            }
-            if !src.tables.is_empty() || !src.items.is_empty() {
-                ds.warnings.push(format!(
-                    "{}: lido ({}), mas nada foi reconhecido como títulos a receber, extrato bancário ou caixa de entrada; o arquivo não entrou nesta conciliação",
-                    src.name,
-                    kind.label_ptbr()
-                ));
-            } else if src.warnings.is_empty() {
-                ds.warnings.push(format!(
-                    "{}: nenhum conteúdo aproveitável; o arquivo não entrou nesta conciliação",
-                    src.name
-                ));
-            }
+            Err(_) => ds.warnings.push(format!(
+                "{name}: falha interna ao ler o arquivo; ele ficou fora desta conciliação"
+            )),
         }
     }
+    if dm_ingest::cancel::cancelled() {
+        return Err(ReconError::Cancelled);
+    }
 
-    // Bank first: its dates fix the period and its documents tell which ledger is main.
-    if let Some((file, table)) = bank_tables.first() {
+    // Bank first: its dates fix the period and its documents tell which ledger is main. The
+    // statement is the table with the most lines (ties go to file order).
+    let main_bank = bank_tables
+        .iter()
+        .enumerate()
+        .max_by_key(|(i, (_, t))| (bank_lines(t).len(), std::cmp::Reverse(*i)))
+        .map(|(i, _)| i);
+    if let Some(b) = main_bank {
+        let (file, table) = &bank_tables[b];
         ds.lines = bank_lines(table);
         ds.sources.insert("bank".to_string(), file.clone());
-        for (other, other_table) in bank_tables.iter().skip(1) {
+        for (other, other_table) in bank_tables
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| *i != b)
+            .map(|(_, x)| x)
+        {
             ds.warnings.push(if other == file {
                 format!(
                     "{other}: a tabela {} é um segundo extrato bancário; só a tabela {} entra nesta conciliação",
@@ -362,32 +351,289 @@ pub fn load_dir(dir: &Path, cfg: &EngineConfig) -> Result<Dataset, ReconError> {
     mark_main_ledger(&mut ds);
     resolve_entities(&mut ds);
 
-    for (other, _) in inbox_items.iter().skip(1) {
-        if let Some((first, _)) = inbox_items.first() {
-            ds.warnings.push(format!(
-                "{other}: segunda caixa de entrada; só {first} entra nesta conciliação"
+    // The inbox: every message source together; documents holding messages only when no
+    // message source exists.
+    let messages = inbox_sources.iter().any(|x| x.message);
+    let (chosen, left_out): (Vec<&InboxSource>, Vec<&InboxSource>) =
+        inbox_sources.iter().partition(|x| x.message || !messages);
+    let files: Vec<&str> = chosen.iter().map(|x| x.file.as_str()).collect();
+    for doc in &left_out {
+        ds.warnings.push(format!(
+            "{}: tem mensagens, mas a caixa de entrada desta conciliação vem de {}; o documento ficou fora dela",
+            doc.file,
+            files.join(", ")
+        ));
+    }
+    // `ap_inbox` names the source with the most messages (ties go to file order).
+    if let Some(main) = chosen
+        .iter()
+        .enumerate()
+        .max_by_key(|(i, x)| {
+            (
+                x.items.iter().filter(|it| is_message(it)).count(),
+                std::cmp::Reverse(*i),
+            )
+        })
+        .map(|(_, x)| x)
+    {
+        ds.sources.insert("ap_inbox".to_string(), main.file.clone());
+    }
+    let year = ds.period.map_or(2000, |p| p.end.year());
+    let mut email_runs: Vec<Vec<(Email, Option<String>)>> = Vec::new();
+    let mut chat_runs: Vec<Vec<ChatMessage>> = Vec::new();
+    for x in &chosen {
+        let (emails, raw_chat) = inbox(&x.file, &x.items);
+        email_runs.push(emails);
+        chat_runs.push(
+            raw_chat
+                .into_iter()
+                .filter_map(|c| {
+                    let at = chat_datetime(&c.date, year)?;
+                    Some(ChatMessage {
+                        file: x.file.clone(),
+                        at,
+                        folded: fold_ascii(&c.text),
+                        author: c.author,
+                        text: c.text,
+                    })
+                })
+                .collect(),
+        );
+    }
+    ds.emails = merge_emails(email_runs);
+    let mut seen_chat = HashSet::new();
+    ds.chat = merge_by_time(
+        chat_runs,
+        |c| Some(c.at),
+        |c| format!("{}\u{0}{}\u{0}{}", c.at, c.author, collapsed(&c.folded)),
+    )
+    .into_iter()
+    .filter(|(_, key)| seen_chat.insert(key.clone()))
+    .map(|(c, _)| c)
+    .collect();
+    Ok(ds)
+}
+
+/// Reads one input file: its tables by role, its messages and its warnings.
+fn read_file(name: &str, bytes: &[u8]) -> FileOutcome {
+    let mut out = FileOutcome::default();
+    let ctx = InboxContext::default();
+    let parsed = match parse_bytes(name, bytes, &ctx) {
+        Ok(p) => p,
+        Err(e) => {
+            out.warnings.push(format!("{name}: {e}"));
+            return out;
+        }
+    };
+    for src in flatten(parsed) {
+        // Entries of an archive follow the same rules as the files of the folder: a zipped
+        // case folder brings its README and answer key along.
+        let base = src.name.rsplit('/').next().unwrap_or(&src.name);
+        if src.name.contains('/') && !is_input_name(base) {
+            continue;
+        }
+        out.warnings.extend(src.warnings.iter().cloned());
+        let kind = src.sniff.kind;
+        if matches!(kind, SourceKind::Zip | SourceKind::SevenZ) {
+            // A container: its entries come next, each with its own outcome.
+            continue;
+        }
+        let mut used = false;
+        let mut unused_tables: Vec<&str> = Vec::new();
+        // Tables of any format (a DOCX or an HTML page has them next to its text).
+        for table in &src.tables {
+            match classify_source_table(kind, table) {
+                TableRole::Ledger => {
+                    // A CNAB collection file has one row per movement; the ledger wants one
+                    // per título.
+                    let table = if matches!(kind, SourceKind::Cnab240 | SourceKind::Cnab400) {
+                        dm_ingest::cnab::titles_view(table)
+                    } else {
+                        table.clone()
+                    };
+                    out.ledgers.push((src.name.clone(), table));
+                }
+                TableRole::Bank => out.banks.push((src.name.clone(), table.clone())),
+                TableRole::Unknown => {
+                    unused_tables.push(&table.name);
+                    continue;
+                }
+            }
+            used = true;
+        }
+        // A document's tables that are neither ledger nor statement (an installment plan,
+        // new bank details) are part of what it says: its text is read again with them.
+        let items: Cow<'_, [Item]> = if src.text_parts.is_empty() || unused_tables.is_empty() {
+            Cow::Borrowed(&src.items)
+        } else {
+            let keep: BTreeSet<&str> = unused_tables.iter().copied().collect();
+            let text = dm_ingest::source::document_text(&src.text_parts, |t| keep.contains(t));
+            Cow::Owned(dm_ingest::source::text_items(&text, &src.source_id, &ctx))
+        };
+        // Only e-mails and chat messages make an inbox (a text dump, an .eml, an Outlook
+        // message, a document holding a pasted thread); notes or a README do not.
+        if items.iter().any(is_message) {
+            out.inboxes.push(InboxSource {
+                file: src.name.clone(),
+                message: message_kind(kind),
+                items: items.into_owned(),
+            });
+            used = true;
+        }
+        if used {
+            if !unused_tables.is_empty() {
+                out.warnings.push(format!(
+                    "{}: tabela(s) {} não reconhecida(s) como títulos a receber ou extrato bancário; ficaram fora desta conciliação",
+                    src.name,
+                    unused_tables.join(", ")
+                ));
+            }
+            continue;
+        }
+        if !src.tables.is_empty() || !src.items.is_empty() {
+            out.warnings.push(format!(
+                "{}: lido ({}), mas nada foi reconhecido como títulos a receber, extrato bancário ou caixa de entrada; o arquivo não entrou nesta conciliação",
+                src.name,
+                kind.label_ptbr()
+            ));
+        } else if src.warnings.is_empty() {
+            out.warnings.push(format!(
+                "{}: nenhum conteúdo aproveitável; o arquivo não entrou nesta conciliação",
+                src.name
             ));
         }
     }
-    if let Some((file, items)) = inbox_items.first() {
-        ds.sources.insert("ap_inbox".to_string(), file.clone());
-        let year = ds.period.map_or(2000, |p| p.end.year());
-        let (emails, raw_chat) = inbox(items);
-        ds.emails = emails;
-        ds.chat = raw_chat
-            .into_iter()
-            .filter_map(|c| {
-                let at = chat_datetime(&c.date, year)?;
-                Some(ChatMessage {
-                    at,
-                    folded: fold_ascii(&c.text),
-                    author: c.author,
-                    text: c.text,
-                })
-            })
-            .collect();
+    out
+}
+
+/// Formats made of messages: mailbox and chat dumps, e-mails, Outlook messages.
+fn message_kind(kind: SourceKind) -> bool {
+    matches!(
+        kind,
+        SourceKind::TxtInbox
+            | SourceKind::Text
+            | SourceKind::Eml
+            | SourceKind::Mbox
+            | SourceKind::Msg
+    )
+}
+
+/// Documents written for people, whose tables may be anything.
+fn document_kind(kind: SourceKind) -> bool {
+    matches!(kind, SourceKind::Docx | SourceKind::Odt | SourceKind::Html)
+}
+
+/// [`classify_for`], and a document's table is a statement only with the signs of one.
+fn classify_source_table(kind: SourceKind, t: &Table) -> TableRole {
+    match classify_for(kind, t) {
+        TableRole::Bank if document_kind(kind) && !statement_signs(t) => TableRole::Unknown,
+        role => role,
     }
-    Ok(ds)
+}
+
+/// What a bank statement has and a payment schedule or an invoice table does not: a
+/// credit/debit side, a balance, or [`MIN_DOCUMENT_STATEMENT_LINES`] lines.
+fn statement_signs(t: &Table) -> bool {
+    side_column(t).is_some()
+        || t.columns.iter().any(|c| {
+            c.role == ColumnRole::Amount
+                && matches!(c.subrole.as_deref(), Some("credit" | "debit" | "balance"))
+        })
+        || bank_lines(t).len() >= MIN_DOCUMENT_STATEMENT_LINES
+}
+
+/// The e-mail address of a sender (`Ana <ana@x.com>` → `ana@x.com`), lowercase.
+fn address_of(from: &str) -> String {
+    let inner = from
+        .rsplit_once('<')
+        .and_then(|(_, rest)| rest.split_once('>'))
+        .map_or(from, |(a, _)| a);
+    inner.trim().to_ascii_lowercase()
+}
+
+fn collapsed(s: &str) -> String {
+    s.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// The inbox from every source's e-mails: each source keeps its order, sources interleave by
+/// time, and a message seen before (same Message-ID, or same sender, minute, subject and
+/// body) is not counted twice.
+fn merge_emails(runs: Vec<Vec<(Email, Option<String>)>>) -> Vec<Email> {
+    let mut seen_ids: HashSet<String> = HashSet::new();
+    let mut seen_content: HashSet<String> = HashSet::new();
+    let merged = merge_by_time(
+        runs,
+        |(e, _)| e.at,
+        |(e, _)| {
+            let body = hex::encode(Sha256::digest(collapsed(&fold_ascii(&e.body)).as_bytes()));
+            format!(
+                "{}\u{0}{}\u{0}{}\u{0}{body}",
+                address_of(&e.from),
+                e.at.map(|t| t.format("%Y-%m-%dT%H:%M").to_string())
+                    .unwrap_or_default(),
+                collapsed(&fold_ascii(&e.subject))
+            )
+        },
+    );
+    let mut out = Vec::new();
+    for ((mut e, id), content) in merged {
+        let id = id
+            .map(|i| i.trim().trim_matches(['<', '>']).to_ascii_lowercase())
+            .filter(|i| !i.is_empty());
+        if id.as_ref().is_some_and(|i| seen_ids.contains(i)) || seen_content.contains(&content) {
+            continue;
+        }
+        if let Some(i) = id {
+            seen_ids.insert(i);
+        }
+        seen_content.insert(content);
+        e.n = out.len() + 1;
+        out.push(e);
+    }
+    out
+}
+
+/// Interleaves runs by time: the earliest head goes first (ties to the earlier run), so a run
+/// keeps its own order; a message without a time takes its run's last known time. Returns
+/// each item with its deduplication key, for the caller to drop repeats.
+fn merge_by_time<T, K: Ord + Copy>(
+    runs: Vec<Vec<T>>,
+    time: impl Fn(&T) -> Option<K>,
+    key: impl Fn(&T) -> String,
+) -> Vec<(T, String)>
+where
+    T: Clone,
+{
+    // The time each item sorts by: its own, else the last one before it in its run.
+    let timed: Vec<Vec<(Option<K>, T)>> = runs
+        .into_iter()
+        .map(|run| {
+            let mut last: Option<K> = None;
+            run.into_iter()
+                .map(|item| {
+                    if let Some(t) = time(&item) {
+                        last = Some(t);
+                    }
+                    (last, item)
+                })
+                .collect()
+        })
+        .collect();
+    let mut heads = vec![0usize; timed.len()];
+    let mut out = Vec::new();
+    loop {
+        let next = (0..timed.len())
+            .filter(|r| heads[*r] < timed[*r].len())
+            .min_by_key(|r| (timed[*r][heads[*r]].0, *r));
+        let Some(r) = next else {
+            break;
+        };
+        let item = timed[r][heads[r]].1.clone();
+        heads[r] += 1;
+        let k = key(&item);
+        out.push((item, k));
+    }
+    out
 }
 
 /// True for a file (or archive entry) that is an input of the case: not hidden, not the
@@ -809,7 +1055,8 @@ fn field(item: &Item, name: &str) -> Option<String> {
     item.fields.get(name).map(text_of).filter(|s| !s.is_empty())
 }
 
-fn inbox(items: &[Item]) -> (Vec<Email>, Vec<RawChat>) {
+/// The e-mails of one source (with their Message-ID) and its chat messages, in its order.
+fn inbox(file: &str, items: &[Item]) -> (Vec<(Email, Option<String>)>, Vec<RawChat>) {
     let mut emails = Vec::new();
     let mut chat = Vec::new();
     for item in items {
@@ -824,16 +1071,28 @@ fn inbox(items: &[Item]) -> (Vec<Email>, Vec<RawChat>) {
                 .unwrap_or_default();
             let subject = field(item, "subject").unwrap_or_default();
             let body = field(item, "text").unwrap_or_default();
-            let at = field(item, "date").and_then(|d| email_datetime(&d));
-            emails.push(Email {
-                n: emails.len() + 1,
-                folded: fold_ascii(&format!("{subject}\n{body}")),
-                from,
-                domain,
-                at,
-                subject,
-                body,
-            });
+            // A dump writes `dd/mm/aaaa hh:mm`; an .eml keeps the RFC 2822 header, whose time
+            // the parser already read.
+            let at = field(item, "date")
+                .and_then(|d| email_datetime(&d))
+                .or_else(|| match &item.time {
+                    Some(TimeRef::Instant { at }) => Some(*at),
+                    Some(TimeRef::Date { date }) => date.and_hms_opt(0, 0, 0),
+                    _ => None,
+                });
+            emails.push((
+                Email {
+                    n: emails.len() + 1,
+                    file: file.to_string(),
+                    folded: fold_ascii(&format!("{subject}\n{body}")),
+                    from,
+                    domain,
+                    at,
+                    subject,
+                    body,
+                },
+                field(item, "message_id"),
+            ));
         } else if let (Some(author), Some(date)) = (field(item, "sender"), field(item, "date")) {
             chat.push(RawChat {
                 date,
@@ -930,5 +1189,137 @@ mod tests {
         let at = chat_datetime("19/07 08:33", 2026).unwrap_or_default();
         assert_eq!(at.format("%Y-%m-%dT%H:%M").to_string(), "2026-07-19T08:33");
         assert!(chat_datetime("x", 2026).is_none());
+    }
+
+    fn mail(file: &str, from: &str, at: Option<&str>, subject: &str, body: &str) -> Email {
+        Email {
+            n: 0,
+            file: file.to_string(),
+            from: from.to_string(),
+            domain: String::new(),
+            at: at.and_then(email_datetime),
+            subject: subject.to_string(),
+            body: body.to_string(),
+            folded: fold_ascii(&format!("{subject}\n{body}")),
+        }
+    }
+
+    #[test]
+    fn inboxes_merge_in_time_order_without_repeats() {
+        let dump = vec![
+            (
+                mail(
+                    "caixa.txt",
+                    "a@x.com",
+                    Some("06/07/2026 09:14"),
+                    "NF 1",
+                    "corpo 1",
+                ),
+                None,
+            ),
+            (
+                mail(
+                    "caixa.txt",
+                    "c@x.com",
+                    Some("18/07/2026 16:52"),
+                    "NF 2",
+                    "corpo 2",
+                ),
+                None,
+            ),
+            (
+                mail(
+                    "caixa.txt",
+                    "b@x.com",
+                    Some("09/07/2026 07:41"),
+                    "NF 3",
+                    "corpo 3",
+                ),
+                None,
+            ),
+        ];
+        let loose = vec![
+            // The same as the dump's first, as an .eml: same sender, minute, subject, body.
+            (
+                mail(
+                    "1.eml",
+                    "Ana <A@x.com>",
+                    Some("06/07/2026 09:14"),
+                    "NF 1",
+                    "corpo   1",
+                ),
+                Some("<m1@x.com>".to_string()),
+            ),
+            (
+                mail(
+                    "2.eml",
+                    "d@x.com",
+                    Some("10/07/2026 08:00"),
+                    "NF 4",
+                    "corpo 4",
+                ),
+                Some("<m4@x.com>".to_string()),
+            ),
+            // The same Message-ID again (an mbox copy).
+            (
+                mail(
+                    "c.mbox",
+                    "d@x.com",
+                    Some("10/07/2026 08:00"),
+                    "Fwd",
+                    "outro",
+                ),
+                Some("M4@X.COM".to_string()),
+            ),
+            (mail("2.eml", "e@x.com", None, "sem data", "corpo 5"), None),
+        ];
+        let merged = merge_emails(vec![dump, loose]);
+        let order: Vec<(usize, &str)> = merged.iter().map(|e| (e.n, e.subject.as_str())).collect();
+        // The dump keeps its order (NF 2 before NF 3); the loose ones fit by time; an undated
+        // one follows the message before it in its own file.
+        assert_eq!(
+            order,
+            vec![
+                (1, "NF 1"),
+                (2, "NF 4"),
+                (3, "sem data"),
+                (4, "NF 2"),
+                (5, "NF 3")
+            ]
+        );
+        assert_eq!(address_of("Ana <A@x.com>"), "a@x.com");
+        // One source alone is unchanged.
+        let single = vec![
+            (
+                mail("t", "a@x.com", Some("06/07/2026 09:14"), "1", "a"),
+                None,
+            ),
+            (
+                mail("t", "a@x.com", Some("01/07/2026 09:14"), "2", "b"),
+                None,
+            ),
+        ];
+        let kept: Vec<String> = merge_emails(vec![single])
+            .into_iter()
+            .map(|e| e.subject)
+            .collect();
+        assert_eq!(kept, vec!["1", "2"]);
+    }
+
+    #[test]
+    fn a_cancelled_run_stops_between_files() {
+        use std::sync::atomic::AtomicBool;
+        use std::sync::Arc;
+        let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+        std::fs::write(
+            dir.path().join("a.csv"),
+            "Data;Histórico;Valor\n10/07/2026;PIX;1,00\n",
+        )
+        .unwrap_or_else(|e| panic!("{e}"));
+        let cancelled = dm_ingest::cancel::scope(Arc::new(AtomicBool::new(true)), || {
+            load_dir(dir.path(), &EngineConfig::default())
+        });
+        assert!(matches!(cancelled, Err(ReconError::Cancelled)));
+        assert!(load_dir(dir.path(), &EngineConfig::default()).is_ok());
     }
 }

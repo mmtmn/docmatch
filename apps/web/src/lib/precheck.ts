@@ -7,7 +7,22 @@ import { formatBytes } from './format';
 import { resolveFileCaps, type FileCaps } from './limits';
 
 export type FileKind =
-  'csv' | 'txt' | 'xlsx' | 'pdf' | 'zip' | 'eml' | 'ofx' | 'xml' | 'image' | 'audio' | 'video';
+  | 'csv'
+  | 'txt'
+  | 'xlsx'
+  | 'doc'
+  | 'pdf'
+  | 'zip'
+  | '7z'
+  | 'eml'
+  | 'msg'
+  | 'ofx'
+  | 'xml'
+  | 'json'
+  | 'html'
+  | 'image'
+  | 'audio'
+  | 'video';
 
 export type FileFamily = 'document' | 'media';
 
@@ -46,11 +61,16 @@ export const KIND_LABEL_KEY: Record<FileKind, MessageKey> = {
   csv: 'dropzone.kind_csv',
   txt: 'dropzone.kind_txt',
   xlsx: 'dropzone.kind_xlsx',
+  doc: 'dropzone.kind_doc',
   pdf: 'dropzone.kind_pdf',
   zip: 'dropzone.kind_zip',
+  '7z': 'dropzone.kind_7z',
   eml: 'dropzone.kind_eml',
+  msg: 'dropzone.kind_msg',
   ofx: 'dropzone.kind_ofx',
   xml: 'dropzone.kind_xml',
+  json: 'dropzone.kind_json',
+  html: 'dropzone.kind_html',
   image: 'dropzone.kind_image',
   audio: 'dropzone.kind_audio',
   video: 'dropzone.kind_video',
@@ -75,12 +95,21 @@ const EXTENSIONS: Readonly<Record<string, FileKind>> = {
   xlsm: 'xlsx',
   xls: 'xlsx',
   ods: 'xlsx',
+  docx: 'doc',
+  odt: 'doc',
   pdf: 'pdf',
   zip: 'zip',
+  '7z': '7z',
   eml: 'eml',
   mbox: 'eml',
+  msg: 'msg',
   ofx: 'ofx',
   xml: 'xml',
+  json: 'json',
+  jsonl: 'json',
+  ndjson: 'json',
+  html: 'html',
+  htm: 'html',
   png: 'image',
   jpg: 'image',
   jpeg: 'image',
@@ -108,7 +137,18 @@ const EXTENSIONS: Readonly<Record<string, FileKind>> = {
   avi: 'video',
 };
 
-const TEXT_KINDS: ReadonlySet<FileKind> = new Set(['csv', 'txt', 'eml', 'ofx', 'xml']);
+const TEXT_KINDS: ReadonlySet<FileKind> = new Set([
+  'csv',
+  'txt',
+  'eml',
+  'ofx',
+  'xml',
+  'json',
+  'html',
+]);
+
+/** Container kinds: never trusted by content alone under an unknown extension. */
+const CONTAINER_KINDS: ReadonlySet<FileKind> = new Set(['zip', 'xlsx', 'doc', 'msg', '7z']);
 
 /** Value for `<input type="file" accept>`: every known extension plus the media families. */
 export const ACCEPT_ATTRIBUTE = [
@@ -155,14 +195,26 @@ export function uploadMime(kind: FileKind, name: string, browserType = ''): stri
       if (ext === 'xls') return 'application/vnd.ms-excel';
       if (ext === 'ods') return 'application/vnd.oasis.opendocument.spreadsheet';
       return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    case 'doc':
+      return ext === 'odt'
+        ? 'application/vnd.oasis.opendocument.text'
+        : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
     case 'pdf':
       return 'application/pdf';
     case 'zip':
       return 'application/zip';
+    case '7z':
+      return 'application/x-7z-compressed';
     case 'eml':
       return ext === 'mbox' ? 'application/mbox' : 'message/rfc822';
+    case 'msg':
+      return 'application/vnd.ms-outlook';
     case 'xml':
       return 'application/xml';
+    case 'json':
+      return 'application/json';
+    case 'html':
+      return 'text/html';
     case 'ofx':
       return 'application/x-ofx';
     case 'audio':
@@ -227,24 +279,29 @@ export function looksLikeOfx(text: string): boolean {
 const decoder = new TextDecoder('utf-8', { fatal: false });
 
 /**
- * Identifies the kind from the first bytes. `ext` disambiguates containers (zip → xlsx/zip,
- * mp4 → audio/video). Returns null when the content is not something we accept.
+ * Identifies the kind from the first bytes. `ext` disambiguates containers (zip → xlsx/doc/zip,
+ * CFB → xlsx/msg, mp4 → audio/video). Returns null when the content is not something we accept.
  */
 export function sniffKind(bytes: Uint8Array, ext: string | null): FileKind | null {
   const extKind = ext ? (EXTENSIONS[ext] ?? null) : null;
 
   if (startsWith(bytes, [0x25, 0x50, 0x44, 0x46])) return 'pdf'; // %PDF
+  if (startsWith(bytes, [0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c])) return '7z';
   if (
     startsWith(bytes, [0x50, 0x4b, 0x03, 0x04]) ||
     startsWith(bytes, [0x50, 0x4b, 0x05, 0x06]) ||
     startsWith(bytes, [0x50, 0x4b, 0x07, 0x08])
   ) {
     if (extKind === 'xlsx') return 'xlsx';
+    if (extKind === 'doc') return 'doc'; // DOCX / ODT
     if (extKind === 'zip') return 'zip';
     return null; // other OOXML/zip-based formats are not accepted
   }
   if (startsWith(bytes, [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1])) {
-    return extKind === 'xlsx' ? 'xlsx' : null; // legacy Excel (CFB container)
+    // CFB container: legacy Excel or an Outlook message.
+    if (extKind === 'xlsx') return 'xlsx';
+    if (extKind === 'msg') return 'msg';
+    return null;
   }
   if (startsWith(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) return 'image';
   if (startsWith(bytes, [0xff, 0xd8, 0xff])) return 'image';
@@ -281,15 +338,11 @@ export function sniffKind(bytes: Uint8Array, ext: string | null): FileKind | nul
     const text = decoder.decode(bytes);
     if (looksLikeEmail(text)) return 'eml';
     if (looksLikeOfx(text)) return 'ofx';
-    // NF-e, CT-e and other XML: markup from the first character (after a BOM).
-    if (
-      extKind === 'xml' &&
-      text
-        .replace(/^\uFEFF/, '')
-        .trimStart()
-        .startsWith('<')
-    )
-      return 'xml';
+    // XML (NF-e, CT-e, other data) and HTML: markup from the first character (after a BOM);
+    // JSON / JSON Lines: an object or an array from the first character.
+    const lead = text.replace(/^\uFEFF/, '').trimStart();
+    if ((extKind === 'xml' || extKind === 'html') && lead.startsWith('<')) return extKind;
+    if (extKind === 'json' && (lead.startsWith('{') || lead.startsWith('['))) return 'json';
     if (extKind === 'csv' || extKind === 'txt') return extKind;
     if (extKind === null && ext === null) return 'txt';
     if (extKind === 'eml' || extKind === 'ofx') return 'txt'; // reported as a mismatch below
@@ -359,7 +412,7 @@ export function classify(
   }
   if (extKind === null && ext !== null) {
     // Unknown extension: trust unambiguous content, never containers or plain text.
-    if (detected === 'zip' || detected === 'xlsx' || TEXT_KINDS.has(detected)) {
+    if (CONTAINER_KINDS.has(detected) || TEXT_KINDS.has(detected)) {
       return { reason: 'errors.file_type_unknown', vars: { name } };
     }
   }

@@ -19,6 +19,7 @@ sha2.workspace = true
 hex.workspace = true
 
 [dev-dependencies]
+dm-ingest.workspace = true
 tempfile.workspace = true
 encoding_rs.workspace = true
 zip.workspace = true

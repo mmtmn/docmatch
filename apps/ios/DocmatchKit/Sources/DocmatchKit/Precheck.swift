@@ -5,7 +5,9 @@
 import Foundation
 
 public enum FileKind: String, Sendable, Equatable, CaseIterable {
-    case csv, txt, xlsx, pdf, zip, eml, ofx, xml, image, audio, video
+    case csv, txt, xlsx, doc, pdf, zip
+    case sevenZip = "7z"
+    case eml, msg, ofx, xml, json, html, image, audio, video
 
     /// Audio and video go up as media (a PUT of the file, no hash); everything else as a document.
     public var media: Bool { self == .audio || self == .video }
@@ -48,19 +50,26 @@ public enum Precheck {
         for e in ["csv", "tsv"] { out[e] = .csv }
         for e in ["txt", "text", "md", "log", "ret", "rem", "cnab"] { out[e] = .txt }
         for e in ["xlsx", "xlsm", "xls", "ods"] { out[e] = .xlsx }
+        for e in ["docx", "odt"] { out[e] = .doc }
         out["pdf"] = .pdf
         out["zip"] = .zip
+        out["7z"] = .sevenZip
         out["eml"] = .eml
         out["mbox"] = .eml
+        out["msg"] = .msg
         out["ofx"] = .ofx
         out["xml"] = .xml
+        for e in ["json", "jsonl", "ndjson"] { out[e] = .json }
+        for e in ["html", "htm"] { out[e] = .html }
         for e in ["png", "jpg", "jpeg", "gif", "webp", "heic", "heif", "tif", "tiff", "bmp"] { out[e] = .image }
         for e in ["mp3", "wav", "m4a", "aac", "flac", "ogg", "oga", "opus", "weba"] { out[e] = .audio }
         for e in ["mp4", "m4v", "mov", "webm", "mkv", "avi"] { out[e] = .video }
         return out
     }()
 
-    private static let textKinds: Set<FileKind> = [.csv, .txt, .eml, .ofx, .xml]
+    private static let textKinds: Set<FileKind> = [.csv, .txt, .eml, .ofx, .xml, .json, .html]
+    /// Container kinds: never trusted by content alone under an unknown extension.
+    private static let containerKinds: Set<FileKind> = [.zip, .xlsx, .doc, .msg, .sevenZip]
     private static let audioMime = [
         "mp3": "audio/mpeg", "wav": "audio/wav", "m4a": "audio/mp4", "aac": "audio/aac", "flac": "audio/flac", "ogg": "audio/ogg",
         "oga": "audio/ogg", "opus": "audio/opus", "weba": "audio/webm",
@@ -94,7 +103,7 @@ public enum Precheck {
         }
         if let extKind, extKind != detected { return (nil, mismatch) }
         // Unknown extension: trust unambiguous content, never containers or plain text.
-        if extKind == nil, ext != nil, detected == .zip || detected == .xlsx || textKinds.contains(detected) { return (nil, unknown) }
+        if extKind == nil, ext != nil, containerKinds.contains(detected) || textKinds.contains(detected) { return (nil, unknown) }
         return (detected, nil)
     }
 
@@ -108,10 +117,17 @@ public enum Precheck {
             if ext == "xls" { return "application/vnd.ms-excel" }
             if ext == "ods" { return "application/vnd.oasis.opendocument.spreadsheet" }
             return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        case .doc:
+            if ext == "odt" { return "application/vnd.oasis.opendocument.text" }
+            return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         case .pdf: return "application/pdf"
         case .zip: return "application/zip"
+        case .sevenZip: return "application/x-7z-compressed"
         case .eml: return ext == "mbox" ? "application/mbox" : "message/rfc822"
+        case .msg: return "application/vnd.ms-outlook"
         case .xml: return "application/xml"
+        case .json: return "application/json"
+        case .html: return "text/html"
         case .ofx: return "application/x-ofx"
         case .audio: return ext.flatMap { audioMime[$0] } ?? "audio/mpeg"
         case .video: return ext.flatMap { videoMime[$0] } ?? "video/mp4"
@@ -240,12 +256,19 @@ public enum Precheck {
             return String(bytes[offset..<min(bytes.count, offset + length)].map { Character(Unicode.Scalar($0)) })
         }
         if starts([0x25, 0x50, 0x44, 0x46]) { return .pdf }
+        if starts([0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c]) { return .sevenZip }
         if starts([0x50, 0x4b, 0x03, 0x04]) || starts([0x50, 0x4b, 0x05, 0x06]) || starts([0x50, 0x4b, 0x07, 0x08]) {
             if extKind == .xlsx { return .xlsx }
+            if extKind == .doc { return .doc }  // DOCX / ODT
             if extKind == .zip { return .zip }
             return nil  // other OOXML/zip-based formats are not accepted
         }
-        if starts([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]) { return extKind == .xlsx ? .xlsx : nil }
+        // CFB container: legacy Excel or an Outlook message.
+        if starts([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]) {
+            if extKind == .xlsx { return .xlsx }
+            if extKind == .msg { return .msg }
+            return nil
+        }
         if starts([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]) { return .image }
         if starts([0xff, 0xd8, 0xff]) { return .image }
         if starts([0x47, 0x49, 0x46, 0x38]) { return .image }
@@ -274,9 +297,12 @@ public enum Precheck {
             let text = String(decoding: bytes, as: UTF8.self)
             if looksLikeEmail(text) { return .eml }
             if looksLikeOfx(text) { return .ofx }
-            // NF-e, CT-e and other XML: markup from the first character (after a BOM).
-            let markup = text.hasPrefix("\u{FEFF}") ? String(text.dropFirst()) : text
-            if extKind == .xml, markup.drop(while: { $0.isWhitespace }).hasPrefix("<") { return .xml }
+            // XML (NF-e, CT-e, other data) and HTML: markup from the first character (after a BOM);
+            // JSON / JSON Lines: an object or an array from the first character.
+            let unmarked = text.hasPrefix("\u{FEFF}") ? String(text.dropFirst()) : text
+            let lead = unmarked.drop(while: { $0.isWhitespace })
+            if extKind == .xml || extKind == .html, lead.hasPrefix("<") { return extKind }
+            if extKind == .json, lead.hasPrefix("{") || lead.hasPrefix("[") { return .json }
             if extKind == .csv || extKind == .txt { return extKind }
             if extKind == nil, ext == nil { return .txt }
             if extKind == .eml || extKind == .ofx { return .txt }  // reported as a mismatch

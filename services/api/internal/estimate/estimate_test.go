@@ -478,12 +478,31 @@ func TestRatesAndCalibration(t *testing.T) {
 	if len(reasons) != 1 || reasons[0] != "new_tools" {
 		t.Fatalf("reasons = %v", reasons)
 	}
-	if SourceKind(uploads.Upload{Kind: uploads.KindMedia}) != pb.SourceKind_SOURCE_KIND_MEDIA ||
-		SourceKind(uploads.Upload{DeclaredMime: "text/csv"}) != pb.SourceKind_SOURCE_KIND_TABLE ||
-		SourceKind(uploads.Upload{DeclaredMime: "message/rfc822"}) != pb.SourceKind_SOURCE_KIND_EMAIL ||
-		SourceKind(uploads.Upload{DeclaredMime: "application/zip"}) != pb.SourceKind_SOURCE_KIND_ARCHIVE ||
-		SourceKind(uploads.Upload{DeclaredMime: "application/pdf"}) != pb.SourceKind_SOURCE_KIND_DOCUMENT {
-		t.Fatal("SourceKind")
+	if SourceKind(uploads.Upload{Kind: uploads.KindMedia}) != pb.SourceKind_SOURCE_KIND_MEDIA {
+		t.Fatal("SourceKind media")
+	}
+	kinds := []struct {
+		mime string
+		want pb.SourceKind
+	}{
+		{"text/csv", pb.SourceKind_SOURCE_KIND_TABLE},
+		{"application/vnd.oasis.opendocument.spreadsheet", pb.SourceKind_SOURCE_KIND_TABLE},
+		{"message/rfc822", pb.SourceKind_SOURCE_KIND_EMAIL},
+		{"application/mbox", pb.SourceKind_SOURCE_KIND_EMAIL},
+		{"application/vnd.ms-outlook", pb.SourceKind_SOURCE_KIND_EMAIL},
+		{"application/zip", pb.SourceKind_SOURCE_KIND_ARCHIVE},
+		{"application/x-7z-compressed", pb.SourceKind_SOURCE_KIND_ARCHIVE},
+		{"application/pdf", pb.SourceKind_SOURCE_KIND_DOCUMENT},
+		{"application/vnd.openxmlformats-officedocument.wordprocessingml.document", pb.SourceKind_SOURCE_KIND_DOCUMENT},
+		{"application/vnd.oasis.opendocument.text", pb.SourceKind_SOURCE_KIND_DOCUMENT},
+		{"application/json", pb.SourceKind_SOURCE_KIND_DOCUMENT},
+		{"application/xml", pb.SourceKind_SOURCE_KIND_DOCUMENT},
+		{"text/html", pb.SourceKind_SOURCE_KIND_DOCUMENT},
+	}
+	for _, k := range kinds {
+		if got := SourceKind(uploads.Upload{DeclaredMime: k.mime}); got != k.want {
+			t.Errorf("SourceKind(%s) = %s, esperado %s", k.mime, got, k.want)
+		}
 	}
 	u := uploads.Upload{StorageKey: "quarantine/x", ScanResult: []byte(`{"rebuilt":[{"kind":"extract","bucket":"b","key":"extracts/x"}]}`)}
 	if got := SourceURI(u, func(k string) string { return "s3://orig/" + k }); got != "s3://b/extracts/x" {
