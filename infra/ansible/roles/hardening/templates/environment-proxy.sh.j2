@@ -1,0 +1,8 @@
+# {{ ansible_managed }}
+# Interactive sessions (Session Manager) reach the internet through the egress proxy only.
+export HTTP_PROXY="http://127.0.0.1:{{ hardening_proxy_port }}"
+export HTTPS_PROXY="http://127.0.0.1:{{ hardening_proxy_port }}"
+export http_proxy="$HTTP_PROXY"
+export https_proxy="$HTTPS_PROXY"
+export NO_PROXY="{{ hardening_no_proxy }}"
+export no_proxy="$NO_PROXY"

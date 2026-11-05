@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# {{ ansible_managed }}
+# pgBackRest wrapper: maps the rendered environment onto PGBACKREST_* options. Runs as postgres
+# (archive_command and the backup timer), reading the postgres subset of the rendered env.
+set -euo pipefail
+env_file="/run/docmatch/env.postgres"
+if [[ -r "$env_file" ]]; then
+  # shellcheck disable=SC1090
+  source "$env_file"
+fi
+: "${DM_S3_BACKUPS_BUCKET:?DM_S3_BACKUPS_BUCKET indefinida (docmatch-env.service ainda não rodou?)}"
+: "${AWS_REGION:?AWS_REGION indefinida}"
+export PGBACKREST_REPO1_S3_BUCKET="$DM_S3_BACKUPS_BUCKET"
+export PGBACKREST_REPO1_S3_REGION="$AWS_REGION"
+export PGBACKREST_REPO1_S3_ENDPOINT="s3.${AWS_REGION}.amazonaws.com"
+unset HTTP_PROXY HTTPS_PROXY http_proxy https_proxy
+exec /usr/bin/pgbackrest "$@"

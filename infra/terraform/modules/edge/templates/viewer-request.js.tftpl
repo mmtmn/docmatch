@@ -1,0 +1,105 @@
+// docmatch viewer-request function (CloudFront Functions, JavaScript runtime 2.0).
+// 1. Known scanners and probe paths get an empty 404 before touching any origin.
+// 2. www is redirected to the apex.
+// 3. Static site paths get the Astro directory index appended.
+// 4. The viewer address is written to a header the viewer cannot control (any value it sent is
+//    overwritten). Caddy on the instance derives {client_ip} from it, so fail2ban, CrowdSec and
+//    the API ban or rate-limit the real address, not a spoofed X-Forwarded-For.
+// 5. The origin secret from the key-value store is added as a request header; Caddy on the
+//    instance rejects anything without it, so only CloudFront can talk to the application.
+import cf from 'cloudfront';
+
+var kvs = cf.kvs();
+var APEX = ${apex};
+var WWW = 'www.' + APEX;
+var SECRET_HEADER = ${secret_header};
+var SECRET_KEY = 'origin_secret';
+var VIEWER_IP_HEADER = ${viewer_ip_header};
+var SCANNER_UA = new RegExp(${scanner_regex}, 'i');
+var PROBE_PREFIXES = ${probe_prefixes};
+var PROBE_SUFFIXES = ${probe_suffixes};
+var API_PREFIXES = ${api_prefixes};
+
+function startsWithAny(value, list) {
+  for (var i = 0; i < list.length; i++) {
+    if (value.indexOf(list[i]) === 0) { return true; }
+  }
+  return false;
+}
+
+function endsWithAny(value, list) {
+  for (var i = 0; i < list.length; i++) {
+    var s = list[i];
+    if (value.length >= s.length && value.lastIndexOf(s) === value.length - s.length) { return true; }
+  }
+  return false;
+}
+
+function emptyNotFound() {
+  return { statusCode: 404, statusDescription: 'Not Found', headers: { 'cache-control': { value: 'no-store' } } };
+}
+
+function querySuffix(qs) {
+  var parts = [];
+  for (var key in qs) {
+    if (qs[key].multiValue) {
+      for (var i = 0; i < qs[key].multiValue.length; i++) {
+        parts.push(encodeURIComponent(key) + '=' + encodeURIComponent(qs[key].multiValue[i].value));
+      }
+    } else {
+      parts.push(encodeURIComponent(key) + '=' + encodeURIComponent(qs[key].value));
+    }
+  }
+  return parts.length ? '?' + parts.join('&') : '';
+}
+
+async function handler(event) {
+  var request = event.request;
+  var uri = request.uri;
+  var lower = uri.toLowerCase();
+  var headers = request.headers;
+  var host = headers.host ? headers.host.value.toLowerCase() : '';
+  var ua = headers['user-agent'] ? headers['user-agent'].value : '';
+  var isApi = startsWithAny(lower, API_PREFIXES);
+
+  // Browsers always send a User-Agent; webhook senders and some SDKs do not, so the API is exempt.
+  if (SCANNER_UA.test(ua) || (ua === '' && !isApi)) { return emptyNotFound(); }
+  if (startsWithAny(lower, PROBE_PREFIXES) || endsWithAny(lower, PROBE_SUFFIXES)) { return emptyNotFound(); }
+  if (lower.indexOf('/../') !== -1 || lower.indexOf('%2e%2e') !== -1) { return emptyNotFound(); }
+
+  if (host === WWW) {
+    return {
+      statusCode: 301,
+      statusDescription: 'Moved Permanently',
+      headers: { location: { value: 'https://' + APEX + uri + querySuffix(request.querystring) } }
+    };
+  }
+
+  // Astro writes every page as <dir>/index.html. The root is its own case: '/' + '/index.html'
+  // would be '//index.html', which S3 answers with 404 (and default_root_object no longer
+  // applies once the function has rewritten the URI).
+  if (!isApi) {
+    if (uri === '/') {
+      request.uri = '/index.html';
+    } else if (uri.charAt(uri.length - 1) === '/') {
+      request.uri = uri + 'index.html';
+    } else if (uri.indexOf('.', uri.lastIndexOf('/')) === -1) {
+      request.uri = uri + '/index.html';
+    }
+  }
+
+  // Overwrite, never trust: the viewer may have sent this header itself.
+  if (event.viewer && event.viewer.ip) {
+    headers[VIEWER_IP_HEADER] = { value: event.viewer.ip };
+  } else {
+    delete headers[VIEWER_IP_HEADER];
+  }
+
+  try {
+    var secret = await kvs.get(SECRET_KEY);
+    headers[SECRET_HEADER] = { value: secret };
+  } catch (err) {
+    // Key not written yet: the origin answers 403 and the failure is visible, not silent.
+  }
+  return request;
+}

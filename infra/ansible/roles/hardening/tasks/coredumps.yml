@@ -1,0 +1,27 @@
+---
+- name: Disable core dumps through limits
+  community.general.pam_limits:
+    domain: "*"
+    limit_type: hard
+    limit_item: core
+    value: "0"
+    dest: /etc/security/limits.d/90-docmatch-coredumps.conf
+
+- name: Create the coredump drop-in directory first
+  ansible.builtin.file:
+    path: /etc/systemd/coredump.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Disable core dump storage in systemd
+  ansible.builtin.copy:
+    dest: /etc/systemd/coredump.conf.d/docmatch.conf
+    content: |
+      [Coredump]
+      Storage=none
+      ProcessSizeMax=0
+    owner: root
+    group: root
+    mode: "0644"

@@ -1,0 +1,16 @@
+# {{ ansible_managed }}
+# Break-glass single packet authorization (disabled by default: fwknop-server is masked).
+#
+# To enable on a running instance (never bake keys into the image):
+#   1. On the operator machine: fwknop --key-gen --use-hmac -K client.key  (prints KEY_BASE64 and HMAC_KEY_BASE64)
+#   2. Through Session Manager, replace the placeholders below, set hardening_breakglass_enabled
+#      to true in /etc/docmatch/breakglass (any content), then: systemctl unmask fwknop-server && systemctl start fwknop-server
+#   3. Add the matching WireGuard peer in /etc/wireguard/wg0.conf and start wg-quick@wg0.
+#   4. Open the security group for UDP {{ hardening_fwknop_port }} and {{ hardening_wireguard_port }} from your address only.
+# A valid SPA packet opens UDP {{ hardening_wireguard_port }} for the source address for 60 seconds.
+SOURCE                  ANY
+OPEN_PORTS              udp/{{ hardening_wireguard_port }}
+FW_ACCESS_TIMEOUT       60
+REQUIRE_SOURCE_ADDRESS  Y
+KEY_BASE64              __REPLACE_WITH_KEY_BASE64__
+HMAC_KEY_BASE64         __REPLACE_WITH_HMAC_KEY_BASE64__

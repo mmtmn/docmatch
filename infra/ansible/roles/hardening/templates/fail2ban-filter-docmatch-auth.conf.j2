@@ -1,0 +1,10 @@
+# {{ ansible_managed }}
+# The API (services/api) logs every failed login, token or API-key check to the journal as a
+# structured line containing event=auth.failure and client_ip=<address>.
+[INCLUDES]
+before = common.conf
+
+[Definition]
+failregex = ^.*event=auth\.failure\b.*\bclient_ip=<HOST>\b
+ignoreregex =
+journalmatch = _SYSTEMD_UNIT=docmatch-api.service

@@ -1,0 +1,58 @@
+---
+# Application units. Binaries are deployed later under /opt/docmatch/bin; every unit carries a
+# ConditionPathExists so the image boots cleanly before the first deploy.
+- name: Install the slices and application units
+  ansible.builtin.template:
+    src: "systemd/{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - docmatch.slice
+    - docmatch-go.slice
+    - docmatch-env.service
+    - docmatch-api.service
+    - docmatch-worker.service
+    - docmatch-harness.service
+    - docmatch-pg-init.service
+    - var-lib-postgresql.mount
+    - docmatch-aws-ranges.service
+    - docmatch-aws-ranges.timer
+    - pgbackrest-backup.service
+    - pgbackrest-backup.timer
+  notify: Reload systemd
+
+- name: Install the AWS IP range refresher
+  ansible.builtin.template:
+    src: docmatch-aws-ranges.sh.j2
+    dest: /usr/local/sbin/docmatch-aws-ranges
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Install the pgBackRest schedule wrapper
+  ansible.builtin.template:
+    src: docmatch-pgbackrest-backup.sh.j2
+    dest: /usr/local/sbin/docmatch-pgbackrest-backup
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Enable the timers that run on every role
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    daemon_reload: true
+  loop: [docmatch-aws-ranges.timer]
+
+- name: Keep the application units disabled in the image (user-data enables them per role)
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: false
+  loop:
+    - docmatch-api.service
+    - docmatch-worker.service
+    - docmatch-harness.service
+    - docmatch-pg-init.service
+    - pgbackrest-backup.timer

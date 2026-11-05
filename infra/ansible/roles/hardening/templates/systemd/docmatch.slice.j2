@@ -1,0 +1,8 @@
+# {{ ansible_managed }}
+[Unit]
+Description=docmatch application slice (memory budget of the whole application)
+
+[Slice]
+MemoryMax=900M
+MemoryHigh=800M
+TasksMax=1024

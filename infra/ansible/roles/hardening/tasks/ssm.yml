@@ -1,0 +1,43 @@
+---
+# Session Manager is the only way in. The agent ships as a snap in Canonical's AMIs.
+- name: Check the Session Manager agent snap
+  ansible.builtin.command:
+    cmd: snap list amazon-ssm-agent
+  register: hardening_ssm_snap
+  changed_when: false
+  failed_when: false
+
+- name: Install the Session Manager agent snap when missing
+  community.general.snap:
+    name: amazon-ssm-agent
+    classic: true
+    state: present
+  when: hardening_ssm_snap.rc != 0
+
+- name: Enable the Session Manager agent
+  ansible.builtin.systemd_service:
+    name: snap.amazon-ssm-agent.amazon-ssm-agent.service
+    enabled: true
+
+- name: Point snapd at the egress proxy
+  ansible.builtin.command:
+    cmd: snap set system proxy.https=http://127.0.0.1:{{ hardening_proxy_port }}
+  register: hardening_snap_proxy
+  changed_when: hardening_snap_proxy.rc == 0
+
+- name: Disable snap refresh outside the maintenance window
+  ansible.builtin.command:
+    cmd: snap set system refresh.timer=sat,04:00-05:00
+  register: hardening_snap_refresh
+  changed_when: hardening_snap_refresh.rc == 0
+
+- name: Give the Session Manager user a login shell banner and restricted umask
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/ssm-agent-users
+    content: |
+      # Session Manager break-glass administration. Every command is logged by sudo and auditd.
+      ssm-user ALL=(ALL) NOPASSWD:ALL
+    owner: root
+    group: root
+    mode: "0440"
+    validate: /usr/sbin/visudo -cf %s

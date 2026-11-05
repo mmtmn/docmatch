@@ -1,0 +1,29 @@
+// {{ ansible_managed }}
+// Security updates only, applied daily; reboots (when a kernel or libc needs one) happen in the
+// {{ hardening_reboot_time }} {{ hardening_timezone }} window. Third-party repositories (Caddy,
+// PGDG, CrowdSec, Falco) are upgraded by hand with a new image.
+Unattended-Upgrade::Allowed-Origins {
+    "${distro_id}:${distro_codename}-security";
+    "${distro_id}ESMApps:${distro_codename}-apps-security";
+    "${distro_id}ESM:${distro_codename}-infra-security";
+};
+Unattended-Upgrade::Package-Blacklist {
+};
+Unattended-Upgrade::DevRelease "false";
+Unattended-Upgrade::AutoFixInterruptedDpkg "true";
+Unattended-Upgrade::MinimalSteps "true";
+Unattended-Upgrade::InstallOnShutdown "false";
+Unattended-Upgrade::Mail "root";
+Unattended-Upgrade::MailReport "on-change";
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+Unattended-Upgrade::Remove-New-Unused-Dependencies "true";
+Unattended-Upgrade::Remove-Unused-Dependencies "true";
+Unattended-Upgrade::Automatic-Reboot "true";
+Unattended-Upgrade::Automatic-Reboot-WithUsers "true";
+Unattended-Upgrade::Automatic-Reboot-Time "{{ hardening_reboot_time }}";
+Unattended-Upgrade::SyslogEnable "true";
+Unattended-Upgrade::SyslogFacility "daemon";
+Unattended-Upgrade::Verbose "false";
+Unattended-Upgrade::Debug "false";
+Unattended-Upgrade::OnlyOnACPower "false";
+Unattended-Upgrade::Skip-Updates-On-Metered-Connections "false";

@@ -1,0 +1,49 @@
+---
+# The database itself is initialised by infra/packer/scripts/finalize.sh after SSH removal, so
+# the baseline matches the image that boots. The daily check mails root (sendmail shim).
+- name: Install the docmatch AIDE rules
+  ansible.builtin.template:
+    src: aide-docmatch.conf.j2
+    dest: /etc/aide/aide.conf.d/99_docmatch
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Mail the daily report to root and keep the database read-only to root
+  ansible.builtin.lineinfile:
+    path: /etc/default/aide
+    regexp: '^#?\s*{{ item.key }}='
+    line: "{{ item.key }}={{ item.value }}"
+  loop:
+    - { key: MAILTO, value: root }
+    - { key: QUIETREPORTS, value: "yes" }
+    - { key: COPYNEWDB, value: "no" }
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Schedule the daily check at the maintenance hour
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/dailyaidecheck.timer.d/override.conf
+    content: |
+      [Timer]
+      OnCalendar=
+      OnCalendar={{ hardening_aide_calendar }}
+      RandomizedDelaySec=15m
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Create the AIDE timer drop-in directory first
+  ansible.builtin.file:
+    path: /etc/systemd/system/dailyaidecheck.timer.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Enable the daily check
+  ansible.builtin.systemd_service:
+    name: dailyaidecheck.timer
+    enabled: true
+    daemon_reload: true

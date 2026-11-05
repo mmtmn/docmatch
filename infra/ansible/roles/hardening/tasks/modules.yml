@@ -1,0 +1,16 @@
+---
+- name: Blacklist kernel modules that a server never needs
+  ansible.builtin.template:
+    src: modprobe-blacklist.conf.j2
+    dest: /etc/modprobe.d/docmatch-blacklist.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Rebuild the initramfs
+
+- name: Unload blacklisted modules that are currently loaded
+  community.general.modprobe:
+    name: "{{ item }}"
+    state: absent
+  loop: "{{ hardening_blacklisted_modules }}"
+  failed_when: false

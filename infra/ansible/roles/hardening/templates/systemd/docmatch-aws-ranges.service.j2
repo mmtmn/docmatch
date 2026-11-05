@@ -1,0 +1,13 @@
+# {{ ansible_managed }}
+[Unit]
+Description=docmatch: refresh the nftables sets with the published AWS and CloudFront ranges
+After=network-online.target nftables.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/docmatch-aws-ranges
+NoNewPrivileges=true
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/etc/nftables.d

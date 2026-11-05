@@ -1,0 +1,6 @@
+// {{ ansible_managed }}
+// At runtime nftables lets only the egress proxy out, so apt must use it (the allowlist carries
+// the Ubuntu archives). During the image build the proxy is already running too.
+Acquire::http::Proxy "http://127.0.0.1:{{ hardening_proxy_port }}";
+Acquire::https::Proxy "http://127.0.0.1:{{ hardening_proxy_port }}";
+Acquire::Retries "3";

@@ -1,0 +1,13 @@
+# {{ ansible_managed }}
+[Unit]
+Description=docmatch: weekly ClamAV scan of the root filesystem (no resident daemon)
+
+[Service]
+Type=oneshot
+Nice=19
+IOSchedulingClass=idle
+MemoryMax={{ hardening_mem_clamscan }}
+ExecStart=/bin/sh -c 'clamscan --recursive --infected --exclude-dir="^/(proc|sys|dev|run|snap|var/lib/postgresql|var/lib/clamav)" --move=/var/lib/docmatch/quarantine --log=/var/log/clamav/weekly-scan.log / ; rc=$?; if [ "$rc" -eq 1 ]; then /usr/local/sbin/docmatch-alert --subject "ClamAV: arquivos infectados movidos para quarentena" --stdin < /var/log/clamav/weekly-scan.log; fi; [ "$rc" -ne 2 ]'
+ProtectHome=read-only
+PrivateTmp=true
+NoNewPrivileges=true

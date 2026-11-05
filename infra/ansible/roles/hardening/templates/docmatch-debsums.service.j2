@@ -1,0 +1,14 @@
+# {{ ansible_managed }}
+[Unit]
+Description=docmatch: verify installed package checksums (debsums)
+After=network-online.target
+
+[Service]
+Type=oneshot
+Nice=19
+IOSchedulingClass=idle
+ExecStart=/bin/sh -c 'debsums --changed --silent || /usr/local/sbin/docmatch-alert --subject "debsums: arquivos de pacotes alterados" --stdin < /dev/null'
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true

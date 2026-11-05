@@ -1,0 +1,14 @@
+# {{ ansible_managed }}
+[Unit]
+# Requires= and After= on var-lib-postgresql.mount: the cluster never starts on the AMI's seed
+# copy when the data volume failed to attach or mount. Installed after the build-time validation
+# (the build instance has no data volume).
+RequiresMountsFor=/var/lib/postgresql
+After=docmatch-env.service
+
+[Service]
+MemoryMax={{ hardening_mem_postgres }}
+MemoryHigh=448M
+OOMScoreAdjust=-500
+Restart=on-failure
+RestartSec=5

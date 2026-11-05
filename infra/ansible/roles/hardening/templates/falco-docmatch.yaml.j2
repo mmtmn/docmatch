@@ -1,0 +1,38 @@
+# {{ ansible_managed }}
+# Falco output: JSON to the journal plus the e-mail hook for warning and above.
+json_output: true
+json_include_output_property: true
+json_include_tags_property: true
+priority: warning
+buffered_outputs: false
+outputs:
+  rate: 1
+  max_burst: 100
+stdout_output:
+  enabled: true
+syslog_output:
+  enabled: false
+file_output:
+  enabled: false
+http_output:
+  enabled: false
+program_output:
+  enabled: true
+  keep_alive: false
+  program: "/usr/local/sbin/docmatch-alert --falco"
+rules_files:
+  - /etc/falco/falco_rules.yaml
+  - /etc/falco/falco_rules.local.yaml
+  - /etc/falco/rules.d
+syscall_event_drops:
+  actions:
+    - log
+  rate: 0.03333
+  max_burst: 1
+modern_bpf:
+  cpus_for_each_buffer: 2
+  buf_size_preset: 2
+metrics:
+  enabled: false
+webserver:
+  enabled: false

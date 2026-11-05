@@ -1,0 +1,28 @@
+---
+- name: Refuse anything but Ubuntu 24.04 on arm64
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Ubuntu'
+      - ansible_facts['distribution_version'] is version('24.04', '>=')
+      - ansible_facts['architecture'] == 'aarch64'
+    fail_msg: >-
+      The hardening role targets Ubuntu 24.04 LTS on arm64 (found
+      {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}
+      {{ ansible_facts['architecture'] }}).
+  when: not hardening_skip_platform_check | default(false)
+
+- name: Validate the profile
+  ansible.builtin.assert:
+    that: hardening_profile in ['prod', 'dev']
+    fail_msg: "hardening_profile must be prod or dev"
+
+- name: Wait for cloud-init and any package manager lock
+  ansible.builtin.command:
+    cmd: cloud-init status --wait
+  register: hardening_cloud_init
+  changed_when: false
+  failed_when: false
+
+- name: Set the timezone
+  community.general.timezone:
+    name: "{{ hardening_timezone }}"

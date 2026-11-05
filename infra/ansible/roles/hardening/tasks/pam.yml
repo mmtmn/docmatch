@@ -1,0 +1,99 @@
+---
+- name: Configure password quality
+  ansible.builtin.template:
+    src: pwquality.conf.j2
+    dest: /etc/security/pwquality.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install the faillock PAM profiles
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/usr/share/pam-configs/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [docmatch-faillock, docmatch-faillock-notify]
+
+- name: Enable the faillock profiles
+  ansible.builtin.command:
+    cmd: pam-auth-update --package --enable docmatch-faillock --enable docmatch-faillock-notify
+  register: hardening_pam_auth_update
+  changed_when: "'docmatch-faillock' not in (hardening_pam_auth_update.stdout | default(''))"
+
+- name: Restrict su to the su group
+  ansible.builtin.lineinfile:
+    path: /etc/pam.d/su
+    regexp: '^#?\s*auth\s+required\s+pam_wheel\.so'
+    line: "auth       required   pam_wheel.so use_uid group={{ hardening_su_group }}"
+    insertafter: '^#.*pam_wheel\.so'
+
+- name: Harden login.defs
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: '^#?\s*{{ item.key }}\s'
+    line: "{{ item.key }}\t{{ item.value }}"
+  loop:
+    - { key: PASS_MAX_DAYS, value: "{{ hardening_pass_max_days }}" }
+    - { key: PASS_MIN_DAYS, value: "{{ hardening_pass_min_days }}" }
+    - { key: PASS_WARN_AGE, value: "{{ hardening_pass_warn_age }}" }
+    - { key: UMASK, value: "{{ hardening_umask }}" }
+    - { key: ENCRYPT_METHOD, value: YESCRYPT }
+    - { key: YESCRYPT_COST_FACTOR, value: "7" }
+    - { key: SHA_CRYPT_MIN_ROUNDS, value: "640000" }
+    - { key: SHA_CRYPT_MAX_ROUNDS, value: "640000" }
+    - { key: LOGIN_RETRIES, value: "3" }
+    - { key: LOGIN_TIMEOUT, value: "60" }
+    - { key: USERGROUPS_ENAB, value: "yes" }
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Lock new accounts after 30 days of inactivity
+  ansible.builtin.lineinfile:
+    path: /etc/default/useradd
+    regexp: '^#?\s*INACTIVE='
+    line: "INACTIVE=30"
+
+- name: Set the default umask and shell timeout for interactive sessions
+  ansible.builtin.template:
+    src: profile-docmatch.sh.j2
+    dest: /etc/profile.d/99-docmatch.sh
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Apply the umask to PAM sessions
+  ansible.builtin.lineinfile:
+    path: /etc/pam.d/common-session
+    regexp: '^session\s+optional\s+pam_umask\.so'
+    line: "session optional pam_umask.so umask={{ hardening_umask }}"
+
+- name: Tighten permissions of sensitive files
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    owner: root
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: /etc/shadow, group: shadow, mode: "0640" }
+    - { path: /etc/gshadow, group: shadow, mode: "0640" }
+    - { path: /etc/passwd, group: root, mode: "0644" }
+    - { path: /etc/group, group: root, mode: "0644" }
+    - { path: /etc/sudoers, group: root, mode: "0440" }
+    - { path: /etc/security/pwquality.conf, group: root, mode: "0644" }
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Require a TTY and log sudo usage
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/90-docmatch
+    content: |
+      Defaults use_pty
+      Defaults logfile="/var/log/sudo.log"
+      Defaults timestamp_timeout=5
+      Defaults passwd_tries=3
+    owner: root
+    group: root
+    mode: "0440"
+    validate: /usr/sbin/visudo -cf %s

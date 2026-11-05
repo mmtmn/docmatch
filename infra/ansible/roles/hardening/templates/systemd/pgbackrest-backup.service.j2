@@ -1,0 +1,17 @@
+# {{ ansible_managed }}
+[Unit]
+Description=docmatch: pgBackRest backup to S3 (full on {{ hardening_pgbackrest_full_day }}, differential otherwise)
+After=postgresql@{{ hardening_pg_version }}-{{ hardening_pg_cluster }}.service docmatch-pg-init.service
+Requires=postgresql@{{ hardening_pg_version }}-{{ hardening_pg_cluster }}.service
+
+[Service]
+Type=oneshot
+User=postgres
+Group=postgres
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+ExecStart=/usr/local/sbin/docmatch-pgbackrest-backup
+NoNewPrivileges=true
+ProtectHome=true
+PrivateTmp=true

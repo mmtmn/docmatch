@@ -1,0 +1,25 @@
+# {{ ansible_managed }}
+# docmatch additions to the AIDE configuration: watch the application closely, ignore what
+# changes by design (data volume, rendered environment, caches, logs).
+{{ hardening_app_bin_dir }} R+sha256
+/etc/docmatch R+sha256
+/etc/caddy R+sha256
+/etc/tinyproxy R+sha256
+/etc/nftables.conf R+sha256
+/etc/nftables.d R+sha256
+/etc/postgresql R+sha256
+/etc/systemd/system R+sha256
+/usr/local/sbin R+sha256
+/usr/local/bin R+sha256
+!/var/lib/postgresql
+!/var/lib/docmatch
+!/var/lib/clamav
+!/var/lib/crowdsec
+!/var/lib/fail2ban
+!/var/lib/caddy
+!/var/spool/pgbackrest
+!/var/log/pgbackrest
+!/run
+!/etc/nftables.d/10-aws-ranges.nft
+!/etc/caddy/snippets/denylist.caddy
+!/etc/tinyproxy/filter

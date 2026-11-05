@@ -1,0 +1,8 @@
+---
+# Collections used by the hardening role, pinned. Installed by `make -C infra setup` into the
+# user's collection path and by Packer's galaxy_file before provisioning.
+collections:
+  - name: ansible.posix
+    version: 2.2.2
+  - name: community.general
+    version: 14.0.0

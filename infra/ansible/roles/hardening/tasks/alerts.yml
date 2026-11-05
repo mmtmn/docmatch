@@ -1,0 +1,51 @@
+---
+# There is no MTA on the box. docmatch-alert posts to the Resend API through the egress proxy
+# (RESEND_API_KEY from /run/docmatch/env) and a sendmail shim turns cron/AIDE/rkhunter mail into
+# the same call, so every daily report reaches the alert mailbox.
+- name: Install the alert helper
+  ansible.builtin.copy:
+    src: docmatch-alert.sh
+    dest: /usr/local/sbin/docmatch-alert
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install the sendmail shim for cron mail
+  ansible.builtin.copy:
+    src: sendmail-shim.sh
+    dest: /usr/sbin/sendmail
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install the render-env script from infra/scripts
+  ansible.builtin.copy:
+    src: "{{ hardening_scripts_dir }}/render-env.sh"
+    dest: /usr/local/sbin/docmatch-render-env
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Install the Lynis gate from infra/scripts
+  ansible.builtin.copy:
+    src: "{{ hardening_scripts_dir }}/lynis-gate.sh"
+    dest: /usr/local/sbin/lynis-gate
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Install the weekly Lynis audit units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [docmatch-lynis.service, docmatch-lynis.timer]
+  notify: Reload systemd
+
+- name: Enable the weekly Lynis audit
+  ansible.builtin.systemd_service:
+    name: docmatch-lynis.timer
+    enabled: true
+    daemon_reload: true

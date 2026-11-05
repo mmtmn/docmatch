@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# {{ ansible_managed }}
+# Rebuilds the tinyproxy allowlist from DM_EGRESS_ALLOWLIST (space separated hosts; a host also
+# admits its subdomains) and reloads the proxy. Runs as root after docmatch-env.service.
+set -euo pipefail
+env_file="{{ hardening_env_file }}"
+filter="{{ hardening_proxy_allowlist_file }}"
+[[ -r "$env_file" ]] || { echo "docmatch-egress-allowlist: $env_file ausente" >&2; exit 1; }
+allowlist="$(sed -nE 's/^DM_EGRESS_ALLOWLIST="(.*)"$/\1/p' "$env_file")"
+[[ -n "$allowlist" ]] || { echo "docmatch-egress-allowlist: DM_EGRESS_ALLOWLIST vazia; mantendo a lista atual" >&2; exit 0; }
+tmp="$(mktemp)"
+{
+  echo "# Gerado por docmatch-egress-allowlist em $(date -u +%FT%TZ) a partir de DM_EGRESS_ALLOWLIST"
+  for host in $allowlist; do
+    [[ "$host" =~ ^[a-z0-9.-]+$ ]] || { echo "docmatch-egress-allowlist: host inválido ignorado: $host" >&2; continue; }
+    printf '^([a-z0-9-]+\\.)*%s$\n' "${host//./\\.}"
+  done
+} > "$tmp"
+chown root:{{ hardening_proxy_user }} "$tmp"
+chmod 0640 "$tmp"
+mv -f "$tmp" "$filter"
+systemctl reload tinyproxy 2>/dev/null || systemctl restart tinyproxy
+echo "docmatch-egress-allowlist: $(grep -c '^\^' "$filter") hosts permitidos"

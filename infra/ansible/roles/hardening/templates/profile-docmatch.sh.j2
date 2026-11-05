@@ -1,0 +1,6 @@
+# {{ ansible_managed }}
+# Restrictive umask and an idle timeout for every interactive shell (Session Manager included).
+umask {{ hardening_umask }}
+TMOUT={{ hardening_login_timeout }}
+readonly TMOUT
+export TMOUT

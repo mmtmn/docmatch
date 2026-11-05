@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+# Break-glass inbound rules (fwknop single packet authorization opens WireGuard per source).
+table inet docmatch {
+	chain breakglass {
+{% if hardening_breakglass_enabled %}
+		udp dport {{ hardening_fwknop_port }} accept
+{% else %}
+		# disabled: enable with hardening_breakglass_enabled=true (see /etc/fwknop/access.conf)
+{% endif %}
+	}
+}

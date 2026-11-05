@@ -1,0 +1,12 @@
+# {{ ansible_managed }}
+[Unit]
+Description=docmatch: daily refresh of the AWS range sets
+
+[Timer]
+OnBootSec=10min
+OnCalendar=daily
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

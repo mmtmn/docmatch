@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+# Maintains /var/lib/fail2ban/caddy-denylist.txt and regenerates the Caddy snippet that answers
+# banned client addresses with an empty 404 (docmatch-caddy-denylist reloads Caddy).
+[Definition]
+actionstart = touch /var/lib/fail2ban/caddy-denylist.txt && /usr/local/sbin/docmatch-caddy-denylist
+actionstop = : > /var/lib/fail2ban/caddy-denylist.txt && /usr/local/sbin/docmatch-caddy-denylist
+actioncheck =
+actionban = grep -qxF '<ip>' /var/lib/fail2ban/caddy-denylist.txt || echo '<ip>' >> /var/lib/fail2ban/caddy-denylist.txt; /usr/local/sbin/docmatch-caddy-denylist
+actionunban = sed -i '/^<ip>$/d' /var/lib/fail2ban/caddy-denylist.txt; /usr/local/sbin/docmatch-caddy-denylist
+
+[Init]
