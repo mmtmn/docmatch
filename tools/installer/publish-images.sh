@@ -28,6 +28,9 @@
 # Uso: tools/installer/publish-images.sh [--version 0.1.0] [--registry ghcr.io/dono]
 #        [--platforms linux/amd64,linux/arm64] [--only api,harness,web] [--no-latest] [--dry-run]
 set -euo pipefail
+# Inside a git hook (make ci in pre-push) git exports GIT_DIR: with it, rev-parse --show-toplevel
+# answers the current folder instead of the repository root.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_PREFIX GIT_OBJECT_DIRECTORY
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 root="$(git -C "$here" rev-parse --show-toplevel 2>/dev/null || (cd "$here/../.." && pwd))"
