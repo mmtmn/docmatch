@@ -1,6 +1,6 @@
 [package]
 name = "dm-server"
-description = "docmatch: contrato de serviço do harness (gRPC chega em outro PR)"
+description = "docmatch: servidor gRPC do harness em socket Unix (orçamento, execução com eventos em streaming, saúde)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,12 +11,29 @@ repository.workspace = true
 [lints]
 workspace = true
 
+[[bin]]
+name = "dm-server"
+path = "src/main.rs"
+
 [dependencies]
-dm-core.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-async-trait.workspace = true
+dm-recon.workspace = true
+tonic.workspace = true
+tonic-prost.workspace = true
+prost.workspace = true
+prost-types.workspace = true
+tokio = { workspace = true, features = ["net", "signal"] }
+tokio-stream.workspace = true
 thiserror.workspace = true
+sha2.workspace = true
+hex.workspace = true
+
+[build-dependencies]
+tonic-prost-build.workspace = true
+prost-build.workspace = true
+protoc-bin-vendored.workspace = true
 
 [dev-dependencies]
-tokio.workspace = true
+tempfile.workspace = true
+hyper-util.workspace = true
+tower.workspace = true
+tokio = { workspace = true, features = ["net", "signal", "macros", "rt-multi-thread"] }

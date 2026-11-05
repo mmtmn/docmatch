@@ -23,7 +23,7 @@ token; modelos de linguagem só veem o resíduo, sempre atrás de uma guarda.
 | `dm-report` | esqueleto | Markdown pt-BR, JSON, CSV e XLSX com escape de fórmulas |
 | `dm-eval` | implementado | placar esperado × obtido com diff em pt-BR (títulos casados por arquivo + referência, nunca por id), casos dourados com verificação de determinismo e variações perturbadas contra sobreajuste |
 | `dm-media`, `dm-tools`, `dm-planner` | esqueleto | tipos e estados de mídia, ferramentas geradas e planejamento por estágio |
-| `dm-server` | esqueleto | trait `HarnessService`; o gRPC em socket Unix chega com `harness.proto` |
+| `dm-server` | implementado | servidor gRPC (`harness.proto`) em socket Unix 0600: orçamento, execução com eventos em streaming (etapas, casamentos, achados, resumo), saúde; fontes só `local://` sob `DM_MEDIA_LOCAL_DIR`, com SHA-256 conferido |
 | `dm` | implementado | CLI: `sniff`, `parse`, `validate`, `bizdays`, `probe`, `run`, `eval score`, `eval golden` |
 
 ## Como os dados fluem
@@ -87,6 +87,30 @@ Resultado nos casos dourados (`dm eval golden`): gêmeo público e caso privado 
 O gêmeo também passa em oito variações (linhas embaralhadas, colunas reordenadas,
 Windows-1252, cabeçalhos no outro idioma, coluna vazia, ponto decimal, extrato invertido e
 todas as empresas renomeadas, inclusive nos históricos truncados do extrato).
+
+## O servidor gRPC (`dm-server`)
+
+O worker Go da API conversa com o harness por gRPC em um socket Unix (`DM_HARNESS_SOCKET`,
+modo 0600, mesmo usuário do serviço). Em produção o systemd roda o binário como
+`docmatch-harness --socket /run/docmatch-harness/harness.sock`; em dev:
+
+```bash
+DM_HARNESS_SOCKET=.cache/harness.sock DM_MEDIA_LOCAL_DIR=.cache/media make serve
+```
+
+- **Fontes.** O servidor nunca abre um caminho que a requisição nomeia: só aceita
+  `local://<bucket>/<chave>`, resolve a chave sob `DM_MEDIA_LOCAL_DIR`, canonicaliza (nada de
+  `..` nem link simbólico para fora), limita o tamanho (50 MB) e confere o SHA-256 que o scanner
+  registrou. Esquemas remotos (`s3://`, `r2://`) são recusados: o worker materializa o arquivo
+  antes, e o harness não precisa de rede nem de SDK de nuvem.
+- **Execução.** Cada fonte é copiada para uma pasta privada da execução (nome do arquivo
+  saneado), o motor `dm-recon` roda nela e o fluxo emite etapas, casamentos, achados (código
+  `recon.<tipo>`, evidências com o upload de origem, linha e trecho) e o resumo; a pasta é
+  apagada ao fim. No máximo duas execuções simultâneas; prazo pelo `deadline` das opções.
+- **Tokens.** O trabalho determinístico já foi orçado: o harness cobra o `expected_credits` do
+  orçamento, nunca acima do teto, e a API devolve o resto da reserva.
+- **Estimativa.** Documentos e arquivos a varrer por fonte e, com modelos ligados, os tokens do
+  resíduo; quem precifica é a API.
 
 ## Decisões
 
@@ -155,4 +179,5 @@ DuckDB embutido compila uma vez por máquina; o ambiente pode apontar outro.
   mínimo de 60 caracteres: texto livre curto em inglês passa) pelo papel `guard` de
   `config/models.yaml`.
 - Parsers CNAB 240/400 e texto de PDF (assinaturas prontas em `dm-ingest`).
-- Ligar o `dm-recon` ao `dm-server` (gRPC em socket Unix) e gravar a linhagem no `dm-graph`.
+- Gravar a linhagem no `dm-graph` e expor `explain` pelo gRPC.
+- Materializar fontes `s3://` no worker Go antes de chamar o harness (produção).

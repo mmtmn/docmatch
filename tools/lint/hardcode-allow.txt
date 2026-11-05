@@ -35,3 +35,5 @@ literal:https://(packagecloud\.io/crowdsec/crowdsec/|download\.falco\.org/packag
 literal:https://(awscli\.amazonaws\.com/awscli-exe-linux-|ip-ranges\.amazonaws\.com/ip-ranges\.json)
 # infra: endereços link-local da AWS na instância (resolvedor de DNS da VPC e Amazon Time Sync).
 literal:169\.254\.169\.253|169\.254\.169\.123
+# Domínio reservado .invalid (RFC 2606): nunca resolve; usado como URI fictícia de clientes gRPC em socket Unix.
+literal:https?://[a-z0-9.-]+\.invalid\b

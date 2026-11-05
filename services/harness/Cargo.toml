@@ -99,6 +99,17 @@ duckdb = { version = "1.20000.1", features = ["bundled"] }
 
 # cli
 clap = { version = "4.6.7", features = ["derive"] }
+# grpc (dm-server)
+tonic = "0.14.9"
+tonic-prost = "0.14.9"
+tonic-prost-build = "0.14.9"
+prost = "0.14.4"
+prost-types = "0.14.4"
+prost-build = "0.14.4"
+protoc-bin-vendored = "3.3.0"
+tokio-stream = { version = "0.1.19", features = ["net"] }
+hyper-util = { version = "0.1.21", features = ["tokio"] }
+tower = { version = "0.5.3", features = ["util"] }
 
 # test only
 proptest = "1.12.0"
