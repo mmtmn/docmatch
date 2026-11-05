@@ -13,7 +13,7 @@ WORKSPACE_CRATES := dm-core dm-validators dm-normalize dm-ingest dm-match dm-gra
                     dm-guard dm-llm dm-sandbox dm-report dm-server dm-eval dm-media dm-tools \
                     dm-planner dm
 
-.PHONY: help setup build lint fmt test deny audit ci ci-full clean dev
+.PHONY: help setup build lint fmt test deny audit ci ci-full clean dev serve
 
 help: ## lista os alvos
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -61,3 +61,6 @@ clean: ## remove só os artefatos dos crates deste workspace (o target dir é co
 
 dev: ## compila e mostra a ajuda do CLI `dm`
 	$(CARGO) run -p dm -- --help
+
+serve: ## servidor gRPC do harness no socket de DM_HARNESS_SOCKET (fontes local:// em DM_MEDIA_LOCAL_DIR)
+	cargo run -p dm-server --release
