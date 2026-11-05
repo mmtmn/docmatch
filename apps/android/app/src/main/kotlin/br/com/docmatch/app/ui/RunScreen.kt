@@ -207,6 +207,10 @@ fun RunScreen(vm: RunViewModel) {
                     Text(t("mobile.run_title"), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
                     Text(t("mobile.run_findings", mapOf("count" to s.findings.size)))
                     Text(t("mobile.run_at_risk", mapOf("amount" to Format.money(s.findings.sumOf { it.amountAtRisk }))), fontWeight = FontWeight.SemiBold)
+                    s.run.summary?.sourceWarnings?.takeIf { it.isNotEmpty() }?.let { warnings ->
+                        Text(t("results.source_warnings_title"), fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
+                        warnings.forEach { Text("• $it", style = MaterialTheme.typography.bodySmall) }
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(DmSize.space2)) {
                         OutlinedButton(onClick = { vm.export(context, "xlsx") }) { Text(t("results.export_xlsx")) }
                         OutlinedButton(onClick = { vm.export(context, "csv") }) { Text(t("results.export_csv")) }

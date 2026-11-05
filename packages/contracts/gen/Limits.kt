@@ -28,6 +28,7 @@ object Limits {
         const val CONTACT_MESSAGE: Int = 2000
         const val ADMIN_NOTE: Int = 1000
         const val FINDING_FEEDBACK_NOTE: Int = 500
+        const val SOURCE_WARNING: Int = 500
         const val BLOG_COMMENT: Int = 0
     }
 
@@ -60,6 +61,7 @@ object Limits {
         const val IDEMPOTENCY_KEY_MAX: Int = 128
         const val API_KEY_SCOPES_MAX: Int = 10
         const val FILES_PER_RUN_HARD_MAX: Int = 100
+        const val SOURCE_WARNINGS_PER_RUN: Int = 100
         const val MEDIA_FILES_PER_RUN_HARD_MAX: Int = 50000
     }
 
@@ -83,6 +85,7 @@ object Limits {
         "text.contact_message" to Text.CONTACT_MESSAGE,
         "text.admin_note" to Text.ADMIN_NOTE,
         "text.finding_feedback_note" to Text.FINDING_FEEDBACK_NOTE,
+        "text.source_warning" to Text.SOURCE_WARNING,
         "text.blog_comment" to Text.BLOG_COMMENT,
         "files.uploaded_file_name_bytes" to Files.UPLOADED_FILE_NAME_BYTES,
         "files.document_file_max_mb" to Files.DOCUMENT_FILE_MAX_MB,
@@ -103,6 +106,7 @@ object Limits {
         "ids.idempotency_key_max" to Ids.IDEMPOTENCY_KEY_MAX,
         "ids.api_key_scopes_max" to Ids.API_KEY_SCOPES_MAX,
         "ids.files_per_run_hard_max" to Ids.FILES_PER_RUN_HARD_MAX,
+        "ids.source_warnings_per_run" to Ids.SOURCE_WARNINGS_PER_RUN,
         "ids.media_files_per_run_hard_max" to Ids.MEDIA_FILES_PER_RUN_HARD_MAX,
     )
 }

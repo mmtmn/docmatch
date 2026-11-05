@@ -14,6 +14,7 @@ enum class FileKind(val id: String) {
     ZIP("zip"),
     EML("eml"),
     OFX("ofx"),
+    XML("xml"),
     IMAGE("image"),
     AUDIO("audio"),
     VIDEO("video"),
@@ -52,17 +53,19 @@ object Precheck {
         buildMap {
             listOf("csv", "tsv").forEach { put(it, FileKind.CSV) }
             listOf("txt", "text", "md", "log", "ret", "rem", "cnab").forEach { put(it, FileKind.TXT) }
-            listOf("xlsx", "xlsm", "xls").forEach { put(it, FileKind.XLSX) }
+            listOf("xlsx", "xlsm", "xls", "ods").forEach { put(it, FileKind.XLSX) }
             put("pdf", FileKind.PDF)
             put("zip", FileKind.ZIP)
             put("eml", FileKind.EML)
+            put("mbox", FileKind.EML)
             put("ofx", FileKind.OFX)
+            put("xml", FileKind.XML)
             listOf("png", "jpg", "jpeg", "gif", "webp", "heic", "heif", "tif", "tiff", "bmp").forEach { put(it, FileKind.IMAGE) }
             listOf("mp3", "wav", "m4a", "aac", "flac", "ogg", "oga", "opus", "weba").forEach { put(it, FileKind.AUDIO) }
             listOf("mp4", "m4v", "mov", "webm", "mkv", "avi").forEach { put(it, FileKind.VIDEO) }
         }
 
-    private val textKinds = setOf(FileKind.CSV, FileKind.TXT, FileKind.EML, FileKind.OFX)
+    private val textKinds = setOf(FileKind.CSV, FileKind.TXT, FileKind.EML, FileKind.OFX, FileKind.XML)
     private val audioMime =
         mapOf(
             "mp3" to "audio/mpeg", "wav" to "audio/wav", "m4a" to "audio/mp4", "aac" to "audio/aac", "flac" to "audio/flac",
@@ -103,10 +106,16 @@ object Precheck {
         return when (kind) {
             FileKind.CSV -> if (ext == "tsv") "text/tab-separated-values" else "text/csv"
             FileKind.TXT -> "text/plain"
-            FileKind.XLSX -> if (ext == "xls") "application/vnd.ms-excel" else OOXML
+            FileKind.XLSX ->
+                when (ext) {
+                    "xls" -> "application/vnd.ms-excel"
+                    "ods" -> "application/vnd.oasis.opendocument.spreadsheet"
+                    else -> OOXML
+                }
             FileKind.PDF -> "application/pdf"
             FileKind.ZIP -> "application/zip"
-            FileKind.EML -> "message/rfc822"
+            FileKind.EML -> if (ext == "mbox") "application/mbox" else "message/rfc822"
+            FileKind.XML -> "application/xml"
             FileKind.OFX -> "application/x-ofx"
             FileKind.AUDIO -> audioMime[ext] ?: "audio/mpeg"
             FileKind.VIDEO -> videoMime[ext] ?: "video/mp4"
@@ -264,6 +273,8 @@ object Precheck {
             val text = bytes.decodeToString()
             if (looksLikeEmail(text)) return FileKind.EML
             if (looksLikeOfx(text)) return FileKind.OFX
+            // NF-e, CT-e and other XML: markup from the first character (after a BOM).
+            if (extKind == FileKind.XML && text.removePrefix("\uFEFF").trimStart().startsWith("<")) return FileKind.XML
             if (extKind == FileKind.CSV || extKind == FileKind.TXT) return extKind
             if (extKind == null && ext == null) return FileKind.TXT
             if (extKind == FileKind.EML || extKind == FileKind.OFX) return FileKind.TXT // reported as a mismatch

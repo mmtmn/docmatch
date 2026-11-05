@@ -114,6 +114,16 @@ export function ResultsScreen({ results, onDecision, onExport }: ResultsScreenPr
               {t('results.demo_notice')}
             </p>
           )}
+          {results.sourceWarnings && results.sourceWarnings.length > 0 && (
+            <div className="notice notice--warning small" role="note">
+              <p>{t('results.source_warnings_title')}</p>
+              <ul>
+                {results.sourceWarnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
         <ExportButtons onExport={(format) => void exportAs(format)} status={exportStatus} />
       </header>

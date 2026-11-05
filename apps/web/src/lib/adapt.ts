@@ -110,5 +110,6 @@ export function toResults(run: RunView, findings: FindingView[]): RunResults {
     fileCount: run.sources.length,
     findings: mapped,
     cleanMatches: [],
+    sourceWarnings: run.summary?.source_warnings ?? [],
   };
 }

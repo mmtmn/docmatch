@@ -24,6 +24,7 @@ public enum Limits {
         public static let contactMessage: Int = 2000
         public static let adminNote: Int = 1000
         public static let findingFeedbackNote: Int = 500
+        public static let sourceWarning: Int = 500
         public static let blogComment: Int = 0
     }
 
@@ -56,6 +57,7 @@ public enum Limits {
         public static let idempotencyKeyMax: Int = 128
         public static let apiKeyScopesMax: Int = 10
         public static let filesPerRunHardMax: Int = 100
+        public static let sourceWarningsPerRun: Int = 100
         public static let mediaFilesPerRunHardMax: Int = 50000
     }
 
@@ -81,6 +83,7 @@ public enum Limits {
         "text.contact_message": Text.contactMessage,
         "text.admin_note": Text.adminNote,
         "text.finding_feedback_note": Text.findingFeedbackNote,
+        "text.source_warning": Text.sourceWarning,
         "text.blog_comment": Text.blogComment,
         "files.uploaded_file_name_bytes": Files.uploadedFileNameBytes,
         "files.document_file_max_mb": Files.documentFileMaxMB,
@@ -101,6 +104,7 @@ public enum Limits {
         "ids.idempotency_key_max": IDs.idempotencyKeyMax,
         "ids.api_key_scopes_max": IDs.apiKeyScopesMax,
         "ids.files_per_run_hard_max": IDs.filesPerRunHardMax,
+        "ids.source_warnings_per_run": IDs.sourceWarningsPerRun,
         "ids.media_files_per_run_hard_max": IDs.mediaFilesPerRunHardMax,
     ]
 }

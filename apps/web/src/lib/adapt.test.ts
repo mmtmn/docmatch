@@ -60,6 +60,24 @@ describe('toResults', () => {
     expect(levels).toEqual(['high', 'medium', 'low']);
   });
 
+  it('keeps the per-file warnings of the run summary', () => {
+    const warned = toResults(
+      {
+        ...run,
+        summary: {
+          findings_total: 1,
+          amount_at_risk: 0,
+          lines_total: 0,
+          lines_matched: 0,
+          source_warnings: ['extrato.pdf: PDF sem camada de texto.'],
+        },
+      },
+      [finding],
+    );
+    expect(warned.sourceWarnings).toEqual(['extrato.pdf: PDF sem camada de texto.']);
+    expect(toResults(run, [finding]).sourceWarnings).toEqual([]);
+  });
+
   it('maps duplicates, missing items and dates', () => {
     const kinds = [
       { ...finding, kind: 'duplicate' },

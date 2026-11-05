@@ -67,6 +67,8 @@ export interface RunSummary {
   amount_at_risk: number;
   lines_total: number;
   lines_matched: number;
+  /** Per file, in pt-BR, what did not take part in the reconciliation. */
+  source_warnings?: string[];
 }
 
 export interface RunView {
