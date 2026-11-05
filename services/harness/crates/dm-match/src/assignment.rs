@@ -30,16 +30,18 @@ pub fn assign_one_to_one(costs: &[Vec<i64>], max_cost: i64) -> Vec<Assignment> {
         return Vec::new();
     }
     let n = rows.max(cols);
+    // The solver sums potentials over whole rows and columns, so a huge sentinel such as
+    // FORBIDDEN overflows i64 as soon as a few forbidden or padding cells are in play (the
+    // normal case: more bank lines than titles). Forbidden and padding cells get instead a
+    // cost derived from the real ones, larger than any difference between real assignments,
+    // and real costs are scaled down when even that would not fit.
+    let (scale, big) = solver_costs(costs, n);
     let padded: Vec<Vec<i64>> = (0..n)
         .map(|i| {
             (0..n)
-                .map(|j| {
-                    costs
-                        .get(i)
-                        .and_then(|r| r.get(j))
-                        .copied()
-                        .unwrap_or(FORBIDDEN)
-                        .min(FORBIDDEN)
+                .map(|j| match costs.get(i).and_then(|r| r.get(j)).copied() {
+                    Some(c) if c < FORBIDDEN => c / scale,
+                    _ => big,
                 })
                 .collect()
         })
@@ -61,6 +63,31 @@ pub fn assign_one_to_one(costs: &[Vec<i64>], max_cost: i64) -> Vec<Assignment> {
             })
         })
         .collect()
+}
+
+/// Scale divisor for real costs and the cost given to forbidden and padding cells, chosen so
+/// that `n` times that cost (the largest sum the solver forms) stays far from `i64::MAX`.
+fn solver_costs(costs: &[Vec<i64>], n: usize) -> (i64, i64) {
+    let real_max: i128 = costs
+        .iter()
+        .flatten()
+        .filter(|c| **c < FORBIDDEN)
+        .map(|c| i128::from(c.unsigned_abs()))
+        .max()
+        .unwrap_or(0);
+    let n = i128::try_from(n).unwrap_or(i128::MAX / 8).max(1);
+    let budget = i128::from(i64::MAX / 8);
+    let mut scale: i128 = 1;
+    loop {
+        let bound = real_max / scale;
+        let big = 2 * n * bound + 1;
+        if big.saturating_mul(2 * n) < budget || scale > real_max {
+            let big = i64::try_from(big).unwrap_or(i64::MAX / (8 * 1024));
+            let scale = i64::try_from(scale).unwrap_or(i64::MAX);
+            return (scale, big);
+        }
+        scale *= 2;
+    }
 }
 
 /// Assignment from similarity scores (higher is better): scores below `min_score` are
@@ -182,5 +209,75 @@ mod tests {
                 cost: -3_000
             }]
         );
+    }
+
+    #[test]
+    fn rectangular_and_sparse_matrices_do_not_overflow() {
+        // 3x9 small real costs: six padding rows.
+        let wide: Vec<Vec<i64>> = (0..3)
+            .map(|i| (0..9).map(|j| (i * 9 + j) % 7).collect())
+            .collect();
+        assert_eq!(assign_one_to_one(&wide, i64::MAX).len(), 3);
+        // All forbidden: nothing to assign, no panic.
+        let none = vec![vec![FORBIDDEN; 6]; 6];
+        assert!(assign_one_to_one(&none, i64::MAX).is_empty());
+        // Sparse 20x60 scores: one acceptable pair per row.
+        let scores: Vec<Vec<f64>> = (0..20)
+            .map(|i| {
+                (0..60)
+                    .map(|j| if j == i * 3 { 0.9 } else { 0.0 })
+                    .collect()
+            })
+            .collect();
+        let got = assign_by_scores(&scores, 0.5);
+        assert_eq!(got.len(), 20);
+        assert!(got.iter().all(|a| a.right == a.left * 3));
+    }
+
+    #[test]
+    fn forbidden_cells_are_never_returned() {
+        let costs = vec![
+            vec![FORBIDDEN, 3],
+            vec![FORBIDDEN, FORBIDDEN],
+            vec![1, FORBIDDEN],
+        ];
+        let got = assign_one_to_one(&costs, i64::MAX);
+        assert_eq!(got.len(), 2);
+        assert!(got.iter().all(|a| costs[a.left][a.right] < FORBIDDEN));
+    }
+
+    #[test]
+    fn huge_real_costs_are_scaled_not_overflowed() {
+        let costs = vec![vec![i64::MAX / 8, 1], vec![2, i64::MAX / 8]];
+        let got = assign_one_to_one(&costs, i64::MAX);
+        assert_eq!(got.len(), 2);
+        assert!(got.contains(&Assignment {
+            left: 0,
+            right: 1,
+            cost: 1
+        }));
+    }
+
+    proptest::proptest! {
+        #[test]
+        fn never_panics_on_random_matrices(
+            rows in 0usize..12,
+            cols in 0usize..12,
+            seed in proptest::collection::vec(proptest::prelude::any::<i64>(), 144),
+        ) {
+            let costs: Vec<Vec<i64>> = (0..rows)
+                .map(|i| (0..cols).map(|j| {
+                    let v = seed[i * 12 + j];
+                    if v % 3 == 0 { FORBIDDEN } else { v % 1_000_000 }
+                }).collect())
+                .collect();
+            let got = assign_one_to_one(&costs, i64::MAX);
+            let mut seen_l = std::collections::BTreeSet::new();
+            let mut seen_r = std::collections::BTreeSet::new();
+            for a in &got {
+                proptest::prop_assert!(costs[a.left][a.right] < FORBIDDEN);
+                proptest::prop_assert!(seen_l.insert(a.left) && seen_r.insert(a.right));
+            }
+        }
     }
 }
