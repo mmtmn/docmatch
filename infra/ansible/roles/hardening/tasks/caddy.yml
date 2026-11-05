@@ -104,6 +104,14 @@
     group: root
     mode: "0750"
 
+- name: Create the Caddy drop-in directory first
+  ansible.builtin.file:
+    path: /etc/systemd/system/caddy.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
 - name: Harden the Caddy unit
   ansible.builtin.template:
     src: caddy-override.conf.j2
@@ -112,14 +120,6 @@
     group: root
     mode: "0644"
   notify: Reload systemd
-
-- name: Create the Caddy drop-in directory first
-  ansible.builtin.file:
-    path: /etc/systemd/system/caddy.service.d
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
 
 - name: Validate the Caddyfile
   ansible.builtin.command:

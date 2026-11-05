@@ -21,6 +21,14 @@
   loop_control:
     label: "{{ item.key }}"
 
+- name: Create the AIDE timer drop-in directory first
+  ansible.builtin.file:
+    path: /etc/systemd/system/dailyaidecheck.timer.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
 - name: Schedule the daily check at the maintenance hour
   ansible.builtin.copy:
     dest: /etc/systemd/system/dailyaidecheck.timer.d/override.conf
@@ -33,14 +41,6 @@
     group: root
     mode: "0644"
   notify: Reload systemd
-
-- name: Create the AIDE timer drop-in directory first
-  ansible.builtin.file:
-    path: /etc/systemd/system/dailyaidecheck.timer.d
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
 
 - name: Enable the daily check
   ansible.builtin.systemd_service:

@@ -8,6 +8,15 @@
     FALCO_FRONTEND: noninteractive
     FALCO_DRIVER_CHOICE: modern_ebpf
 
+- name: Create the Falco drop-in directories first
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: [/etc/falco/config.d, /etc/falco/rules.d, /etc/systemd/system/falco-modern-bpf.service.d]
+
 - name: Configure outputs and the e-mail alert hook
   ansible.builtin.template:
     src: falco-docmatch.yaml.j2
@@ -25,15 +34,6 @@
     group: root
     mode: "0640"
   notify: Restart falco
-
-- name: Create the Falco drop-in directories first
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
-  loop: [/etc/falco/config.d, /etc/falco/rules.d, /etc/systemd/system/falco-modern-bpf.service.d]
 
 - name: Limit Falco memory
   ansible.builtin.copy:
