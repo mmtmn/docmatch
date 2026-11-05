@@ -21,6 +21,9 @@ const (
 	HeaderOriginSecret  = "X-DM-Origin-Secret" //nolint:gosec // header name, not a credential
 	HeaderViewerCountry = "CloudFront-Viewer-Country"
 	HeaderViewerAddress = "CloudFront-Viewer-Address"
+	// HeaderRealIP is the viewer address written by the origin proxy (Caddy sets it from the
+	// header the CloudFront function overwrites, never from X-Forwarded-For).
+	HeaderRealIP = "X-Real-IP"
 )
 
 // Unknown is returned when the country cannot be trusted or is absent.
@@ -88,11 +91,16 @@ func (e *Edge) Country(r *http.Request) string {
 	return c
 }
 
-// ClientIP returns the viewer address CloudFront saw when the request is
-// trusted, and the TCP peer address otherwise. An invalid result (no usable
+// ClientIP returns the viewer address when the request is trusted (the
+// origin proxy's X-Real-IP, then CloudFront-Viewer-Address), and the TCP peer
+// address otherwise: behind Caddy that peer is the loopback, which would put
+// every user in the same rate-limit bucket. An invalid result (no usable
 // address anywhere) returns the zero netip.Addr.
 func (e *Edge) ClientIP(r *http.Request) netip.Addr {
 	if e.Trusted(r) {
+		if ip, err := netip.ParseAddr(strings.TrimSpace(r.Header.Get(HeaderRealIP))); err == nil {
+			return ip.Unmap()
+		}
 		if ip, ok := parseViewerAddress(r.Header.Get(HeaderViewerAddress)); ok {
 			return ip
 		}

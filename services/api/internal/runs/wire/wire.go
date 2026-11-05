@@ -10,11 +10,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -111,6 +113,10 @@ func New(ctx context.Context, o Options) (*System, error) {
 	if err != nil {
 		return nil, err
 	}
+	if cfg.Harness.Socket != "" {
+		// The harness reads only local files; remote sources are copied for each call.
+		sys.Harness = &harness.Staged{Client: sys.Harness, Root: cfg.Storage.MediaLocalDir, Open: sys.openRemote}
+	}
 	if cfg.Harness.Socket == "" {
 		log.Warn("DM_HARNESS_SOCKET vazio: estimativas e execuções respondem harness_unavailable (rode o fakeharness ou o harness)")
 	}
@@ -198,6 +204,26 @@ func (s *System) buildStores(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// openRemote opens an s3:// or r2:// source of one of the configured stores
+// for the harness; ok is false for local:// and unknown URIs.
+func (s *System) openRemote(ctx context.Context, uri string) (io.ReadCloser, bool, error) {
+	scheme, rest, ok := strings.Cut(uri, "://")
+	if !ok || scheme == storage.NameLocal {
+		return nil, false, nil
+	}
+	bucket, key, ok := strings.Cut(rest, "/")
+	if !ok || key == "" {
+		return nil, false, nil
+	}
+	for _, st := range []storage.Store{s.Stores.Documents, s.Stores.Media} {
+		if st != nil && st.Name() == scheme && st.Bucket() == bucket {
+			rc, err := st.Open(ctx, key)
+			return rc, true, err
+		}
+	}
+	return nil, false, nil
 }
 
 // Mount returns the route groups for api.Deps.Mount.

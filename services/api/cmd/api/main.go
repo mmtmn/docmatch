@@ -118,7 +118,7 @@ func authStack(cfg *config.Config, log *slog.Logger, pool *pgxpool.Pool) (*auth.
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	edge := geo.New(cfg.OriginSecret.Reveal())
+	edge := geo.New(cfg.OriginSecret.Reveal(), geo.WithHeaderName(cfg.OriginSecretHeader))
 	secure := !cfg.IsDev() || cfg.APIBaseURL.Scheme != "http"
 	sessions := session.NewManager(sessionpg.New(pool), session.Config{Secure: secure, AllowedOrigins: cfg.AllowedOrigins(), ClientIP: edge.ClientIP})
 	store := accountpg.New(pool, inserter)
