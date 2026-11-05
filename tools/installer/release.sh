@@ -73,6 +73,11 @@ fi
 base="${base%/}"
 # Rendered with sed below: only plain URL characters.
 [[ "$base" =~ ^https?://[A-Za-z0-9._~:/-]+$ ]] || die "base inválida: $base"
+# The binary downloads its updates from this base: a real release is https only (a dry-run may
+# point at a local test server).
+if [[ $dry_run -eq 0 && ! "$base" =~ ^https:// ]]; then
+  die "a base de um release precisa ser https: $base"
+fi
 
 out="${out:-$here/dist/$version}"
 rm -rf "$out"

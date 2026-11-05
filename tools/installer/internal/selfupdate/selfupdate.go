@@ -16,13 +16,16 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/mmtmn/docmatch/tools/installer/internal/docker"
+	"github.com/mmtmn/docmatch/tools/installer/internal/text"
 )
 
 // MaxBinary bounds a download (the binaries are ~10 MB).
@@ -72,11 +75,12 @@ func (OSFS) Chmod(name string, mode fs.FileMode) error { return os.Chmod(name, m
 
 // Errors the caller explains.
 var (
-	ErrNoBase   = errors.New("sem base de download")
-	ErrChecksum = errors.New("checksum não confere")
-	ErrVersion  = errors.New("o binário baixado não é a versão anunciada")
+	ErrNoBase   = errors.New(text.T("update.err_no_base"))
+	ErrInsecure = errors.New(text.T("update.err_https"))
+	ErrChecksum = errors.New(text.T("update.err_checksum"))
+	ErrVersion  = errors.New(text.T("update.err_version"))
 	// ErrStranded: on Windows neither the new binary nor the old one is in place.
-	ErrStranded = errors.New("nem o binário novo nem o antigo ficaram no lugar")
+	ErrStranded = errors.New(text.T("update.err_stranded"))
 )
 
 // Updater replaces Exe with a release from Base.
@@ -90,6 +94,9 @@ type Updater struct {
 	FS      FS
 	// Probe runs a downloaded binary with --version and returns what it printed.
 	Probe func(ctx context.Context, path string) (string, error)
+	// AllowLoopbackHTTP lets the tests serve a release over http on 127.0.0.1 (httptest);
+	// anything else must be https, redirects included.
+	AllowLoopbackHTTP bool
 }
 
 // Outcome of an update.
@@ -98,11 +105,39 @@ type Outcome struct {
 	Updated  bool // false: already at To
 }
 
-func (u *Updater) client() *http.Client {
-	if u.HTTP != nil {
-		return u.HTTP
+// allowed reports whether raw may be fetched: https only (the binary replaces this one).
+func (u *Updater) allowed(raw string) bool {
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Host == "" {
+		return false
 	}
-	return &http.Client{Timeout: 5 * time.Minute}
+	if parsed.Scheme == "https" {
+		return true
+	}
+	if !u.AllowLoopbackHTTP || parsed.Scheme != "http" {
+		return false
+	}
+	ip := net.ParseIP(parsed.Hostname())
+	return parsed.Hostname() == "localhost" || ip != nil && ip.IsLoopback()
+}
+
+// client is the caller's client (or a default one) refusing redirects that leave https.
+func (u *Updater) client() *http.Client {
+	c := &http.Client{Timeout: 5 * time.Minute}
+	if u.HTTP != nil {
+		copied := *u.HTTP
+		c = &copied
+	}
+	c.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return errors.New(text.T("update.err_redirects"))
+		}
+		if !u.allowed(req.URL.String()) {
+			return fmt.Errorf("%w: %s", ErrInsecure, req.URL.Redacted())
+		}
+		return nil
+	}
+	return c
 }
 
 func (u *Updater) get(ctx context.Context, url string) (*http.Response, error) {
@@ -116,7 +151,7 @@ func (u *Updater) get(ctx context.Context, url string) (*http.Response, error) {
 	}
 	if res.StatusCode != http.StatusOK {
 		_ = res.Body.Close()
-		return nil, fmt.Errorf("%s respondeu %d", url, res.StatusCode)
+		return nil, errors.New(text.T("update.err_status", "url", url, "code", res.StatusCode))
 	}
 	return res, nil
 }
@@ -136,6 +171,9 @@ func (u *Updater) base() (string, error) {
 	if b == "" {
 		return "", ErrNoBase
 	}
+	if !u.allowed(b) {
+		return "", fmt.Errorf("%w: %s", ErrInsecure, b)
+	}
 	return b, nil
 }
 
@@ -151,7 +189,7 @@ func (u *Updater) Latest(ctx context.Context) (string, error) {
 	}
 	v = strings.TrimPrefix(strings.TrimSpace(v), "v")
 	if v == "" || strings.ContainsAny(v, " /\\\n") {
-		return "", fmt.Errorf("VERSION.txt inválido em %s", b)
+		return "", errors.New(text.T("update.err_version_file", "base", b))
 	}
 	return v, nil
 }
@@ -218,7 +256,7 @@ func (u *Updater) Update(ctx context.Context, version string, force bool, say fu
 	}
 	want := Expected(sums, name)
 	if want == "" {
-		return out, fmt.Errorf("%s não está no SHA256SUMS.txt de %s", name, b)
+		return out, errors.New(text.T("update.err_not_listed", "name", name, "base", b))
 	}
 	say(name)
 	tmp, err := u.download(ctx, b+"/"+name, want)
@@ -234,16 +272,16 @@ func (u *Updater) Update(ctx context.Context, version string, force bool, say fu
 	if u.Probe != nil {
 		got, err := u.Probe(ctx, tmp)
 		if err != nil {
-			return out, fmt.Errorf("o binário novo não rodou: %w", err)
+			return out, fmt.Errorf("%s: %w", text.T("update.err_probe"), err)
 		}
 		if strings.TrimSpace(got) != "docmatch "+version {
-			return out, fmt.Errorf("%w: esperava docmatch %s, ele diz %q", ErrVersion, version, strings.TrimSpace(got))
+			return out, fmt.Errorf("%w: %s", ErrVersion, text.T("update.err_probe_says", "want", version, "got", strings.TrimSpace(got)))
 		}
 	}
 	if err := u.Replace(tmp); err != nil {
 		if errors.Is(err, ErrStranded) {
 			keep = true // the only good binary left: say where it is
-			return out, fmt.Errorf("%w; o binário novo está em %s", err, tmp)
+			return out, fmt.Errorf("%w; %s", err, text.T("update.err_new_at", "path", tmp))
 		}
 		return out, err
 	}
@@ -266,7 +304,7 @@ func (u *Updater) download(ctx context.Context, url, want string) (string, error
 	}
 	f, err := u.FS.CreateTemp(filepath.Dir(u.Exe), pattern)
 	if err != nil {
-		return "", fmt.Errorf("sem permissão para escrever ao lado de %s: %w", u.Exe, err)
+		return "", fmt.Errorf("%s: %w", text.T("update.err_write", "path", u.Exe), err)
 	}
 	h := sha256.New()
 	n, err := io.Copy(io.MultiWriter(f, h), io.LimitReader(res.Body, MaxBinary+1))
@@ -274,11 +312,11 @@ func (u *Updater) download(ctx context.Context, url, want string) (string, error
 		err = cerr
 	}
 	if err == nil && n > MaxBinary {
-		err = fmt.Errorf("%s passa de %d MB", url, MaxBinary>>20)
+		err = errors.New(text.T("update.err_too_big", "url", url, "max", MaxBinary>>20))
 	}
 	if err == nil {
 		if got := hex.EncodeToString(h.Sum(nil)); got != want {
-			err = fmt.Errorf("%w (esperado %s, obtido %s); nada foi trocado", ErrChecksum, want, got)
+			err = fmt.Errorf("%w %s", ErrChecksum, text.T("update.err_mismatch", "want", want, "got", got))
 		}
 	}
 	if err == nil && u.GOOS != "windows" {
@@ -302,11 +340,11 @@ func (u *Updater) Replace(newPath string) error {
 	old := OldPath(u.Exe)
 	_ = u.FS.Remove(old) // a leftover of an earlier update
 	if err := u.FS.Rename(u.Exe, old); err != nil {
-		return fmt.Errorf("não consegui tirar %s do caminho: %w", u.Exe, err)
+		return fmt.Errorf("%s: %w", text.T("update.err_move_aside", "path", u.Exe), err)
 	}
 	if err := u.FS.Rename(newPath, u.Exe); err != nil {
 		if rerr := u.FS.Rename(old, u.Exe); rerr != nil {
-			return fmt.Errorf("%w: %w; e o antigo não voltou de %s: %w", ErrStranded, err, old, rerr)
+			return fmt.Errorf("%w: %w; %s: %w", ErrStranded, err, text.T("update.err_not_back", "path", old), rerr)
 		}
 		return err
 	}

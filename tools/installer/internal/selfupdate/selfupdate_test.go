@@ -164,7 +164,7 @@ func updater(t *testing.T, base, goos string, m *memFS) *Updater {
 	}
 	m.files[exe] = []byte("binário antigo 0.1.0")
 	m.locked[exe] = true
-	return &Updater{Base: base, Current: "0.1.0", Exe: exe, GOOS: goos, GOARCH: "amd64", FS: m, Probe: probe(m)}
+	return &Updater{Base: base, Current: "0.1.0", Exe: exe, GOOS: goos, GOARCH: "amd64", FS: m, Probe: probe(m), AllowLoopbackHTTP: true}
 }
 
 func TestAssetName(t *testing.T) {

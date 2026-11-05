@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -26,8 +27,9 @@ import (
 // Runner runs the outside commands the detection needs (a fake in tests).
 type Runner interface {
 	LookPath(name string) (string, error)
-	// Output runs name with args inside dir ("" = a folder without go.mod, so `go version`
-	// reports the local toolchain) and returns the trimmed combined output.
+	// Output runs name with args inside dir ("" = ProbeDir: private, without go.mod, so `go
+	// version` reports the local toolchain and nobody else's configuration is read) and returns
+	// the trimmed combined output.
 	Output(ctx context.Context, dir, name string, args ...string) (string, error)
 }
 
@@ -41,7 +43,7 @@ func (System) LookPath(name string) (string, error) { return exec.LookPath(name)
 func (System) Output(ctx context.Context, dir, name string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, name, args...) //nolint:gosec // fixed tools with our own arguments
 	if dir == "" {
-		dir = os.TempDir()
+		dir = ProbeDir()
 	}
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "NO_COLOR=1", "PAGER=cat", "LC_ALL=C")
@@ -60,6 +62,24 @@ type Env struct {
 	Runner    Runner
 	// Exists reports whether a path exists (PATH augmentation); os.Stat by default.
 	Exists func(path string) bool
+	// Glob lists files (apt's package lists); filepath.Glob by default.
+	Glob func(pattern string) ([]string, error)
+}
+
+// join builds a path of the target system: commands for Linux and macOS take forward slashes
+// whatever machine the plan is computed on (the tests run on Windows too).
+func (e Env) join(elem ...string) string {
+	if e.Info.OS == "windows" {
+		return filepath.Join(elem...)
+	}
+	return path.Join(elem...)
+}
+
+func (e Env) clean(p string) string {
+	if e.Info.OS == "windows" {
+		return filepath.Clean(p)
+	}
+	return path.Clean(p)
 }
 
 func (e Env) runner() Runner {
@@ -104,6 +124,7 @@ var (
 	toolDirective = regexp.MustCompile(`(?m)^toolchain\s+(go\S+)\s*$`)
 	channelLine   = regexp.MustCompile(`(?m)^\s*channel\s*=\s*"([^"]+)"`)
 	semverish     = regexp.MustCompile(`(\d+(?:\.\d+){0,2})`)
+	exactVersion  = regexp.MustCompile(`^\d+\.\d+\.\d+$`)
 )
 
 // ReadRequirements reads the checkout's pins, keeping the defaults for what it cannot read.
@@ -147,7 +168,11 @@ func ReadRequirements(source string) Requirements {
 				r.PNPMMin = v
 			}
 			if name, v, ok := strings.Cut(pkg.PackageManager, "@"); ok && name == "pnpm" {
-				r.PNPM, _, _ = strings.Cut(v, "+") // "11.5.3+sha512..." -> "11.5.3"
+				// Only a plain version reaches `npm install pnpm@<v>`: "npm:other", a tarball or
+				// a git spec would install anything. "11.5.3+sha512..." -> "11.5.3".
+				if v, _, _ = strings.Cut(v, "+"); exactVersion.MatchString(v) {
+					r.PNPM = v
+				}
 			}
 		}
 	}

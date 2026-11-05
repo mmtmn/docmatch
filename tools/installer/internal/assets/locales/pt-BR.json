@@ -744,7 +744,9 @@
       "note_xcode": "O xcode-select abre uma janela: conclua a instalação nela antes de verificar de novo.",
       "note_docker_desktop": "Abra o Docker Desktop uma vez e espere ele ficar pronto.",
       "note_wsl_restart": "O wsl --install pode pedir para reiniciar o Windows.",
-      "note_docker_wsl": "No Docker Desktop, ligue Settings > Resources > WSL integration para o Ubuntu."
+      "note_docker_wsl": "No Docker Desktop, ligue Settings > Resources > WSL integration para o Ubuntu.",
+      "wsl_no_distro": "instalado, mas sem nenhuma distribuição Linux",
+      "note_apt_lists": "As listas do apt estão vazias (WSL ou máquina nova): este primeiro passo só as atualiza. Depois o instalador verifica de novo e mostra o resto do plano com o que o apt de fato instala."
     },
     "ports": {
       "web": "site",
@@ -795,7 +797,7 @@
       "migrate": "Migrações",
       "services": "Harness, API, worker e site",
       "dev_clone": "Clonar o repositório",
-      "dev_setup": "make setup",
+      "dev_setup": "Preparar o repositório (make setup-local)",
       "dev_local": "make local",
       "verify": "Conferir API e site",
       "demo": "Conciliar o gêmeo da Vantara",
@@ -960,7 +962,30 @@
       "uninstall_dir_kept_unsafe": "{dir} fica: não parece só uma pasta de instalação da docmatch",
       "uninstall_source_kept": "o código em {dir} fica (é o seu checkout)",
       "uninstall_binary_done": "{path} removido",
-      "uninstall_done": "docmatch desinstalada. Se você pôs a pasta do binário no PATH, pode tirá-la."
+      "uninstall_done": "docmatch desinstalada. Se você pôs a pasta do binário no PATH, pode tirá-la.",
+      "uninstall_local_down_failed": "o make local-down falhou",
+      "uninstall_no_pg_volume": "o tools/dev/compose.yaml não tem o volume postgres-data",
+      "uninstall_yes": "s (--yes)"
+    },
+    "update": {
+      "err_no_base": "sem base de download",
+      "err_https": "a base de download e os redirecionamentos precisam ser https",
+      "err_redirects": "redirecionamentos demais",
+      "err_checksum": "checksum não confere",
+      "err_version": "o binário baixado não é a versão anunciada",
+      "err_stranded": "nem o binário novo nem o antigo ficaram no lugar",
+      "err_status": "{url} respondeu {code}",
+      "err_version_file": "VERSION.txt inválido em {base}",
+      "err_not_listed": "{name} não está no SHA256SUMS.txt de {base}",
+      "err_probe": "o binário novo não rodou",
+      "err_probe_says": "esperava docmatch {want}, ele diz \"{got}\"",
+      "err_new_at": "o binário novo está em {path}",
+      "err_write": "sem permissão para escrever ao lado de {path}",
+      "err_too_big": "{url} passa de {max} MB",
+      "err_mismatch": "(esperado {want}, obtido {got}); nada foi trocado",
+      "err_move_aside": "não consegui tirar {path} do caminho",
+      "err_not_back": "e o antigo não voltou de {path}",
+      "err_later_path": "não dá para agendar a remoção de um caminho com % ou aspas: {path}"
     }
   }
 }
