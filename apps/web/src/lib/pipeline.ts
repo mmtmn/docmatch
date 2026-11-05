@@ -5,7 +5,8 @@ import { apiUrl } from './env';
 import { t } from './i18n';
 import type { AcceptedFile } from './precheck';
 
-export type UploadStatus = 'pending' | 'scanning' | 'clean' | 'rejected' | 'infected' | 'deleted';
+/** openapi UploadStatus: `ready` is a file that passed the security scan. */
+export type UploadStatus = 'pending' | 'scanning' | 'ready' | 'rejected' | 'expired';
 
 export interface UploadView {
   id: string;
@@ -169,7 +170,7 @@ export async function uploadFile(
     await sleep(SCAN_POLL_MS, signal);
     view = await api<UploadView>(path, { body: {}, ...(signal ? { signal } : {}) });
   }
-  if (view.status !== 'clean') {
+  if (view.status !== 'ready') {
     throw new ApiError(
       422,
       'upload_rejected',

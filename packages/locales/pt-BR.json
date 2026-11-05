@@ -16,7 +16,8 @@
     "main_navigation": "Navegação principal",
     "footer_navigation": "Links do rodapé",
     "logo_label": "docmatch — página inicial",
-    "menu_open": "Abrir menu"
+    "menu_open": "Abrir menu",
+    "account": "Minha conta"
   },
   "landing": {
     "title": "Concilie qualquer documento.",
@@ -204,7 +205,41 @@
     "code_sent": "Enviamos um código e um link de acesso para {email}. Eles valem por 15 minutos.",
     "verify": "Entrar",
     "change_email": "Usar outro e-mail",
-    "google_unavailable": "O login com Google ainda não está disponível."
+    "google_unavailable": "O login com Google ainda não está disponível.",
+    "dev_sign_in": "Entrar sem conta (ambiente local)",
+    "dev_signing_in": "Entrando no ambiente local…",
+    "none_available": "O login ainda não está disponível nesta instalação. Tente de novo mais tarde.",
+    "apple_unavailable": "O login com Apple ainda não está disponível.",
+    "login_title": "Entrar na docmatch",
+    "login_text": "A mesma conta vale no site e nos apps Android e iOS.",
+    "magic_title": "Confirmando seu acesso…",
+    "magic_failed": "Não foi possível confirmar o link: {message}",
+    "magic_back": "Voltar para o login",
+    "error_oauth_state_mismatch": "O login expirou ou foi aberto em outra aba. Tente de novo.",
+    "error_oauth_provider_error": "O provedor recusou o login. Tente de novo.",
+    "error_oauth_email_unverified": "Seu e-mail nesse provedor não está verificado.",
+    "error_account_suspended": "Esta conta está suspensa.",
+    "error_account_deletion_pending": "Esta conta está em processo de exclusão.",
+    "error_service_unavailable": "Esse login ainda não está disponível.",
+    "error_generic": "Não foi possível entrar. Tente de novo."
+  },
+  "account": {
+    "title": "Minha conta",
+    "loading": "Carregando sua conta…",
+    "profile": "Perfil",
+    "name_label": "Nome",
+    "email_label": "E-mail",
+    "credits": "Créditos",
+    "credits_available": "{available} tokens disponíveis",
+    "devices": "Aparelhos conectados",
+    "devices_text": "Cada navegador e cada app em que você entrou, todos na mesma conta. Encerre os que você não reconhece.",
+    "this_device": "Este aparelho",
+    "last_seen": "Último acesso: {when}",
+    "revoke": "Encerrar",
+    "revoke_label": "Encerrar a sessão de {name}",
+    "revoked": "Sessão encerrada.",
+    "sign_out": "Sair deste aparelho",
+    "signed_out": "Você saiu. Entre de novo para ver sua conta."
   },
   "app": {
     "uploading": "Enviando {done} de {total} arquivo(s)…",

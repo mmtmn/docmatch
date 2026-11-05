@@ -44,13 +44,13 @@ describe('pipeline', () => {
       )
       .mockResolvedValueOnce(new Response(null, { status: 204 }))
       .mockResolvedValueOnce(json(202, { id: 'upl_1', file_name: 'a.csv', status: 'scanning' }))
-      .mockResolvedValueOnce(json(200, { id: 'upl_1', file_name: 'a.csv', status: 'clean' }));
+      .mockResolvedValueOnce(json(200, { id: 'upl_1', file_name: 'a.csv', status: 'ready' }));
     const scanning = vi.fn();
     const done = uploadFile(accepted('a.csv', 'x;y\n1;2\n'), scanning);
     // Hashing resolves on a real event-loop turn, so wait for the scan wait to start first.
     await vi.waitFor(() => expect(scanning).toHaveBeenCalledWith('a.csv'));
     await vi.advanceTimersByTimeAsync(1000);
-    await expect(done).resolves.toMatchObject({ id: 'upl_1', status: 'clean' });
+    await expect(done).resolves.toMatchObject({ id: 'upl_1', status: 'ready' });
     const create = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string) as Record<
       string,
       unknown

@@ -1,14 +1,14 @@
 // Wires the HeroForm to the API when the build knows its address (PUBLIC_DM_API_BASE_URL):
-// sign-in when needed, upload and scan each file, one confirmation with the estimate, then the
-// run's results page. Without an API the demo providers (PUBLIC_DM_FEATURE_RESULTS) or the plain
-// form are used.
+// sign-in when needed (silently, on a development API that offers the local sign-in), upload and
+// scan each file, one confirmation with the estimate, then the run's results page. Without an
+// API the demo providers (PUBLIC_DM_FEATURE_RESULTS) or the plain form are used.
 import { useCallback, useRef, useState } from 'react';
 import { apiConfigured } from '../lib/api';
 import { featureResults } from '../lib/env';
 import { t } from '../lib/i18n';
 import { mockQuoteProvider, mockRuleOptions } from '../lib/mock/quote';
 import { createRun, estimate, uploadFile, type RunOptionsInput } from '../lib/pipeline';
-import { currentUser } from '../lib/session';
+import { currentUser, signInLocally } from '../lib/session';
 import { AuthDialog } from './AuthDialog';
 import { HeroForm, type RunRequest } from './HeroForm';
 import styles from './HeroApp.module.css';
@@ -61,7 +61,8 @@ function LiveHero() {
   const onSubmit = useCallback(
     async (request: RunRequest) => {
       try {
-        if (!(await currentUser())) {
+        const me = (await currentUser()) ?? (await signInLocally());
+        if (!me) {
           pending.current = request;
           setAuthOpen(true);
           return;

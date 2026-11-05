@@ -6,7 +6,7 @@ SHELL := /usr/bin/env bash
 SUBSYSTEMS := packages/contracts services/api services/harness apps/web apps/admin infra \
               sdks/python sdks/typescript sdks/go sdks/rust
 
-.PHONY: help setup hooks dev ci ci-full lint test e2e clean
+.PHONY: help setup hooks dev ci ci-full lint test e2e clean local local-down e2e-local
 
 # Binário do harness usado pelo e2e (mesmo target dir do Makefile do harness).
 HARNESS_TARGET ?= $(or $(CARGO_TARGET_DIR),$(HOME)/.cache/docmatch/cargo-target)
@@ -24,6 +24,16 @@ setup: hooks ## instala ferramentas locais de cada subsistema
 
 dev: ## sobe o ambiente local (Postgres, MinIO, Mailpit, stripe-mock, modelo local) e os apps
 	@if [ -f tools/dev/up.sh ]; then tools/dev/up.sh; else echo "tools/dev/up.sh ainda não existe"; fi
+
+local: ## docmatch inteiro nesta máquina, sem chave nem login: Postgres, harness, API, worker e site
+	tools/dev/local.sh up
+
+local-down: ## para o que o make local subiu
+	tools/dev/local.sh down
+
+e2e-local: ## make local + Playwright no fluxo real (envio, estimativa, execução, resultados, conta)
+	tools/dev/local.sh up
+	cd apps/web && pnpm exec playwright test -c playwright.local.config.ts
 
 ci: ## portão completo antes de push (< 6 min)
 	@tools/ci/run.sh ci
