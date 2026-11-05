@@ -25,6 +25,7 @@ export const LIMITS = {
     contact_message: 2000,
     admin_note: 1000,
     finding_feedback_note: 500,
+    source_warning: 500,
     blog_comment: 0,
   },
   /** File, upload and archive limits. Plan limits in config/pricing.yaml are always at or below these. */
@@ -54,6 +55,7 @@ export const LIMITS = {
     idempotency_key_max: 128,
     api_key_scopes_max: 10,
     files_per_run_hard_max: 100,
+    source_warnings_per_run: 100,
     media_files_per_run_hard_max: 50000,
   },
 } as const;
@@ -81,6 +83,7 @@ export type LimitKey =
   | 'text.contact_message'
   | 'text.admin_note'
   | 'text.finding_feedback_note'
+  | 'text.source_warning'
   | 'text.blog_comment'
   | 'files.uploaded_file_name_bytes'
   | 'files.document_file_max_mb'
@@ -101,6 +104,7 @@ export type LimitKey =
   | 'ids.idempotency_key_max'
   | 'ids.api_key_scopes_max'
   | 'ids.files_per_run_hard_max'
+  | 'ids.source_warnings_per_run'
   | 'ids.media_files_per_run_hard_max';
 
 /** Every limit by dotted key. */
@@ -121,6 +125,7 @@ export const LIMIT_BY_KEY: Readonly<Record<LimitKey, number>> = {
   'text.contact_message': 2000,
   'text.admin_note': 1000,
   'text.finding_feedback_note': 500,
+  'text.source_warning': 500,
   'text.blog_comment': 0,
   'files.uploaded_file_name_bytes': 255,
   'files.document_file_max_mb': 50,
@@ -141,6 +146,7 @@ export const LIMIT_BY_KEY: Readonly<Record<LimitKey, number>> = {
   'ids.idempotency_key_max': 128,
   'ids.api_key_scopes_max': 10,
   'ids.files_per_run_hard_max': 100,
+  'ids.source_warnings_per_run': 100,
   'ids.media_files_per_run_hard_max': 50000,
 };
 

@@ -71,6 +71,14 @@ struct RunView: View {
                 Text(texts.t("mobile.run_findings", ["count": findings.count]))
                 Text(texts.t("mobile.run_at_risk", ["amount": Format.money(findings.reduce(0) { $0 + $1.amountAtRisk })]))
                     .bold()
+                if let warnings = run.summary?.sourceWarnings, !warnings.isEmpty {
+                    Text(texts.t("results.source_warnings_title"))
+                        .bold()
+                        .foregroundStyle(Color(DmColors.statusDanger))
+                    ForEach(warnings, id: \.self) { warning in
+                        Text("• " + warning).font(.caption)
+                    }
+                }
                 HStack {
                     Button(texts.t("results.export_xlsx")) { export("xlsx") }
                     Button(texts.t("results.export_csv")) { export("csv") }

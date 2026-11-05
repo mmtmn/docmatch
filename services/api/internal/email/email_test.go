@@ -300,3 +300,29 @@ func TestTemplatesAndJobs(t *testing.T) {
 		t.Fatalf("backoff: %v %v %v", Backoff(1), Backoff(3), Backoff(20))
 	}
 }
+
+func TestRunFinishedMessage(t *testing.T) {
+	t.Parallel()
+	started := time.Date(2026, 11, 5, 14, 3, 0, 0, time.FixedZone("BRT", -3*3600))
+	link := "https://example.com/resultados?run=run_01JBXKAH4M0N5P6Q7R8S9T0V1W&x=<b>"
+	done := RunFinishedMessage("ana@example.com", RunFinishedData{Link: link, Completed: true, StartedAt: started})
+	if done.Validate() != nil || done.Tag != TagRunFinished || done.Subject != "Sua conciliação terminou" {
+		t.Fatalf("concluída: %+v", done)
+	}
+	if !strings.Contains(done.Text, "05/11/2026 17:03 UTC terminou") || !strings.Contains(done.Text, link) || strings.Contains(done.Text, "tokens") {
+		t.Fatalf("texto da concluída: %s", done.Text)
+	}
+	if !strings.Contains(done.HTML, `href="https://example.com/resultados?run=run_01JBXKAH4M0N5P6Q7R8S9T0V1W&amp;x=&lt;b&gt;"`) || !strings.Contains(done.HTML, "Ver os resultados") {
+		t.Fatalf("HTML sem o link escapado: %s", done.HTML)
+	}
+	failed := RunFinishedMessage("ana@example.com", RunFinishedData{Link: link, StartedAt: started})
+	if failed.Subject != "Sua conciliação não terminou" || !strings.Contains(failed.Text, "parou antes de terminar") || !strings.Contains(failed.Text, "voltaram para o seu saldo") {
+		t.Fatalf("falha: %+v", failed)
+	}
+	if !strings.Contains(failed.HTML, "Ver o que aconteceu") {
+		t.Fatalf("HTML da falha: %s", failed.HTML)
+	}
+	if err := RunFinishedMessage("não é e-mail", RunFinishedData{Link: link}).Validate(); !errors.Is(err, ErrInvalidTo) {
+		t.Fatal("destinatário inválido precisa falhar na validação")
+	}
+}

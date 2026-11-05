@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # {{ ansible_managed }}
 # Installs an application release from the releases bucket: the binaries in
-# {{ hardening_app_bin_dir }} and pricing.yaml/models.yaml in {{ hardening_app_config_dir }}, after
+# {{ hardening_app_bin_dir }} and pricing.yaml/models.yaml/throughput.yaml in {{ hardening_app_config_dir }}, after
 # checking every file against the release's SHA256SUMS. "current" resolves the pointer that
 # infra/scripts/deploy-app.sh writes after each successful deploy, so a replacement instance boots
 # with the release that was running. Services are not restarted here; the caller decides.
@@ -39,5 +39,7 @@ for b in docmatch-api docmatch-worker docmatch-migrate docmatch-harness; do
   mv -f "{{ hardening_app_bin_dir }}/$b.new" "{{ hardening_app_bin_dir }}/$b"
 done
 install -m 0644 -o root -g root pricing.yaml models.yaml {{ hardening_app_config_dir }}/
+# Releases before throughput.yaml existed do not carry it (the API then quotes without timing).
+if [[ -f throughput.yaml ]]; then install -m 0644 -o root -g root throughput.yaml {{ hardening_app_config_dir }}/; fi
 printf '%s\n' "$release" > "{{ hardening_app_bin_dir }}/../RELEASE"
 log "release $release instalada"

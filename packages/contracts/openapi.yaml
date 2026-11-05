@@ -842,6 +842,9 @@ paths:
       description: |
         Devolve um orçamento assinado (`Quote`) com o custo esperado, o teto e o detalhamento.
         Não gasta créditos. O orçamento vale por `quote_ttl_minutes` (config/pricing.yaml).
+        Traz também a duração esperada (`expected_seconds`, fila incluída) e `large`: nenhum
+        pedido é recusado pelo tamanho; um pedido grande avisa quanto deve levar, e quem o iniciou
+        recebe um e-mail quando ele terminar.
       tags: [runs]
       requestBody:
         required: true
@@ -3324,6 +3327,15 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/RuleId"
+        source_warnings:
+          type: array
+          maxItems: 100
+          x-limit: ids.source_warnings_per_run
+          description: Em pt-BR, por arquivo, o que não entrou na conciliação (PDF digitalizado, carteira sem títulos em aberto, arquivo não reconhecido).
+          items:
+            type: string
+            maxLength: 500
+            x-limit: text.source_warning
       additionalProperties: false
     RunError:
       type: object

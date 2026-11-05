@@ -216,6 +216,33 @@ fn line_findings(ds: &Dataset, cascade: &Cascade, out: &[TitleOutcome]) -> Vec<F
             }
             if a.withholding.is_positive() {
                 let rate = lo.withholding_rate.unwrap_or_default();
+                let (title, explanation) = if t.kind.is_empty() {
+                    (
+                        format!(
+                            "Diferença de {}% em título sem tipo informado: possível {} retido",
+                            ptbr::pct(rate),
+                            withheld_tax(rate)
+                        ),
+                        format!(
+                            "{} não diz se é de serviço e entrou com {} a menos; confirme o tipo da nota e peça o comprovante de retenção antes de baixar a diferença.",
+                            t.reference,
+                            a.withholding.format_brl()
+                        ),
+                    )
+                } else {
+                    (
+                        format!(
+                            "Diferença de {}% em nota de serviço: provável {} retido",
+                            ptbr::pct(rate),
+                            withheld_tax(rate)
+                        ),
+                        format!(
+                            "{} é de serviço e entrou com {} a menos; peça o comprovante de retenção antes de baixar a diferença.",
+                            t.reference,
+                            a.withholding.format_brl()
+                        ),
+                    )
+                };
                 f.push(finding(
                     section::LINES,
                     n,
@@ -224,16 +251,8 @@ fn line_findings(ds: &Dataset, cascade: &Cascade, out: &[TitleOutcome]) -> Vec<F
                     "medium",
                     a.withholding,
                     vec![bank(n), title_ref(ds, a.title)],
-                    format!(
-                        "Diferença de {}% em nota de serviço: provável {} retido",
-                        ptbr::pct(rate),
-                        withheld_tax(rate)
-                    ),
-                    format!(
-                        "{} é de serviço e entrou com {} a menos; peça o comprovante de retenção antes de baixar a diferença.",
-                        t.reference,
-                        a.withholding.format_brl()
-                    ),
+                    title,
+                    explanation,
                 ));
             }
             for (d, of) in cascade.duplicate_of.iter().enumerate() {

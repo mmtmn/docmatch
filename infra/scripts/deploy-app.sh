@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Builds the application for the instance (linux/arm64), publishes it to the releases bucket and
 # installs it on the app instance over SSM Run Command (no SSH anywhere): binaries in the role's
-# bin dir, pricing.yaml and models.yaml in its config dir, migrations, then a restart of the
+# bin dir, pricing.yaml, models.yaml and throughput.yaml in its config dir (the API finds
+# throughput.yaml next to pricing.yaml), migrations, then a restart of the
 # harness, the API and the worker with a health check. The bucket comes from the Terraform
 # outputs, the instance from its tags and the paths from the hardening role's defaults, so
 # nothing here is typed twice.
@@ -71,8 +72,8 @@ if [[ $skip_build -eq 0 ]]; then
   dm_log "compilando a release $release (linux/arm64)"
   make -s -C "$root/services/api" release RELEASE_DIR="$out" VERSION="$release"
   make -s -C "$root/services/harness" release RELEASE_DIR="$out"
-  install -m 0644 "$root/config/pricing.yaml" "$root/config/models.yaml" "$out/"
-  (cd "$out" && sha256sum docmatch-api docmatch-worker docmatch-migrate docmatch-harness pricing.yaml models.yaml > SHA256SUMS)
+  install -m 0644 "$root/config/pricing.yaml" "$root/config/models.yaml" "$root/config/throughput.yaml" "$out/"
+  (cd "$out" && sha256sum docmatch-api docmatch-worker docmatch-migrate docmatch-harness pricing.yaml models.yaml throughput.yaml > SHA256SUMS)
 fi
 
 bucket="$(terraform -chdir="$env_dir" output -raw releases_bucket_name)"
@@ -122,6 +123,8 @@ for b in docmatch-api docmatch-worker docmatch-migrate docmatch-harness; do
   mv -f '$bin_dir/'"\$b.new" '$bin_dir/'"\$b"
 done
 install -m 0644 -o root -g root pricing.yaml models.yaml '$config_dir/'
+# Releases before throughput.yaml existed (rollbacks) do not carry it.
+if [[ -f throughput.yaml ]]; then install -m 0644 -o root -g root throughput.yaml '$config_dir/'; fi
 systemctl restart docmatch-env.service
 db_url="\$(sed -n 's/^DATABASE_URL="\(.*\)"\$/\1/p' '$env_file')"
 [[ "\$db_url" =~ ^postgres(ql)?://([^:/@]+):[^@]*@[^/]+/([^?]+) ]] || { echo "DATABASE_URL fora do formato esperado"; exit 1; }

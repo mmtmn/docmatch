@@ -12,6 +12,7 @@ const (
 	TagLogin       = "login"
 	TagExportReady = "export_ready"
 	TagDeletion    = "deletion_scheduled"
+	TagRunFinished = "run_finished"
 )
 
 // LoginData fills the login e-mail.
@@ -127,4 +128,41 @@ Recebemos o pedido de exclusão da sua conta na docmatch. A conta e todos os dad
 <p>— docmatch</p>
 </body></html>`, html.EscapeString(when), html.EscapeString(extra))
 	return Message{To: to, Subject: "Pedido de exclusão da conta recebido", Text: text, HTML: htmlBody, Tag: TagDeletion}
+}
+
+// RunFinishedData fills the e-mail sent when a long run ends. It carries no
+// content of the run (no file names, findings or amounts): only when it was
+// started and the link to its results, which asks for the session.
+type RunFinishedData struct {
+	// Link opens the results page of the run.
+	Link string
+	// Completed is false when the run failed.
+	Completed bool
+	// StartedAt is when the person started the run.
+	StartedAt time.Time
+}
+
+// RunFinishedMessage tells the person a long run completed or failed.
+func RunFinishedMessage(to string, d RunFinishedData) Message {
+	when := d.StartedAt.UTC().Format("02/01/2006 15:04") + " UTC"
+	subject, outcome, action, extra := "Sua conciliação terminou", "terminou", "Ver os resultados", ""
+	if !d.Completed {
+		subject, outcome, action = "Sua conciliação não terminou", "parou antes de terminar", "Ver o que aconteceu"
+		extra = " Os tokens reservados para ela voltaram para o seu saldo."
+	}
+	text := fmt.Sprintf(`Olá,
+
+A conciliação que você iniciou em %s %s.%s %s:
+
+%s
+
+— docmatch
+`, when, outcome, extra, action, d.Link)
+	htmlBody := fmt.Sprintf(`<!doctype html><html lang="pt-BR"><body style="font-family:system-ui,sans-serif;line-height:1.5;color:#111">
+<p>Olá,</p>
+<p>A conciliação que você iniciou em %s %s.%s</p>
+<p><a href="%s">%s</a></p>
+<p>— docmatch</p>
+</body></html>`, html.EscapeString(when), html.EscapeString(outcome), html.EscapeString(extra), html.EscapeString(d.Link), html.EscapeString(action))
+	return Message{To: to, Subject: subject, Text: text, HTML: htmlBody, Tag: TagRunFinished}
 }

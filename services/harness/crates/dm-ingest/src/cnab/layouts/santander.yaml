@@ -1,0 +1,19 @@
+# Santander (033) — "Layout de Cobrança CNAB 400 posições", arquivo retorno, registro de
+# detalhe tipo 1. O nome do sacado não é lido: a posição não foi confirmada.
+bank: "033"
+name: Santander
+source: "Santander, layout de cobrança CNAB 400 posições (retorno, detalhe tipo 1)"
+detail_records: ["1"]
+fields:
+  uso_empresa: [38, 62]
+  nosso_numero: [63, 70]
+  tarifa: [176, 188]
+  outras_despesas: [189, 201]
+  iof: [215, 227]
+  outros_creditos: [280, 292]
+  data_credito: [296, 301]
+occurrences:
+  "02": [Entrada confirmada, aberto]
+  "03": [Entrada rejeitada, rejeitado]
+  "06": [Liquidação normal, liquidado]
+  "09": [Baixa automática, baixado]

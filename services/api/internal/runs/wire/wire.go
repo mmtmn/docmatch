@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -24,8 +25,10 @@ import (
 	"github.com/mmtmn/docmatch/services/api/internal/config"
 	"github.com/mmtmn/docmatch/services/api/internal/credits"
 	dbpgstore "github.com/mmtmn/docmatch/services/api/internal/db/pgstore"
+	"github.com/mmtmn/docmatch/services/api/internal/email/emailpg"
 	"github.com/mmtmn/docmatch/services/api/internal/estimate"
 	"github.com/mmtmn/docmatch/services/api/internal/estimate/pricing"
+	"github.com/mmtmn/docmatch/services/api/internal/estimate/throughput"
 	"github.com/mmtmn/docmatch/services/api/internal/harness"
 	"github.com/mmtmn/docmatch/services/api/internal/httpx"
 	"github.com/mmtmn/docmatch/services/api/internal/jobs"
@@ -53,20 +56,22 @@ type Options struct {
 
 // System is the assembled pipeline.
 type System struct {
-	Store     *pgstore.Store
-	Stores    storage.Stores
-	Local     *storage.LocalStore
-	Harness   harness.Client
-	Pricing   *pricing.Pricing
-	Audit     *audit.Service
-	Credits   *credits.Service
-	Broker    *sse.Broker
-	Jobs      *jobargs.LazyEnqueuer
-	Uploads   *uploads.Service
-	Estimates *estimate.Service
-	Rules     *rules.Service
-	Workflows *workflows.Service
-	Runs      *runs.Service
+	Store   *pgstore.Store
+	Stores  storage.Stores
+	Local   *storage.LocalStore
+	Harness harness.Client
+	Pricing *pricing.Pricing
+	// Throughput times quotes; nil when no throughput.yaml was found.
+	Throughput *throughput.Config
+	Audit      *audit.Service
+	Credits    *credits.Service
+	Broker     *sse.Broker
+	Jobs       *jobargs.LazyEnqueuer
+	Uploads    *uploads.Service
+	Estimates  *estimate.Service
+	Rules      *rules.Service
+	Workflows  *workflows.Service
+	Runs       *runs.Service
 
 	cfg  *config.Config
 	log  *slog.Logger
@@ -102,6 +107,9 @@ func New(ctx context.Context, o Options) (*System, error) {
 		return nil, err
 	}
 	sys.Pricing = pr
+	if sys.Throughput, err = loadThroughput(cfg, log); err != nil {
+		return nil, err
+	}
 	signer, err := estimate.NewSigner(cfg.Signing.QuoteHMACKey.Reveal())
 	if err != nil {
 		return nil, err
@@ -132,7 +140,7 @@ func New(ctx context.Context, o Options) (*System, error) {
 	if err != nil {
 		return nil, err
 	}
-	sys.Estimates, err = estimate.New(estimate.Deps{Store: sys.Store, Harness: sys.Harness, Pricing: pr, Signer: signer, Sources: sys.Uploads, Limits: o.Limits, Audit: sys.Audit, Logger: log})
+	sys.Estimates, err = estimate.New(estimate.Deps{Store: sys.Store, Harness: sys.Harness, Pricing: pr, Throughput: sys.Throughput, Signer: signer, Sources: sys.Uploads, Limits: o.Limits, Audit: sys.Audit, Logger: log})
 	if err != nil {
 		return nil, err
 	}
@@ -144,9 +152,16 @@ func New(ctx context.Context, o Options) (*System, error) {
 	if err != nil {
 		return nil, err
 	}
+	// The end-of-run e-mail goes through the e-mail outbox in the transaction
+	// that finishes the run; without a sender configured it waits there.
+	mailInserter, err := emailpg.NewInserter(o.Pool)
+	if err != nil {
+		return nil, err
+	}
 	sys.Runs, err = runs.New(runs.Deps{
 		Store: sys.Store, Uploads: sys.Uploads, Estimates: sys.Estimates, Rules: sys.Rules, Credits: sys.Credits, Jobs: sys.Jobs,
-		Harness: sys.Harness, Broker: sys.Broker, Idem: sys.Store, Limits: o.Limits, Audit: sys.Audit, Outbox: sys.Store, Logger: log,
+		Harness: sys.Harness, Broker: sys.Broker, Idem: sys.Store, Limits: o.Limits, Audit: sys.Audit, Outbox: sys.Store,
+		Mailer: emailpg.NewTxMailer(mailInserter), ResultsURL: ResultsURL(cfg.PublicBaseURL), Logger: log,
 	})
 	if err != nil {
 		return nil, err
@@ -275,6 +290,40 @@ func (s *System) Close() {
 	if s.Harness != nil {
 		_ = s.Harness.Close()
 	}
+}
+
+// ResultsPath is the web page with the results of a run (apps/web/src/pages/resultados).
+const ResultsPath = "/resultados"
+
+// ResultsURL renders DM_PUBLIC_BASE_URL + ResultsPath?run=<id>; nil without a
+// base URL (the end-of-run e-mail then stays off).
+func ResultsURL(base *url.URL) func(runID string) string {
+	if base == nil {
+		return nil
+	}
+	return func(runID string) string {
+		u := *base
+		u.Path = strings.TrimRight(u.Path, "/") + ResultsPath
+		u.RawPath, u.Fragment = "", ""
+		u.RawQuery = url.Values{"run": {runID}}.Encode()
+		return u.String()
+	}
+}
+
+// loadThroughput reads DM_THROUGHPUT_FILE, which must load when set. Unset,
+// it looks for throughput.yaml next to the pricing table (the release
+// installs both there); a missing file only turns the timing of quotes off.
+func loadThroughput(cfg *config.Config, log *slog.Logger) (*throughput.Config, error) {
+	if path := cfg.Billing.ThroughputFile; path != "" {
+		return throughput.Load(resolveFile(path))
+	}
+	path := filepath.Join(filepath.Dir(resolveFile(cfg.Billing.PricingFile)), config.ThroughputFileName)
+	tp, err := throughput.Load(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		log.Warn("throughput.yaml ausente: orçamentos sem tempo esperado nem e-mail de execução longa", slog.String("path", path))
+		return nil, nil
+	}
+	return tp, err
 }
 
 // resolveFile finds a repo-relative file (config/pricing.yaml) from the

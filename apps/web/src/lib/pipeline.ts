@@ -2,6 +2,7 @@
 // security scan, ask for the estimate, start the run and read its findings.
 import { api, ApiError } from './api';
 import { apiUrl } from './env';
+import { formatDuration } from './format';
 import { t } from './i18n';
 import { uploadMime, type AcceptedFile } from './precheck';
 
@@ -37,6 +38,21 @@ export interface QuoteView {
   cap_credits: number;
   signature: string;
   requires_approval: boolean;
+  /** How long the run should take, queue included; absent on older quotes. */
+  expected_seconds?: number;
+  /** A large order: the confirmation says how long it takes and an e-mail follows. */
+  large?: boolean;
+}
+
+/** The confirmation of a quote: the tokens, plus the expected duration of a large order. */
+export function confirmText(quote: QuoteView): string {
+  const lines = [
+    t('app.confirm_run', { expected: quote.expected_credits, cap: quote.cap_credits }),
+  ];
+  if (quote.large && (quote.expected_seconds ?? 0) > 0) {
+    lines.push(t('app.confirm_large', { duration: formatDuration(quote.expected_seconds ?? 0) }));
+  }
+  return lines.join('\n\n');
 }
 
 export interface RunOptionsInput {
@@ -51,6 +67,8 @@ export interface RunSummary {
   amount_at_risk: number;
   lines_total: number;
   lines_matched: number;
+  /** Per file, in pt-BR, what did not take part in the reconciliation. */
+  source_warnings?: string[];
 }
 
 export interface RunView {

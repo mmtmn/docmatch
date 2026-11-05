@@ -1,0 +1,22 @@
+# Itaú (341) — "Cobrança Itaú — CNAB 400 — Layout de arquivos", arquivo retorno, registro de
+# detalhe tipo 1. Só as posições conferidas no manual; o resto vem do layout comum. O retorno
+# do Itaú traz o nome do pagador, mas não a inscrição (CNPJ/CPF).
+bank: "341"
+name: Itaú
+source: "Itaú Unibanco, Cobrança CNAB 400 — layout de arquivos (retorno, detalhe tipo 1)"
+detail_records: ["1"]
+fields:
+  uso_empresa: [38, 62]
+  nosso_numero: [63, 70]
+  tarifa: [176, 188]
+  iof: [215, 227]
+  outros_creditos: [280, 292]
+  data_credito: [296, 301]
+  sacado: [325, 354]
+  motivo: [378, 385]
+occurrences:
+  "02": [Entrada confirmada, aberto]
+  "03": [Entrada rejeitada, rejeitado]
+  "06": [Liquidação normal, liquidado]
+  "08": [Liquidação em cartório, liquidado]
+  "09": [Baixa simples, baixado]

@@ -21,7 +21,7 @@ WHERE id IN (
   LIMIT $3
   FOR UPDATE SKIP LOCKED
 )
-RETURNING id, org_id, kind, payload, available_at, attempts, last_error, created_at, sent_at
+RETURNING id, org_id, kind, payload, available_at, attempts, last_error, created_at, sent_at, dedupe_key
 `
 
 type AuthClaimStaleOutboxParams struct {
@@ -49,6 +49,7 @@ func (q *Queries) AuthClaimStaleOutbox(ctx context.Context, arg AuthClaimStaleOu
 			&i.LastError,
 			&i.CreatedAt,
 			&i.SentAt,
+			&i.DedupeKey,
 		); err != nil {
 			return nil, err
 		}
@@ -61,7 +62,7 @@ func (q *Queries) AuthClaimStaleOutbox(ctx context.Context, arg AuthClaimStaleOu
 }
 
 const authMarkOutboxAttempt = `-- name: AuthMarkOutboxAttempt :one
-UPDATE outbox SET attempts = attempts + 1 WHERE id = $1 AND sent_at IS NULL RETURNING id, org_id, kind, payload, available_at, attempts, last_error, created_at, sent_at
+UPDATE outbox SET attempts = attempts + 1 WHERE id = $1 AND sent_at IS NULL RETURNING id, org_id, kind, payload, available_at, attempts, last_error, created_at, sent_at, dedupe_key
 `
 
 func (q *Queries) AuthMarkOutboxAttempt(ctx context.Context, id uuid.UUID) (Outbox, error) {
@@ -77,13 +78,14 @@ func (q *Queries) AuthMarkOutboxAttempt(ctx context.Context, id uuid.UUID) (Outb
 		&i.LastError,
 		&i.CreatedAt,
 		&i.SentAt,
+		&i.DedupeKey,
 	)
 	return i, err
 }
 
 const authOutboxByID = `-- name: AuthOutboxByID :one
 
-SELECT id, org_id, kind, payload, available_at, attempts, last_error, created_at, sent_at FROM outbox WHERE id = $1
+SELECT id, org_id, kind, payload, available_at, attempts, last_error, created_at, sent_at, dedupe_key FROM outbox WHERE id = $1
 `
 
 // Envio de e-mail pelo outbox (internal/email): o job imediato do River lê a
@@ -102,6 +104,7 @@ func (q *Queries) AuthOutboxByID(ctx context.Context, id uuid.UUID) (Outbox, err
 		&i.LastError,
 		&i.CreatedAt,
 		&i.SentAt,
+		&i.DedupeKey,
 	)
 	return i, err
 }

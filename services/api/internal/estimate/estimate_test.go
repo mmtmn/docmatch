@@ -238,7 +238,7 @@ func newFixture(t *testing.T, opts harnesstest.Options) *fixture {
 	store := NewMemStore()
 	now := time.Date(2026, 11, 4, 12, 0, 0, 0, time.UTC)
 	f := &fixture{store: store, uploads: ups, fake: fake, org: uuid.New(), now: now}
-	f.svc, err = New(Deps{Store: store, Harness: client, Pricing: p, Signer: signer, Sources: upSvc, Logger: logx.Discard(), Now: func() time.Time { return f.now }})
+	f.svc, err = New(Deps{Store: store, Harness: client, Pricing: p, Throughput: repoThroughput(t), Signer: signer, Sources: upSvc, Logger: logx.Discard(), Now: func() time.Time { return f.now }})
 	if err != nil {
 		t.Fatal(err)
 	}

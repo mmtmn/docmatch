@@ -12,7 +12,7 @@ token; modelos de linguagem só veem o resíduo, sempre atrás de uma guarda.
 | `dm-core` | implementado | `Money` em centavos (`rust_decimal`, nunca float), `Table`/`Column`/`Value` com papéis inferidos, modelo de evidência (`Item`, `Entity`, `Fact`, `Finding`, `Rule`, `Locator`) com os nomes de campo do contrato JSON |
 | `dm-validators` | implementado | dígitos verificadores de CNPJ (numérico e alfanumérico), CPF, chave NF-e, linha digitável de boleto (47) e arrecadação (48) com os dois ciclos do fator de vencimento, PIS, CEP, dias úteis bancários (computus) |
 | `dm-normalize` | implementado | dinheiro pt-BR, datas em todos os formatos usuais (inclusive `dd/mm hh:mm` sem ano), CNPJ/CPF com zeros restaurados, chave de nome com abreviações corporativas e prefixo truncado, número de documento, percentuais, status |
-| `dm-ingest` | implementado | `sniff` (formato, codificação, separador, cabeçalho, estilo decimal/data, idioma), CSV, XLSX/XLS/ODS, dumps de inbox e WhatsApp, `.eml`/mbox, OFX e NF-e XML mínimos; CNAB e PDF só com assinatura; todo parser é total |
+| `dm-ingest` | implementado | `sniff` (formato, codificação, separador, cabeçalho, estilo decimal/data, idioma), CSV, XLSX/XLS/ODS, dumps de inbox e WhatsApp, `.eml`/mbox, OFX e NF-e XML mínimos, PDF com camada de texto (extrato vira tabela, o resto vira itens com caixa na página), CNAB 240 (cobrança T/U e P/Q, pagamentos A/B e J/J-52), CNAB 400 (retorno de cobrança com layout por banco), SPED (EFD ICMS/IPI, EFD Contribuições, ECD) e ZIP (cada entrada é uma fonte); todo parser é total |
 | `dm-match` | implementado | chaves exatas (`KeySpec`), tolerâncias (multa, juros pro rata, retenções, arredondamento, D+1), soma de subconjuntos (meet-in-the-middle, ≤ 12), pontuação Fellegi–Sunter, atribuição um-para-um (húngaro) |
 | `dm-guard` | implementado | spotlighting do texto não confiável, detector de injeção pt-BR/en afinado por corpus versionado (60 injeções, 30 benignos parecidos; detecção ≥ 95% e zero falso positivo são portões do CI), achados `injected_instructions` (nunca executados), triagem de saídas (URLs, comandos, idioma, limites) |
 | `dm-llm` | implementado | `LlmClient` com OpenRouter (preferências de provedor `data_collection=deny`, tentativas com jitter, fallback), endpoint local compatível com OpenAI e modo `off`; cache em disco por `sha256(modelo, prompt, schema)` com modo *replay*; medição de tokens e custo |
@@ -86,7 +86,24 @@ Resultado nos casos dourados (`dm eval golden`): gêmeo público e caso privado 
 **18/18 linhas, 17/17 títulos, 23/23 achados e 11/11 totais**, dez execuções idênticas cada.
 O gêmeo também passa em oito variações (linhas embaralhadas, colunas reordenadas,
 Windows-1252, cabeçalhos no outro idioma, coluna vazia, ponto decimal, extrato invertido e
-todas as empresas renomeadas, inclusive nos históricos truncados do extrato).
+todas as empresas renomeadas, inclusive nos históricos truncados do extrato) e em outros
+formatos: com o extrato em PDF e a carteira principal como retorno CNAB 240
+(`testdata/golden/vantara-twin-pdf-cnab240`, mesmo gabarito) e com todos os arquivos dentro de
+um ZIP.
+
+## Formatos de arquivo (`dm-ingest`)
+
+| Formato | O que sai | Observações |
+| --- | --- | --- |
+| PDF com texto | tabela de extrato (data, histórico, documento, valor em centavos, saldo, C/D, página) e itens `page_region` com caixa normalizada | glifos posicionados por página (`lopdf` + interpretação do conteúdo), linhas e colunas pelos espaços; cabeçalhos `Data`/`Histórico`/`Documento`/`Crédito`/`Débito`/`Saldo` posicionam os valores; sem sinal, a evolução do saldo decide; data impressa uma vez por dia e histórico em duas linhas são aceitos; PDF digitalizado gera aviso (OCR ainda não disponível) |
+| CNAB 240 | tabela de cobrança (uma linha por título e movimento: nosso número, seu número, sacado e inscrição, vencimento, valor, pago, juros/multa, desconto, abatimento, tarifa, líquido, datas, situação) e tabela de pagamentos | FEBRABAN v10 (posições estáveis desde a 08.4); T+U e P+Q casados por título; trailer conferido |
+| CNAB 400 | a mesma tabela de cobrança | layout comum em `crates/dm-ingest/src/cnab/layouts/comum.yaml` e um YAML por banco (Itaú, Bradesco, Santander, Banco do Brasil); Caixa, Sicoob e bancos sem arquivo usam só o comum, com aviso; remessa 400 é recusada com aviso |
+| SPED | uma tabela por registro (`<arquivo>:C100`) | nomes oficiais em 0000, 0150, C100, C170, C190, E110, I200 e I250; posicionais no resto; `LINHA_PAI` liga filho e pai; contagens do bloco 9 conferidas |
+| ZIP | uma fonte por entrada (`pacote.zip/pasta/arquivo`) | limites de `packages/contracts/limits.yaml` (entradas, tamanho, razão, profundidade 1, caminhos seguros), os mesmos do scanner de uploads |
+
+Toda fonte que não rende nada leva um aviso em pt-BR com o nome do arquivo; o motor junta esses
+avisos (e os de arquivos que não entraram na conciliação) em `Dataset::warnings`, e o servidor os
+devolve em `RunSummary.source_warnings`.
 
 ## O servidor gRPC (`dm-server`)
 
@@ -135,6 +152,18 @@ DM_HARNESS_SOCKET=.cache/harness.sock DM_MEDIA_LOCAL_DIR=.cache/media make serve
 - TLS é sempre rustls com o provedor `ring` (puro Rust): o padrão do reqwest puxaria
   `aws-lc-sys` (cmake + C), que custa minutos no build frio do CI. `dm-llm` instala o
   provedor antes de criar qualquer cliente HTTP.
+- PDF é lido com `lopdf` e um interpretador próprio do conteúdo, não com `pdf-extract`: o
+  `pdf-extract` entra em pânico em PDFs malformados e puxa mais dependências; o `lopdf` já traz
+  decodificação com limite (bombas de compressão) e as codificações (WinAnsi, Differences,
+  ToUnicode). Fontes CID sem ToUnicode não são adivinhadas: viram aviso.
+- Layouts CNAB 400 são dados (YAML embutido com `include_str!`), não código: banco novo é um
+  arquivo novo. Só entram posições conferidas no manual; o que não foi conferido fica no layout
+  comum e vira aviso, nunca palpite.
+- Formatos com significado próprio não passam pela inferência de colunas: OFX e PDF são
+  extrato, cobrança CNAB é razão a receber, pagamentos CNAB e SPED ficam fora da conciliação
+  (com aviso). O OFX nomeia o favorecido e seria lido como razão pelas colunas.
+- Título sem tipo (retorno CNAB, que não traz a espécie, ou razão sem coluna de tipo) também é
+  candidato a retenção de tributo; um título de produto, não. O achado diz que o tipo não veio.
 - Um código de barras de 44 dígitos começando com `8` é ambíguo entre boleto bancário (bancos
   `8xx`) e arrecadação: os DVs de bloco da arrecadação são recalculados a partir do próprio
   código, então só o DV geral discrimina. `parse_boleto_with_reference` prefere a leitura de
@@ -156,7 +185,7 @@ cargo run -p dm -- bizdays 28/02/2025 10/03/2025
 cargo run -p dm -- probe "SELECT fornecedor, SUM(valor) FROM t GROUP BY 1" --table t=titulos.csv
 cargo run -p dm -- run ./pasta --out result.json            # --config para outra recon.yaml
 cargo run -p dm -- eval score --expected expected.yaml --actual result.json
-cargo run -p dm -- eval golden --runs 10                     # gêmeo + DM_VANTARA_PATH
+cargo run -p dm -- eval golden --runs 10                     # gêmeo, variações + DM_VANTARA_PATH
 ```
 
 O target dir padrão é compartilhado (`CARGO_TARGET_DIR ?= ~/.cache/docmatch/cargo-target`), então o
@@ -178,6 +207,9 @@ DuckDB embutido compila uma vez por máquina; o ambiente pode apontar outro.
 - Trocar a heurística de idioma de `dm-guard::screen_output` (contagem de stopwords com
   mínimo de 60 caracteres: texto livre curto em inglês passa) pelo papel `guard` de
   `config/models.yaml`.
-- Parsers CNAB 240/400 e texto de PDF (assinaturas prontas em `dm-ingest`).
+- OCR de PDF digitalizado e de imagens (hoje: aviso por página sem texto).
+- Conferir contra os manuais vigentes as posições próprias de Caixa e Sicoob no CNAB 400 e
+  ler a remessa 400; cruzar liquidações de um retorno com o extrato (hoje o retorno entra como
+  carteira de títulos).
 - Gravar a linhagem no `dm-graph` e expor `explain` pelo gRPC.
 - Materializar fontes `s3://` no worker Go antes de chamar o harness (produção).

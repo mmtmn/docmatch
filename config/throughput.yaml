@@ -1,0 +1,41 @@
+# Tempo esperado das execuções: o `expected_seconds` e o `large` de cada orçamento, e o e-mail
+# avisando que uma execução longa terminou. Sobrescrevível por ambiente com DM_THROUGHPUT_FILE.
+#
+#   segundos = overhead_seconds + espera_na_fila + Σ_tipo quantidade(tipo) × segundos_por_unidade(tipo)
+#
+# A quantidade de cada tipo sai do que o orçamento já mede: megabytes de cada planilha, PDF,
+# e-mail ou ZIP, minutos de áudio e vídeo, milhares de tokens de modelo, ferramentas novas e
+# buscas na web. segundos_por_unidade vem do histórico quando há pelo menos history.min_runs
+# execuções recentes com aquele tipo: a duração ativa de cada execução concluída (sem
+# overhead_seconds) é repartida entre os tipos na proporção dos padrões abaixo, e vale a mediana
+# ponderada pela quantidade, robusta a execuções travadas e dominada pelos pedidos grandes, que são
+# os que importam aqui. Com histórico curto, vale o padrão daqui.
+#
+# A espera na fila conta as execuções na frente (em fila ou rodando, de todas as contas):
+# acima de queue.parallel_runs, cada rodada de execuções paralelas soma a duração típica (mediana
+# das execuções recentes, ou queue.default_run_seconds).
+
+overhead_seconds: 15           # subir a execução, montar o grafo, gerar o relatório
+large_after_seconds: 600       # acima disso o orçamento sai com large=true e os apps avisam
+notify_after_seconds: 600      # execução que levou mais que isso (da criação ao fim) avisa por e-mail
+
+history:
+  window_days: 30
+  max_runs: 1000
+  min_runs: 5
+
+queue:
+  parallel_runs: 2             # execuções simultâneas no harness (MAX_CONCURRENT_RUNS do dm-server)
+  default_run_seconds: 60      # duração típica até haver histórico
+
+# Padrões por tipo de entrada, antes de haver histórico.
+kinds:
+  table:        { unit: mb, seconds_per_unit: 3 }        # CSV, TSV, XLSX: ~10 mil linhas por MB na cascata determinística
+  document:     { unit: mb, seconds_per_unit: 20 }       # PDF e texto: ~10 páginas por MB, extração e leitura
+  email:        { unit: mb, seconds_per_unit: 6 }        # .eml e .msg
+  archive:      { unit: mb, seconds_per_unit: 15 }       # ZIP: desempacotar e ler o conteúdo misto
+  audio:        { unit: minutes, seconds_per_unit: 12, mb_per_minute: 1 }    # transcrição ~5× o tempo real
+  video:        { unit: minutes, seconds_per_unit: 30, mb_per_minute: 20 }   # transcrição + quadros
+  llm:          { unit: ktokens, seconds_per_unit: 1.5 } # resíduo para o modelo e a verificação cruzada
+  new_tools:    { unit: tools, seconds_per_unit: 240 }   # ferramenta nova escrita, testada e revisada em sandbox
+  web_requests: { unit: requests, seconds_per_unit: 4 }

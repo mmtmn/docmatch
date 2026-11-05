@@ -106,6 +106,10 @@ data class Quote(
     @SerialName("cap_credits") val capCredits: Long,
     val signature: String,
     @SerialName("requires_approval") val requiresApproval: Boolean = false,
+    /** How long the run should take, queue included; absent on older quotes. */
+    @SerialName("expected_seconds") val expectedSeconds: Long? = null,
+    /** A large order: the confirmation says how long it takes and an e-mail follows. */
+    val large: Boolean = false,
 )
 
 /** openapi RunStatus. */
@@ -136,6 +140,8 @@ data class RunSummary(
     val currency: String = "BRL",
     @SerialName("lines_total") val linesTotal: Int = 0,
     @SerialName("lines_matched") val linesMatched: Int = 0,
+    /** Per file, in pt-BR, what did not take part in the reconciliation. */
+    @SerialName("source_warnings") val sourceWarnings: List<String> = emptyList(),
 )
 
 @Serializable

@@ -26,6 +26,7 @@ const (
 	TextContactMessage         = 2000
 	TextAdminNote              = 1000
 	TextFindingFeedbackNote    = 500
+	TextSourceWarning          = 500
 	TextBlogComment            = 0
 )
 
@@ -58,6 +59,7 @@ const (
 	IDsIdempotencyKeyMax       = 128
 	IDsAPIKeyScopesMax         = 10
 	IDsFilesPerRunHardMax      = 100
+	IDsSourceWarningsPerRun    = 100
 	IDsMediaFilesPerRunHardMax = 50000
 )
 
@@ -85,6 +87,7 @@ var limitByKey = map[string]int{
 	"text.contact_message":             TextContactMessage,
 	"text.admin_note":                  TextAdminNote,
 	"text.finding_feedback_note":       TextFindingFeedbackNote,
+	"text.source_warning":              TextSourceWarning,
 	"text.blog_comment":                TextBlogComment,
 	"files.uploaded_file_name_bytes":   FilesUploadedFileNameBytes,
 	"files.document_file_max_mb":       FilesDocumentFileMaxMB,
@@ -105,5 +108,6 @@ var limitByKey = map[string]int{
 	"ids.idempotency_key_max":          IDsIdempotencyKeyMax,
 	"ids.api_key_scopes_max":           IDsAPIKeyScopesMax,
 	"ids.files_per_run_hard_max":       IDsFilesPerRunHardMax,
+	"ids.source_warnings_per_run":      IDsSourceWarningsPerRun,
 	"ids.media_files_per_run_hard_max": IDsMediaFilesPerRunHardMax,
 }

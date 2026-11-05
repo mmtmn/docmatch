@@ -404,6 +404,32 @@ pub fn run_golden(dir: &Path, cfg: &EngineConfig, runs: usize) -> Result<GoldenR
     })
 }
 
+/// The public twin and its format variants (`testdata/golden/vantara-twin-*` folders with an
+/// `expected.yaml`, such as the PDF statement + CNAB 240 variant), twin first.
+pub fn find_golden_dirs(start: &Path) -> Vec<PathBuf> {
+    let Some(twin) = find_twin_dir(start) else {
+        return Vec::new();
+    };
+    let mut variants: Vec<PathBuf> = twin
+        .parent()
+        .and_then(|golden| std::fs::read_dir(golden).ok())
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .filter(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.starts_with("vantara-twin-"))
+                && p.join("expected.yaml").is_file()
+        })
+        .collect();
+    variants.sort();
+    let mut out = vec![twin];
+    out.extend(variants);
+    out
+}
+
 /// Walks up from `start` looking for `testdata/golden/vantara-twin`.
 pub fn find_twin_dir(start: &Path) -> Option<PathBuf> {
     let mut dir = Some(start);

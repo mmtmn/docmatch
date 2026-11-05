@@ -155,3 +155,74 @@ func TestEnqueueAndDeliver(t *testing.T) {
 		t.Fatal("pool nulo")
 	}
 }
+
+func TestEnqueueOnceAndTxMailer(t *testing.T) {
+	d := getDB(t)
+	ctx := context.Background()
+	inserter, err := NewInserter(d.App)
+	if err != nil {
+		t.Fatal(err)
+	}
+	org := uuid.New()
+	if err := db.WithOrgTx(ctx, d.App, org, func(ctx context.Context, tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, "INSERT INTO orgs (id, name, slug) VALUES ($1, 'Org', $2)", org, "org-"+org.String())
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	user := uuid.New()
+	if _, err := d.Admin.Exec(ctx, "INSERT INTO users (id, email) VALUES ($1, $2)", user, "fim-"+user.String()[:8]+"@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	mailer := NewTxMailer(inserter)
+	key := "run_finished:run_" + user.String()[:8]
+	msg := email.Message{To: "fim@example.com", Subject: "Terminou", Text: "corpo", Tag: email.TagRunFinished}
+	// Twice in the org transaction a finishing run uses: one row, one job.
+	for i := 0; i < 2; i++ {
+		err := db.WithOrgTx(ctx, d.App, org, func(ctx context.Context, tx pgx.Tx) error {
+			to, err := mailer.UserEmail(ctx, tx, user)
+			if err != nil || to != "fim-"+user.String()[:8]+"@example.com" {
+				t.Fatalf("UserEmail = %q %v", to, err)
+			}
+			return mailer.EnqueueOnce(ctx, tx, org, key, msg)
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	var rows, jobs int
+	if err := d.Admin.QueryRow(ctx, "SELECT count(*) FROM outbox WHERE dedupe_key = $1 AND org_id = $2 AND kind = $3", key, org, email.OutboxKind).Scan(&rows); err != nil || rows != 1 {
+		t.Fatalf("linhas no outbox: %d %v", rows, err)
+	}
+	if err := d.Admin.QueryRow(ctx, "SELECT count(*) FROM river_job j JOIN outbox o ON j.args->>'outbox_id' = o.id::text WHERE o.dedupe_key = $1", key).Scan(&jobs); err != nil || jobs != 1 {
+		t.Fatalf("jobs de envio: %d %v", jobs, err)
+	}
+	// The plain Enqueue keeps working beside keyed rows.
+	err = db.WithSystemTx(ctx, d.App, func(ctx context.Context, tx pgx.Tx) error {
+		if _, err := Enqueue(ctx, tx, nil, nil, msg); err != nil {
+			return err
+		}
+		_, err := Enqueue(ctx, tx, nil, nil, msg)
+		return err
+	})
+	if err != nil {
+		t.Fatalf("Enqueue sem chave: %v", err)
+	}
+	// A user that is gone has no address; bad input is refused before SQL.
+	err = db.WithOrgTx(ctx, d.App, org, func(ctx context.Context, tx pgx.Tx) error {
+		to, err := mailer.UserEmail(ctx, tx, uuid.New())
+		if err != nil || to != "" {
+			t.Fatalf("usuário inexistente: %q %v", to, err)
+		}
+		if _, _, err := EnqueueOnce(ctx, tx, nil, &org, "", msg); err == nil {
+			t.Fatal("chave vazia deveria falhar")
+		}
+		if _, _, err := EnqueueOnce(ctx, tx, nil, &org, "k", email.Message{To: "x"}); err == nil {
+			t.Fatal("mensagem inválida deveria falhar")
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}

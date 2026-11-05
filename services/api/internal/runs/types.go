@@ -95,6 +95,9 @@ type Summary struct {
 	LinesMatched       int            `json:"lines_matched"`
 	NewToolIDs         []string       `json:"new_tool_ids,omitempty"`
 	ProposedRuleIDs    []string       `json:"proposed_rule_ids,omitempty"`
+	// SourceWarnings says, in pt-BR and per file, what did not take part in
+	// the reconciliation (a scanned PDF, a ledger with no open titles...).
+	SourceWarnings []string `json:"source_warnings,omitempty"`
 }
 
 // RunError is openapi RunError.
@@ -139,6 +142,48 @@ type Run struct {
 
 // PublicID renders the API identifier.
 func (r Run) PublicID() string { return apix.Encode(apix.PrefixRun, r.ID) }
+
+// Timing is what a run keeps about its duration in runs.stats.timing: the
+// expected seconds and large flag of its initial quote, its measured input
+// and the active time (first harness event to the last) summed over attempts.
+type Timing struct {
+	ExpectedSeconds int64          `json:"expected_seconds,omitempty"`
+	Large           bool           `json:"large,omitempty"`
+	Units           estimate.Units `json:"units,omitempty"`
+	ActiveMs        int64          `json:"active_ms,omitempty"`
+}
+
+const statsTiming = "timing"
+
+// Timing reads runs.stats.timing (zero when absent or unreadable).
+func (r Run) Timing() Timing {
+	var t Timing
+	var stats map[string]json.RawMessage
+	if len(r.Stats) == 0 || json.Unmarshal(r.Stats, &stats) != nil || len(stats[statsTiming]) == 0 {
+		return t
+	}
+	_ = json.Unmarshal(stats[statsTiming], &t)
+	return t
+}
+
+// SetTiming writes runs.stats.timing and keeps every other key of stats.
+func (r *Run) SetTiming(t Timing) {
+	stats := map[string]json.RawMessage{}
+	if len(r.Stats) > 0 {
+		_ = json.Unmarshal(r.Stats, &stats)
+		if stats == nil {
+			stats = map[string]json.RawMessage{}
+		}
+	}
+	raw, err := json.Marshal(t)
+	if err != nil {
+		return
+	}
+	stats[statsTiming] = raw
+	if out, err := json.Marshal(stats); err == nil {
+		r.Stats = out
+	}
+}
 
 // SourceIDs lists every upload referenced by the run, documents first.
 func (r Run) SourceIDs() []uuid.UUID {

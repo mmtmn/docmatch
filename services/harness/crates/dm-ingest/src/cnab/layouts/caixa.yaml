@@ -1,0 +1,9 @@
+# Caixa (104) — CNAB 400 do SIGCB, arquivo retorno. As posições próprias da Caixa (nosso
+# número, tarifa, data do crédito) não foram confirmadas contra o manual vigente: o arquivo é
+# lido com o layout comum e o aviso abaixo acompanha a fonte.
+bank: "104"
+name: Caixa
+source: "Caixa Econômica Federal, SIGCB — leiaute CNAB 400 (retorno); só campos comuns"
+detail_records: ["1"]
+partial: true
+note: "layout CNAB 400 da Caixa lido só com os campos comuns: nosso número, tarifa e data do crédito não foram lidos (posições não confirmadas)"

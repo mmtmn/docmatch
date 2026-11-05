@@ -34,6 +34,10 @@ pub enum SourceKind {
     Cnab240,
     /// CNAB 400 file.
     Cnab400,
+    /// SPED digital bookkeeping (EFD ICMS/IPI, EFD Contribuições, ECD): `|REG|...|` records.
+    Sped,
+    /// ZIP archive (not an Office/OpenDocument package).
+    Zip,
     /// JSON document.
     Json,
     /// Plain text with no recognizable structure.
@@ -57,6 +61,8 @@ impl SourceKind {
             SourceKind::Pdf => "PDF",
             SourceKind::Cnab240 => "CNAB 240",
             SourceKind::Cnab400 => "CNAB 400",
+            SourceKind::Sped => "SPED (EFD/ECD)",
+            SourceKind::Zip => "arquivo ZIP",
             SourceKind::Json => "JSON",
             SourceKind::Text => "texto simples",
             SourceKind::Unknown => "desconhecido",
@@ -77,6 +83,8 @@ impl SourceKind {
             SourceKind::Pdf => "pdf",
             SourceKind::Cnab240 => "cnab240",
             SourceKind::Cnab400 => "cnab400",
+            SourceKind::Sped => "sped",
+            SourceKind::Zip => "zip",
             SourceKind::Json => "json",
             SourceKind::Text => "text",
             SourceKind::Unknown => "unknown",
@@ -193,6 +201,12 @@ pub fn sniff(bytes: &[u8]) -> Sniff {
     }
     if let Some(kind) = binary_kind(bytes) {
         out.kind = kind;
+        if kind == SourceKind::Sped {
+            // Signed EFD files carry a binary signature after |9999|: sniff the records only.
+            let records = crate::sped::record_bytes(bytes);
+            out.encoding = detect_encoding(records).0.name().to_string();
+            out.crlf = contains(&records[..records.len().min(SAMPLE_BYTES)], b"\r\n");
+        }
         return out;
     }
     let (encoding, bom) = detect_encoding(bytes);
@@ -201,7 +215,14 @@ pub fn sniff(bytes: &[u8]) -> Sniff {
     let (text, _, _) = encoding.decode(&bytes[..bytes.len().min(SAMPLE_BYTES)]);
     let text = text.trim_start_matches('\u{feff}');
     out.crlf = text.contains("\r\n");
-    let lines: Vec<&str> = text.lines().take(SAMPLE_LINES).collect();
+    // The sample window cuts the last line of a longer file: only whole lines are sampled,
+    // or a 400-position CNAB of a few hundred records would fail the record-length test.
+    let whole = if bytes.len() > SAMPLE_BYTES {
+        text.rfind('\n').map_or(text, |i| &text[..i])
+    } else {
+        text
+    };
+    let lines: Vec<&str> = whole.lines().take(SAMPLE_LINES).collect();
     out.sampled_lines = lines.len();
     if lines.iter().all(|l| l.trim().is_empty()) {
         out.kind = SourceKind::Text;
@@ -257,25 +278,18 @@ fn binary_kind(bytes: &[u8]) -> Option<SourceKind> {
     if bytes.starts_with(b"%PDF") {
         return Some(SourceKind::Pdf);
     }
+    if bytes.starts_with(b"PK\x05\x06") {
+        // End of central directory first: an empty archive.
+        return Some(SourceKind::Zip);
+    }
     if bytes.starts_with(b"PK\x03\x04") {
-        let head = &bytes[..bytes.len().min(4096)];
-        let is_office = contains(head, b"[Content_Types].xml")
-            || contains(head, b"xl/")
-            || contains(head, b"_rels/");
-        let is_ods = contains(
-            head,
-            b"mimetypeapplication/vnd.oasis.opendocument.spreadsheet",
-        );
-        return Some(
-            if is_office || is_ods || contains(bytes, b"xl/workbook.xml") {
-                SourceKind::Spreadsheet
-            } else {
-                SourceKind::Unknown
-            },
-        );
+        return Some(zip_kind(bytes));
     }
     if bytes.starts_with(b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1") {
         return Some(SourceKind::Spreadsheet);
+    }
+    if crate::sped::looks_like_sped(bytes) {
+        return Some(SourceKind::Sped);
     }
     // NUL bytes mean binary, except for UTF-16 text announced by its byte-order mark.
     let utf16 = bytes.starts_with(&[0xFF, 0xFE]) || bytes.starts_with(&[0xFE, 0xFF]);
@@ -283,6 +297,41 @@ fn binary_kind(bytes: &[u8]) -> Option<SourceKind> {
         return Some(SourceKind::Unknown);
     }
     None
+}
+
+/// A ZIP is a workbook when its own central directory says so (`xl/workbook.xml`, an ODS
+/// `mimetype`); scanning the bytes would also match an archive that merely *contains* a stored
+/// workbook. Other Office packages (`.docx`, `.pptx`) are not archives of sources. A damaged
+/// archive falls back to the local headers of its first entries.
+fn zip_kind(bytes: &[u8]) -> SourceKind {
+    let head = &bytes[..bytes.len().min(4096)];
+    if contains(
+        head,
+        b"mimetypeapplication/vnd.oasis.opendocument.spreadsheet",
+    ) {
+        return SourceKind::Spreadsheet;
+    }
+    if let Ok(archive) = zip::ZipArchive::new(std::io::Cursor::new(bytes)) {
+        let names: Vec<&[u8]> = archive.file_names_raw().collect();
+        return if names
+            .iter()
+            .any(|n| *n == b"xl/workbook.xml" || *n == b"xl/workbook.bin")
+        {
+            SourceKind::Spreadsheet
+        } else if names.contains(&&b"[Content_Types].xml"[..]) {
+            SourceKind::Unknown
+        } else {
+            SourceKind::Zip
+        };
+    }
+    let is_office = contains(head, b"[Content_Types].xml")
+        || contains(head, b"xl/")
+        || contains(head, b"_rels/");
+    if is_office {
+        SourceKind::Spreadsheet
+    } else {
+        SourceKind::Zip
+    }
 }
 
 fn contains(haystack: &[u8], needle: &[u8]) -> bool {
@@ -617,7 +666,15 @@ mod tests {
     fn empty_and_binary() {
         assert_eq!(sniff(b"").kind, SourceKind::Unknown);
         assert_eq!(sniff(b"%PDF-1.7\n...").kind, SourceKind::Pdf);
-        assert_eq!(sniff(b"PK\x03\x04garbage").kind, SourceKind::Unknown);
+        assert_eq!(sniff(b"PK\x03\x04garbage").kind, SourceKind::Zip);
+        assert_eq!(sniff(b"PK\x05\x06\x00\x00").kind, SourceKind::Zip);
+        // A CNAB 400 longer than the sample window: the cut last line is not sampled.
+        let mut long = String::new();
+        while long.len() <= SAMPLE_BYTES + 1000 {
+            long.push_str(&"1".repeat(400));
+            long.push_str("\r\n");
+        }
+        assert_eq!(sniff(long.as_bytes()).kind, SourceKind::Cnab400);
         assert_eq!(
             sniff(b"PK\x03\x04\x00\x00[Content_Types].xml").kind,
             SourceKind::Spreadsheet
@@ -626,6 +683,45 @@ mod tests {
             sniff(b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1rest").kind,
             SourceKind::Spreadsheet
         );
+    }
+
+    #[test]
+    fn zip_kinds_come_from_the_central_directory() {
+        use std::io::Write;
+        let build = |entries: &[(&str, zip::CompressionMethod)]| {
+            let mut w = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+            for (name, method) in entries {
+                let opts = zip::write::SimpleFileOptions::default().compression_method(*method);
+                w.start_file(*name, opts).unwrap();
+                w.write_all(b"<x/>").unwrap();
+            }
+            w.finish().unwrap().into_inner()
+        };
+        let stored = zip::CompressionMethod::Stored;
+        let workbook = build(&[("[Content_Types].xml", stored), ("xl/workbook.xml", stored)]);
+        assert_eq!(sniff(&workbook).kind, SourceKind::Spreadsheet);
+        // An archive that stores a workbook (with its xl/workbook.xml bytes in the clear) is
+        // still an archive.
+        let mut outer_entries = vec![("leia-me.txt", stored)];
+        outer_entries.push(("planilha.xlsx", stored));
+        let mut w = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        for (name, method) in &outer_entries {
+            let opts = zip::write::SimpleFileOptions::default().compression_method(*method);
+            w.start_file(*name, opts).unwrap();
+            w.write_all(if *name == "planilha.xlsx" {
+                &workbook
+            } else {
+                b"oi"
+            })
+            .unwrap();
+        }
+        let outer = w.finish().unwrap().into_inner();
+        assert_eq!(sniff(&outer).kind, SourceKind::Zip);
+        let docx = build(&[
+            ("[Content_Types].xml", stored),
+            ("word/document.xml", stored),
+        ]);
+        assert_eq!(sniff(&docx).kind, SourceKind::Unknown);
     }
 
     #[test]
@@ -702,6 +798,13 @@ mod tests {
         assert_eq!(sniff(cnab.as_bytes()).kind, SourceKind::Cnab240);
         let cnab = format!("{}\r\n{}\r\n", "0".repeat(400), "1".repeat(400));
         assert_eq!(sniff(cnab.as_bytes()).kind, SourceKind::Cnab400);
+        let sped = b"|0000|017|0|01072026|31072026|EMPRESA SINTETICA LTDA|11222333000181||SP|123||3550308||A|1|\r\n|0001|0|\r\n|C100|1|0|P1|55|00|1|123|||05072026|05072026|100,00|0|||100,00|9|||||||||||\r\n";
+        assert_eq!(sniff(sped).kind, SourceKind::Sped);
+        assert_eq!(
+            sniff(b"|a|b|\n|1|2|\n").kind,
+            SourceKind::Csv,
+            "pipe-delimited text without |0000| stays CSV"
+        );
         assert_eq!(
             sniff(b"apenas um texto qualquer sem estrutura\nsegunda linha\n").kind,
             SourceKind::Text

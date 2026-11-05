@@ -78,6 +78,10 @@ calamine = { version = "0.38.0", features = ["dates"] }
 mailparse = "0.18.0"
 quick-xml = "0.42.0"
 rust_xlsxwriter = "0.102.0"
+# PDF text layer (pure Rust; no rayon, no clock). ZIP with deflate only, like calamine: the
+# default features pull bzip2/zstd (C) and would break the musl release.
+lopdf = { version = "0.47.0", default-features = false }
+zip = { version = "9.3.0", default-features = false, features = ["deflate"] }
 
 # algorithms, hashing
 pathfinding = "4.16.0"

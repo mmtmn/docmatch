@@ -57,6 +57,9 @@ pub mod text {
     /// `text.finding_feedback_note`
     pub const FINDING_FEEDBACK_NOTE: u32 = 500;
 
+    /// `text.source_warning`
+    pub const SOURCE_WARNING: u32 = 500;
+
     /// `text.blog_comment`
     pub const BLOG_COMMENT: u32 = 0;
 }
@@ -126,6 +129,9 @@ pub mod ids {
     /// `ids.files_per_run_hard_max`
     pub const FILES_PER_RUN_HARD_MAX: u32 = 100;
 
+    /// `ids.source_warnings_per_run`
+    pub const SOURCE_WARNINGS_PER_RUN: u32 = 100;
+
     /// `ids.media_files_per_run_hard_max`
     pub const MEDIA_FILES_PER_RUN_HARD_MAX: u32 = 50000;
 }
@@ -150,6 +156,7 @@ pub fn limit_by_key(key: &str) -> Option<u32> {
         "text.contact_message" => Some(text::CONTACT_MESSAGE),
         "text.admin_note" => Some(text::ADMIN_NOTE),
         "text.finding_feedback_note" => Some(text::FINDING_FEEDBACK_NOTE),
+        "text.source_warning" => Some(text::SOURCE_WARNING),
         "text.blog_comment" => Some(text::BLOG_COMMENT),
         "files.uploaded_file_name_bytes" => Some(files::UPLOADED_FILE_NAME_BYTES),
         "files.document_file_max_mb" => Some(files::DOCUMENT_FILE_MAX_MB),
@@ -170,6 +177,7 @@ pub fn limit_by_key(key: &str) -> Option<u32> {
         "ids.idempotency_key_max" => Some(ids::IDEMPOTENCY_KEY_MAX),
         "ids.api_key_scopes_max" => Some(ids::API_KEY_SCOPES_MAX),
         "ids.files_per_run_hard_max" => Some(ids::FILES_PER_RUN_HARD_MAX),
+        "ids.source_warnings_per_run" => Some(ids::SOURCE_WARNINGS_PER_RUN),
         "ids.media_files_per_run_hard_max" => Some(ids::MEDIA_FILES_PER_RUN_HARD_MAX),
         _ => None,
     }
@@ -193,6 +201,7 @@ pub const LIMIT_KEYS: &[&str] = &[
     "text.contact_message",
     "text.admin_note",
     "text.finding_feedback_note",
+    "text.source_warning",
     "text.blog_comment",
     "files.uploaded_file_name_bytes",
     "files.document_file_max_mb",
@@ -213,5 +222,6 @@ pub const LIMIT_KEYS: &[&str] = &[
     "ids.idempotency_key_max",
     "ids.api_key_scopes_max",
     "ids.files_per_run_hard_max",
+    "ids.source_warnings_per_run",
     "ids.media_files_per_run_hard_max",
 ];

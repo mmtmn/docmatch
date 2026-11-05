@@ -15,7 +15,7 @@ enrolação. Identificadores de código e comentários em código ficam em ingl�
 
 Fora desta pasta, mas parte da mesma leitura: [README.md](../README.md) (mapa do repositório),
 [CONTRIBUTING.md](../CONTRIBUTING.md), [SECURITY.md](../SECURITY.md), [.env.example](../.env.example)
-(todas as variáveis), [config/models.yaml](../config/models.yaml), [config/pricing.yaml](../config/pricing.yaml)
+(todas as variáveis), [config/models.yaml](../config/models.yaml), [config/pricing.yaml](../config/pricing.yaml), [config/throughput.yaml](../config/throughput.yaml)
 e [packages/contracts/limits.yaml](../packages/contracts/limits.yaml).
 
 ## Por onde começar

@@ -321,6 +321,11 @@ html[data-vv] .first-screen > header {
   background: var(--color-info-soft);
 }
 
+.notice--warning {
+  border-color: var(--color-warning);
+  background: var(--color-warning-soft);
+}
+
 .card {
   padding: var(--space-5);
   border: 1px solid var(--color-border);

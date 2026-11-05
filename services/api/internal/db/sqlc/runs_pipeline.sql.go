@@ -295,8 +295,8 @@ func (q *Queries) InsertMatchFull(ctx context.Context, arg InsertMatchFullParams
 
 const insertRun = `-- name: InsertRun :one
 
-INSERT INTO runs (id, org_id, workflow_id, user_id, api_key_id, quote_id, hold_id, lane, status, estimated_credits, credits_held, inputs, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'queued', $9, $10, $11, $12)
+INSERT INTO runs (id, org_id, workflow_id, user_id, api_key_id, quote_id, hold_id, lane, status, estimated_credits, credits_held, inputs, expires_at, stats)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'queued', $9, $10, $11, $12, coalesce($13::jsonb, '{}'::jsonb))
 RETURNING id, org_id, workflow_id, user_id, api_key_id, quote_id, hold_id, lane, status, credits_held, credits_settled, error_code, stats, started_at, finished_at, created_at, updated_at, estimated_credits, credits_spent, credits_refunded, last_seq, inputs, progress, summary, error, pending_quote_id, cancel_requested, expires_at
 `
 
@@ -313,6 +313,7 @@ type InsertRunParams struct {
 	CreditsHeld      int64
 	Inputs           []byte
 	ExpiresAt        *time.Time
+	Stats            []byte
 }
 
 // Execuções, eventos (SSE), achados, casamentos e feedback.
@@ -330,6 +331,7 @@ func (q *Queries) InsertRun(ctx context.Context, arg InsertRunParams) (Run, erro
 		arg.CreditsHeld,
 		arg.Inputs,
 		arg.ExpiresAt,
+		arg.Stats,
 	)
 	var i Run
 	err := row.Scan(

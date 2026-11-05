@@ -58,6 +58,63 @@ func Enqueue(ctx context.Context, tx pgx.Tx, client *Client, orgID *uuid.UUID, m
 	return row.ID, nil
 }
 
+// EnqueueOnce is Enqueue keyed by key: when an e-mail with the same key is
+// already in the outbox nothing is written and inserted is false. Retries of
+// the code that justifies the e-mail can call it freely.
+func EnqueueOnce(ctx context.Context, tx pgx.Tx, client *Client, orgID *uuid.UUID, key string, msg email.Message) (id uuid.UUID, inserted bool, err error) {
+	if key == "" {
+		return uuid.Nil, false, errors.New("emailpg: chave de deduplicação vazia")
+	}
+	if err := msg.Validate(); err != nil {
+		return uuid.Nil, false, err
+	}
+	payload, err := json.Marshal(msg)
+	if err != nil {
+		return uuid.Nil, false, err
+	}
+	row, err := sqlc.New(tx).EnqueueOutboxOnce(ctx, sqlc.EnqueueOutboxOnceParams{OrgID: orgID, Kind: email.OutboxKind, Payload: payload, DedupeKey: &key})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, false, nil
+	}
+	if err != nil {
+		return uuid.Nil, false, fmt.Errorf("emailpg: outbox: %w", err)
+	}
+	if client != nil {
+		if _, err := client.InsertTx(ctx, tx, email.SendArgs{OutboxID: row.ID}, nil); err != nil {
+			return uuid.Nil, false, fmt.Errorf("emailpg: job: %w", err)
+		}
+	}
+	return row.ID, true, nil
+}
+
+// TxMailer writes e-mails inside the caller's transaction (runs.Mailer): the
+// recipient's address and the outbox row come from the same transaction as
+// the state change that justifies the message.
+type TxMailer struct {
+	client *Client
+}
+
+// NewTxMailer binds the insert-only River client (nil: the sweep delivers).
+func NewTxMailer(client *Client) *TxMailer { return &TxMailer{client: client} }
+
+// UserEmail returns the address of an active user, "" when the user is gone.
+func (m *TxMailer) UserEmail(ctx context.Context, tx pgx.Tx, userID uuid.UUID) (string, error) {
+	u, err := sqlc.New(tx).GetUser(ctx, userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return u.Email, nil
+}
+
+// EnqueueOnce writes msg to the outbox in tx unless key was already used.
+func (m *TxMailer) EnqueueOnce(ctx context.Context, tx pgx.Tx, orgID uuid.UUID, key string, msg email.Message) error {
+	_, _, err := EnqueueOnce(ctx, tx, m.client, &orgID, key, msg)
+	return err
+}
+
 // Deliverer sends outbox rows and records the outcome.
 type Deliverer struct {
 	pool   *pgxpool.Pool

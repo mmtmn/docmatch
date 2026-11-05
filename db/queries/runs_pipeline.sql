@@ -1,8 +1,8 @@
 -- Execuções, eventos (SSE), achados, casamentos e feedback.
 
 -- name: InsertRun :one
-INSERT INTO runs (id, org_id, workflow_id, user_id, api_key_id, quote_id, hold_id, lane, status, estimated_credits, credits_held, inputs, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'queued', $9, $10, $11, $12)
+INSERT INTO runs (id, org_id, workflow_id, user_id, api_key_id, quote_id, hold_id, lane, status, estimated_credits, credits_held, inputs, expires_at, stats)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'queued', $9, $10, $11, $12, coalesce(sqlc.narg(stats)::jsonb, '{}'::jsonb))
 RETURNING *;
 
 -- name: GetRunSystem :one

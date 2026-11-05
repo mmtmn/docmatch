@@ -45,7 +45,7 @@ const (
 // matched by prefix.
 var watched = []string{
 	"credit_ledger", "findings", "api_usage", "audit_log", "runs", "sessions", "api_keys", "rules",
-	"outbox", "credit_accounts", "credit_holds", "credit_grants", "stripe_events", "orgs", "users",
+	"outbox", "credit_accounts", "credit_holds", "credit_grants", "stripe_events", "orgs", "users", "run_timings",
 }
 
 type hotQuery struct {
@@ -109,6 +109,8 @@ func TestExplainBudget(t *testing.T) {
 		{name: "ListRecentRunsBefore", org: tenant, args: []any{org, time.Now(), int32(20)}},
 		{name: "CountActiveRuns", org: tenant, args: []any{org}},
 		{name: "NextQueuedRun"},
+		{name: "CountRunsInFlight", args: []any{time.Now().Add(-3 * time.Hour)}},
+		{name: "ListRecentRunTimings", args: []any{time.Now().Add(-30 * 24 * time.Hour), int32(1000)}},
 		{name: "GetRun", org: tenant, args: []any{org, runID}},
 		{name: "ListFindingsByRun", org: tenant, args: []any{org, runID, int32(50), int32(0)}},
 		{name: "CountFindingsByRun", org: tenant, args: []any{org, runID}},
@@ -374,6 +376,9 @@ func seed(t *testing.T, d *testdb.DB) seeded {
 	      SELECT uuidv7(), o[1 + (g % $2)], 'app', CASE WHEN g % 50 = 0 THEN 'queued' WHEN g % 51 = 0 THEN 'running' ELSE 'completed' END,
 	             now() - (g % 80) * interval '1 day'
 	      FROM (SELECT $1::uuid[] AS o) s, generate_series(1, $3) g`, orgs, seedOrgs, seedRuns)
+	exec(`INSERT INTO run_timings (run_id, org_id, status, units, active_seconds, finished_at)
+	      SELECT id, org_id, 'completed', '{"table": 1.5}'::jsonb, 30, created_at FROM runs WHERE status = 'completed'
+	      ON CONFLICT (run_id) DO NOTHING`)
 	exec(`INSERT INTO findings (org_id, run_id, kind, amount_at_risk, title, created_at)
 	      SELECT r.org_id, r.id, 'divergencia', (g * 37) % 100000, 'achado ' || g, r.created_at
 	      FROM (SELECT id, org_id, created_at, row_number() OVER () AS n FROM runs) r

@@ -62,6 +62,15 @@
         "enum": ["new_tools", "over_default_budget", "media_heavy", "web_search", "escalation_model"]
       }
     },
+    "expected_seconds": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Quanto a execução deve levar, em segundos, da fila ao relatório: overhead + Σ quantidade × segundos por unidade de cada tipo de entrada (MB de planilha, PDF, e-mail e ZIP; minutos de áudio e vídeo; mil tokens de modelo; ferramentas novas; buscas na web) + a espera pelas execuções na frente. Os segundos por unidade são a mediana ponderada das execuções concluídas recentes ou, com histórico curto, os padrões de config/throughput.yaml. Ausente em orçamentos adicionais e nos emitidos antes do campo existir."
+    },
+    "large": {
+      "type": "boolean",
+      "description": "Verdadeiro quando `expected_seconds` passa de `large_after_seconds` (config/throughput.yaml): os clientes mostram a duração na confirmação e a docmatch manda um e-mail a quem iniciou a execução quando ela terminar ou falhar. Ausente equivale a falso."
+    },
     "created_at": { "type": "string", "format": "date-time" }
   },
   "additionalProperties": false

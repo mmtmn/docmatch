@@ -18,6 +18,7 @@ import (
 	contracts "github.com/mmtmn/docmatch/packages/contracts/gen"
 	"github.com/mmtmn/docmatch/services/api/internal/audit"
 	"github.com/mmtmn/docmatch/services/api/internal/estimate/pricing"
+	"github.com/mmtmn/docmatch/services/api/internal/estimate/throughput"
 	"github.com/mmtmn/docmatch/services/api/internal/harness"
 	pb "github.com/mmtmn/docmatch/services/api/internal/harness/pb"
 	"github.com/mmtmn/docmatch/services/api/internal/httpx"
@@ -28,6 +29,11 @@ import (
 
 // ratesTTL bounds how long model rates are cached in memory.
 const ratesTTL = 5 * time.Minute
+
+// inFlightFreshness bounds the runs counted ahead in the queue: a queued or
+// running run untouched for longer than the run deadline (2 h) plus the job
+// pad is stuck, not waiting (a running run is touched by every event).
+const inFlightFreshness = 3 * time.Hour
 
 // overrunWindow and overrunLimit select the runs the p99 is computed on.
 const (
@@ -50,12 +56,15 @@ type Deps struct {
 	Store   Store
 	Harness harness.Client
 	Pricing *pricing.Pricing
-	Signer  *Signer
-	Sources Sources
-	Limits  *limits.Limits
-	Audit   Recorder
-	Logger  *slog.Logger
-	Now     func() time.Time
+	// Throughput times quotes (config/throughput.yaml); nil leaves quotes
+	// without expected_seconds.
+	Throughput *throughput.Config
+	Signer     *Signer
+	Sources    Sources
+	Limits     *limits.Limits
+	Audit      Recorder
+	Logger     *slog.Logger
+	Now        func() time.Time
 }
 
 // Service builds, signs and verifies quotes.
@@ -65,6 +74,8 @@ type Service struct {
 	mu      sync.Mutex
 	rates   ModelRates
 	ratesAt time.Time
+	tp      Throughput
+	tpAt    time.Time
 }
 
 // New validates the dependencies.
@@ -86,6 +97,9 @@ func New(d Deps) (*Service, error) {
 
 // Pricing exposes the parsed table (runs and uploads read plan limits).
 func (s *Service) Pricing() *pricing.Pricing { return s.d.Pricing }
+
+// Throughput exposes the timing configuration (nil when timing is off).
+func (s *Service) Throughput() *throughput.Config { return s.d.Throughput }
 
 var (
 	roleRe   = regexp.MustCompile(`^[a-z][a-z0-9_]{0,39}$`)
@@ -377,6 +391,7 @@ func (s *Service) Estimate(ctx context.Context, p apix.Principal, req Request, u
 	if err != nil {
 		return Quote{}, err
 	}
+	q.ExpectedSeconds, q.Large = s.Time(ctx, s.Units(loaded, q.Breakdown.Items))
 	rawReq, _ := json.Marshal(req)
 	rec, err := s.Issue(ctx, p, v.Lane, KindInitial, rawReq, Fingerprint(req, loaded.Hashes), q, nil)
 	if err != nil {
@@ -491,6 +506,55 @@ func (s *Service) Rates(ctx context.Context) ModelRates {
 	}
 	s.rates, s.ratesAt = RatesFrom(rows), now
 	return s.rates
+}
+
+// Units measures the input of a run (MeasureUnits with this configuration).
+func (s *Service) Units(loaded Loaded, items []Item) Units {
+	return MeasureUnits(s.d.Throughput, loaded.Docs, loaded.Media, items)
+}
+
+// Time returns the expected seconds of a run with these units and whether
+// that makes a large order; (0, false) when timing is off.
+func (s *Service) Time(ctx context.Context, units Units) (int64, bool) {
+	cfg := s.d.Throughput
+	if cfg == nil {
+		return 0, false
+	}
+	tp := s.throughputRates(ctx)
+	inFlight, err := s.d.Store.RunsInFlight(ctx, s.d.Now().Add(-inFlightFreshness))
+	if err != nil {
+		s.d.Logger.Warn("fila de execuções indisponível; estimativa sem espera", slog.String("err", err.Error()))
+		inFlight = 0
+	}
+	seconds := ExpectedSeconds(cfg, tp, units, QueueWait(cfg, tp, inFlight))
+	return seconds, cfg.Large(seconds)
+}
+
+// throughputRates returns the cached per-kind rates, relearning them from
+// the history every ratesTTL.
+func (s *Service) throughputRates(ctx context.Context) Throughput {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := s.d.Now()
+	if !s.tpAt.IsZero() && now.Sub(s.tpAt) < ratesTTL {
+		return s.tp
+	}
+	cfg := s.d.Throughput
+	samples, err := s.d.Store.RecentTimings(ctx, now.Add(-cfg.Window()), cfg.History.MaxRuns)
+	if err != nil {
+		s.d.Logger.Warn("histórico de durações indisponível; usando os padrões", slog.String("err", err.Error()))
+		samples = nil
+	}
+	s.tp, s.tpAt = ThroughputFrom(cfg, samples), now
+	return s.tp
+}
+
+// RecordTiming stores the measured duration of a finished run for the history.
+func (s *Service) RecordTiming(ctx context.Context, t RunTiming) error {
+	if t.Units == nil {
+		t.Units = Units{}
+	}
+	return s.d.Store.InsertTiming(ctx, t)
 }
 
 // CapRatio picks the cap multiplier: the harness calibration when it sends

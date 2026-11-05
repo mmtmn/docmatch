@@ -6,7 +6,7 @@ vi.mock('./env', () => ({
   apiBaseUrl: 'https://api.invalid',
 }));
 
-const { createRun, listFindings, uploadFile } = await import('./pipeline');
+const { confirmText, createRun, listFindings, uploadFile } = await import('./pipeline');
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -119,5 +119,35 @@ describe('pipeline', () => {
       rules_text: 'tarifa entra como despesa',
     });
     expect((init?.headers as Record<string, string>)['Idempotency-Key']).toBeTruthy();
+  });
+});
+
+describe('confirmText', () => {
+  const quote = {
+    id: 'qte_1',
+    expected_credits: 1234,
+    cap_credits: 1500,
+    signature: 'v1=x',
+    requires_approval: false,
+  };
+
+  it('asks only for the tokens on a small order', () => {
+    expect(confirmText(quote)).toBe(
+      'Esta conciliação deve usar cerca de 1.234 tokens (no máximo 1.500). Continuar?',
+    );
+    expect(confirmText({ ...quote, expected_seconds: 40, large: false })).not.toContain(
+      'Pedido grande',
+    );
+  });
+
+  it('adds the expected duration of a large order', () => {
+    expect(confirmText({ ...quote, expected_seconds: 4800, large: true })).toBe(
+      'Esta conciliação deve usar cerca de 1.234 tokens (no máximo 1.500). Continuar?\n\n' +
+        'Pedido grande: deve levar cerca de 1 h 20 min. Avisamos por e-mail quando terminar.',
+    );
+  });
+
+  it('says nothing about time when the duration is missing', () => {
+    expect(confirmText({ ...quote, large: true })).not.toContain('Pedido grande');
   });
 });
