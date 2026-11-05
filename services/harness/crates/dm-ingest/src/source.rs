@@ -17,9 +17,10 @@ use crate::IngestError;
 /// Everything ingested from one source.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ParsedSource {
-    /// Deterministic source id (`src_...`), from the file name and content hash.
+    /// Deterministic source id (`src_...`), from the file name and content hash (for an
+    /// archive entry: from the archive's id and the entry path).
     pub source_id: String,
-    /// File name (stem used for table names).
+    /// File name (stem used for table names); `archive.zip/path/in/archive` for an entry.
     pub name: String,
     /// What was sniffed.
     pub sniff: Sniff,
@@ -27,8 +28,22 @@ pub struct ParsedSource {
     pub tables: Vec<Table>,
     /// Items produced directly (text sources); table rows become items via [`table_items`].
     pub items: Vec<Item>,
-    /// Non-fatal problems, in pt-BR.
+    /// Non-fatal problems, in pt-BR, each naming the file.
     pub warnings: Vec<String>,
+    /// Sources inside a container (ZIP entries), each parsed as its own source.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub entries: Vec<ParsedSource>,
+}
+
+impl ParsedSource {
+    /// This source and every source inside it, depth first.
+    pub fn flatten(&self) -> Vec<&ParsedSource> {
+        let mut out = vec![self];
+        for e in &self.entries {
+            out.extend(e.flatten());
+        }
+        out
+    }
 }
 
 /// Source id from the name and the SHA-256 of the content.
@@ -37,9 +52,10 @@ pub fn source_id_for(name: &str, bytes: &[u8]) -> String {
     stable_id("src", &[name, &digest])
 }
 
-/// Sniffs and parses bytes under a file name. Unknown and not-yet-implemented formats produce
-/// a source with no tables and a warning, never an error, so a run can continue with the
-/// other files.
+/// Sniffs and parses bytes under a file name. Unknown and unreadable formats produce a source
+/// with no tables and a warning naming the file and the reason, never an error (except for
+/// empty input), so a run can continue with the other files. A ZIP archive yields one entry
+/// per file inside it, each parsed as its own source.
 pub fn parse_bytes(
     name: &str,
     bytes: &[u8],
@@ -48,13 +64,33 @@ pub fn parse_bytes(
     if bytes.is_empty() {
         return Err(IngestError::Empty);
     }
-    let sniffed = sniff(bytes);
     let source_id = source_id_for(name, bytes);
     let stem = Path::new(name)
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or(name)
         .to_string();
+    Ok(parse_inner(name, &stem, source_id, bytes, ctx, 0))
+}
+
+/// The table-name stem of an archive entry: its path without the extension, so row
+/// locators carry the entry path.
+fn entry_stem(path: &str) -> String {
+    match path.rsplit_once('.') {
+        Some((stem, ext)) if !stem.is_empty() && !ext.contains('/') => stem.to_string(),
+        _ => path.to_string(),
+    }
+}
+
+fn parse_inner(
+    name: &str,
+    stem: &str,
+    source_id: String,
+    bytes: &[u8],
+    ctx: &InboxContext,
+    depth: usize,
+) -> ParsedSource {
+    let sniffed = sniff(bytes);
     let mut out = ParsedSource {
         source_id: source_id.clone(),
         name: name.to_string(),
@@ -62,26 +98,30 @@ pub fn parse_bytes(
         tables: Vec::new(),
         items: Vec::new(),
         warnings: Vec::new(),
+        entries: Vec::new(),
     };
     let note = |out: &mut ParsedSource, e: IngestError| out.warnings.push(format!("{name}: {e}"));
+    let extend = |out: &mut ParsedSource, warnings: Vec<String>| {
+        out.warnings
+            .extend(warnings.into_iter().map(|w| format!("{name}: {w}")));
+    };
     match sniffed.kind {
-        SourceKind::Csv => match crate::delimited::parse_csv(bytes, &sniffed, &stem, &source_id) {
+        SourceKind::Csv => match crate::delimited::parse_csv(bytes, &sniffed, stem, &source_id) {
             Ok(t) => out.tables.push(t),
             Err(e) => note(&mut out, e),
         },
-        SourceKind::Spreadsheet => match crate::spreadsheet::parse_xlsx(bytes, &stem, &source_id) {
+        SourceKind::Spreadsheet => match crate::spreadsheet::parse_xlsx(bytes, stem, &source_id) {
             Ok((tables, warnings)) => {
                 out.tables.extend(tables);
-                out.warnings
-                    .extend(warnings.into_iter().map(|w| format!("{name}: {w}")));
+                extend(&mut out, warnings);
             }
             Err(e) => note(&mut out, e),
         },
-        SourceKind::Ofx => match crate::ofx::parse_ofx(bytes, &stem, &source_id) {
+        SourceKind::Ofx => match crate::ofx::parse_ofx(bytes, stem, &source_id) {
             Ok(t) => out.tables.push(t),
             Err(e) => note(&mut out, e),
         },
-        SourceKind::NfeXml => match crate::nfe_xml::parse_nfe_xml(bytes, &stem, &source_id) {
+        SourceKind::NfeXml => match crate::nfe_xml::parse_nfe_xml(bytes, stem, &source_id) {
             Ok(t) => out.tables.push(t),
             Err(e) => note(&mut out, e),
         },
@@ -94,33 +134,111 @@ pub fn parse_bytes(
             Err(e) => note(&mut out, e),
         },
         SourceKind::TxtInbox | SourceKind::Text => {
-            let text = crate::delimited::decode(bytes, &sniffed)?;
-            out.items = crate::inbox::parse_txt_inbox(&text, &source_id, ctx);
+            match crate::delimited::decode(bytes, &sniffed) {
+                Ok(text) => out.items = crate::inbox::parse_txt_inbox(&text, &source_id, ctx),
+                Err(e) => note(&mut out, e),
+            }
         }
-        SourceKind::Cnab240 => note(
-            &mut out,
-            crate::cnab::parse_cnab240(bytes, &stem, &source_id)
-                .err()
-                .unwrap_or(IngestError::NotImplemented("CNAB 240")),
-        ),
-        SourceKind::Cnab400 => note(
-            &mut out,
-            crate::cnab::parse_cnab400(bytes, &stem, &source_id)
-                .err()
-                .unwrap_or(IngestError::NotImplemented("CNAB 400")),
-        ),
-        SourceKind::Pdf => note(
-            &mut out,
-            crate::pdf::parse_pdf_text(bytes, &source_id)
-                .err()
-                .unwrap_or(IngestError::NotImplemented("PDF")),
-        ),
+        SourceKind::Cnab240 | SourceKind::Cnab400 => {
+            let parsed = if sniffed.kind == SourceKind::Cnab240 {
+                crate::cnab::parse_cnab240(bytes, stem, &source_id)
+            } else {
+                crate::cnab::parse_cnab400(bytes, stem, &source_id)
+            };
+            match parsed {
+                Ok(p) => {
+                    out.tables.extend(p.tables);
+                    extend(&mut out, p.warnings);
+                }
+                Err(e) => note(&mut out, e),
+            }
+        }
+        SourceKind::Sped => match crate::sped::parse_sped(bytes, stem, &source_id) {
+            Ok((tables, warnings)) => {
+                out.tables.extend(tables);
+                extend(&mut out, warnings);
+            }
+            Err(e) => note(&mut out, e),
+        },
+        SourceKind::Pdf => match crate::pdf::parse_pdf(bytes, stem, &source_id) {
+            Ok(p) => {
+                out.tables.extend(p.table);
+                out.items = p.items;
+                extend(&mut out, p.warnings);
+            }
+            Err(e) => note(&mut out, e),
+        },
+        SourceKind::Zip => parse_zip(&mut out, &source_id, bytes, ctx, depth),
         SourceKind::Xml | SourceKind::Json | SourceKind::Unknown => note(
             &mut out,
-            IngestError::Unrecognized(format!("{:?}", sniffed.kind)),
+            IngestError::Unrecognized(sniffed.kind.label_ptbr().to_string()),
         ),
     }
-    Ok(out)
+    if out.tables.is_empty()
+        && out.items.is_empty()
+        && out.entries.is_empty()
+        && out.warnings.is_empty()
+    {
+        out.warnings.push(format!(
+            "{name}: nenhum conteúdo aproveitável ({})",
+            sniffed.kind.label_ptbr()
+        ));
+    }
+    out
+}
+
+/// Opens a ZIP archive and parses every entry as its own source.
+fn parse_zip(
+    out: &mut ParsedSource,
+    source_id: &str,
+    bytes: &[u8],
+    ctx: &InboxContext,
+    depth: usize,
+) {
+    let name = out.name.clone();
+    let limits = crate::archive::ZipLimits::default();
+    if depth + 1 > limits.max_depth {
+        out.warnings.push(format!(
+            "{name}: zip dentro de zip não é aberto (profundidade máxima {})",
+            limits.max_depth
+        ));
+        return;
+    }
+    let (entries, warnings) = match crate::archive::read_zip(bytes, &limits) {
+        Ok(r) => r,
+        Err(e) => {
+            out.warnings.push(format!("{name}: {e}"));
+            return;
+        }
+    };
+    out.warnings
+        .extend(warnings.into_iter().map(|w| format!("{name}: {w}")));
+    if entries.is_empty() {
+        out.warnings
+            .push(format!("{name}: arquivo zip sem arquivos aproveitáveis"));
+    }
+    for entry in entries {
+        let entry_name = format!("{name}/{}", entry.path);
+        if entry.bytes.is_empty() {
+            out.warnings
+                .push(format!("{entry_name}: {}", IngestError::Empty));
+            continue;
+        }
+        let id = stable_id("src", &[source_id, &entry.path]);
+        let mut child = parse_inner(
+            &entry_name,
+            &entry_stem(&entry.path),
+            id,
+            &entry.bytes,
+            ctx,
+            depth + 1,
+        );
+        for item in &mut child.items {
+            item.fields
+                .insert("archive_entry".to_string(), Value::Text(entry.path.clone()));
+        }
+        out.entries.push(child);
+    }
 }
 
 /// Reads and parses a file.
@@ -236,7 +354,16 @@ mod tests {
         let pdf = parse_bytes("doc.pdf", b"%PDF-1.4", &ctx).unwrap();
         assert!(pdf.tables.is_empty());
         assert_eq!(pdf.warnings.len(), 1);
-        assert!(pdf.warnings[0].contains("PDF"));
+        assert!(
+            pdf.warnings[0].starts_with("doc.pdf: "),
+            "{:?}",
+            pdf.warnings
+        );
+        let blank = parse_bytes("vazio.txt", b"   \n", &ctx).unwrap();
+        assert_eq!(
+            blank.warnings,
+            vec!["vazio.txt: nenhum conteúdo aproveitável (texto simples)".to_string()]
+        );
         let unknown = parse_bytes("bin", &[0u8, 1, 2, 3], &ctx).unwrap();
         assert_eq!(unknown.warnings.len(), 1);
         assert_eq!(parse_bytes("x", b"", &ctx), Err(IngestError::Empty));

@@ -1,0 +1,24 @@
+# CNAB 400 — retorno de cobrança: campos com a mesma posição em todos os manuais consultados
+# (Itaú "Cobrança — CNAB 400 — layout de arquivos"; Bradesco "Cobrança Bradesco — arquivo
+# retorno CNAB 400"; Santander "Layout de cobrança CNAB 400 — retorno"; Banco do Brasil CBR643;
+# Caixa SIGCB CNAB 400). Um banco sem layout próprio, ou um campo incerto, usa só estes.
+# Posições com base 1, inclusivas; valores com 2 decimais implícitos; datas DDMMAA.
+name: comum
+source: "base comum dos manuais de retorno CNAB 400 de Itaú, Bradesco, Santander, Banco do Brasil (CBR643) e Caixa (SIGCB)"
+detail_records: ["1"]
+fields:
+  codigo_ocorrencia: [109, 110]
+  data_ocorrencia: [111, 116]
+  seu_numero: [117, 126]
+  vencimento: [147, 152]
+  valor_titulo: [153, 165]
+  banco_cobrador: [166, 168]
+  abatimento: [228, 240]
+  desconto: [241, 253]
+  valor_pago: [254, 266]
+  juros_multa: [267, 279]
+occurrences:
+  "02": [Entrada confirmada, aberto]
+  "03": [Entrada rejeitada, rejeitado]
+  "06": [Liquidação, liquidado]
+  "09": [Baixa, baixado]

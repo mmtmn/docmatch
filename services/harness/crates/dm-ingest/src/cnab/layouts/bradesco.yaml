@@ -1,0 +1,24 @@
+# Bradesco (237) — "Cobrança Bradesco — Layout CNAB 400 — Arquivo Retorno", registro de
+# detalhe tipo 1. O retorno do Bradesco não traz o nome nem a inscrição do sacado.
+bank: "237"
+name: Bradesco
+source: "Bradesco, Cobrança — layout CNAB 400, arquivo retorno (detalhe tipo 1)"
+detail_records: ["1"]
+fields:
+  uso_empresa: [38, 62]
+  nosso_numero: [71, 82]
+  tarifa: [176, 188]
+  outras_despesas: [189, 201]
+  iof: [215, 227]
+  outros_creditos: [280, 292]
+  data_credito: [296, 301]
+  motivo: [319, 328]
+occurrences:
+  "02": [Entrada confirmada, aberto]
+  "03": [Entrada rejeitada, rejeitado]
+  "06": [Liquidação normal, liquidado]
+  "09": [Baixado automaticamente via arquivo, baixado]
+  "10": [Baixado conforme instruções da agência, baixado]
+  "15": [Liquidação em cartório, liquidado]
+  "17": [Liquidação após baixa ou título não registrado, liquidado]
+  "28": [Débito de tarifas/custas, tarifa]

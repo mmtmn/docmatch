@@ -34,6 +34,10 @@ pub enum SourceKind {
     Cnab240,
     /// CNAB 400 file.
     Cnab400,
+    /// SPED digital bookkeeping (EFD ICMS/IPI, EFD Contribuições, ECD): `|REG|...|` records.
+    Sped,
+    /// ZIP archive (not an Office/OpenDocument package).
+    Zip,
     /// JSON document.
     Json,
     /// Plain text with no recognizable structure.
@@ -57,6 +61,8 @@ impl SourceKind {
             SourceKind::Pdf => "PDF",
             SourceKind::Cnab240 => "CNAB 240",
             SourceKind::Cnab400 => "CNAB 400",
+            SourceKind::Sped => "SPED (EFD/ECD)",
+            SourceKind::Zip => "arquivo ZIP",
             SourceKind::Json => "JSON",
             SourceKind::Text => "texto simples",
             SourceKind::Unknown => "desconhecido",
@@ -77,6 +83,8 @@ impl SourceKind {
             SourceKind::Pdf => "pdf",
             SourceKind::Cnab240 => "cnab240",
             SourceKind::Cnab400 => "cnab400",
+            SourceKind::Sped => "sped",
+            SourceKind::Zip => "zip",
             SourceKind::Json => "json",
             SourceKind::Text => "text",
             SourceKind::Unknown => "unknown",
@@ -193,6 +201,12 @@ pub fn sniff(bytes: &[u8]) -> Sniff {
     }
     if let Some(kind) = binary_kind(bytes) {
         out.kind = kind;
+        if kind == SourceKind::Sped {
+            // Signed EFD files carry a binary signature after |9999|: sniff the records only.
+            let records = crate::sped::record_bytes(bytes);
+            out.encoding = detect_encoding(records).0.name().to_string();
+            out.crlf = contains(&records[..records.len().min(SAMPLE_BYTES)], b"\r\n");
+        }
         return out;
     }
     let (encoding, bom) = detect_encoding(bytes);
@@ -257,6 +271,10 @@ fn binary_kind(bytes: &[u8]) -> Option<SourceKind> {
     if bytes.starts_with(b"%PDF") {
         return Some(SourceKind::Pdf);
     }
+    if bytes.starts_with(b"PK\x05\x06") {
+        // End of central directory first: an empty archive.
+        return Some(SourceKind::Zip);
+    }
     if bytes.starts_with(b"PK\x03\x04") {
         let head = &bytes[..bytes.len().min(4096)];
         let is_office = contains(head, b"[Content_Types].xml")
@@ -270,12 +288,15 @@ fn binary_kind(bytes: &[u8]) -> Option<SourceKind> {
             if is_office || is_ods || contains(bytes, b"xl/workbook.xml") {
                 SourceKind::Spreadsheet
             } else {
-                SourceKind::Unknown
+                SourceKind::Zip
             },
         );
     }
     if bytes.starts_with(b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1") {
         return Some(SourceKind::Spreadsheet);
+    }
+    if crate::sped::looks_like_sped(bytes) {
+        return Some(SourceKind::Sped);
     }
     // NUL bytes mean binary, except for UTF-16 text announced by its byte-order mark.
     let utf16 = bytes.starts_with(&[0xFF, 0xFE]) || bytes.starts_with(&[0xFE, 0xFF]);
@@ -617,7 +638,8 @@ mod tests {
     fn empty_and_binary() {
         assert_eq!(sniff(b"").kind, SourceKind::Unknown);
         assert_eq!(sniff(b"%PDF-1.7\n...").kind, SourceKind::Pdf);
-        assert_eq!(sniff(b"PK\x03\x04garbage").kind, SourceKind::Unknown);
+        assert_eq!(sniff(b"PK\x03\x04garbage").kind, SourceKind::Zip);
+        assert_eq!(sniff(b"PK\x05\x06\x00\x00").kind, SourceKind::Zip);
         assert_eq!(
             sniff(b"PK\x03\x04\x00\x00[Content_Types].xml").kind,
             SourceKind::Spreadsheet
@@ -702,6 +724,13 @@ mod tests {
         assert_eq!(sniff(cnab.as_bytes()).kind, SourceKind::Cnab240);
         let cnab = format!("{}\r\n{}\r\n", "0".repeat(400), "1".repeat(400));
         assert_eq!(sniff(cnab.as_bytes()).kind, SourceKind::Cnab400);
+        let sped = b"|0000|017|0|01072026|31072026|EMPRESA SINTETICA LTDA|11222333000181||SP|123||3550308||A|1|\r\n|0001|0|\r\n|C100|1|0|P1|55|00|1|123|||05072026|05072026|100,00|0|||100,00|9|||||||||||\r\n";
+        assert_eq!(sniff(sped).kind, SourceKind::Sped);
+        assert_eq!(
+            sniff(b"|a|b|\n|1|2|\n").kind,
+            SourceKind::Csv,
+            "pipe-delimited text without |0000| stays CSV"
+        );
         assert_eq!(
             sniff(b"apenas um texto qualquer sem estrutura\nsegunda linha\n").kind,
             SourceKind::Text
