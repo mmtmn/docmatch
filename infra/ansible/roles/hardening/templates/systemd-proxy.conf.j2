@@ -1,0 +1,6 @@
+# {{ ansible_managed }}
+# Every service inherits the egress proxy; AWS endpoints and link-local services stay direct
+# (nftables allows them for the listed users only). Services that must not use the proxy
+# (tinyproxy itself) clear these variables in their own unit.
+[Manager]
+DefaultEnvironment="HTTP_PROXY=http://127.0.0.1:{{ hardening_proxy_port }}" "HTTPS_PROXY=http://127.0.0.1:{{ hardening_proxy_port }}" "http_proxy=http://127.0.0.1:{{ hardening_proxy_port }}" "https_proxy=http://127.0.0.1:{{ hardening_proxy_port }}" "NO_PROXY={{ hardening_no_proxy }}" "no_proxy={{ hardening_no_proxy }}"

@@ -1,0 +1,78 @@
+# {{ ansible_managed }}
+# docmatch rules: what matters on this box and what is expected noise.
+#
+# proc.name is the kernel comm field, 15 characters at most: docmatch-harness shows up as
+# docmatch-harnes. Every helper script under /usr/local/{sbin,bin} starts with
+# "#!/usr/bin/env bash", so its comm is "bash" and it is recognised by its command line
+# ("bash /usr/local/sbin/docmatch-..."); the install/mv/chown children it spawns are recognised
+# by the parent's command line.
+- list: docmatch_binaries
+  items: [docmatch-api, docmatch-worker, docmatch-harnes]
+
+- list: docmatch_sensitive_files
+  items: [{{ hardening_env_file }}, {{ hardening_caddy_env_file }}, /run/docmatch/env.postgres, /etc/caddy/crowdsec.env]
+
+- macro: docmatch_helper_script
+  condition: >
+    (proc.name = bash and
+     (proc.cmdline startswith "bash /usr/local/sbin/docmatch-"
+      or proc.cmdline startswith "bash /usr/local/bin/docmatch-"
+      or proc.cmdline startswith "bash /usr/local/sbin/lynis-gate"))
+
+- macro: docmatch_helper_child
+  condition: >
+    (proc.pname = bash and
+     (proc.pcmdline startswith "bash /usr/local/sbin/docmatch-"
+      or proc.pcmdline startswith "bash /usr/local/bin/docmatch-"))
+
+- rule: docmatch secrets read by an unexpected process
+  desc: The rendered environment is read by anything other than the application, Caddy, PostgreSQL, pgBackRest, systemd (EnvironmentFile) or the helper scripts and their sed/grep/jq children.
+  condition: >
+    open_read and fd.name in (docmatch_sensitive_files)
+    and not proc.name in (docmatch_binaries)
+    and not proc.name in (caddy, pgbackrest, postgres, systemd)
+    and not docmatch_helper_script
+    and not (proc.name in (sed, grep, jq, cat) and docmatch_helper_child)
+  output: >
+    Rendered secrets read by an unexpected process (user=%user.name proc=%proc.name parent=%proc.pname file=%fd.name cmdline=%proc.cmdline pcmdline=%proc.pcmdline)
+  priority: CRITICAL
+  tags: [docmatch, secrets]
+
+- rule: Shell spawned by a docmatch service
+  desc: The application never spawns an interactive shell; a shell under its process tree means code execution.
+  condition: >
+    spawned_process and proc.name in (bash, sh, dash, zsh)
+    and proc.pname in (docmatch_binaries)
+  output: >
+    Shell spawned by a docmatch service (user=%user.name parent=%proc.pname cmdline=%proc.cmdline)
+  priority: CRITICAL
+  tags: [docmatch, execution]
+
+- rule: Outbound connection by a docmatch service bypassing the proxy
+  desc: Application processes reach AWS endpoints on 443 directly, the proxy and PostgreSQL on loopback, and nothing else.
+  condition: >
+    outbound and proc.name in (docmatch_binaries)
+    and not (fd.rip in ("127.0.0.1", "::1") and fd.rport in ({{ hardening_proxy_port }}, {{ hardening_pg_port }}, 8080))
+    and not fd.rport = 443
+  output: >
+    Unexpected outbound connection from a docmatch service (proc=%proc.name connection=%fd.name)
+  priority: WARNING
+  tags: [docmatch, network]
+
+# Expected activity on this image, excluded from the upstream rules (condition appended).
+# lynis, rkhunter and debsums are #!/bin/sh or perl scripts, so their comm is the script name.
+- rule: Read sensitive file untrusted
+  condition: and not proc.name in (lynis, rkhunter, aide, debsums, sudo, unix_chkpwd, ssm-agent-worke, ssm-session-wor) and not docmatch_helper_script
+  override:
+    condition: append
+
+# The allowlist, denylist and AWS-range renderers write under /etc through install/mv.
+- rule: Write below etc
+  condition: and not proc.name in (fail2ban-server, unattended-upgr, dpkg, apt-get, caddy, freshclam) and not docmatch_helper_script and not docmatch_helper_child
+  override:
+    condition: append
+
+- rule: Run shell untrusted
+  condition: and not proc.pname in (systemd, cron, ssm-session-wor, sudo)
+  override:
+    condition: append

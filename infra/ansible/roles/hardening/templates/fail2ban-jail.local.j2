@@ -1,0 +1,40 @@
+# {{ ansible_managed }}
+[DEFAULT]
+# Bans are enforced inside Caddy on the forwarded client address (see action.d/caddy-denylist).
+banaction = caddy-denylist
+banaction_allports = caddy-denylist
+backend = systemd
+bantime = 1h
+bantime.increment = true
+bantime.factor = 2
+bantime.maxtime = 1d
+findtime = 10m
+maxretry = 5
+ignoreip = 127.0.0.1/8 ::1
+destemail = root
+sender = fail2ban
+mta = sendmail
+action = %(action_)s
+
+[sshd]
+enabled = false
+
+# Authentication failures logged by the API as: event=auth.failure ... client_ip=<ip>
+[docmatch-auth]
+enabled = true
+filter = docmatch-auth
+backend = systemd
+journalmatch = _SYSTEMD_UNIT=docmatch-api.service
+maxretry = 5
+findtime = 10m
+bantime = 1h
+
+# Bursts of 4xx from one client in the Caddy access log (scanners, credential stuffing).
+[caddy-4xx]
+enabled = true
+filter = caddy-4xx
+backend = auto
+logpath = /var/log/caddy/access.log
+maxretry = 40
+findtime = 1m
+bantime = 30m

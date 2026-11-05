@@ -1,0 +1,24 @@
+# {{ ansible_managed }}
+DatabaseOwner clamav
+UpdateLogFile /var/log/clamav/freshclam.log
+LogVerbose false
+LogSyslog false
+LogFacility LOG_LOCAL6
+LogFileMaxSize 2M
+LogRotate true
+LogTime true
+Foreground false
+Debug false
+MaxAttempts 5
+DatabaseDirectory /var/lib/clamav
+DNSDatabaseInfo current.cvd.clamav.net
+DatabaseMirror database.clamav.net
+HTTPProxyServer 127.0.0.1
+HTTPProxyPort {{ hardening_proxy_port }}
+ConnectTimeout 30
+ReceiveTimeout 60
+TestDatabases yes
+ScriptedUpdates yes
+CompressLocalDatabase no
+Bytecode true
+Checks 4

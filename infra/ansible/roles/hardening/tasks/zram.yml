@@ -1,0 +1,17 @@
+---
+- name: Configure 2 GB of zram swap (zstd)
+  ansible.builtin.copy:
+    dest: /etc/default/zramswap
+    content: |
+      ALGO=zstd
+      SIZE={{ hardening_zram_size_mb }}
+      PRIORITY=100
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart zramswap
+
+- name: Enable zram swap
+  ansible.builtin.systemd_service:
+    name: zramswap
+    enabled: true

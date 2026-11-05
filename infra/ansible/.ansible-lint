@@ -1,0 +1,15 @@
+---
+# ansible-lint configuration for infra/ansible (run from this directory by `make -C infra lint`).
+profile: production
+strict: true
+offline: true
+exclude_paths:
+  - .ansible-lint-cache/
+  - collections/
+kinds:
+  - playbook: site.yml
+  - requirements: requirements.yml
+  - inventory: inventory/*.yml
+skip_list: []
+warn_list:
+  - experimental

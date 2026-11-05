@@ -1,0 +1,10 @@
+---
+# docmatch AMI: applies the hardening role to the Packer build instance.
+- name: Harden the docmatch application image
+  hosts: all
+  become: true
+  gather_facts: true
+  vars:
+    hardening_profile: prod
+  roles:
+    - role: hardening

@@ -1,0 +1,90 @@
+---
+# Build-time assertions. Each one guards a failure that used to be silent in the image: audit
+# rules that only half loaded, and tmpfs lines that never became mounts. Runs last, after every
+# handler has been flushed (cleanup.yml), so the kernel state is the final one.
+
+# ------------------------------------------------------------------------------- auditd
+- name: Count the audit rules declared in the rules file
+  ansible.builtin.command:
+    cmd: grep -cE '^-[aw] ' {{ hardening_audit_rules_file }}
+  register: hardening_audit_rules_declared
+  changed_when: false
+
+- name: Check that /etc/audit/audit.rules is in sync with rules.d
+  ansible.builtin.command:
+    cmd: augenrules --check
+  register: hardening_augenrules_check
+  changed_when: false
+
+- name: List the audit rules loaded in the kernel
+  ansible.builtin.command:
+    cmd: auditctl -l
+  register: hardening_audit_rules_loaded
+  changed_when: false
+
+- name: Read the audit status
+  ansible.builtin.command:
+    cmd: auditctl -s
+  register: hardening_audit_status
+  changed_when: false
+
+- name: Fail the build unless every audit rule is loaded and the configuration is immutable
+  ansible.builtin.assert:
+    that:
+      - "'No change' in hardening_augenrules_check.stdout"
+      - (hardening_audit_rules_loaded.stdout_lines | select('match', '^-[aw] ') | list | length) >= (hardening_audit_rules_declared.stdout | int)
+      - hardening_audit_status.stdout is search('(?m)^enabled 2$')
+    fail_msg: >-
+      audit: {{ hardening_audit_rules_loaded.stdout_lines | select('match', '^-[aw] ') | list | length }} rules loaded,
+      {{ hardening_audit_rules_declared.stdout }} declared in {{ hardening_audit_rules_file }};
+      augenrules --check: {{ hardening_augenrules_check.stdout }};
+      auditctl -s: {{ hardening_audit_status.stdout_lines | first | default('') }}
+    success_msg: >-
+      audit: {{ hardening_audit_rules_declared.stdout }} rules loaded, configuration immutable (-e 2)
+
+# ----------------------------------------------------------------------- tmpfs mounts
+- name: Read the live mounts of /tmp and /var/tmp
+  ansible.builtin.command:
+    cmd: findmnt --noheadings --output FSTYPE,OPTIONS --mountpoint {{ item }}
+  loop: [/tmp, /var/tmp]
+  register: hardening_tmp_mounts
+  changed_when: false
+  failed_when: false
+
+# No \b in these patterns: Jinja string literals turn \b into a backspace character.
+- name: Fail the build unless /tmp and /var/tmp are tmpfs mounted nodev,nosuid,noexec
+  ansible.builtin.assert:
+    that:
+      - item.rc == 0
+      - item.stdout is match('^tmpfs( |$)')
+      - item.stdout is search('(^|[ ,])nodev(,|$)')
+      - item.stdout is search('(^|[ ,])nosuid(,|$)')
+      - item.stdout is search('(^|[ ,])noexec(,|$)')
+    fail_msg: "{{ item.item }}: findmnt -> {{ item.stdout | default(item.msg | default('not mounted')) }}"
+    quiet: true
+  loop: "{{ hardening_tmp_mounts.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+# Without state/enabled/masked the module only reports the unit (systemctl show properties).
+- name: Read the mount units the fstab generator produced for the next boot
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+  loop: [tmp.mount, var-tmp.mount]
+  register: hardening_tmp_units
+
+- name: Fail the build if a tmpfs unit is masked or lost its options
+  ansible.builtin.assert:
+    that:
+      - item.status.LoadState == 'loaded'
+      - item.status.What == 'tmpfs'
+      - item.status.Options is search('(^|,)nodev(,|$)')
+      - item.status.Options is search('(^|,)nosuid(,|$)')
+      - item.status.Options is search('(^|,)noexec(,|$)')
+    fail_msg: >-
+      {{ item.item }}: LoadState={{ item.status.LoadState | default('?') }}
+      What={{ item.status.What | default('?') }} Options={{ item.status.Options | default('?') }}
+    quiet: true
+  loop: "{{ hardening_tmp_units.results }}"
+  loop_control:
+    label: "{{ item.item }}"

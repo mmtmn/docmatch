@@ -1,0 +1,142 @@
+---
+# Order matters: packages and repositories first, filesystem and kernel next, services, and the
+# firewall last so the build itself is never throttled. SSH is removed by Packer afterwards.
+- name: Preflight
+  ansible.builtin.import_tasks: preflight.yml
+  tags: [always]
+
+- name: Packages and repositories
+  ansible.builtin.import_tasks: packages.yml
+  tags: [packages]
+
+- name: Users, groups and directories
+  ansible.builtin.import_tasks: users.yml
+  tags: [users]
+
+- name: Kernel parameters
+  ansible.builtin.import_tasks: sysctl.yml
+  tags: [kernel, sysctl]
+
+- name: Kernel modules
+  ansible.builtin.import_tasks: modules.yml
+  tags: [kernel, modules]
+
+- name: Boot loader
+  ansible.builtin.import_tasks: grub.yml
+  tags: [kernel, grub]
+
+- name: Core dumps
+  ansible.builtin.import_tasks: coredumps.yml
+  tags: [kernel]
+
+- name: Authentication and accounts
+  ansible.builtin.import_tasks: pam.yml
+  tags: [auth]
+
+- name: Banners
+  ansible.builtin.import_tasks: banners.yml
+  tags: [auth]
+
+- name: Automatic updates
+  ansible.builtin.import_tasks: updates.yml
+  tags: [updates]
+
+- name: Audit
+  ansible.builtin.import_tasks: auditd.yml
+  tags: [audit]
+
+- name: Accounting and logging
+  ansible.builtin.import_tasks: accounting.yml
+  tags: [audit]
+
+- name: Time synchronisation
+  ansible.builtin.import_tasks: chrony.yml
+  tags: [time]
+
+- name: AppArmor
+  ansible.builtin.import_tasks: apparmor.yml
+  tags: [apparmor]
+
+- name: Session Manager agent
+  ansible.builtin.import_tasks: ssm.yml
+  tags: [ssm]
+
+- name: OpenSSH (hardened for the build, removed by Packer afterwards)
+  ansible.builtin.import_tasks: ssh.yml
+  tags: [ssh]
+
+- name: Alerting helpers
+  ansible.builtin.import_tasks: alerts.yml
+  tags: [alerts]
+
+- name: Egress proxy
+  ansible.builtin.import_tasks: egress_proxy.yml
+  tags: [network, proxy]
+
+- name: Caddy
+  ansible.builtin.import_tasks: caddy.yml
+  tags: [caddy]
+
+- name: PostgreSQL and pgBackRest
+  ansible.builtin.import_tasks: postgres.yml
+  tags: [postgres]
+
+- name: Swap on zram
+  ansible.builtin.import_tasks: zram.yml
+  tags: [memory]
+
+- name: Application units
+  ansible.builtin.import_tasks: services.yml
+  tags: [services]
+
+- name: CrowdSec
+  ansible.builtin.import_tasks: crowdsec.yml
+  tags: [ids, crowdsec]
+
+- name: Fail2ban
+  ansible.builtin.import_tasks: fail2ban.yml
+  tags: [ids, fail2ban]
+
+- name: Falco
+  ansible.builtin.import_tasks: falco.yml
+  tags: [ids, falco]
+
+- name: ClamAV
+  ansible.builtin.import_tasks: clamav.yml
+  tags: [malware]
+
+- name: Rkhunter
+  ansible.builtin.import_tasks: rkhunter.yml
+  tags: [malware]
+
+- name: AIDE
+  ansible.builtin.import_tasks: aide.yml
+  tags: [integrity]
+
+- name: Break-glass access (disabled)
+  ansible.builtin.import_tasks: breakglass.yml
+  tags: [breakglass]
+
+- name: Apt through the proxy, third-party sources off (after every third-party install)
+  ansible.builtin.import_tasks: apt_proxy.yml
+  tags: [network, proxy, packages]
+
+- name: Filesystem mounts
+  ansible.builtin.import_tasks: mounts.yml
+  tags: [filesystem]
+
+- name: Firewall
+  ansible.builtin.import_tasks: nftables.yml
+  tags: [network, firewall]
+
+- name: Compilers and build tools
+  ansible.builtin.import_tasks: compilers.yml
+  tags: [cleanup]
+
+- name: Cleanup
+  ansible.builtin.import_tasks: cleanup.yml
+  tags: [cleanup]
+
+- name: Build-time assertions (audit rules loaded, tmpfs mounts)
+  ansible.builtin.import_tasks: verify.yml
+  tags: [verify]

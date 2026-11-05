@@ -1,0 +1,13 @@
+---
+- name: Enable AppArmor
+  ansible.builtin.systemd_service:
+    name: apparmor
+    enabled: true
+    state: started
+
+- name: Put every installed profile in enforce mode
+  ansible.builtin.command:
+    cmd: aa-enforce /etc/apparmor.d/*
+  register: hardening_aa_enforce
+  changed_when: "'Setting' in hardening_aa_enforce.stdout"
+  failed_when: false

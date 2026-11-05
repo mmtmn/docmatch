@@ -1,0 +1,36 @@
+---
+# fail2ban watches two things: authentication failures the API logs to the journal and bursts of
+# 4xx in the Caddy access log. Bans are applied inside Caddy on the real client IP (the TCP peer
+# is always CloudFront, so an nftables ban would only block an edge location).
+- name: Install the jails
+  ansible.builtin.template:
+    src: fail2ban-jail.local.j2
+    dest: /etc/fail2ban/jail.local
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart fail2ban
+
+- name: Install the filters
+  ansible.builtin.template:
+    src: "fail2ban-filter-{{ item }}.conf.j2"
+    dest: "/etc/fail2ban/filter.d/{{ item }}.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [docmatch-auth, caddy-4xx]
+  notify: Restart fail2ban
+
+- name: Install the Caddy denylist action
+  ansible.builtin.template:
+    src: fail2ban-action-caddy-denylist.conf.j2
+    dest: /etc/fail2ban/action.d/caddy-denylist.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart fail2ban
+
+- name: Enable fail2ban
+  ansible.builtin.systemd_service:
+    name: fail2ban
+    enabled: true

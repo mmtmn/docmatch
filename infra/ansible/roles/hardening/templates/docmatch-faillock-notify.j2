@@ -1,0 +1,6 @@
+Name: docmatch: reset the failure counter after a successful login (pam_faillock)
+Default: yes
+Priority: 0
+Auth-Type: Primary
+Auth:
+	sufficient	pam_faillock.so authsucc deny=5 unlock_time=900 audit

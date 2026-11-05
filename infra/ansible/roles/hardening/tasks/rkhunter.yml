@@ -1,0 +1,28 @@
+---
+- name: Configure rkhunter
+  ansible.builtin.template:
+    src: rkhunter.conf.local.j2
+    dest: /etc/rkhunter.conf.local
+    owner: root
+    group: root
+    mode: "0640"
+
+- name: Enable the daily run and e-mail report
+  ansible.builtin.lineinfile:
+    path: /etc/default/rkhunter
+    regexp: '^#?\s*{{ item.key }}='
+    line: '{{ item.key }}="{{ item.value }}"'
+  loop:
+    - { key: CRON_DAILY_RUN, value: "true" }
+    - { key: CRON_DB_UPDATE, value: "false" }
+    - { key: DB_UPDATE_EMAIL, value: "false" }
+    - { key: REPORT_EMAIL, value: root }
+    - { key: APT_AUTOGEN, value: "true" }
+    - { key: NICE, value: "19" }
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Check the rkhunter configuration
+  ansible.builtin.command:
+    cmd: rkhunter --config-check
+  changed_when: false

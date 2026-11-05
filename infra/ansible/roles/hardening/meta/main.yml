@@ -1,0 +1,16 @@
+---
+galaxy_info:
+  role_name: hardening
+  namespace: docmatch
+  author: docmatch
+  description: CIS-style hardening of the docmatch application image (Ubuntu 24.04 arm64)
+  license: AGPL-3.0-only
+  min_ansible_version: "2.16"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+  galaxy_tags:
+    - security
+    - hardening
+dependencies: []

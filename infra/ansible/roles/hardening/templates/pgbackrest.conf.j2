@@ -1,0 +1,28 @@
+# {{ ansible_managed }}
+# Repository in the backups bucket. Bucket, region and endpoint are supplied as PGBACKREST_*
+# environment variables by /usr/local/bin/docmatch-pgbackrest (read from the rendered env), so
+# the image carries no account-specific value. Credentials come from the instance role.
+[global]
+repo1-type=s3
+repo1-path={{ hardening_pgbackrest_repo_path }}
+repo1-s3-key-type=auto
+repo1-s3-uri-style=path
+repo1-retention-full={{ hardening_pgbackrest_retention_full }}
+repo1-retention-diff={{ hardening_pgbackrest_retention_diff }}
+repo1-bundle=y
+repo1-block=y
+compress-type=zst
+compress-level=3
+process-max=2
+log-level-console=warn
+log-level-file=info
+log-path=/var/log/pgbackrest
+spool-path=/var/spool/pgbackrest
+archive-async=y
+delta=y
+start-fast=y
+
+[docmatch]
+pg1-path={{ hardening_pg_data_dir }}
+pg1-port={{ hardening_pg_port }}
+pg1-socket-path=/var/run/postgresql

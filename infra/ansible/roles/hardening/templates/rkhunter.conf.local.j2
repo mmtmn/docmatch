@@ -1,0 +1,20 @@
+# {{ ansible_managed }}
+# Local overrides for rkhunter. No updates from the internet (the signatures ship with the
+# package and a new image is built monthly); reports go to root through the sendmail shim.
+UPDATE_MIRRORS=0
+MIRRORS_MODE=1
+WEB_CMD=""
+PKGMGR=DPKG
+MAIL-ON-WARNING=root
+MAIL_CMD=/usr/sbin/sendmail -t
+ALLOW_SSH_ROOT_USER=no
+ALLOW_SSH_PROT_V1=0
+DISABLE_TESTS=suspscan hidden_procs deleted_files packet_cap_apps apps
+SCRIPTWHITELIST=/usr/bin/egrep
+SCRIPTWHITELIST=/usr/bin/fgrep
+SCRIPTWHITELIST=/usr/bin/which
+SCRIPTWHITELIST=/usr/bin/ldd
+SCRIPTWHITELIST=/usr/sbin/sendmail
+ALLOWHIDDENDIR=/etc/.java
+ALLOWDEVFILE=/dev/shm/*
+EXISTWHITELIST=/usr/sbin/sendmail

@@ -1,0 +1,28 @@
+# {{ ansible_managed }}
+[Unit]
+Description=docmatch: render /run/docmatch/env from SSM Parameter Store and the egress allowlist
+After=network-online.target snap.amazon-ssm-agent.amazon-ssm-agent.service tinyproxy.service
+Wants=network-online.target
+ConditionPathExists={{ hardening_instance_env_file }}
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+EnvironmentFile={{ hardening_instance_env_file }}
+Environment=NO_PROXY={{ hardening_no_proxy }}
+ExecStart=/usr/local/sbin/docmatch-render-env --out {{ hardening_env_file }} --owner {{ hardening_app_user }}
+ExecStartPost=/usr/local/sbin/docmatch-egress-allowlist
+Restart=on-failure
+RestartSec=15
+NoNewPrivileges=true
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallFilter=@system-service
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

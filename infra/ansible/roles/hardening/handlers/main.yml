@@ -1,0 +1,86 @@
+---
+- name: Reload systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+- name: Reload sysctl
+  ansible.builtin.command:
+    cmd: sysctl --system
+  changed_when: true
+
+- name: Rebuild the initramfs
+  ansible.builtin.command:
+    cmd: update-initramfs -u
+  changed_when: true
+
+- name: Update grub
+  ansible.builtin.command:
+    cmd: update-grub
+  changed_when: true
+
+# Fails the build on any rule auditctl rejects (a partial load used to be silent); verify.yml
+# checks afterwards that every rule is in the kernel and the configuration is immutable.
+- name: Reload audit rules
+  ansible.builtin.command:
+    cmd: augenrules --load
+  changed_when: true
+
+- name: Restart auditd
+  ansible.builtin.systemd_service:
+    name: auditd
+    state: restarted
+
+- name: Restart journald
+  ansible.builtin.systemd_service:
+    name: systemd-journald
+    state: restarted
+
+- name: Restart chrony
+  ansible.builtin.systemd_service:
+    name: chrony
+    state: restarted
+
+- name: Restart tinyproxy
+  ansible.builtin.systemd_service:
+    name: tinyproxy
+    state: restarted
+    daemon_reload: true
+
+- name: Reload caddy
+  ansible.builtin.systemd_service:
+    name: caddy
+    state: reloaded
+  failed_when: false
+
+- name: Restart zramswap
+  ansible.builtin.systemd_service:
+    name: zramswap
+    state: restarted
+  failed_when: false
+
+- name: Restart crowdsec
+  ansible.builtin.systemd_service:
+    name: crowdsec
+    state: restarted
+
+- name: Restart crowdsec-firewall-bouncer
+  ansible.builtin.systemd_service:
+    name: crowdsec-firewall-bouncer
+    state: restarted
+  failed_when: false
+
+- name: Restart fail2ban
+  ansible.builtin.systemd_service:
+    name: fail2ban
+    state: restarted
+
+- name: Restart falco
+  ansible.builtin.systemd_service:
+    name: falco-modern-bpf
+    state: restarted
+  failed_when: false
+
+- name: Restart clamav-freshclam
+  ansible.builtin.systemd_service:
+    name: clamav-freshclam
+    state: restarted

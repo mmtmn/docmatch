@@ -1,0 +1,18 @@
+# {{ ansible_managed }}
+[Unit]
+Description=docmatch: create the database role and pgBackRest stanza on first boot
+After=postgresql@{{ hardening_pg_version }}-{{ hardening_pg_cluster }}.service docmatch-env.service
+Requires=postgresql@{{ hardening_pg_version }}-{{ hardening_pg_cluster }}.service docmatch-env.service
+Before=docmatch-api.service docmatch-worker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+EnvironmentFile={{ hardening_env_file }}
+ExecStart=/usr/local/sbin/docmatch-pg-init
+NoNewPrivileges=true
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

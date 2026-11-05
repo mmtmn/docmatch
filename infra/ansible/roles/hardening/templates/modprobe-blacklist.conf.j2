@@ -1,0 +1,7 @@
+# {{ ansible_managed }}
+# Kernel modules a docmatch server never needs. "install ... /bin/false" prevents loading even on
+# explicit request; "blacklist" prevents auto-loading by alias.
+{% for module in hardening_blacklisted_modules %}
+install {{ module }} /bin/false
+blacklist {{ module }}
+{% endfor %}

@@ -1,0 +1,123 @@
+---
+- name: Install PostgreSQL and pgBackRest from PGDG
+  ansible.builtin.apt:
+    name:
+      - "postgresql-{{ hardening_pg_version }}"
+      - "postgresql-client-{{ hardening_pg_version }}"
+      - pgbackrest
+    state: present
+    install_recommends: false
+
+- name: Generate a self-signed certificate for local TLS connections
+  ansible.builtin.command:
+    cmd: >-
+      openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 3650
+      -subj /CN=localhost -keyout /etc/postgresql/{{ hardening_pg_version }}/{{ hardening_pg_cluster }}/server.key
+      -out /etc/postgresql/{{ hardening_pg_version }}/{{ hardening_pg_cluster }}/server.crt
+    creates: "/etc/postgresql/{{ hardening_pg_version }}/{{ hardening_pg_cluster }}/server.key"
+
+- name: Restrict the certificate and key to postgres
+  ansible.builtin.file:
+    path: "/etc/postgresql/{{ hardening_pg_version }}/{{ hardening_pg_cluster }}/{{ item.name }}"
+    owner: postgres
+    group: postgres
+    mode: "{{ item.mode }}"
+  loop:
+    - { name: server.key, mode: "0600" }
+    - { name: server.crt, mode: "0644" }
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Install the hardened PostgreSQL configuration
+  ansible.builtin.template:
+    src: postgresql-docmatch.conf.j2
+    dest: "/etc/postgresql/{{ hardening_pg_version }}/{{ hardening_pg_cluster }}/conf.d/10-docmatch.conf"
+    owner: postgres
+    group: postgres
+    mode: "0640"
+
+- name: Install the client authentication rules (scram over TLS on loopback only)
+  ansible.builtin.template:
+    src: pg_hba.conf.j2
+    dest: "/etc/postgresql/{{ hardening_pg_version }}/{{ hardening_pg_cluster }}/pg_hba.conf"
+    owner: postgres
+    group: postgres
+    mode: "0640"
+
+- name: Configure pgBackRest (bucket and region arrive through the environment at runtime)
+  ansible.builtin.template:
+    src: pgbackrest.conf.j2
+    dest: /etc/pgbackrest/pgbackrest.conf
+    owner: postgres
+    group: postgres
+    mode: "0640"
+
+- name: Create the pgBackRest log and spool directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: "0750"
+  loop: [/var/log/pgbackrest, /var/spool/pgbackrest, /var/lib/pgbackrest]
+
+- name: Install the pgBackRest wrapper (maps DM_ variables onto PGBACKREST_ options)
+  ansible.builtin.template:
+    src: docmatch-pgbackrest.sh.j2
+    dest: /usr/local/bin/docmatch-pgbackrest
+    owner: root
+    group: postgres
+    mode: "0750"
+
+- name: Install the first-boot database initialiser
+  ansible.builtin.copy:
+    src: docmatch-pg-init.sh
+    dest: /usr/local/sbin/docmatch-pg-init
+    owner: root
+    group: root
+    mode: "0750"
+
+# Build-time validation of the configuration runs before the unit override below is installed:
+# the override requires the data volume mount, which the build instance does not have.
+- name: Start the cluster once so the configuration is validated during the build
+  ansible.builtin.systemd_service:
+    name: "postgresql@{{ hardening_pg_version }}-{{ hardening_pg_cluster }}"
+    state: restarted
+    daemon_reload: true
+
+- name: Wait for the cluster to accept connections
+  ansible.builtin.command:
+    cmd: pg_isready -h 127.0.0.1 -p {{ hardening_pg_port }}
+  register: hardening_pg_ready
+  retries: 10
+  delay: 2
+  until: hardening_pg_ready.rc == 0
+  changed_when: false
+
+- name: Stop the cluster and keep it disabled in the image (user-data enables it on the application role)
+  ansible.builtin.systemd_service:
+    name: "postgresql@{{ hardening_pg_version }}-{{ hardening_pg_cluster }}"
+    state: stopped
+    enabled: false
+
+- name: Disable the PostgreSQL umbrella unit
+  ansible.builtin.systemd_service:
+    name: postgresql
+    enabled: false
+
+- name: Create the PostgreSQL drop-in directory
+  ansible.builtin.file:
+    path: "/etc/systemd/system/postgresql@.service.d"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Limit PostgreSQL memory and bind it to the data volume mount
+  ansible.builtin.template:
+    src: postgresql-override.conf.j2
+    dest: "/etc/systemd/system/postgresql@.service.d/override.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd

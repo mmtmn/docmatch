@@ -1,0 +1,10 @@
+# {{ ansible_managed }}
+[Service]
+MemoryMax={{ hardening_mem_crowdsec }}
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectControlGroups=true

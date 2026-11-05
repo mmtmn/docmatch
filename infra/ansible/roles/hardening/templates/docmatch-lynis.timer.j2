@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+[Unit]
+Description=docmatch: weekly Lynis audit
+
+[Timer]
+OnCalendar={{ hardening_lynis_calendar }}
+RandomizedDelaySec=30m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

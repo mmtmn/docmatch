@@ -1,0 +1,33 @@
+# {{ ansible_managed }}
+# Merged over the file the package generated (api_key stays there). Decisions land in the
+# dedicated table so the docmatch ruleset is never touched.
+mode: nftables
+update_frequency: 30s
+log_mode: file
+log_dir: /var/log/
+log_level: warning
+api_url: http://127.0.0.1:8181/
+deny_action: DROP
+deny_log: true
+deny_log_prefix: "crowdsec: "
+blacklists_ipv4: crowdsec-blacklists
+blacklists_ipv6: crowdsec6-blacklists
+supported_decisions_types:
+  - ban
+nftables:
+  ipv4:
+    enabled: true
+    set-only: false
+    table: crowdsec
+    chain: crowdsec-chain
+    priority: -10
+  ipv6:
+    enabled: true
+    set-only: false
+    table: crowdsec6
+    chain: crowdsec6-chain
+    priority: -10
+nftables_hooks:
+  - input
+prometheus:
+  enabled: false

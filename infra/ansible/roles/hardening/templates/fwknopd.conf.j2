@@ -1,0 +1,9 @@
+# {{ ansible_managed }}
+PCAP_INTF               {{ ansible_facts['default_ipv4']['interface'] | default('ens5') }}
+PCAP_FILTER             udp port {{ hardening_fwknop_port }}
+ENABLE_PCAP_PROMISC     N
+FIREWALL_TYPE           nftables
+ENABLE_NFT_FORWARDING   N
+NFT_INPUT_ACCESS        docmatch, breakglass
+SYSLOG_IDENTITY         fwknopd
+SYSLOG_FACILITY         LOG_DAEMON

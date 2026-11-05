@@ -1,0 +1,17 @@
+# {{ ansible_managed }}
+# Password quality for local accounts (there are none besides break-glass; the policy still
+# applies to anything created later).
+minlen = {{ hardening_pwquality_minlen }}
+minclass = 3
+maxrepeat = 3
+maxsequence = 3
+dcredit = -1
+ucredit = -1
+lcredit = -1
+ocredit = -1
+difok = 4
+gecoscheck = 1
+dictcheck = 1
+usercheck = 1
+enforcing = 1
+retry = 3

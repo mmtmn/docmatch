@@ -1,0 +1,234 @@
+---
+# Defaults of the hardening role. Every variable is prefixed hardening_. Account-specific values
+# never live here: the instance learns them at boot from /etc/docmatch/instance.env (user-data)
+# and from SSM through infra/scripts/render-env.sh.
+
+# prod removes compilers and build tools at the end; dev keeps them for debugging.
+hardening_profile: prod
+
+# Application identity on the box.
+hardening_app_user: docmatch
+hardening_app_group: docmatch
+hardening_app_home: /var/lib/docmatch
+hardening_app_bin_dir: /opt/docmatch/bin
+hardening_env_file: /run/docmatch/env
+hardening_caddy_env_file: /run/docmatch/env.caddy
+hardening_instance_env_file: /etc/docmatch/instance.env
+
+# Where infra/scripts lives relative to the playbook (Packer runs from the repo checkout).
+hardening_scripts_dir: "{{ playbook_dir }}/../scripts"
+
+# Memory budget of a t4g.small (2 GiB): PostgreSQL 512, harness 512, Go API + worker 150.
+hardening_mem_postgres: 512M
+hardening_mem_harness: 512M
+hardening_mem_go: 150M
+hardening_mem_caddy: 96M
+hardening_mem_crowdsec: 160M
+hardening_mem_falco: 192M
+hardening_mem_clamscan: 1200M
+hardening_zram_size_mb: 2048
+
+# Services: API on loopback, admin on a second loopback port never exposed, harness on a socket.
+hardening_api_listen: "127.0.0.1:8080"
+hardening_admin_listen: "127.0.0.1:8443"
+hardening_harness_socket: /run/docmatch-harness/harness.sock
+hardening_https_port: 443
+
+# Egress proxy (tinyproxy on loopback). The allowlist comes from DM_EGRESS_ALLOWLIST at boot.
+hardening_proxy_port: 8118
+hardening_proxy_user: tinyproxy
+hardening_proxy_allowlist_file: /etc/tinyproxy/filter
+hardening_no_proxy: "localhost,127.0.0.1,169.254.169.254,.amazonaws.com"
+
+# Users and groups allowed to open outbound connections directly (everything else goes through
+# the proxy or is dropped by nftables). ssm-agent runs as root.
+hardening_egress_direct_users:
+  - root
+  - "{{ hardening_app_user }}"
+  - postgres
+  - caddy
+  - _chrony
+
+# Users allowed to reach the instance metadata service (credentials).
+hardening_imds_users:
+  - root
+  - "{{ hardening_app_user }}"
+  - postgres
+  - caddy
+
+# Group that may use su.
+hardening_su_group: sugroup
+
+# Automatic security updates: 04:00 America/Sao_Paulo reboot window.
+hardening_timezone: America/Sao_Paulo
+hardening_reboot_time: "04:00"
+
+# Kernel modules never needed on a server.
+hardening_blacklisted_modules:
+  - dccp
+  - sctp
+  - rds
+  - tipc
+  - cramfs
+  - freevxfs
+  - jffs2
+  - hfs
+  - hfsplus
+  - squashfs
+  - udf
+  - usb-storage
+  - firewire-core
+  - bluetooth
+  - n-hdlc
+  - ax25
+  - netrom
+  - x25
+  - rose
+  - decnet
+  - econet
+  - af_802154
+  - ipx
+  - appletalk
+  - psnap
+  - p8023
+  - p8022
+  - can
+  - atm
+
+hardening_sysctl:
+  kernel.kptr_restrict: 2
+  kernel.dmesg_restrict: 1
+  kernel.randomize_va_space: 2
+  kernel.yama.ptrace_scope: 2
+  kernel.sysrq: 0
+  kernel.unprivileged_bpf_disabled: 1
+  kernel.kexec_load_disabled: 1
+  kernel.perf_event_paranoid: 3
+  kernel.core_uses_pid: 1
+  net.core.bpf_jit_harden: 2
+  fs.protected_hardlinks: 1
+  fs.protected_symlinks: 1
+  fs.protected_fifos: 2
+  fs.protected_regular: 2
+  fs.suid_dumpable: 0
+  net.ipv4.conf.all.rp_filter: 1
+  net.ipv4.conf.default.rp_filter: 1
+  net.ipv4.tcp_syncookies: 1
+  net.ipv4.conf.all.accept_redirects: 0
+  net.ipv4.conf.default.accept_redirects: 0
+  net.ipv4.conf.all.secure_redirects: 0
+  net.ipv4.conf.default.secure_redirects: 0
+  net.ipv4.conf.all.send_redirects: 0
+  net.ipv4.conf.default.send_redirects: 0
+  net.ipv4.conf.all.accept_source_route: 0
+  net.ipv4.conf.default.accept_source_route: 0
+  net.ipv4.conf.all.log_martians: 1
+  net.ipv4.conf.default.log_martians: 1
+  net.ipv4.icmp_echo_ignore_broadcasts: 1
+  net.ipv4.icmp_ignore_bogus_error_responses: 1
+  net.ipv4.ip_forward: 0
+  net.ipv4.tcp_rfc1337: 1
+  net.ipv4.tcp_timestamps: 1
+  net.ipv6.conf.all.accept_redirects: 0
+  net.ipv6.conf.default.accept_redirects: 0
+  net.ipv6.conf.all.accept_source_route: 0
+  net.ipv6.conf.default.accept_source_route: 0
+  # accept_ra stays at its default: EC2 delivers the IPv6 default route through router
+  # advertisements, and forwarding is off so RAs are honoured without the host acting as a router.
+  net.ipv6.conf.all.forwarding: 0
+  net.ipv6.conf.all.use_tempaddr: 0
+  net.ipv6.conf.default.use_tempaddr: 0
+  vm.swappiness: 120
+  vm.page-cluster: 0
+
+# Password quality and account aging.
+hardening_pwquality_minlen: 14
+hardening_pass_max_days: 365
+hardening_pass_min_days: 1
+hardening_pass_warn_age: 14
+hardening_umask: "027"
+hardening_login_timeout: 600
+
+# Packages removed in the prod profile (the image never compiles anything).
+hardening_compilers:
+  - gcc
+  - g++
+  - cpp
+  - make
+  - binutils
+  - clang
+  - tcc
+  - gfortran
+
+# PostgreSQL 18 from the PGDG repository.
+hardening_pg_version: 18
+hardening_pg_cluster: main
+hardening_pg_port: 5432
+hardening_pg_data_dir: "/var/lib/postgresql/{{ hardening_pg_version }}/{{ hardening_pg_cluster }}"
+hardening_pg_shared_buffers: 128MB
+hardening_pg_effective_cache_size: 384MB
+hardening_pg_work_mem: 4MB
+hardening_pg_maintenance_work_mem: 32MB
+hardening_pg_max_connections: 40
+
+# pgBackRest: the repository prefix in the backups bucket, bucket and region come from the env.
+hardening_pgbackrest_repo_path: /pgbackrest
+hardening_pgbackrest_full_day: Sun
+hardening_pgbackrest_retention_full: 2
+hardening_pgbackrest_retention_diff: 6
+
+# Caddy: official apt repository plus the Route 53 DNS module for the origin certificate.
+hardening_caddy_dns_module: github.com/caddy-dns/route53
+hardening_caddy_dns_module_version: v1.6.2
+hardening_caddy_crowdsec_module: github.com/hslatman/caddy-crowdsec-bouncer
+hardening_caddy_crowdsec_module_version: v0.15.0
+hardening_caddy_max_body: 600MB
+hardening_caddy_read_timeout: 30s
+hardening_caddy_header_timeout: 5s
+hardening_caddy_write_timeout: 300s
+hardening_caddy_idle_timeout: 120s
+hardening_caddy_max_header_bytes: 16384
+
+# Official package repositories used while building the image (never at runtime without the
+# proxy). Keys are verified by fingerprint before the repository is enabled.
+hardening_repo_caddy_key_url: https://dl.cloudsmith.io/public/caddy/stable/gpg.key
+hardening_repo_caddy_url: https://dl.cloudsmith.io/public/caddy/stable/deb/debian
+hardening_repo_caddy_fingerprint: "65760C51EDEA2017CEA2CA15155B6D79CA56EA34"
+hardening_repo_pgdg_key_url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+hardening_repo_pgdg_url: https://apt.postgresql.org/pub/repos/apt
+hardening_repo_pgdg_fingerprint: "B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8"
+hardening_repo_crowdsec_key_url: https://packagecloud.io/crowdsec/crowdsec/gpgkey
+hardening_repo_crowdsec_url: https://packagecloud.io/crowdsec/crowdsec/ubuntu
+hardening_repo_crowdsec_fingerprint: "6A89E3C2303A901A889971D3376ED5326E93CD0C"
+hardening_repo_falco_key_url: https://falco.org/repo/falcosecurity-packages.asc
+hardening_repo_falco_url: https://download.falco.org/packages/deb
+hardening_repo_falco_fingerprint: "478B2FBBC75F4237B731DA4365106822B35B1B1F"
+hardening_awscli_version: 2.39.4
+hardening_awscli_url: "https://awscli.amazonaws.com/awscli-exe-linux-aarch64-{{ hardening_awscli_version }}.zip"
+hardening_awscli_sha256: 76e4ac0f82b5b1ec68dfc747705fa3298c05e22648e5503f1869f0d035ad57bb
+hardening_aws_ip_ranges_url: https://ip-ranges.amazonaws.com/ip-ranges.json
+
+# AWS services whose published ranges the instance may reach directly (nftables sets).
+hardening_aws_ip_ranges_services:
+  - AMAZON
+hardening_aws_link_local_dns: "169.254.169.253"
+hardening_aws_link_local_ntp: "169.254.169.123"
+hardening_aws_link_local_imds: "169.254.169.254"
+hardening_aws_link_local_dns_v6: "fd00:ec2::253"
+hardening_aws_link_local_ntp_v6: "fd00:ec2::123"
+
+# Weekly ClamAV root scan and daily integrity checks (times in the instance timezone).
+hardening_clamscan_calendar: "Sun 03:00"
+hardening_aide_calendar: "*-*-* 04:30:00"
+hardening_rkhunter_calendar: "*-*-* 04:45:00"
+hardening_lynis_calendar: "Mon 05:00"
+
+# Break-glass access (fwknop + WireGuard) ships disabled; see templates for how to enable.
+hardening_breakglass_enabled: false
+hardening_wireguard_port: 51820
+hardening_fwknop_port: 62201
+
+# Banner text shown before any login.
+hardening_banner: |
+  Sistema privado da docmatch. Acesso restrito a pessoas autorizadas.
+  Toda atividade é registrada e auditada. Desconecte-se agora se não estiver autorizado.
