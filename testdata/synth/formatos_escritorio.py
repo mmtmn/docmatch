@@ -925,6 +925,18 @@ def main() -> None:
             ]
         ),
     )
+    # Entry names that must be cleaned: control characters, a name far past 200 characters
+    # and two names that are the same once cleaned.
+    write(
+        os.path.join(OUT, "nomes_estranhos.7z"),
+        sevenz(
+            [
+                ("extrato\x1b[31m.csv", bank_csv),
+                ("extrato[31m.csv", bank_csv),
+                ("pasta/" + "n" * 300 + ".csv", bank_csv),
+            ]
+        ),
+    )
     office_variant(protheus_csv, omie, bank, inbox)
     msg_variant(protheus, omie, bank_csv)
     print(f"fixtures gerados em {OUT}, {VARIANT_OFFICE} e {VARIANT_MSG}")

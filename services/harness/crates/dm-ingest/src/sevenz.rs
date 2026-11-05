@@ -308,7 +308,7 @@ pub fn read_7z(bytes: &[u8], lim: &ZipLimits) -> Result<(Vec<ZipEntry>, Vec<Stri
                 .get(block)
                 .copied()
                 .unwrap_or(0);
-            let names: Vec<&str> = archive
+            let names: Vec<String> = archive
                 .files
                 .iter()
                 .enumerate()
@@ -323,7 +323,7 @@ pub fn read_7z(bytes: &[u8], lim: &ZipLimits) -> Result<(Vec<ZipEntry>, Vec<Stri
                             == Some(block)
                         && !is_noise(&f.name)
                 })
-                .map(|(_, f)| f.name.as_str())
+                .map(|(_, f)| crate::archive::clean_name(&f.name))
                 .collect();
             for name in names {
                 warnings.push(format!("{name}: entrada não foi aberta ({reason})"));
@@ -395,6 +395,7 @@ pub fn read_7z(bytes: &[u8], lim: &ZipLimits) -> Result<(Vec<ZipEntry>, Vec<Stri
         }
     }
     entries.sort_by(|a, b| a.path.cmp(&b.path));
+    crate::archive::unique_paths(&mut entries);
     Ok((entries, warnings))
 }
 

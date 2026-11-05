@@ -328,6 +328,51 @@ fn sevenz_entries_are_sources_of_their_own() {
     assert_eq!(ids.len(), 3);
 }
 
+/// Entry names are cleaned like attachment names: no control characters, at most 200
+/// characters (start and extension kept), and names equal once cleaned stay apart.
+#[test]
+fn archive_entry_names_are_cleaned() {
+    let src = parse("escritorio/nomes_estranhos.7z");
+    let paths: Vec<&str> = src
+        .entries
+        .iter()
+        .map(|e| e.name.trim_start_matches("nomes_estranhos.7z/"))
+        .collect();
+    assert_eq!(paths.len(), 3, "{paths:?}");
+    assert_eq!(paths[0], "extrato[31m.csv");
+    assert_eq!(paths[1], "extrato[31m (2).csv");
+    assert!(paths[2].starts_with("pasta/nnn") && paths[2].ends_with("nnn.csv"));
+    assert_eq!(paths[2].chars().count(), 200);
+    for e in &src.entries {
+        assert!(!e.name.chars().any(char::is_control), "{:?}", e.name);
+        assert_eq!(e.tables[0].len(), 18);
+    }
+    let ids: std::collections::BTreeSet<&str> =
+        src.flatten().iter().map(|s| s.source_id.as_str()).collect();
+    assert_eq!(ids.len(), 4, "every entry is a source of its own");
+    // ZIP entries follow the same rule.
+    let mut zip = std::io::Cursor::new(Vec::new());
+    {
+        use std::io::Write;
+        let mut w = zip::ZipWriter::new(&mut zip);
+        let opts = zip::write::SimpleFileOptions::default();
+        for name in ["a\u{7}b.csv", &format!("{}.csv", "z".repeat(500))] {
+            w.start_file(name, opts).unwrap_or_else(|e| panic!("{e}"));
+            w.write_all(b"data;valor\n10/07/2026;1,00\n")
+                .unwrap_or_else(|e| panic!("{e}"));
+        }
+        w.finish().unwrap_or_else(|e| panic!("{e}"));
+    }
+    let src = parse_bytes("pacote.zip", zip.get_ref(), &InboxContext::default())
+        .unwrap_or_else(|e| panic!("{e}"));
+    let names: Vec<&str> = src.entries.iter().map(|e| e.name.as_str()).collect();
+    assert_eq!(names[0], "pacote.zip/ab.csv");
+    assert_eq!(
+        names[1].trim_start_matches("pacote.zip/").chars().count(),
+        200
+    );
+}
+
 #[test]
 fn containers_inside_containers_stay_closed() {
     let ctx = InboxContext::default();
