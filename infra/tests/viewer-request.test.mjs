@@ -24,7 +24,7 @@ const templateValues = {
   scanner_regex: 'sqlmap|nikto|nmap|masscan|zgrab|nuclei',
   probe_prefixes: ['/.env', '/.git', '/wp-admin', '/wp-login.php', '/xmlrpc.php', '/cgi-bin', '/phpmyadmin'],
   probe_suffixes: ['.php', '.asp', '.aspx', '.jsp', '.sql', '.bak', '.env'],
-  api_prefixes: ['/api/', '/auth/', '/webhooks/'],
+  api_prefixes: ['/v1/'],
 };
 
 function render(template, values) {
@@ -77,14 +77,19 @@ test('directory index: the root becomes /index.html, never //index.html', async 
   assert.equal(await rewrite('/'), '/index.html');
 });
 
-test('directory index: /docs and /docs/ both map to /docs/index.html', async () => {
-  assert.equal(await rewrite('/docs'), '/docs/index.html');
-  assert.equal(await rewrite('/docs/'), '/docs/index.html');
+test('clean URLs: /docs and /docs/ both map to /docs.html', async () => {
+  assert.equal(await rewrite('/docs'), '/docs.html');
+  assert.equal(await rewrite('/docs/'), '/docs.html');
 });
 
-test('directory index: a page without an extension gets its index.html', async () => {
-  assert.equal(await rewrite('/termos'), '/termos/index.html');
-  assert.equal(await rewrite('/docs/api/autenticacao'), '/docs/api/autenticacao/index.html');
+test('clean URLs: a page without an extension gets .html, at any depth', async () => {
+  assert.equal(await rewrite('/termos'), '/termos.html');
+  assert.equal(await rewrite('/blog/codigo-primeiro-modelo-depois'), '/blog/codigo-primeiro-modelo-depois.html');
+  assert.equal(await rewrite('/docs/api/autenticacao'), '/docs/api/autenticacao.html');
+});
+
+test('clean URLs: a dot in a parent directory does not count as an extension', async () => {
+  assert.equal(await rewrite('/.well-known/change-password'), '/.well-known/change-password.html');
 });
 
 test('files with an extension are left alone', async () => {
@@ -100,9 +105,11 @@ test('the root keeps its query string (the rewrite only touches the URI)', async
 });
 
 test('API paths are never rewritten and carry the origin secret', async () => {
-  const result = await handler(event({ uri: '/api/v1/runs' }));
-  assert.equal(result.uri, '/api/v1/runs');
-  assert.equal(result.headers[SECRET_HEADER].value, 's3cret');
+  for (const uri of ['/v1/runs', '/v1/auth/google/callback', '/v1/me']) {
+    const result = await handler(event({ uri }));
+    assert.equal(result.uri, uri);
+    assert.equal(result.headers[SECRET_HEADER].value, 's3cret');
+  }
 });
 
 test('scanner probe paths get an empty, uncacheable 404 before any origin', async () => {
@@ -123,7 +130,7 @@ test('scanner user agents are dropped; a missing user agent is only tolerated on
   assert.equal((await handler(event({ uri: '/', ua: 'sqlmap/1.8' }))).statusCode, 404);
   assert.equal((await handler(event({ uri: '/', ua: '' }))).statusCode, 404);
   assert.equal((await handler(event({ uri: '/', ua: null }))).statusCode, 404);
-  assert.equal((await handler(event({ uri: '/webhooks/stripe', ua: null }))).uri, '/webhooks/stripe');
+  assert.equal((await handler(event({ uri: '/v1/webhooks/stripe', ua: null }))).uri, '/v1/webhooks/stripe');
 });
 
 test('www is redirected to the apex with the path and query preserved', async () => {
@@ -141,7 +148,7 @@ test('www is redirected to the apex with the path and query preserved', async ()
 
 test('the viewer address header is overwritten, whatever the viewer sent', async () => {
   const spoofed = { [VIEWER_IP_HEADER]: { value: '10.9.9.9' } };
-  const result = await handler(event({ uri: '/api/v1/me', headers: spoofed }));
+  const result = await handler(event({ uri: '/v1/me', headers: spoofed }));
   assert.equal(result.headers[VIEWER_IP_HEADER].value, VIEWER_IP);
 });
 

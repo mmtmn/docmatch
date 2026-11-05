@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
-# Publishes apps/web/dist to the static site bucket and invalidates the CloudFront distribution.
-# Bucket and distribution come from the Terraform outputs of the environment; nothing is typed.
-# Hashed assets under _astro/ are immutable (one year); everything else revalidates in 5 minutes.
+# Builds apps/web for the environment and publishes it to the static site bucket, then invalidates
+# the CloudFront distribution. Site origin (also the API's: CloudFront routes /v1/* to the
+# instance), uploads bucket origin (CSP connect-src), security contact, bucket and distribution
+# all come from the Terraform outputs of the environment; nothing is typed. --dist publishes an
+# existing build instead. Hashed assets under _astro/ are immutable (one year); everything else
+# revalidates in 5 minutes.
 #
 # Uso: infra/scripts/deploy-site.sh [--env prod] [--dist apps/web/dist] [--no-invalidate] [--dry-run]
 set -euo pipefail
@@ -27,12 +30,24 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-dm_require aws terraform
+dm_require aws terraform make
 root="$(dm_repo_root)"
-dist="${dist:-$root/apps/web/dist}"
 env_dir="$root/infra/terraform/envs/$env"
 [[ -d "$env_dir" ]] || dm_die "ambiente desconhecido: $env"
-[[ -f "$dist/index.html" ]] || dm_die "build do site não encontrado em $dist (rode make -C apps/web build)"
+export AWS_PAGER=""
+
+if [[ -z "$dist" ]]; then
+  site_url="$(terraform -chdir="$env_dir" output -raw site_url)"
+  uploads_origin="$(terraform -chdir="$env_dir" output -raw uploads_origin)"
+  security_contact="$(terraform -chdir="$env_dir" output -raw security_contact_email)"
+  [[ -n "$site_url" && -n "$uploads_origin" ]] || dm_die "outputs do Terraform vazios; o ambiente já foi aplicado?"
+  dm_log "build do site para $site_url"
+  DM_PUBLIC_BASE_URL="$site_url" PUBLIC_DM_API_BASE_URL="$site_url" DM_UPLOAD_ORIGINS="$uploads_origin" \
+    PUBLIC_DM_SECURITY_CONTACT="$security_contact" PUBLIC_DM_FEATURE_RESULTS=false \
+    make -s -C "$root/apps/web" build
+  dist="$root/apps/web/dist"
+fi
+[[ -f "$dist/index.html" ]] || dm_die "build do site não encontrado em $dist"
 
 bucket="$(terraform -chdir="$env_dir" output -raw site_bucket_name)"
 distribution_id="$(terraform -chdir="$env_dir" output -raw cloudfront_distribution_id)"
@@ -44,14 +59,14 @@ extra=()
 
 if [[ -d "$dist/_astro" ]]; then
   aws s3 sync "$dist/_astro" "s3://$bucket/_astro" "${extra[@]}" \
-    --cache-control "public, max-age=31536000, immutable" --size-only --no-progress
+    --cache-control "public, max-age=31536000, immutable" --size-only --no-progress | cat
 fi
 aws s3 sync "$dist" "s3://$bucket" "${extra[@]}" --exclude "_astro/*" --delete --exact-timestamps \
-  --cache-control "public, max-age=300, must-revalidate" --no-progress
+  --cache-control "public, max-age=300, must-revalidate" --no-progress | cat
 
 if [[ $invalidate -eq 1 && $dry_run -eq 0 ]]; then
   invalidation_id="$(aws cloudfront create-invalidation --distribution-id "$distribution_id" \
-    --paths "/*" --query 'Invalidation.Id' --output text)"
+    --paths "/*" --query 'Invalidation.Id' --output text | cat)"
   dm_log "invalidação $invalidation_id criada; aguardando"
   aws cloudfront wait invalidation-completed --distribution-id "$distribution_id" --id "$invalidation_id"
 fi

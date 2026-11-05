@@ -29,6 +29,7 @@ k4_raw=$'abc\\'                         # trailing backslash
 k5_raw=''                               # empty
 # shellcheck disable=SC2016
 k6_raw='$HOME e "aspas" com = e espaços'
+k7_raw='__EMPTY__'                      # SSM cannot hold "": the sentinel renders as empty
 
 # What the EnvironmentFile must contain (systemd syntax) and what the service must receive.
 # shellcheck disable=SC1003,SC2016
@@ -39,6 +40,7 @@ expected_file=(
   'K4="abc\\"'
   'K5=""'
   'K6="$HOME e \"aspas\" com = e espaços"'
+  'K7=""'
 )
 # shellcheck disable=SC1003,SC2016
 expected_delivered=(
@@ -48,16 +50,18 @@ expected_delivered=(
   'K4=abc\'
   'K5='
   'K6=$HOME e "aspas" com = e espaços'
+  'K7='
 )
 
 # render() reads the GetParametersByPath document from $params.
-params="$(jq -n --arg k1 "$k1_raw" --arg k2 "$k2_raw" --arg k3 "$k3_raw" --arg k4 "$k4_raw" --arg k5 "$k5_raw" --arg k6 "$k6_raw" '{Parameters: [
+params="$(jq -n --arg k1 "$k1_raw" --arg k2 "$k2_raw" --arg k3 "$k3_raw" --arg k4 "$k4_raw" --arg k5 "$k5_raw" --arg k6 "$k6_raw" --arg k7 "$k7_raw" '{Parameters: [
   {Name: "/docmatch/test/K1", Value: $k1},
   {Name: "/docmatch/test/K2", Value: $k2},
   {Name: "/docmatch/test/K3", Value: $k3},
   {Name: "/docmatch/test/K4", Value: $k4},
   {Name: "/docmatch/test/K5", Value: $k5},
-  {Name: "/docmatch/test/K6", Value: $k6}]}')"
+  {Name: "/docmatch/test/K6", Value: $k6},
+  {Name: "/docmatch/test/K7", Value: $k7}]}')"
 render '.Parameters[]' > "$tmp/env"
 printf '%s\n' "${expected_file[@]}" > "$tmp/env.expected"
 if ! diff -u "$tmp/env.expected" "$tmp/env" >&2; then

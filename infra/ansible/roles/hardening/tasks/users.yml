@@ -31,6 +31,8 @@
     - { path: "{{ hardening_app_home }}/cache", owner: "{{ hardening_app_user }}", group: "{{ hardening_app_group }}", mode: "0750" }
     - { path: /opt/docmatch, owner: root, group: root, mode: "0755" }
     - { path: "{{ hardening_app_bin_dir }}", owner: root, group: root, mode: "0755" }
+    - { path: "{{ hardening_app_config_dir }}", owner: root, group: root, mode: "0755" }
+    - { path: "{{ hardening_media_dir }}", owner: "{{ hardening_app_user }}", group: "{{ hardening_app_group }}", mode: "0700" }
     - { path: /etc/docmatch, owner: root, group: "{{ hardening_app_group }}", mode: "0750" }
     - { path: /var/log/docmatch, owner: "{{ hardening_app_user }}", group: "{{ hardening_app_group }}", mode: "0750" }
   loop_control:

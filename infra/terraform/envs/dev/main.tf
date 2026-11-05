@@ -35,6 +35,8 @@ locals {
 module "storage" {
   source = "../../modules/storage"
 
+  uploads_cors_origins = ["https://${var.domain}"]
+
   name            = local.name
   account_id      = var.account_id
   region          = var.region
@@ -79,6 +81,7 @@ module "edge" {
   wait_for_certificate_validation  = var.wait_for_certificate_validation
   dmarc_rua_email                  = var.dmarc_rua_email
   extra_records                    = var.extra_dns_records
+  connect_src_extra                = [module.storage.uploads_origin]
 }
 
 module "sandbox" {
@@ -106,18 +109,17 @@ module "secrets" {
   env          = local.env
   secret_names = local.secret_names
 
-  config_values = {
+  config_values = merge({
     DM_ENV                    = local.env
     DM_DOMAIN                 = var.domain
     DM_PUBLIC_BASE_URL        = "https://${var.domain}"
-    DM_API_BASE_URL           = "https://${var.domain}/api"
+    DM_API_BASE_URL           = "https://${var.domain}"
     DM_ORIGIN_SECRET_HEADER   = module.edge.origin_secret_header_name
     DM_VIEWER_IP_HEADER       = module.edge.viewer_ip_header_name
     DM_ROUTE53_ZONE_ID        = module.edge.hosted_zone_id
     AWS_REGION                = var.region
     DM_S3_UPLOADS_BUCKET      = module.storage.bucket_names["uploads"]
     DM_S3_BACKUPS_BUCKET      = module.storage.bucket_names["backups"]
-    DM_SCAN_VERDICTS_QUEUE    = module.sandbox.verdict_queue_url
     DM_SCAN_VERDICTS_PREFIX   = module.sandbox.verdicts_prefix
     DM_SANDBOX_MEDIARUNNER    = module.sandbox.function_names["mediarunner"]
     DM_SANDBOX_TOOLRUNNER     = module.sandbox.function_names["toolrunner"]
@@ -129,7 +131,7 @@ module "secrets" {
     DM_ALERT_EMAIL            = var.alert_email
     DM_EGRESS_ALLOWLIST       = join(" ", var.egress_allowlist)
     DM_BACKUPS_PGBACKREST_KEY = "pgbackrest"
-  }
+  }, module.sandbox.enabled ? { DM_SCAN_QUEUE_URL = module.sandbox.verdict_queue_url } : {})
 }
 
 module "compute" {
@@ -145,6 +147,7 @@ module "compute" {
   security_group_id       = module.network.app_security_group_id
   ssm_path_prefix         = module.secrets.path_prefix
   uploads_bucket_arn      = module.storage.bucket_arns["uploads"]
+  releases_bucket_arn     = module.storage.bucket_arns["releases"]
   backups_bucket_arn      = module.storage.bucket_arns["backups"]
   verdict_queue_arn       = module.sandbox.verdict_queue_arn
   verdicts_prefix         = module.sandbox.verdicts_prefix

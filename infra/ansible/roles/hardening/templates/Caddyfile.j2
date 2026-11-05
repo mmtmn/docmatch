@@ -103,8 +103,9 @@ origin.{$DM_DOMAIN}:{{ hardening_https_port }} {
 	encode zstd gzip
 
 	reverse_proxy {{ hardening_api_listen }} {
+		# The API trusts X-Real-IP (and the viewer country) only when the origin secret matches,
+		# so the secret travels on the loopback hop too; the viewer never sees it.
 		header_up X-Real-IP {client_ip}
-		header_up -{$DM_ORIGIN_SECRET_HEADER}
 		transport http {
 			dial_timeout 5s
 			read_timeout {{ hardening_caddy_write_timeout }}

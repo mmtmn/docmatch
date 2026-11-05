@@ -69,3 +69,20 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "releases_noncurrent_days" {
+  description = "Days an overwritten object version of the releases bucket is kept."
+  type        = number
+  default     = 7
+}
+
+variable "uploads_cors_origins" {
+  description = "Site origins (https://<domain>) allowed to upload to the uploads bucket from the browser. Empty creates no CORS rule."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for o in var.uploads_cors_origins : can(regex("^https://[a-z0-9.-]+$", o))])
+    error_message = "uploads_cors_origins must be https origins without a path."
+  }
+}

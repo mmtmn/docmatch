@@ -43,9 +43,12 @@ const (
 	VarAPIListen     = "DM_API_LISTEN"
 	VarAdminListen   = "DM_ADMIN_LISTEN"
 	VarOriginSecret  = "DM_ORIGIN_SECRET"
-	VarVantaraPath   = "DM_VANTARA_PATH"
-	VarKillFlags     = "DM_KILL_FLAGS"
-	VarMaintenance   = "DM_MAINTENANCE"
+	// VarOriginSecretHeader names the header that carries DM_ORIGIN_SECRET
+	// (the CloudFront function sets it; Caddy checks and forwards it).
+	VarOriginSecretHeader = "DM_ORIGIN_SECRET_HEADER"
+	VarVantaraPath        = "DM_VANTARA_PATH"
+	VarKillFlags          = "DM_KILL_FLAGS"
+	VarMaintenance        = "DM_MAINTENANCE"
 
 	VarDatabaseURL       = "DATABASE_URL"
 	VarDBAppRole         = "DM_DB_APP_ROLE"
@@ -130,7 +133,9 @@ type Config struct {
 	APIListen     string
 	AdminListen   string
 	OriginSecret  Secret
-	VantaraPath   string
+	// OriginSecretHeader is the header name; empty keeps geo's default.
+	OriginSecretHeader string
+	VantaraPath        string
 	// KillFlags are feature flags forced off from the environment (layer 2 of
 	// the kill switches); they win over anything stored in the database.
 	KillFlags []string
@@ -270,6 +275,7 @@ func LoadFrom(lookup Lookup) (*Config, error) {
 	cfg.APIListen = r.listen(VarAPIListen)
 	cfg.AdminListen = r.listen(VarAdminListen)
 	cfg.OriginSecret = r.secret(VarOriginSecret, prod)
+	cfg.OriginSecretHeader = r.optional(VarOriginSecretHeader, "")
 	if prod && cfg.OriginSecret.Reveal() == placeholderOriginSecret {
 		r.problem(VarOriginSecret, "não pode manter o valor de exemplo em produção")
 	}
@@ -437,6 +443,7 @@ func (c *Config) redacted() [][2]string {
 		{VarAPIListen, c.APIListen},
 		{VarAdminListen, c.AdminListen},
 		{VarOriginSecret, presence(c.OriginSecret)},
+		{VarOriginSecretHeader, c.OriginSecretHeader},
 		{VarVantaraPath, c.VantaraPath},
 		{VarKillFlags, strings.Join(c.KillFlags, ",")},
 		{VarMaintenance, strconv.FormatBool(c.Maintenance)},
@@ -797,7 +804,7 @@ func (r *reader) address(name string) *mail.Address {
 // migration-time extras. The package tests check it against .env.example.
 func KnownVars() []string {
 	return []string{
-		VarEnv, VarPublicBaseURL, VarAPIBaseURL, VarAPIListen, VarAdminListen, VarOriginSecret, VarVantaraPath,
+		VarEnv, VarPublicBaseURL, VarAPIBaseURL, VarAPIListen, VarAdminListen, VarOriginSecret, VarOriginSecretHeader, VarVantaraPath,
 		VarKillFlags, VarMaintenance,
 		VarDatabaseURL, VarDBAppRole, VarAWSRegion, VarAWSAccessKeyID, VarAWSSecretKey, VarS3UploadsBucket, VarS3BackupsBucket, VarS3Endpoint,
 		VarR2AccountID, VarR2AccessKeyID, VarR2SecretAccessKey, VarR2MediaBucket, VarR2Endpoint, VarMediaLocalDir,

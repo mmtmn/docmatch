@@ -42,7 +42,7 @@ FULL_EXCLUDES := -exclude internal/db/sqlc -exclude internal/testdb -exclude int
 FLOORS        := -floor 85 -pkg internal/credits=95 -pkg internal/config=95 -pkg internal/auth=90 -pkg internal/session=90
 
 .PHONY: help setup tools generate proto sync sync-check sqlc-check fmt lint vet test test-integration \
-        vuln ci ci-full build dev migrate run-api run-worker clean
+        vuln ci ci-full build release dev migrate run-api run-worker clean
 
 help: ## lista os alvos
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -131,6 +131,15 @@ ci-full: ci test-integration ## portão de release: ci + integração + orçamen
 build: ## compila api, worker e migrate em bin/ com git sha nos ldflags
 	@mkdir -p bin
 	go build -trimpath -ldflags '$(LDFLAGS)' -o bin/ ./cmd/...
+
+# Binários da instância (Graviton): linux/arm64 estáticos, nomes das unidades systemd.
+RELEASE_DIR ?= $(ROOT)/dist/release
+release: ## binários linux/arm64 da instância em RELEASE_DIR (infra/scripts/deploy-app.sh)
+	@mkdir -p $(RELEASE_DIR)
+	for cmd in api worker migrate; do \
+	  CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags '$(LDFLAGS)' \
+	    -o $(RELEASE_DIR)/docmatch-$$cmd ./cmd/$$cmd; \
+	done
 
 # tools/dev/env.sh lê o .env com aspas seguras (valores com espaços e "<>").
 LOAD_ENV := eval "$$($(ROOT)/tools/dev/env.sh $(ROOT)/.env)"

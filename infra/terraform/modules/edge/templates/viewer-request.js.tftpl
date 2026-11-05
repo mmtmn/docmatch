@@ -1,7 +1,7 @@
 // docmatch viewer-request function (CloudFront Functions, JavaScript runtime 2.0).
 // 1. Known scanners and probe paths get an empty 404 before touching any origin.
 // 2. www is redirected to the apex.
-// 3. Static site paths get the Astro directory index appended.
+// 3. Static site paths get the .html of the Astro page (/termos -> /termos.html).
 // 4. The viewer address is written to a header the viewer cannot control (any value it sent is
 //    overwritten). Caddy on the instance derives {client_ip} from it, so fail2ban, CrowdSec and
 //    the API ban or rate-limit the real address, not a spoofed X-Forwarded-For.
@@ -75,16 +75,17 @@ async function handler(event) {
     };
   }
 
-  // Astro writes every page as <dir>/index.html. The root is its own case: '/' + '/index.html'
-  // would be '//index.html', which S3 answers with 404 (and default_root_object no longer
-  // applies once the function has rewritten the URI).
+  // Astro writes every page as <path>.html (build.format: 'file', trailingSlash: 'never'), so a
+  // clean URL gets the extension: /termos -> /termos.html, /blog/ -> /blog.html. The root is its
+  // own case (default_root_object no longer applies once the function rewrites the URI). Keep in
+  // sync with rewriteUri() in apps/web/tools/serve-dist.mjs, which the e2e suite runs against.
   if (!isApi) {
     if (uri === '/') {
       request.uri = '/index.html';
     } else if (uri.charAt(uri.length - 1) === '/') {
-      request.uri = uri + 'index.html';
+      request.uri = uri.slice(0, -1) + '.html';
     } else if (uri.indexOf('.', uri.lastIndexOf('/')) === -1) {
-      request.uri = uri + '/index.html';
+      request.uri = uri + '.html';
     }
   }
 

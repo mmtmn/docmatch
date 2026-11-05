@@ -14,6 +14,7 @@ Group={{ hardening_app_group }}
 EnvironmentFile={{ hardening_env_file }}
 Environment=DM_API_LISTEN={{ hardening_api_listen }} DM_ADMIN_LISTEN={{ hardening_admin_listen }} DM_HARNESS_SOCKET={{ hardening_harness_socket }}
 Environment=DM_LLM_CACHE_DIR={{ hardening_app_home }}/cache/llm GOMEMLIMIT=120MiB
+Environment=DM_MEDIA_LOCAL_DIR={{ hardening_media_dir }} DM_PRICING_FILE={{ hardening_app_config_dir }}/pricing.yaml DM_MODELS_FILE={{ hardening_app_config_dir }}/models.yaml
 WorkingDirectory={{ hardening_app_home }}
 ExecStart={{ hardening_app_bin_dir }}/docmatch-api
 Restart=always

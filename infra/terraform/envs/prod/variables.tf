@@ -137,3 +137,9 @@ variable "llm_mode" {
     error_message = "llm_mode must be openrouter, local or off."
   }
 }
+
+variable "create_packer_profile" {
+  description = "Create the instance profile the Packer build uses (true while prod is the only environment that builds AMIs)."
+  type        = bool
+  default     = true
+}

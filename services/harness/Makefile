@@ -13,7 +13,7 @@ WORKSPACE_CRATES := dm-core dm-validators dm-normalize dm-ingest dm-match dm-gra
                     dm-guard dm-llm dm-sandbox dm-report dm-server dm-eval dm-media dm-tools \
                     dm-planner dm
 
-.PHONY: help setup build lint fmt test deny audit ci ci-full clean dev serve
+.PHONY: help setup build lint fmt test deny audit ci ci-full clean dev serve release
 
 help: ## lista os alvos
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -64,3 +64,15 @@ dev: ## compila e mostra a ajuda do CLI `dm`
 
 serve: ## servidor gRPC do harness no socket de DM_HARNESS_SOCKET (fontes local:// em DM_MEDIA_LOCAL_DIR)
 	cargo run -p dm-server --release
+
+# dm-server estático para a instância (Graviton): musl ligado pelo rust-lld do próprio Rust, sem
+# toolchain C cruzada (o servidor não tem dependências em C; um crate novo com `cc` quebraria
+# este alvo de propósito). Sai como docmatch-harness, o nome da unidade systemd.
+RELEASE_TARGET ?= aarch64-unknown-linux-musl
+RELEASE_DIR ?= $(abspath ../../dist/release)
+release: ## dm-server linux/arm64 estático em RELEASE_DIR como docmatch-harness (infra/scripts/deploy-app.sh)
+	@rustup target list --installed | grep -qx '$(RELEASE_TARGET)' || rustup target add $(RELEASE_TARGET)
+	CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=rust-lld CARGO_PROFILE_RELEASE_STRIP=symbols \
+	  $(CARGO) build --release --locked -p dm-server --target $(RELEASE_TARGET)
+	@mkdir -p $(RELEASE_DIR)
+	install -m 0755 $(CARGO_TARGET_DIR)/$(RELEASE_TARGET)/release/dm-server $(RELEASE_DIR)/docmatch-harness
