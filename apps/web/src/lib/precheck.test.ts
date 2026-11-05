@@ -205,7 +205,10 @@ describe('precheckFiles', () => {
 });
 
 describe('shared precheck cases (testdata/precheck/cases.json)', () => {
-  const file = join(dirname(fileURLToPath(import.meta.url)), '../../../../testdata/precheck/cases.json');
+  const file = join(
+    dirname(fileURLToPath(import.meta.url)),
+    '../../../../testdata/precheck/cases.json',
+  );
   const { cases } = JSON.parse(readFileSync(file, 'utf8')) as {
     cases: { name: string; hex: string; kind?: string; reason?: string; mime?: string }[];
   };
