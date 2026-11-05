@@ -78,7 +78,7 @@ func (g *Group) Describe(ctx context.Context) (burst.Group, error) {
 	res := burst.Group{Desired: int(aws.ToInt32(asg.DesiredCapacity)), Max: int(aws.ToInt32(asg.MaxSize))}
 	for _, in := range asg.Instances {
 		res.Instances = append(res.Instances, burst.GroupInstance{
-			ID: aws.ToString(in.InstanceId), State: string(in.LifecycleState), Protected: aws.ToBool(in.ProtectedFromScaleIn),
+			ID: aws.ToString(in.InstanceId), Type: aws.ToString(in.InstanceType), State: string(in.LifecycleState), Protected: aws.ToBool(in.ProtectedFromScaleIn),
 		})
 	}
 	return res, nil

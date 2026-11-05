@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -30,11 +31,15 @@ type serverFixture struct {
 	run   uuid.UUID
 }
 
-func newServerFixture(t *testing.T) *serverFixture {
+func newServerFixture(t *testing.T, tune ...func(*Settings)) *serverFixture {
 	t.Helper()
 	s := testSettings()
 	s.LongPoll = 10 * time.Millisecond
+	for _, fn := range tune {
+		fn(&s)
+	}
 	f := &serverFixture{t: t, st: NewMemStore(), keys: mustKeys(t, testSecret), clock: &clock{now: time.Now().UTC()}, run: uuid.New()}
+	f.st.Now = f.clock.Now
 	f.srv = &Server{
 		Store: f.st, Keys: f.keys, Settings: s, Now: f.clock.Now,
 		Presign: func(_ context.Context, uri string, _ time.Duration) (string, bool, error) {
@@ -64,7 +69,7 @@ func (f *serverFixture) queue(sources ...string) Job {
 		req.Sources = append(req.Sources, &pb.Source{Id: "upl_1", Uri: u, SizeBytes: 8, Sha256: "ab"})
 	}
 	raw, _ := proto.Marshal(req)
-	j, err := f.st.CreateJob(context.Background(), Job{ID: uuid.New(), OrgID: uuid.New(), RunID: f.run, Request: raw, DeadlineSeconds: 7200, CreatedAt: f.clock.Now()})
+	j, err := f.st.CreateJob(context.Background(), Job{ID: uuid.New(), OrgID: uuid.New(), RunID: f.run, Request: raw, DeadlineSeconds: 7200}, 0)
 	if err != nil {
 		f.t.Fatal(err)
 	}
@@ -109,6 +114,10 @@ func TestServerClaimHandsASignedManifest(t *testing.T) {
 	f := newServerFixture(t)
 	if rec := f.do(http.MethodPost, PathClaim, nil, "i-1", ""); rec.Code != http.StatusNoContent {
 		t.Fatalf("fila vazia = %d", rec.Code)
+	}
+	// An empty claim leaves no trace in the usage (S3).
+	if seen, _ := f.st.InstanceSeen(context.Background(), "i-1", time.Hour); seen {
+		t.Fatal("pedido sem trabalho não pode contar horas")
 	}
 	job := f.queue("s3://uploads/quarantine/a", "local://t/a.csv")
 	m := f.claim("i-1")
@@ -156,15 +165,21 @@ func TestServerJobCalls(t *testing.T) {
 	if rec := f.do(http.MethodPost, path("events"), EventsRequest{Events: [][]byte{ev(1, runID), ev(2, runID)}}, "i-1", m.Token); rec.Code != http.StatusOK {
 		t.Fatalf("events = %d %s", rec.Code, rec.Body)
 	}
-	evs, _ := f.st.Events(context.Background(), uuid.MustParse(m.JobID), 0, 10)
+	evs, _ := f.st.Events(context.Background(), uuid.MustParse(m.JobID), 0, 10, 1<<20)
 	if len(evs) != 2 {
 		t.Fatalf("eventos gravados = %d", len(evs))
 	}
+	tooMany := make([][]byte, MaxEventsPerCall+1)
+	for i := range tooMany {
+		tooMany[i] = ev(uint64(i+3), runID) //nolint:gosec // small
+	}
 	for name, body := range map[string]any{
-		"outra execução": EventsRequest{Events: [][]byte{ev(3, "run_outra")}},
-		"seq zero":       EventsRequest{Events: [][]byte{ev(0, runID)}},
-		"lixo":           EventsRequest{Events: [][]byte{{0xff, 0xff}}},
-		"json errado":    "x",
+		"outra execução":     EventsRequest{Events: [][]byte{ev(3, "run_outra")}},
+		"seq zero":           EventsRequest{Events: [][]byte{ev(0, runID)}},
+		"lixo":               EventsRequest{Events: [][]byte{{0xff, 0xff}}},
+		"json errado":        "x",
+		"evento grande":      EventsRequest{Events: [][]byte{make([]byte, MaxEventBytes+1)}},
+		"lote acima do teto": EventsRequest{Events: tooMany},
 	} {
 		if rec := f.do(http.MethodPost, path("events"), body, "i-1", m.Token); rec.Code != http.StatusBadRequest {
 			t.Errorf("%s = %d", name, rec.Code)
@@ -193,12 +208,14 @@ func TestServerJobCalls(t *testing.T) {
 	if rec := f.do(http.MethodPost, path("finish"), FinishRequest{Outcome: "talvez"}, "i-1", m.Token); rec.Code != http.StatusBadRequest {
 		t.Fatalf("outcome inválido = %d", rec.Code)
 	}
-	if rec := f.do(http.MethodPost, path("finish"), FinishRequest{Outcome: "interrupted", Reason: strings.Repeat("x", 900)}, "i-1", m.Token); rec.Code != http.StatusOK {
+	// The reason keeps no presigned signature and is cut on a rune boundary.
+	reason := `Get "https://s3.example/k?X-Amz-Signature=segredo": EOF ` + strings.Repeat("ç", 400)
+	if rec := f.do(http.MethodPost, path("finish"), FinishRequest{Outcome: "interrupted", Reason: reason}, "i-1", m.Token); rec.Code != http.StatusOK {
 		t.Fatalf("finish = %d %s", rec.Code, rec.Body)
 	}
 	got, _, _ := f.st.GetJob(context.Background(), uuid.MustParse(m.JobID))
-	if got.State != StateInterrupted || len(got.Reason) != 500 {
-		t.Fatalf("job = %s %d", got.State, len(got.Reason))
+	if got.State != StateInterrupted || len(got.Reason) > reasonMax || strings.Contains(got.Reason, "segredo") || !strings.HasSuffix(got.Reason, "ç") {
+		t.Fatalf("job = %s %q", got.State, got.Reason)
 	}
 	// A finished job answers 410: the worker stops.
 	if rec := f.do(http.MethodPost, path("heartbeat"), struct{}{}, "i-1", m.Token); rec.Code != http.StatusGone {
@@ -206,26 +223,139 @@ func TestServerJobCalls(t *testing.T) {
 	}
 }
 
-func TestServerRefusesUnsignedCalls(t *testing.T) {
+func TestServerEventQuota(t *testing.T) {
+	t.Parallel()
+	f := newServerFixture(t, func(s *Settings) { s.Quota = EventQuota{MaxEvents: 2} })
+	f.queue()
+	m := f.claim("i-1")
+	ev := func(seq uint64) []byte {
+		raw, _ := proto.Marshal(&pb.RunEvent{RunId: m.RunID, Seq: seq, Event: &pb.RunEvent_Progress{Progress: &pb.Progress{}}})
+		return raw
+	}
+	if rec := f.do(http.MethodPost, JobPath(m.JobID, "events"), EventsRequest{Events: [][]byte{ev(1), ev(2)}}, "i-1", m.Token); rec.Code != http.StatusOK {
+		t.Fatalf("dentro da cota = %d", rec.Code)
+	}
+	if rec := f.do(http.MethodPost, JobPath(m.JobID, "events"), EventsRequest{Events: [][]byte{ev(3)}}, "i-1", m.Token); rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("acima da cota = %d", rec.Code)
+	}
+}
+
+// trap fails the test if the server reads the body of a request it should
+// have refused on its headers.
+type trap struct{ read bool }
+
+func (t *trap) Read([]byte) (int, error) { t.read = true; return 0, io.EOF }
+
+func TestServerChecksHeadersBeforeReadingTheBody(t *testing.T) {
 	t.Parallel()
 	f := newServerFixture(t)
-	req := httptest.NewRequest(http.MethodPost, PathClaim, nil)
+	f.queue()
+	m := f.claim("i-1")
+	for name, set := range map[string]func(*http.Request){
+		"sem assinatura": func(*http.Request) {},
+		"data velha": func(r *http.Request) {
+			f.keys.SignRequest(r, nil, "i-1", f.clock.Now().Add(-time.Hour))
+		},
+		"instância inválida": func(r *http.Request) {
+			f.keys.SignRequest(r, nil, "i-1", f.clock.Now())
+			r.Header.Set(HeaderInstance, "../../etc")
+		},
+	} {
+		body := &trap{}
+		req := httptest.NewRequest(http.MethodPost, JobPath(m.JobID, "events"), body)
+		set(req)
+		rec := httptest.NewRecorder()
+		f.h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnauthorized || body.read {
+			t.Errorf("%s: %d, corpo lido=%v", name, rec.Code, body.read)
+		}
+	}
+	// Well-formed headers but a declared body above the limit: refused unread.
+	body := &trap{}
+	req := httptest.NewRequest(http.MethodPost, JobPath(m.JobID, "events"), body)
+	req.ContentLength = MaxEventsBody + 1
+	f.keys.SignRequest(req, nil, "i-1", f.clock.Now())
+	req.Header.Set("Authorization", "Bearer "+m.Token)
 	rec := httptest.NewRecorder()
 	f.h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("sem assinatura = %d", rec.Code)
+	if rec.Code != http.StatusRequestEntityTooLarge || body.read {
+		t.Fatalf("corpo declarado grande = %d, lido=%v", rec.Code, body.read)
+	}
+	big := httptest.NewRequest(http.MethodPost, PathClaim, bytes.NewReader(make([]byte, maxSmallBody+1)))
+	f.keys.SignRequest(big, nil, "i-1", f.clock.Now())
+	rec = httptest.NewRecorder()
+	f.h.ServeHTTP(rec, big)
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("corpo grande = %d", rec.Code)
+	}
+}
+
+func TestServerBoundsConcurrency(t *testing.T) {
+	t.Parallel()
+	f := newServerFixture(t, func(s *Settings) { s.LongPoll = 300 * time.Millisecond; s.ClaimSlots = 1; s.EventSlots = 1 })
+	// One open claim per instance: a second one from i-1 is refused...
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_ = f.do(http.MethodPost, PathClaim, nil, "i-1", "")
+	}()
+	time.Sleep(50 * time.Millisecond)
+	if rec := f.do(http.MethodPost, PathClaim, nil, "i-1", ""); rec.Code != http.StatusConflict {
+		t.Fatalf("segundo pedido da mesma instância = %d", rec.Code)
+	}
+	// ...and with the one global slot taken, another instance waits outside.
+	if rec := f.do(http.MethodPost, PathClaim, nil, "i-2", ""); rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("sem vaga global = %d", rec.Code)
+	}
+	wg.Wait()
+	// Event posts beyond EventSlots get 503 (the worker keeps them for later).
+	f.queue()
+	m := f.claim("i-1")
+	f.srv.events <- struct{}{}
+	if rec := f.do(http.MethodPost, JobPath(m.JobID, "events"), EventsRequest{}, "i-1", m.Token); rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("eventos sem vaga = %d", rec.Code)
+	}
+	<-f.srv.events
+}
+
+func TestServerManagedPoolServesOnlyItsGroup(t *testing.T) {
+	t.Parallel()
+	f := newServerFixture(t, func(s *Settings) { s.Managed = true })
+	f.queue()
+	// An instance the scaler never saw in the group (a self-asserted id) is refused.
+	if rec := f.do(http.MethodPost, PathClaim, nil, "i-forjada", ""); rec.Code != http.StatusForbidden {
+		t.Fatalf("instância desconhecida = %d", rec.Code)
+	}
+	if rec := f.do(http.MethodPost, PathHello, HelloRequest{}, "i-forjada", ""); rec.Code != http.StatusForbidden {
+		t.Fatalf("aviso de desconhecida = %d", rec.Code)
+	}
+	_ = f.st.TouchInstance(context.Background(), Instance{ID: "i-0abc"}) // the scaler saw it
+	m := f.claim("i-0abc")
+	if m.JobID == "" {
+		t.Fatal("instância do grupo deveria receber o trabalho")
+	}
+}
+
+func TestServerHelloKeepsTheLastError(t *testing.T) {
+	t.Parallel()
+	f := newServerFixture(t)
+	rec := f.do(http.MethodPost, PathHello, HelloRequest{Version: "dev+abc", LastError: `Get "https://s3.example/k?X-Amz-Signature=segredo": timeout`}, "local-1", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("hello = %d %s", rec.Code, rec.Body)
+	}
+	c, ok := f.st.LastContact("local-1")
+	if !ok || c.Version != "dev+abc" || strings.Contains(c.LastError, "segredo") || !strings.Contains(c.LastError, "timeout") {
+		t.Fatalf("contato = %+v %v", c, ok)
+	}
+	if rec := f.do(http.MethodPost, PathHello, "x", "local-1", ""); rec.Code != http.StatusBadRequest {
+		t.Fatalf("corpo inválido = %d", rec.Code)
 	}
 	if rec := f.do(http.MethodGet, PathHealth, nil, "i-1", ""); rec.Code != http.StatusOK {
 		t.Fatalf("health = %d", rec.Code)
 	}
 	if rec := f.do(http.MethodPost, PathClaim, "não é objeto", "i-1", ""); rec.Code != http.StatusBadRequest {
 		t.Fatalf("corpo inválido = %d", rec.Code)
-	}
-	big := httptest.NewRequest(http.MethodPost, PathClaim, bytes.NewReader(make([]byte, maxSmallBody+1)))
-	rec = httptest.NewRecorder()
-	f.h.ServeHTTP(rec, big)
-	if rec.Code != http.StatusRequestEntityTooLarge {
-		t.Fatalf("corpo grande = %d", rec.Code)
 	}
 }
 

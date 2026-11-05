@@ -28,16 +28,16 @@ type Pool struct {
 	scaler     *burst.Scaler
 }
 
-// newPool builds the pool when the configuration turns it on (routing or
-// the internal endpoint); nil otherwise.
+// newPool builds the pool when the configuration needs it: routing on, the
+// internal endpoint open, or an Auto Scaling group to look after (with the
+// pool off, the scaler drains it). nil otherwise.
 func newPool(cfg *config.Config, sys *System) (*Pool, error) {
 	b := cfg.Burst
-	if !b.Enabled && b.Listen == "" {
-		return nil, nil
+	if b.Off != "" {
+		sys.log.Warn(b.Off)
 	}
-	keys, err := burst.DeriveKeys(b.PoolSecret.Reveal())
-	if err != nil {
-		return nil, err
+	if !b.Enabled && b.Listen == "" && b.ASGName == "" {
+		return nil, nil
 	}
 	var largeAfter int64
 	var boot float64
@@ -46,9 +46,19 @@ func newPool(cfg *config.Config, sys *System) (*Pool, error) {
 	}
 	settings := burst.FromConfig(b, largeAfter, boot)
 	store := burstpg.New(sys.pool)
-	p := &Pool{Settings: settings, Store: store, Keys: keys, Router: &burst.Router{Settings: settings, Store: store}}
+	p := &Pool{Settings: settings, Store: store}
+	if b.Enabled || b.Listen != "" {
+		keys, err := burst.DeriveKeys(b.PoolSecret.Reveal())
+		if err != nil {
+			return nil, err
+		}
+		p.Keys = keys
+	}
 	p.scaler = burst.NewScaler(store, nil, settings, sys.log)
-	p.Dispatcher = &burst.Dispatcher{Store: store, Settings: settings, Wake: p.scaler.Wake, Logger: sys.log}
+	if b.Enabled {
+		p.Router = &burst.Router{Settings: settings, Store: store}
+		p.Dispatcher = &burst.Dispatcher{Store: store, Settings: settings, Wake: p.scaler.Wake, Logger: sys.log}
+	}
 	return p, nil
 }
 
@@ -148,7 +158,8 @@ func (s *System) BurstScaler(ctx context.Context) (*burst.Scaler, error) {
 			return nil, err
 		}
 		sc.ASG = g
-		s.log.Info("pool sob demanda ligado ao grupo de Auto Scaling", slog.String("asg", name), slog.Int("max", s.Pool.Settings.MaxInstances), slog.Float64("monthly_hours", s.Pool.Settings.MonthlyHours))
+		s.log.Info("pool sob demanda ligado ao grupo de Auto Scaling", slog.String("asg", name), slog.Bool("enabled", s.Pool.Settings.Enabled),
+			slog.Int("max", s.Pool.Settings.MaxInstances), slog.Float64("monthly_hours", s.Pool.Settings.MonthlyHours))
 	}
 	return sc, nil
 }

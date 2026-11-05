@@ -38,6 +38,27 @@ func TestPoolIsOffUnlessConfigured(t *testing.T) {
 	}
 }
 
+// TestASwitchedOffPoolStillDrains: with the pool off but its group
+// configured, the worker keeps a scaler (to bring the group back to zero and
+// unprotect what finished), and nothing routes runs or opens the endpoint.
+func TestASwitchedOffPoolStillDrains(t *testing.T) {
+	t.Parallel()
+	cfg := &config.Config{Burst: config.Burst{ASGName: "docmatch-test-worker", Off: "segredo vazio"}, Storage: config.Storage{AWSRegion: "us-east-1"}}
+	sys := &System{cfg: cfg, log: logx.Discard()}
+	p, err := newPool(cfg, sys)
+	if err != nil || p == nil || p.Router != nil || p.Dispatcher != nil || p.Settings.Enabled {
+		t.Fatalf("pool desligado = %+v %v", p, err)
+	}
+	sys.Pool = p
+	if sys.BurstServer() != nil {
+		t.Fatal("pool desligado não abre o endpoint")
+	}
+	sc, err := sys.BurstScaler(context.Background())
+	if err != nil || sc == nil || sc.ASG == nil || sc.Settings.Enabled {
+		t.Fatalf("escalonador de drenagem = %+v %v", sc, err)
+	}
+}
+
 func TestPoolAssembly(t *testing.T) {
 	t.Parallel()
 	cfg := &config.Config{
@@ -53,7 +74,9 @@ func TestPoolAssembly(t *testing.T) {
 	if err != nil || p == nil {
 		t.Fatalf("pool = %v %v", p, err)
 	}
-	if p.Settings.MinSeconds != 900 || p.Settings.BootSeconds != 150 || p.Router == nil || p.Dispatcher == nil {
+	// Managed (an Auto Scaling group): the scaler measures instances from
+	// Pending on, so no boot charge on top.
+	if p.Settings.MinSeconds != 900 || p.Settings.BootSeconds != 0 || !p.Settings.Managed || p.Router == nil || p.Dispatcher == nil {
 		t.Fatalf("settings = %+v", p.Settings)
 	}
 	sys.Pool = p

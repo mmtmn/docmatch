@@ -64,7 +64,6 @@ func TestBurstSettings(t *testing.T) {
 func TestBurstSettingsProblems(t *testing.T) {
 	t.Parallel()
 	cases := map[string]map[string]string{
-		VarBurstPoolSecret:     {VarBurstEnabled: "1"},
 		VarBurstListen:         {VarBurstListen: "endereço", VarBurstPoolSecret: samplePoolSecret},
 		VarBurstMaxInstances:   {VarBurstMaxInstances: "-1"},
 		VarBurstMonthlyHours:   {VarBurstMonthlyHours: "muitas"},
@@ -86,11 +85,31 @@ func TestBurstSettingsProblems(t *testing.T) {
 			t.Errorf("%s: err = %v", want, err)
 		}
 	}
+}
+
+// TestAnUnsetPoolSecretNeverStopsTheBoot: the parameter is created as
+// __EMPTY__ (rendered as ""), and an operator may turn the pool on before
+// filling it. The process boots with the pool off and says why.
+func TestAnUnsetPoolSecretNeverStopsTheBoot(t *testing.T) {
+	t.Parallel()
+	for name, secret := range map[string]string{"vazio": "", "curto": "curto"} {
+		env := validEnv()
+		env[VarBurstEnabled] = "1"
+		env[VarBurstListen] = "0.0.0.0:8444"
+		env[VarBurstPoolSecret] = secret
+		cfg, err := LoadFrom(lookupFrom(env))
+		if err != nil {
+			t.Fatalf("%s: o boot não pode falhar: %v", name, err)
+		}
+		if cfg.Burst.Enabled || cfg.Burst.Listen != "" || !strings.Contains(cfg.Burst.Off, VarBurstPoolSecret) {
+			t.Fatalf("%s: pool deveria ficar desligado: %+v", name, cfg.Burst)
+		}
+	}
 	env := validEnv()
-	env[VarBurstListen] = "0.0.0.0:8444"
-	env[VarBurstPoolSecret] = "curto"
-	if _, err := LoadFrom(lookupFrom(env)); err == nil || !slices.Contains(validationVars(t, err), VarBurstPoolSecret) {
-		t.Fatalf("segredo curto: %v", err)
+	env[VarBurstEnabled] = "1"
+	env[VarBurstPoolSecret] = samplePoolSecret
+	if cfg := mustLoad(t, env); !cfg.Burst.Enabled || cfg.Burst.Off != "" {
+		t.Fatalf("com segredo: %+v", cfg.Burst)
 	}
 }
 

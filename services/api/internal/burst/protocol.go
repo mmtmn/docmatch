@@ -51,6 +51,20 @@ const (
 	PathPrefix = "/internal/burst/v1/"
 	PathClaim  = PathPrefix + "claim"
 	PathHealth = PathPrefix + "health"
+	PathHello  = PathPrefix + "hello"
+)
+
+// Limits of the internal endpoint; the worker sizes its batches with them.
+const (
+	// MaxEventsPerCall bounds the events of one post.
+	MaxEventsPerCall = 1000
+	// MaxEventsBody bounds the body of an events post (JSON, events in base64).
+	MaxEventsBody = 4 << 20
+	// MaxEventBytes bounds one event (protobuf).
+	MaxEventBytes = 1 << 20
+	// MaxBatchBytes is the raw size the worker packs per post: base64 adds a
+	// third, JSON a little more, and the body stays under MaxEventsBody.
+	MaxBatchBytes = 2 << 20
 )
 
 // JobPath is the path of a job action (heartbeat, events, finish, sources/<n>).
@@ -124,27 +138,57 @@ func (k Keys) SignRequest(req *http.Request, body []byte, instanceID string, now
 	req.Header.Set(HeaderSignature, hex.EncodeToString(sig))
 }
 
-// VerifyRequest checks the signature headers against the request and its
-// body and returns the instance that signed it.
-func (k Keys) VerifyRequest(req *http.Request, body []byte, now time.Time) (string, error) {
+// Signed holds the signature headers of a call, checked before its body is
+// read: a caller without the secret cannot make the endpoint buffer a body.
+type Signed struct {
+	Instance string
+	date     string
+	sig      []byte
+}
+
+// CheckHeaders validates the format of the signature headers, the instance
+// and the date (MaxClockSkew); the MAC itself needs the body (VerifyBody).
+func (k Keys) CheckHeaders(req *http.Request, now time.Time) (Signed, error) {
 	instance := req.Header.Get(HeaderInstance)
 	date := req.Header.Get(HeaderDate)
-	got, err := hex.DecodeString(req.Header.Get(HeaderSignature))
-	if err != nil || len(got) == 0 || !validInstance(instance) {
-		return "", ErrBadSignature
+	sigHex := req.Header.Get(HeaderSignature)
+	if len(sigHex) != 2*sha256.Size || !validInstance(instance) || len(date) == 0 || len(date) > 20 {
+		return Signed{}, ErrBadSignature
+	}
+	got, err := hex.DecodeString(sigHex)
+	if err != nil {
+		return Signed{}, ErrBadSignature
 	}
 	sec, err := strconv.ParseInt(date, 10, 64)
 	if err != nil {
-		return "", ErrBadSignature
+		return Signed{}, ErrBadSignature
 	}
 	if d := now.Sub(time.Unix(sec, 0)); d > MaxClockSkew || d < -MaxClockSkew {
-		return "", ErrExpired
+		return Signed{}, ErrExpired
 	}
-	want := mac(k.request, req.Method, req.URL.EscapedPath(), date, instance, bodyHash(body))
-	if !hmac.Equal(got, want) {
-		return "", ErrBadSignature
+	return Signed{Instance: instance, date: date, sig: got}, nil
+}
+
+// VerifyBody checks the MAC of a call whose headers passed CheckHeaders.
+func (k Keys) VerifyBody(h Signed, req *http.Request, body []byte) error {
+	want := mac(k.request, req.Method, req.URL.EscapedPath(), h.date, h.Instance, bodyHash(body))
+	if len(h.sig) == 0 || !hmac.Equal(h.sig, want) {
+		return ErrBadSignature
 	}
-	return instance, nil
+	return nil
+}
+
+// VerifyRequest checks the signature headers against the request and its
+// body and returns the instance that signed it (CheckHeaders + VerifyBody).
+func (k Keys) VerifyRequest(req *http.Request, body []byte, now time.Time) (string, error) {
+	h, err := k.CheckHeaders(req, now)
+	if err != nil {
+		return "", err
+	}
+	if err := k.VerifyBody(h, req, body); err != nil {
+		return "", err
+	}
+	return h.Instance, nil
 }
 
 // validInstance accepts EC2 ids and the names local workers use.

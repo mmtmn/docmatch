@@ -12,7 +12,9 @@ import (
 )
 
 type Querier interface {
+	// Abandona só um trabalho que ainda está na fila e já esperou wait_seconds pelo relógio do banco.
 	AbandonBurstJob(ctx context.Context, arg AbandonBurstJobParams) (int64, error)
+	AddBurstJobEvents(ctx context.Context, arg AddBurstJobEventsParams) error
 	AddMembership(ctx context.Context, arg AddMembershipParams) error
 	AppendAudit(ctx context.Context, arg AppendAuditParams) (AuditLog, error)
 	// O lançamento recebe o próximo número de sequência da conta na mesma
@@ -82,10 +84,12 @@ type Querier interface {
 	AuthTenantKey(ctx context.Context, orgID uuid.UUID) (TenantKey, error)
 	AuthTouchSession(ctx context.Context, id uuid.UUID) error
 	AuthUpdateOrgName(ctx context.Context, arg AuthUpdateOrgNameParams) error
-	// Segundos de instância do mês: o trecho de cada instância dentro de [month_start, now] mais o boot
-	// das que nasceram nele.
+	BurstInstanceSeen(ctx context.Context, arg BurstInstanceSeenParams) (bool, error)
+	// Segundos de instância do mês: o trecho de cada instância dentro de [month_start, now()] mais o
+	// boot das que nasceram nele.
 	BurstUsageSeconds(ctx context.Context, arg BurstUsageSecondsParams) (float64, error)
 	CancelBurstJob(ctx context.Context, arg CancelBurstJobParams) (int64, error)
+	CancelLiveBurstJobForRun(ctx context.Context, arg CancelLiveBurstJobForRunParams) (int64, error)
 	// Forma canônica de um jsonb (chaves ordenadas, sem espaços redundantes).
 	CanonicalJSON(ctx context.Context, dollar_1 []byte) (string, error)
 	// O mais antigo na fila vai para quem pediu; SKIP LOCKED deixa dois pedidos simultâneos com
@@ -100,8 +104,9 @@ type Querier interface {
 	CountActiveRuns(ctx context.Context, orgID uuid.UUID) (int64, error)
 	CountBurstJobs(ctx context.Context) (CountBurstJobsRow, error)
 	CountFindingsByRun(ctx context.Context, arg CountFindingsByRunParams) (int64, error)
-	// Instâncias vivas (ouvidas desde live_since) e as que delas estão sem trabalho.
-	CountLiveBurstInstances(ctx context.Context, liveSince time.Time) (CountLiveBurstInstancesRow, error)
+	// Instâncias vivas (ouvidas na janela) e as que delas estão sem trabalho.
+	CountLiveBurstInstances(ctx context.Context, windowSeconds int32) (CountLiveBurstInstancesRow, error)
+	CountLiveBurstJobs(ctx context.Context) (int64, error)
 	CountModelPrices(ctx context.Context) (int64, error)
 	CountRecentMagicLinks(ctx context.Context, arg CountRecentMagicLinksParams) (int64, error)
 	CountRecentUploads(ctx context.Context, arg CountRecentUploadsParams) (int64, error)
@@ -143,7 +148,8 @@ type Querier interface {
 	// Enfileira só se a chave ainda não existe; sem linha de volta, já estava lá.
 	EnqueueOutboxOnce(ctx context.Context, arg EnqueueOutboxOnceParams) (Outbox, error)
 	EnsureCreditAccount(ctx context.Context, orgID uuid.UUID) (CreditAccount, error)
-	ExpireBurstLeases(ctx context.Context, now *time.Time) ([]uuid.UUID, error)
+	ExpireBurstLeases(ctx context.Context) ([]uuid.UUID, error)
+	// Uma concessão vencida não revive: só o escalonador ou o despachante a encerram.
 	ExtendBurstLease(ctx context.Context, arg ExtendBurstLeaseParams) (int64, error)
 	FinishBurstJob(ctx context.Context, arg FinishBurstJobParams) (int64, error)
 	FinishIdempotencyKey(ctx context.Context, arg FinishIdempotencyKeyParams) error
@@ -165,6 +171,8 @@ type Querier interface {
 	GetCreditHoldForUpdate(ctx context.Context, arg GetCreditHoldForUpdateParams) (CreditHold, error)
 	GetFindingByID(ctx context.Context, arg GetFindingByIDParams) (Finding, error)
 	GetIdempotencyKey(ctx context.Context, arg GetIdempotencyKeyParams) (IdempotencyKey, error)
+	// O trabalho mais novo da execução, em qualquer estado (reconexão a um que terminou sem ninguém ler).
+	GetLatestBurstJobForRun(ctx context.Context, runID uuid.UUID) (BurstJob, error)
 	GetLiveBurstJobForRun(ctx context.Context, runID uuid.UUID) (BurstJob, error)
 	GetMembership(ctx context.Context, arg GetMembershipParams) (Membership, error)
 	GetOrg(ctx context.Context, id uuid.UUID) (Org, error)
@@ -185,9 +193,7 @@ type Querier interface {
 	GetWorkflow(ctx context.Context, arg GetWorkflowParams) (Workflow, error)
 	InsertAPIUsage(ctx context.Context, arg InsertAPIUsageParams) error
 	// Um evento por linha, todos do lote na mesma transação; um seq já gravado é ignorado.
-	InsertBurstEvent(ctx context.Context, arg InsertBurstEventParams) error
-	// Pool de trabalhadores sob demanda (docs/escala.md). Tudo em modo sistema: o worker principal
-	// enfileira e lê, a API entrega e grava os eventos, o escalonador mede o pool.
+	InsertBurstEvent(ctx context.Context, arg InsertBurstEventParams) (int64, error)
 	InsertBurstJob(ctx context.Context, arg InsertBurstJobParams) (BurstJob, error)
 	InsertCreditGrant(ctx context.Context, arg InsertCreditGrantParams) (CreditGrant, error)
 	InsertCreditHold(ctx context.Context, arg InsertCreditHoldParams) (CreditHold, error)
@@ -231,6 +237,8 @@ type Querier interface {
 	ListAllMatchesByRun(ctx context.Context, arg ListAllMatchesByRunParams) ([]Match, error)
 	ListAuditByOrg(ctx context.Context, arg ListAuditByOrgParams) ([]AuditLog, error)
 	ListAuditRange(ctx context.Context, arg ListAuditRangeParams) ([]ListAuditRangeRow, error)
+	// Os eventos depois de after_seq, em ordem, até max_rows linhas e max_bytes bytes (a primeira
+	// linha sempre vem, para o leitor nunca parar).
 	ListBurstEvents(ctx context.Context, arg ListBurstEventsParams) ([]ListBurstEventsRow, error)
 	ListBusyBurstInstances(ctx context.Context) ([]string, error)
 	ListCreditLedger(ctx context.Context, arg ListCreditLedgerParams) ([]CreditLedger, error)
@@ -268,16 +276,26 @@ type Querier interface {
 	// Lista as organizações de um usuário (atravessa locatários: modo sistema).
 	ListUserMemberships(ctx context.Context, userID uuid.UUID) ([]ListUserMembershipsRow, error)
 	ListWorkflowsPage(ctx context.Context, arg ListWorkflowsPageParams) ([]Workflow, error)
+	// Pool de trabalhadores sob demanda (docs/escala.md). Tudo em modo sistema: o worker principal
+	// enfileira e lê, a API entrega e grava os eventos, o escalonador mede o pool. Concessões, fins e
+	// horas usam o relógio do banco (now()), o mesmo para a API e para o worker.
+	// A reserva de lugar no pool é atômica: quem cria um trabalho segura este lock até o fim da
+	// transação, conta os vivos e só então insere (dois despachos simultâneos nunca passam do teto).
+	LockBurstCapacity(ctx context.Context) error
+	// A cota de eventos por trabalho: a linha do trabalho fica travada enquanto o lote entra.
+	LockBurstJobEvents(ctx context.Context, id uuid.UUID) (LockBurstJobEventsRow, error)
 	MarkCreditGrantExpired(ctx context.Context, arg MarkCreditGrantExpiredParams) error
 	MarkOutboxSent(ctx context.Context, id uuid.UUID) error
 	MarkStripeEventFailed(ctx context.Context, arg MarkStripeEventFailedParams) error
 	MarkStripeEventProcessed(ctx context.Context, id string) error
 	// Próxima execução da fila (modo sistema; o worker define app.org_id depois).
 	NextQueuedRun(ctx context.Context) (Run, error)
+	// O aviso de vida do trabalhador: só atualiza uma instância que já existe.
+	NoteBurstContact(ctx context.Context, arg NoteBurstContactParams) (int64, error)
 	// Uma falta de trabalhador a mais; no limiar o pool entra em espera e a contagem recomeça.
 	NoteBurstNoClaim(ctx context.Context, arg NoteBurstNoClaimParams) error
 	PromoteRule(ctx context.Context, arg PromoteRuleParams) (Rule, error)
-	PruneBurstJobs(ctx context.Context, finishedAt *time.Time) (int64, error)
+	PruneBurstJobs(ctx context.Context, olderThanSeconds int32) (int64, error)
 	RemoveMembership(ctx context.Context, arg RemoveMembershipParams) (int64, error)
 	ResetBurstPool(ctx context.Context) error
 	RetryOutboxLater(ctx context.Context, arg RetryOutboxLaterParams) error

@@ -37,6 +37,9 @@ func (s *Service) Execute(ctx context.Context, orgID, runID uuid.UUID, lastAttem
 		return fmt.Errorf("runs: ler execução: %w", err)
 	}
 	if !ok || r.Status.Terminal() || r.Status == StatusNeedsApproval {
+		if ok && r.Status.Terminal() {
+			s.dropRemote(ctx, r, "execução já encerrada")
+		}
 		return nil
 	}
 	log := s.d.Logger.With(slog.String("run_id", r.PublicID()))
@@ -80,7 +83,18 @@ func (s *Service) Execute(ctx context.Context, orgID, runID uuid.UUID, lastAttem
 	timing := r.Timing()
 	budget := s.d.Deadlines.For(timing.Budget())
 	deadline := time.Now().Add(budget)
-	place := s.place(ctx, timing)
+	// On the pool the job may first wait for a worker (Deadlines.Wait).
+	window := budget
+	if s.d.Remote != nil {
+		window += s.d.Deadlines.Wait
+	}
+	runCtx, cancel := context.WithTimeout(ctx, window)
+	defer cancel()
+	// A job the pool already has for this run wins over a new decision.
+	place, attached, err := s.attachOrPlace(runCtx, &r, timing, budget)
+	if err != nil {
+		return s.streamFailure(ctx, &r, err, lastAttempt)
+	}
 	req := &pb.RunRequest{
 		RunId: r.PublicID(), TenantId: apix.Encode(apix.PrefixOrg, orgID),
 		Sources: append(estimate.BuildSources(r.Inputs.Request.Sources, loaded.Docs, s.d.URI), estimate.BuildSources(r.Inputs.Request.MediaSources, loaded.Media, s.d.URI)...),
@@ -101,14 +115,7 @@ func (s *Service) Execute(ctx context.Context, orgID, runID uuid.UUID, lastAttem
 			return fmt.Errorf("runs: marcar em execução: %w", err)
 		}
 	}
-	// On the pool the job may first wait for a worker (Deadlines.Wait).
-	window := budget
-	if place.Burst {
-		window += s.d.Deadlines.Wait
-	}
-	runCtx, cancel := context.WithTimeout(ctx, window)
-	defer cancel()
-	stream, remote, err := s.open(runCtx, &r, req, place, budget)
+	stream, remote, err := s.open(runCtx, &r, req, place, budget, attached)
 	if err != nil {
 		return s.streamFailure(ctx, &r, err, lastAttempt)
 	}

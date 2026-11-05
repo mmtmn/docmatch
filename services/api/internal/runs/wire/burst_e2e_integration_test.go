@@ -362,7 +362,7 @@ func (s *spotIMDS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "instance-id":
 		_, _ = io.WriteString(w, "i-0e2espot")
 	case "instance-type":
-		_, _ = io.WriteString(w, "t4g.medium")
+		_, _ = io.WriteString(w, "m7g.medium")
 	case "instance-life-cycle":
 		_, _ = io.WriteString(w, "spot")
 	case "spot/instance-action":

@@ -41,7 +41,7 @@ UNIT_EXCLUDES := -exclude internal/db -exclude internal/db/pgstore -exclude inte
 FULL_EXCLUDES := -exclude internal/db/sqlc -exclude internal/testdb -exclude internal/harness/pb
 FLOORS        := -floor 85 -pkg internal/credits=95 -pkg internal/config=95 -pkg internal/auth=90 -pkg internal/session=90
 
-.PHONY: help setup tools generate proto sync sync-check sqlc-check fmt lint vet test test-integration \
+.PHONY: help setup tools generate proto sync sync-check sqlc-check fmt lint vet test test-integration test-pool \
         vuln ci ci-full build release dev migrate run-api run-worker clean
 
 help: ## lista os alvos
@@ -120,10 +120,17 @@ test-integration: tools ## integração com testcontainers (Docker) + orçamento
 	  -coverpkg=./internal/... -coverprofile=$(COVER_DIR)/integration.out -timeout 20m ./...
 	go run ./tools/covercheck -profile $(COVER_DIR)/integration.out $(FULL_EXCLUDES) $(FLOORS)
 
+# O pool sob demanda depende do PostgreSQL de verdade (concessões no relógio do banco, reserva
+# atômica de lugar, pedidos concorrentes) e de um trabalhador em outro processo: estes testes de
+# integração entram no portão rápido (precisam de Docker, como o test-integration).
+test-pool: ## pool sob demanda: burstpg no PostgreSQL (Docker) e ponta a ponta com o trabalhador em outro processo
+	go test -tags integration -count=1 -timeout 10m ./internal/burst/...
+	go test -tags integration -count=1 -timeout 10m -run 'TestBurst' ./internal/runs/wire/
+
 vuln: tools ## govulncheck ./...
 	govulncheck ./...
 
-ci: lint test vuln ## portão rápido (< 6 min): lint + unitários + govulncheck
+ci: lint test test-pool vuln ## portão rápido (< 6 min): lint + unitários + pool sob demanda (Docker) + govulncheck
 
 ci-full: ci test-integration ## portão de release: ci + integração + orçamento de EXPLAIN
 

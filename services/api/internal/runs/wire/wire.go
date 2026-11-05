@@ -147,7 +147,7 @@ func New(ctx context.Context, o Options) (*System, error) {
 	}
 	var placer estimate.Placer
 	var remote runs.Remote
-	if sys.Pool != nil && cfg.Burst.Enabled {
+	if sys.Pool != nil && sys.Pool.Dispatcher != nil {
 		placer, remote = sys.Pool.Router, sys.Pool.Dispatcher
 	}
 	sys.Estimates, err = estimate.New(estimate.Deps{Store: sys.Store, Harness: sys.Harness, Pricing: pr, Throughput: sys.Throughput, Signer: signer, Sources: sys.Uploads, Limits: o.Limits, Audit: sys.Audit, Logger: log, Placer: placer})

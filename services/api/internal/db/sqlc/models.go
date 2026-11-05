@@ -136,11 +136,14 @@ type BurstEvent struct {
 }
 
 type BurstInstance struct {
-	InstanceID   string
-	InstanceType string
-	Lifecycle    string
-	FirstSeenAt  time.Time
-	LastSeenAt   time.Time
+	InstanceID    string
+	InstanceType  string
+	Lifecycle     string
+	FirstSeenAt   time.Time
+	LastSeenAt    time.Time
+	LastContactAt *time.Time
+	AgentVersion  string
+	LastError     string
 }
 
 type BurstJob struct {
@@ -156,6 +159,8 @@ type BurstJob struct {
 	LeaseExpiresAt  *time.Time
 	FinishedAt      *time.Time
 	Reason          string
+	EventsCount     int32
+	EventsBytes     int64
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 }

@@ -9,7 +9,9 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"regexp"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -22,12 +24,12 @@ import (
 
 // Body limits of the internal endpoint.
 const (
-	maxSmallBody  = 64 << 10
-	maxEventsBody = 32 << 20
-	maxEventsCall = 1000
+	maxSmallBody = 64 << 10
 	// presignTTL bounds the source URLs of a manifest (the worker downloads
 	// them right after the claim).
 	presignTTL = 15 * time.Minute
+	// reasonMax bounds a finish reason or a reported error.
+	reasonMax = 500
 )
 
 // ClaimRequest is the body of a claim.
@@ -48,6 +50,15 @@ type FinishRequest struct {
 	Reason  string `json:"reason,omitempty"`
 }
 
+// HelloRequest is the worker's sign of life: its version and the last error
+// it hit (kept in burst_instances: a Spot instance's journal dies with it).
+type HelloRequest struct {
+	Version      string `json:"version,omitempty"`
+	InstanceType string `json:"instance_type,omitempty"`
+	Lifecycle    string `json:"lifecycle,omitempty"`
+	LastError    string `json:"last_error,omitempty"`
+}
+
 // Presigner returns a short-lived download URL for a storage URI; ok is false
 // when the store has none (the endpoint then serves the bytes itself).
 type Presigner func(ctx context.Context, uri string, ttl time.Duration) (url string, ok bool, err error)
@@ -56,8 +67,10 @@ type Presigner func(ctx context.Context, uri string, ttl time.Duration) (url str
 type Opener func(ctx context.Context, uri string) (rc io.ReadCloser, ok bool, err error)
 
 // Server is the internal endpoint the burst workers call (DM_BURST_LISTEN,
-// reachable from the VPC only). Every call is signed with the pool key;
-// job calls also carry the job's bearer token.
+// reachable from the VPC only). Every call is signed with the pool key, and
+// the headers are checked before any body is read; job calls also carry the
+// job's bearer token. Claims and event posts run under small semaphores, one
+// open claim per instance.
 type Server struct {
 	Store    Store
 	Keys     Keys
@@ -66,6 +79,12 @@ type Server struct {
 	Open     Opener
 	Logger   *slog.Logger
 	Now      func() time.Time
+
+	once      sync.Once
+	claims    chan struct{}
+	events    chan struct{}
+	mu        sync.Mutex
+	claimants map[string]bool
 }
 
 func (s *Server) now() time.Time {
@@ -82,13 +101,24 @@ func (s *Server) log() *slog.Logger {
 	return s.Logger
 }
 
+func (s *Server) init() {
+	s.once.Do(func() {
+		st := s.Settings.WithDefaults()
+		s.claims = make(chan struct{}, st.ClaimSlots)
+		s.events = make(chan struct{}, st.EventSlots)
+		s.claimants = map[string]bool{}
+	})
+}
+
 // Handler routes the endpoint.
 func (s *Server) Handler() http.Handler {
+	s.init()
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET "+PathHealth, s.health)
+	mux.HandleFunc("POST "+PathHello, s.hello)
 	mux.HandleFunc("POST "+PathClaim, s.claim)
 	mux.HandleFunc("POST "+PathPrefix+"jobs/{id}/heartbeat", s.heartbeat)
-	mux.HandleFunc("POST "+PathPrefix+"jobs/{id}/events", s.events)
+	mux.HandleFunc("POST "+PathPrefix+"jobs/{id}/events", s.postEvents)
 	mux.HandleFunc("POST "+PathPrefix+"jobs/{id}/finish", s.finish)
 	mux.HandleFunc("GET "+PathPrefix+"jobs/{id}/sources/{n}", s.source)
 	return mux
@@ -114,7 +144,8 @@ func (s *Server) ServeListener(ctx context.Context, ln net.Listener) error {
 	srv := &http.Server{
 		Handler: s.Handler(), TLSConfig: tlsCfg, ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout: 2 * time.Minute, WriteTimeout: 10 * time.Minute, IdleTimeout: 2 * time.Minute,
-		ErrorLog: slog.NewLogLogger(s.log().Handler(), slog.LevelWarn),
+		MaxHeaderBytes: 16 << 10,
+		ErrorLog:       slog.NewLogLogger(s.log().Handler(), slog.LevelWarn),
 	}
 	go func() {
 		<-ctx.Done()
@@ -140,31 +171,59 @@ func fail(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
 }
 
-// authenticate reads the body (bounded) and checks the pool signature; the
-// instance is recorded as alive (usage and liveness).
-func (s *Server) authenticate(w http.ResponseWriter, r *http.Request, limit int64, in Instance) ([]byte, string, bool) {
+// authenticate checks the signature headers first (format, instance, date),
+// only then reads the body (bounded) and checks the MAC.
+func (s *Server) authenticate(w http.ResponseWriter, r *http.Request, limit int64) ([]byte, string, bool) {
+	h, err := s.Keys.CheckHeaders(r, s.now())
+	if err != nil {
+		s.refuse(w, r, err)
+		return nil, "", false
+	}
+	if r.ContentLength > limit {
+		fail(w, http.StatusRequestEntityTooLarge, "corpo grande demais")
+		return nil, "", false
+	}
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, limit))
 	if err != nil {
 		fail(w, http.StatusRequestEntityTooLarge, "corpo grande demais")
 		return nil, "", false
 	}
-	instance, err := s.Keys.VerifyRequest(r, body, s.now())
-	if err != nil {
-		s.log().Warn("pedido ao endpoint interno recusado", slog.String("path", r.URL.Path), slog.String("err", err.Error()), slog.String("remote", r.RemoteAddr))
-		fail(w, http.StatusUnauthorized, "assinatura inválida")
+	if err := s.Keys.VerifyBody(h, r, body); err != nil {
+		s.refuse(w, r, err)
 		return nil, "", false
 	}
-	in.ID = instance
-	if err := s.Store.TouchInstance(r.Context(), in, s.now()); err != nil {
-		s.log().Warn("registrar instância do pool falhou", slog.String("instance", instance), slog.String("err", err.Error()))
+	return body, h.Instance, true
+}
+
+func (s *Server) refuse(w http.ResponseWriter, r *http.Request, err error) {
+	s.log().Warn("pedido ao endpoint interno recusado", slog.String("path", r.URL.Path), slog.String("err", err.Error()), slog.String("remote", r.RemoteAddr))
+	fail(w, http.StatusUnauthorized, "assinatura inválida")
+}
+
+// known reports whether an instance may use the endpoint: in a managed pool,
+// only one the scaler saw in the Auto Scaling group.
+func (s *Server) known(ctx context.Context, instance string) (bool, error) {
+	if !s.Settings.Managed {
+		return true, nil
 	}
-	return body, instance, true
+	return s.Store.InstanceSeen(ctx, instance, s.Settings.LiveWindow)
+}
+
+// touch records a manual pool's instance at a claim or a job call (a
+// managed pool's instances come from the scaler).
+func (s *Server) touch(ctx context.Context, in Instance) {
+	if s.Settings.Managed {
+		return
+	}
+	if err := s.Store.TouchInstance(ctx, in); err != nil {
+		s.log().Warn("registrar instância do pool falhou", slog.String("instance", in.ID), slog.String("err", err.Error()))
+	}
 }
 
 // job authenticates a job call: signature, then the bearer token of a job
 // still claimed by the calling instance.
 func (s *Server) job(w http.ResponseWriter, r *http.Request, limit int64) (Job, []byte, bool) {
-	body, instance, ok := s.authenticate(w, r, limit, Instance{})
+	body, instance, ok := s.authenticate(w, r, limit)
 	if !ok {
 		return Job{}, nil, false
 	}
@@ -188,34 +247,95 @@ func (s *Server) job(w http.ResponseWriter, r *http.Request, limit int64) (Job, 
 		fail(w, http.StatusGone, "trabalho encerrado: "+j.State)
 		return Job{}, nil, false
 	}
+	s.touch(r.Context(), Instance{ID: instance})
 	return j, body, true
 }
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
-	if _, _, ok := s.authenticate(w, r, maxSmallBody, Instance{}); !ok {
+	if _, _, ok := s.authenticate(w, r, maxSmallBody); !ok {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "version": ProtocolVersion})
 }
 
-// claim long-polls for a queued job and answers its signed manifest, or 204.
-func (s *Server) claim(w http.ResponseWriter, r *http.Request) {
-	var req ClaimRequest
-	body, instance, ok := s.authenticate(w, r, maxSmallBody, Instance{})
+// hello records the worker's sign of life (version, last error).
+func (s *Server) hello(w http.ResponseWriter, r *http.Request) {
+	body, instance, ok := s.authenticate(w, r, maxSmallBody)
 	if !ok {
 		return
 	}
+	var req HelloRequest
 	if len(body) > 0 && json.Unmarshal(body, &req) != nil {
 		fail(w, http.StatusBadRequest, "corpo inválido")
 		return
 	}
-	if req.InstanceType != "" || req.Lifecycle != "" {
-		_ = s.Store.TouchInstance(r.Context(), Instance{ID: instance, Type: req.InstanceType, Lifecycle: req.Lifecycle}, s.now())
+	if known, err := s.known(r.Context(), instance); err != nil || !known {
+		fail(w, http.StatusForbidden, "instância fora do grupo do pool")
+		return
 	}
+	c := Contact{InstanceID: instance, Version: req.Version, LastError: Sanitize(req.LastError)}
+	if err := s.Store.NoteContact(r.Context(), c, !s.Settings.Managed); err != nil {
+		fail(w, http.StatusServiceUnavailable, "banco indisponível")
+		return
+	}
+	if c.LastError != "" {
+		s.log().Warn("trabalhador do pool relatou um erro", slog.String("instance", instance), slog.String("err", c.LastError))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// enter takes one slot of a semaphore without waiting; false means busy.
+func enter(sem chan struct{}) bool {
+	select {
+	case sem <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
+func leave(sem chan struct{}) { <-sem }
+
+// claim long-polls for a queued job and answers its signed manifest, or 204.
+func (s *Server) claim(w http.ResponseWriter, r *http.Request) {
+	body, instance, ok := s.authenticate(w, r, maxSmallBody)
+	if !ok {
+		return
+	}
+	var req ClaimRequest
+	if len(body) > 0 && json.Unmarshal(body, &req) != nil {
+		fail(w, http.StatusBadRequest, "corpo inválido")
+		return
+	}
+	if known, err := s.known(r.Context(), instance); err != nil || !known {
+		fail(w, http.StatusForbidden, "instância fora do grupo do pool")
+		return
+	}
+	s.mu.Lock()
+	open := s.claimants[instance]
+	if !open {
+		s.claimants[instance] = true
+	}
+	s.mu.Unlock()
+	if open {
+		fail(w, http.StatusConflict, "já há um pedido aberto desta instância")
+		return
+	}
+	defer func() {
+		s.mu.Lock()
+		delete(s.claimants, instance)
+		s.mu.Unlock()
+	}()
+	if !enter(s.claims) {
+		w.Header().Set("Retry-After", "5")
+		fail(w, http.StatusServiceUnavailable, "endpoint ocupado")
+		return
+	}
+	defer leave(s.claims)
 	// The long poll is a transport timeout: wall clock, not the business clock.
 	deadline := time.Now().Add(s.Settings.LongPoll)
 	for {
-		sm, found, err := s.tryClaim(r.Context(), instance)
+		sm, found, err := s.tryClaim(r.Context(), Instance{ID: instance, Type: req.InstanceType, Lifecycle: req.Lifecycle})
 		if err != nil {
 			s.log().Error("entregar trabalho do pool falhou", slog.String("instance", instance), slog.String("err", err.Error()))
 			fail(w, http.StatusServiceUnavailable, "não foi possível entregar o trabalho")
@@ -237,27 +357,28 @@ func (s *Server) claim(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// tryClaim claims the oldest queued job for instance and builds its manifest.
-// A job whose manifest cannot be built is cancelled, never left claimed.
-func (s *Server) tryClaim(ctx context.Context, instance string) (SignedManifest, bool, error) {
+// tryClaim claims the oldest queued job for the instance and builds its
+// manifest. A job whose manifest cannot be built is cancelled, never left
+// claimed.
+func (s *Server) tryClaim(ctx context.Context, in Instance) (SignedManifest, bool, error) {
 	token, hash, err := NewToken()
 	if err != nil {
 		return SignedManifest{}, false, err
 	}
-	now := s.now()
-	job, found, err := s.Store.Claim(ctx, instance, hash, now, now.Add(s.Settings.Lease))
+	job, found, err := s.Store.Claim(ctx, in.ID, hash, s.Settings.Lease)
 	if err != nil || !found {
 		return SignedManifest{}, false, err
 	}
+	s.touch(ctx, in)
 	if err := s.Store.NoteClaim(ctx); err != nil {
 		s.log().Warn("zerar falhas do pool falhou", slog.String("err", err.Error()))
 	}
-	sm, err := s.manifest(ctx, job, token, now)
+	sm, err := s.manifest(ctx, job, token, s.now())
 	if err != nil {
-		_, _ = s.Store.Cancel(ctx, job.ID, "manifesto inválido: "+err.Error(), now)
+		_, _ = s.Store.Cancel(ctx, job.ID, Sanitize("manifesto inválido: "+err.Error()))
 		return SignedManifest{}, false, err
 	}
-	s.log().Info("trabalho do pool entregue", slog.String("job_id", job.ID.String()), slog.String("instance", instance), slog.String("run_id", apix.Encode(apix.PrefixRun, job.RunID)))
+	s.log().Info("trabalho do pool entregue", slog.String("job_id", job.ID.String()), slog.String("instance", in.ID), slog.String("run_id", apix.Encode(apix.PrefixRun, job.RunID)))
 	return sm, true, nil
 }
 
@@ -315,7 +436,7 @@ func (s *Server) heartbeat(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) extend(w http.ResponseWriter, r *http.Request, j Job) {
-	ok, err := s.Store.Extend(r.Context(), j.ID, j.TokenHash, s.now().Add(s.Settings.Lease))
+	ok, err := s.Store.Extend(r.Context(), j.ID, j.TokenHash, s.Settings.Lease)
 	switch {
 	case err != nil:
 		fail(w, http.StatusServiceUnavailable, "banco indisponível")
@@ -326,21 +447,32 @@ func (s *Server) extend(w http.ResponseWriter, r *http.Request, j Job) {
 	}
 }
 
-// events stores a batch of harness events (idempotent by seq) and renews
-// the lease.
-func (s *Server) events(w http.ResponseWriter, r *http.Request) {
-	j, body, ok := s.job(w, r, maxEventsBody)
+// postEvents stores a batch of harness events (idempotent by seq, within the
+// job's quota) and renews the lease. At most EventSlots posts are processed
+// at once; the rest get 503 and are retried by the worker.
+func (s *Server) postEvents(w http.ResponseWriter, r *http.Request) {
+	if !enter(s.events) {
+		w.Header().Set("Retry-After", "1")
+		fail(w, http.StatusServiceUnavailable, "endpoint ocupado")
+		return
+	}
+	defer leave(s.events)
+	j, body, ok := s.job(w, r, MaxEventsBody)
 	if !ok {
 		return
 	}
 	var req EventsRequest
-	if err := json.Unmarshal(body, &req); err != nil || len(req.Events) > maxEventsCall {
+	if err := json.Unmarshal(body, &req); err != nil || len(req.Events) > MaxEventsPerCall {
 		fail(w, http.StatusBadRequest, "lote de eventos inválido")
 		return
 	}
 	runID := apix.Encode(apix.PrefixRun, j.RunID)
 	evs := make([]Event, 0, len(req.Events))
 	for _, raw := range req.Events {
+		if len(raw) > MaxEventBytes {
+			fail(w, http.StatusBadRequest, "evento grande demais")
+			return
+		}
 		ev := &pb.RunEvent{}
 		if err := proto.Unmarshal(raw, ev); err != nil || ev.GetSeq() == 0 || ev.GetSeq() > 1<<62 || ev.GetRunId() != runID {
 			fail(w, http.StatusBadRequest, "evento inválido")
@@ -348,7 +480,11 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 		}
 		evs = append(evs, Event{Seq: int64(ev.GetSeq()), Data: raw}) //nolint:gosec // bounded above
 	}
-	if err := s.Store.AppendEvents(r.Context(), j, evs); err != nil {
+	if err := s.Store.AppendEvents(r.Context(), j, evs, s.Settings.Quota); err != nil {
+		if errors.Is(err, ErrEventQuota) {
+			fail(w, http.StatusRequestEntityTooLarge, "o trabalho passou da cota de eventos")
+			return
+		}
 		s.log().Error("gravar eventos do pool falhou", slog.String("job_id", j.ID.String()), slog.String("err", err.Error()))
 		fail(w, http.StatusServiceUnavailable, "banco indisponível")
 		return
@@ -372,11 +508,8 @@ func (s *Server) finish(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, "outcome precisa ser done, interrupted ou failed")
 		return
 	}
-	reason := req.Reason
-	if len(reason) > 500 {
-		reason = reason[:500]
-	}
-	done, err := s.Store.Finish(r.Context(), j.ID, j.TokenHash, state, reason, s.now())
+	reason := Sanitize(req.Reason)
+	done, err := s.Store.Finish(r.Context(), j.ID, j.TokenHash, state, reason)
 	if err != nil {
 		fail(w, http.StatusServiceUnavailable, "banco indisponível")
 		return
@@ -413,4 +546,14 @@ func (s *Server) source(w http.ResponseWriter, r *http.Request) {
 	if _, err := io.Copy(w, rc); err != nil {
 		s.log().Warn("enviar fonte ao trabalhador falhou", slog.String("job_id", j.ID.String()), slog.String("err", err.Error()))
 	}
+}
+
+// queryRe matches the query of a URL: presigned URLs carry their signature
+// there, and an error message must never keep it.
+var queryRe = regexp.MustCompile(`(https?://[^\s"'?]+)\?[^\s"']*`)
+
+// Sanitize strips URL queries (presigned signatures) and cuts a reason to
+// reasonMax bytes on a rune boundary.
+func Sanitize(reason string) string {
+	return Truncate(queryRe.ReplaceAllString(reason, "$1"), reasonMax)
 }

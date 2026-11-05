@@ -21,12 +21,14 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"strconv"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/mmtmn/docmatch/services/api/internal/burst"
@@ -34,21 +36,24 @@ import (
 	pb "github.com/mmtmn/docmatch/services/api/internal/harness/pb"
 )
 
-// sourceScheme names the inputs of a job by position inside the agent; the
-// opener resolves them against the manifest.
-const sourceScheme = "burst://"
-
 // Defaults of Options.
 const (
 	DefaultNoticeInterval = 5 * time.Second
 	DefaultFlushEvery     = 250 * time.Millisecond
 	DefaultFlushEvents    = 100
 	DefaultAPIDownAfter   = 10 * time.Minute
-	// maxPending bounds the events kept while the API does not answer.
-	maxPending  = 20_000
-	callTimeout = 30 * time.Second
+	// maxPending and maxPendingBytes bound the events kept while the API does
+	// not answer; past them the job fails (the run is requeued).
+	maxPending      = 20_000
+	maxPendingBytes = 64 << 20
+	callTimeout     = 30 * time.Second
 	// finishTimeout bounds the last calls of a job (a Spot notice gives two minutes).
 	finishTimeout = 45 * time.Second
+	// stagingLabel is the bucket label of the staged URIs (the harness ignores it).
+	stagingLabel = "staging"
+	// LastErrorFile, under StateDir, keeps the error that ended the previous
+	// process; the next one reports it (the journal dies with a Spot instance).
+	LastErrorFile = "last-error"
 )
 
 // Options configure an Agent.
@@ -58,10 +63,14 @@ type Options struct {
 	Keys   burst.Keys
 	// Harness is the local harness (gRPC over its Unix socket).
 	Harness harness.Client
-	// MediaRoot is DM_MEDIA_LOCAL_DIR, shared with the harness: inputs are
-	// staged under it for the duration of a job.
+	// MediaRoot is the harness's DM_MEDIA_LOCAL_DIR: inputs are staged under
+	// it, group-readable, for the duration of a job.
 	MediaRoot string
-	Identity  Identity
+	// StateDir keeps LastErrorFile (empty: nothing is kept).
+	StateDir string
+	// Version is reported in the sign of life.
+	Version  string
+	Identity Identity
 	// IMDS watches for termination notices; nil (local runs) never drains.
 	IMDS           *IMDS
 	NoticeInterval time.Duration
@@ -88,9 +97,12 @@ type Agent struct {
 	dl       *http.Client
 	draining atomic.Bool
 
-	mu     sync.Mutex
-	reason string
-	cancel context.CancelFunc
+	mu           sync.Mutex
+	reason       string
+	cancel       context.CancelFunc
+	lastErr      string
+	reported     string
+	reportedOnce bool
 }
 
 // New validates the options.
@@ -116,6 +128,11 @@ func New(o Options) (*Agent, error) {
 	}
 	if a.dl == nil {
 		a.dl = &http.Client{Transport: &http.Transport{Proxy: http.ProxyFromEnvironment, MaxIdleConns: 4, IdleConnTimeout: time.Minute}}
+	}
+	if o.StateDir != "" {
+		if prev, err := os.ReadFile(filepath.Join(o.StateDir, LastErrorFile)); err == nil { //nolint:gosec // our own state file
+			a.lastErr = strings.TrimSpace(string(prev))
+		}
 	}
 	return a, nil
 }
@@ -151,6 +168,15 @@ func (a *Agent) setCancel(c context.CancelFunc) {
 	a.mu.Unlock()
 }
 
+// RecordFailure keeps the error that ends this process, for the next one to
+// report (cmd calls it before exiting).
+func RecordFailure(stateDir string, err error) {
+	if stateDir == "" || err == nil {
+		return
+	}
+	_ = os.WriteFile(filepath.Join(stateDir, LastErrorFile), []byte(burst.Sanitize(err.Error())+"\n"), 0o600)
+}
+
 // Run claims jobs until ctx ends (nil or ctx.Err()), Once/MaxIdle say so or
 // the instance drains.
 func (a *Agent) Run(ctx context.Context) error {
@@ -158,6 +184,7 @@ func (a *Agent) Run(ctx context.Context) error {
 		go a.watch(ctx)
 	}
 	a.o.Logger.Info("trabalhador sob demanda pronto", slog.String("instance", a.o.Identity.InstanceID), slog.String("type", a.o.Identity.InstanceType), slog.String("api", a.o.APIURL.Host))
+	a.hello(ctx)
 	var failingSince time.Time
 	backoff := time.Second
 	lastJob := time.Now()
@@ -175,6 +202,9 @@ func (a *Agent) Run(ctx context.Context) error {
 			if failingSince.IsZero() {
 				failingSince = time.Now()
 			}
+			a.mu.Lock()
+			a.lastErr = burst.Sanitize("pedir trabalho: " + err.Error())
+			a.mu.Unlock()
 			if a.o.APIDownAfter > 0 && time.Since(failingSince) > a.o.APIDownAfter {
 				return fmt.Errorf("agent: endpoint interno sem resposta desde %s: %w", failingSince.Format(time.RFC3339), err)
 			}
@@ -186,6 +216,7 @@ func (a *Agent) Run(ctx context.Context) error {
 			continue
 		}
 		failingSince, backoff = time.Time{}, time.Second
+		a.hello(ctx) // reports an error the API has not heard of yet
 		if !ok {
 			if a.o.MaxIdle > 0 && time.Since(lastJob) > a.o.MaxIdle {
 				return nil
@@ -234,10 +265,36 @@ func (a *Agent) watch(ctx context.Context) {
 	}
 }
 
+// hello sends the sign of life when the last error changed since the last
+// report (and once at start). Best effort.
+func (a *Agent) hello(ctx context.Context) {
+	a.mu.Lock()
+	last, skip := a.lastErr, a.reportedOnce && a.lastErr == a.reported
+	a.mu.Unlock()
+	if skip {
+		return
+	}
+	body := burst.HelloRequest{Version: a.o.Version, InstanceType: a.o.Identity.InstanceType, Lifecycle: a.o.Identity.Lifecycle, LastError: last}
+	if err := a.do(ctx, burst.PathHello, body, ""); err != nil {
+		a.o.Logger.Debug("aviso de vida não registrado", slog.String("err", err.Error()))
+		return
+	}
+	a.mu.Lock()
+	a.reported, a.reportedOnce = last, true
+	a.mu.Unlock()
+	if a.o.StateDir != "" && last != "" {
+		_ = os.Remove(filepath.Join(a.o.StateDir, LastErrorFile))
+	}
+}
+
 // ---------------------------------------------------------------- calls
 
-// errGone is a job the API dropped (cancelled, lost, requeued): stop quietly.
-var errGone = errors.New("agent: trabalho encerrado pela API")
+var (
+	// errGone is a job the API dropped (cancelled, lost, requeued): stop quietly.
+	errGone = errors.New("agent: trabalho encerrado pela API")
+	// errFatal is a refusal a retry cannot fix (malformed batch, quota, token).
+	errFatal = errors.New("agent: a API recusou o pedido")
+)
 
 func (a *Agent) call(ctx context.Context, method, path string, body any, token string) (*http.Response, error) {
 	var raw []byte
@@ -262,7 +319,21 @@ func (a *Agent) call(ctx context.Context, method, path string, body any, token s
 	return a.api.Do(req)
 }
 
-// do runs a job call and maps its status.
+// classify maps an answer of the endpoint: 410 drops the job, a 4xx other
+// than 408, 409 and 429 cannot be fixed by retrying, the rest is transient.
+func classify(path string, status int) error {
+	switch {
+	case status < 300:
+		return nil
+	case status == http.StatusGone:
+		return errGone
+	case status >= 400 && status < 500 && status != http.StatusRequestTimeout && status != http.StatusConflict && status != http.StatusTooManyRequests:
+		return fmt.Errorf("%w: %s respondeu %d", errFatal, path, status)
+	}
+	return fmt.Errorf("agent: %s respondeu %d", path, status)
+}
+
+// do runs a call and maps its status.
 func (a *Agent) do(ctx context.Context, path string, body any, token string) error {
 	ctx, cancel := context.WithTimeout(ctx, callTimeout)
 	defer cancel()
@@ -272,13 +343,7 @@ func (a *Agent) do(ctx context.Context, path string, body any, token string) err
 	}
 	defer func() { _ = resp.Body.Close() }()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
-	switch {
-	case resp.StatusCode == http.StatusGone:
-		return errGone
-	case resp.StatusCode >= 300:
-		return fmt.Errorf("agent: %s respondeu %d", path, resp.StatusCode)
-	}
-	return nil
+	return classify(path, resp.StatusCode)
 }
 
 // claim long-polls for a job; ok is false when there is none.
@@ -315,6 +380,60 @@ type recv struct {
 	err error
 }
 
+// batches posts pending events in calls of at most MaxEventsPerCall events
+// and MaxBatchBytes bytes; what was sent leaves pending.
+type batches struct {
+	a       *Agent
+	m       burst.Manifest
+	pending [][]byte
+	size    int
+}
+
+func (b *batches) add(raw []byte) error {
+	if len(raw) > burst.MaxEventBytes {
+		return fmt.Errorf("%w: evento de %d bytes acima do limite de %d", errFatal, len(raw), burst.MaxEventBytes)
+	}
+	b.pending = append(b.pending, raw)
+	b.size += len(raw)
+	if len(b.pending) > maxPending || b.size > maxPendingBytes {
+		return fmt.Errorf("%w: a API não recebe os eventos", errFatal)
+	}
+	return nil
+}
+
+// flushFinal sends what is left at the end of a job, retrying a transient
+// failure (API restart) until finishTimeout: the work is done and must not be
+// thrown away for a moment of unavailability.
+func (b *batches) flushFinal(ctx context.Context) error {
+	deadline := time.Now().Add(finishTimeout)
+	wait := 500 * time.Millisecond
+	for {
+		err := b.flush(ctx)
+		if err == nil || errors.Is(err, errGone) || errors.Is(err, errFatal) || time.Now().After(deadline) {
+			return err
+		}
+		if !sleep(ctx, wait) {
+			return err
+		}
+		wait = min(wait*2, 4*time.Second)
+	}
+}
+
+func (b *batches) flush(ctx context.Context) error {
+	for len(b.pending) > 0 {
+		n, size := 0, 0
+		for n < len(b.pending) && n < burst.MaxEventsPerCall && (n == 0 || size+len(b.pending[n]) <= burst.MaxBatchBytes) {
+			size += len(b.pending[n])
+			n++
+		}
+		if err := b.a.do(ctx, burst.JobPath(b.m.JobID, "events"), burst.EventsRequest{Events: b.pending[:n]}, b.m.Token); err != nil {
+			return err
+		}
+		b.pending, b.size = b.pending[n:], b.size-size
+	}
+	return nil
+}
+
 // execute runs one job to its end and reports the outcome.
 func (a *Agent) execute(ctx context.Context, m burst.Manifest) {
 	log := a.o.Logger.With(slog.String("job_id", m.JobID), slog.String("run_id", m.RunID))
@@ -331,13 +450,13 @@ func (a *Agent) execute(ctx context.Context, m burst.Manifest) {
 	var gone atomic.Bool
 	go a.heartbeat(jobCtx, m, func() { gone.Store(true); cancel() })
 
-	req, err := a.request(m)
+	req, cleanup, err := a.stage(jobCtx, m)
 	if err != nil {
-		a.finish(tail, m, "failed", err.Error(), log)
+		a.finish(tail, m, a.outcome(), err.Error(), log)
 		return
 	}
-	staged := &harness.Staged{Client: a.o.Harness, Root: a.o.MediaRoot, Open: a.opener(m), MaxBytes: maxSize(m)}
-	stream, err := staged.Run(jobCtx, req)
+	defer cleanup()
+	stream, err := a.o.Harness.Run(jobCtx, req)
 	if err != nil {
 		a.finish(tail, m, a.outcome(), "harness: "+err.Error(), log)
 		return
@@ -366,28 +485,32 @@ func (a *Agent) execute(ctx context.Context, m burst.Manifest) {
 	}()
 	ticker := time.NewTicker(a.o.FlushEvery)
 	defer ticker.Stop()
-	var pending [][]byte
-	flush := func(c context.Context) error {
-		if len(pending) == 0 {
-			return nil
+	out := &batches{a: a, m: m}
+	// stop reports whether a send error ends the job: 410 quietly, a fatal
+	// refusal as failed; a transient error keeps the events for later.
+	stop := func(err error) bool {
+		switch {
+		case errors.Is(err, errGone):
+			log.Info("trabalho encerrado pela API; harness interrompido")
+			return true
+		case errors.Is(err, errFatal):
+			a.finish(tail, m, "failed", err.Error(), log)
+			return true
 		}
-		err := a.do(c, burst.JobPath(m.JobID, "events"), burst.EventsRequest{Events: pending}, m.Token)
-		if err == nil {
-			pending = pending[:0]
-		}
-		return err
+		return false
 	}
 	for {
 		select {
 		case <-ticker.C:
-			if err := flush(jobCtx); errors.Is(err, errGone) {
-				log.Info("trabalho encerrado pela API; harness interrompido")
+			if err := out.flush(jobCtx); stop(err) {
 				return
 			}
 			continue
 		case r := <-events:
 			if r.err != nil {
-				_ = flush(tail)
+				if err := out.flush(tail); stop(err) {
+					return
+				}
 				switch {
 				case gone.Load():
 					log.Info("trabalho encerrado pela API; harness interrompido")
@@ -399,27 +522,27 @@ func (a *Agent) execute(ctx context.Context, m burst.Manifest) {
 				return
 			}
 			raw, err := proto.Marshal(r.ev)
+			if err == nil {
+				err = out.add(raw)
+			}
 			if err != nil {
-				a.finish(tail, m, "failed", "serializar evento: "+err.Error(), log)
+				a.finish(tail, m, "failed", err.Error(), log)
 				return
 			}
-			pending = append(pending, raw)
 			if terminal(r.ev) {
-				if err := flush(tail); err != nil {
-					a.finish(tail, m, "failed", "enviar o evento final: "+err.Error(), log)
+				if err := out.flushFinal(tail); err != nil {
+					if !stop(err) {
+						a.finish(tail, m, "failed", "enviar o evento final: "+err.Error(), log)
+					}
 					return
 				}
 				a.finish(tail, m, "done", "", log)
 				return
 			}
-			if len(pending) >= a.o.FlushEvents {
-				if err := flush(jobCtx); errors.Is(err, errGone) {
+			if len(out.pending) >= a.o.FlushEvents {
+				if err := out.flush(jobCtx); stop(err) {
 					return
 				}
-			}
-			if len(pending) > maxPending {
-				a.finish(tail, m, "failed", "a API não recebe os eventos", log)
-				return
 			}
 		}
 	}
@@ -435,9 +558,10 @@ func (a *Agent) outcome() string {
 }
 
 func (a *Agent) finish(ctx context.Context, m burst.Manifest, outcome, reason string, log *slog.Logger) {
-	if outcome == "interrupted" && reason == "" || outcome == "interrupted" && strings.Contains(reason, "context canceled") {
-		reason = a.drainReason()
+	if outcome == "interrupted" {
+		reason = strings.TrimSpace(a.drainReason() + " " + reason)
 	}
+	reason = burst.Sanitize(reason)
 	ctx, cancel := context.WithTimeout(ctx, finishTimeout)
 	defer cancel()
 	err := a.do(ctx, burst.JobPath(m.JobID, "finish"), burst.FinishRequest{Outcome: outcome, Reason: reason}, m.Token)
@@ -449,6 +573,11 @@ func (a *Agent) finish(ctx context.Context, m burst.Manifest, outcome, reason st
 	default:
 		// The lease expires and the main worker requeues the run.
 		log.Warn("informar o fim do trabalho falhou", slog.String("outcome", outcome), slog.String("err", err.Error()))
+	}
+	if outcome == "failed" {
+		a.mu.Lock()
+		a.lastErr = burst.Sanitize("trabalho " + m.JobID + ": " + reason)
+		a.mu.Unlock()
 	}
 }
 
@@ -462,41 +591,15 @@ func (a *Agent) heartbeat(ctx context.Context, m burst.Manifest, dropped func())
 			return
 		case <-t.C:
 		}
-		if err := a.do(ctx, burst.JobPath(m.JobID, "heartbeat"), struct{}{}, m.Token); errors.Is(err, errGone) {
+		err := a.do(ctx, burst.JobPath(m.JobID, "heartbeat"), struct{}{}, m.Token)
+		switch {
+		case errors.Is(err, errGone), errors.Is(err, errFatal):
 			dropped()
 			return
-		} else if err != nil && ctx.Err() == nil {
+		case err != nil && ctx.Err() == nil:
 			a.o.Logger.Warn("renovar a concessão falhou", slog.String("job_id", m.JobID), slog.String("err", err.Error()))
 		}
 	}
-}
-
-// request decodes the job's request and names its sources by position.
-func (a *Agent) request(m burst.Manifest) (*pb.RunRequest, error) {
-	req := &pb.RunRequest{}
-	if err := proto.Unmarshal(m.Request, req); err != nil {
-		return nil, fmt.Errorf("pedido ilegível: %w", err)
-	}
-	if len(req.GetSources()) != len(m.Sources) {
-		return nil, fmt.Errorf("manifesto com %d fontes para %d no pedido", len(m.Sources), len(req.GetSources()))
-	}
-	for i, src := range req.GetSources() {
-		c, ok := proto.Clone(src).(*pb.Source)
-		if !ok {
-			return nil, errors.New("cópia da fonte falhou")
-		}
-		c.Uri = sourceScheme + strconv.Itoa(i)
-		req.Sources[i] = c
-	}
-	return req, nil
-}
-
-func maxSize(m burst.Manifest) int64 {
-	n := int64(harness.DefaultStagingMaxBytes)
-	for _, s := range m.Sources {
-		n = max(n, s.Size)
-	}
-	return n
 }
 
 func terminal(ev *pb.RunEvent) bool {
@@ -507,60 +610,136 @@ func terminal(ev *pb.RunEvent) bool {
 	return false
 }
 
-// opener downloads the inputs of m: presigned URLs straight from the store,
-// internal-endpoint URLs with the job token. Each copy is checked against
-// the SHA-256 the upload was confirmed with.
-func (a *Agent) opener(m burst.Manifest) harness.Opener {
-	return func(ctx context.Context, uri string) (io.ReadCloser, bool, error) {
-		idx, ok := strings.CutPrefix(uri, sourceScheme)
-		if !ok {
-			return nil, false, nil
-		}
-		i, err := strconv.Atoi(idx)
-		if err != nil || i < 0 || i >= len(m.Sources) {
-			return nil, false, fmt.Errorf("fonte %q fora do manifesto", uri)
-		}
-		src := m.Sources[i]
-		u, err := a.o.APIURL.Parse(src.URL)
-		if err != nil {
-			return nil, false, fmt.Errorf("fonte %d: URL inválida", i)
-		}
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
-		if err != nil {
-			return nil, false, err
-		}
-		client := a.dl
-		if src.Bearer {
-			client = a.api
-			a.o.Keys.SignRequest(req, nil, a.o.Identity.InstanceID, time.Now())
-			req.Header.Set("Authorization", "Bearer "+m.Token)
-		}
-		resp, err := client.Do(req)
-		if err != nil {
-			return nil, false, fmt.Errorf("fonte %d: %w", i, err)
-		}
-		if resp.StatusCode != http.StatusOK {
-			_ = resp.Body.Close()
-			return nil, false, fmt.Errorf("fonte %d: download respondeu %d", i, resp.StatusCode)
-		}
-		return &verified{rc: resp.Body, want: strings.ToLower(src.SHA256), h: sha256.New()}, true, nil
+// stage downloads every input of m into MediaRoot/job-<id>/ (directory 0750,
+// files 0640: the harness may run as another user of the same group),
+// checks each against the size and SHA-256 the upload was confirmed with, and
+// returns the request with the inputs as local:// URIs and the cleanup.
+func (a *Agent) stage(ctx context.Context, m burst.Manifest) (*pb.RunRequest, func(), error) {
+	req := &pb.RunRequest{}
+	if err := proto.Unmarshal(m.Request, req); err != nil {
+		return nil, nil, fmt.Errorf("pedido ilegível: %w", err)
 	}
+	if len(req.GetSources()) != len(m.Sources) {
+		return nil, nil, fmt.Errorf("manifesto com %d fontes para %d no pedido", len(m.Sources), len(req.GetSources()))
+	}
+	id, err := uuid.Parse(m.JobID)
+	if err != nil {
+		return nil, nil, errors.New("manifesto com id de trabalho inválido")
+	}
+	rel := "job-" + id.String()
+	dir := filepath.Join(a.o.MediaRoot, rel)
+	_ = os.RemoveAll(dir) // leftovers of a process that died mid-job
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		return nil, nil, fmt.Errorf("preparar as fontes: %w", err)
+	}
+	// On a pool instance the staging directory is setgid (group docmatch) and
+	// the unit's umask 0027 already gives 0750: a chmod would drop the setgid
+	// bit the files need. Only a stricter umask (local runs) is corrected.
+	if fi, err := os.Stat(dir); err == nil && fi.Mode().Perm()&0o050 != 0o050 {
+		_ = os.Chmod(dir, 0o750) //nolint:gosec // the harness reads the inputs through the shared group
+	}
+	cleanup := func() { _ = os.RemoveAll(dir) }
+	for i, src := range req.GetSources() {
+		name := fmt.Sprintf("%03d", i)
+		if err := a.download(ctx, m, i, filepath.Join(dir, name)); err != nil {
+			cleanup()
+			return nil, nil, fmt.Errorf("fonte %s: %w", src.GetId(), err)
+		}
+		c, ok := proto.Clone(src).(*pb.Source)
+		if !ok {
+			cleanup()
+			return nil, nil, errors.New("cópia da fonte falhou")
+		}
+		c.Uri = "local://" + stagingLabel + "/" + rel + "/" + name
+		req.Sources[i] = c
+	}
+	return req, cleanup, nil
 }
 
-// verified hashes what it reads and fails at EOF when the digest differs.
+// download fetches input i of m into path: presigned URLs straight from the
+// store, internal-endpoint URLs with the job token.
+func (a *Agent) download(ctx context.Context, m burst.Manifest, i int, path string) error {
+	src := m.Sources[i]
+	u, err := a.o.APIURL.Parse(src.URL)
+	if err != nil {
+		return errors.New("URL inválida no manifesto")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return errors.New("URL inválida no manifesto")
+	}
+	client := a.dl
+	if src.Bearer {
+		client = a.api
+		a.o.Keys.SignRequest(req, nil, a.o.Identity.InstanceID, time.Now())
+		req.Header.Set("Authorization", "Bearer "+m.Token)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("download falhou: %s", redact(err))
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("download respondeu %d (%s)", resp.StatusCode, stripQuery(u))
+	}
+	limit := src.Size
+	if limit <= 0 {
+		limit = harness.DefaultStagingMaxBytes
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o640) //nolint:gosec // path is our staging dir and a counter
+	if err != nil {
+		return err
+	}
+	v := &verified{r: resp.Body, want: strings.ToLower(src.SHA256), h: sha256.New()}
+	n, err := io.Copy(f, io.LimitReader(v, limit+1))
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	switch {
+	case err != nil:
+		return err
+	case n > limit:
+		return fmt.Errorf("maior que os %d bytes do upload", limit)
+	case !v.ok():
+		return errors.New("SHA-256 da fonte não confere com o upload")
+	}
+	return nil
+}
+
+// verified hashes what it reads.
 type verified struct {
-	rc   io.ReadCloser
+	r    io.Reader
 	want string
 	h    hash.Hash
 }
 
 func (v *verified) Read(p []byte) (int, error) {
-	n, err := v.rc.Read(p)
+	n, err := v.r.Read(p)
 	v.h.Write(p[:n])
-	if errors.Is(err, io.EOF) && v.want != "" && hex.EncodeToString(v.h.Sum(nil)) != v.want {
-		return n, errors.New("agent: SHA-256 da fonte não confere com o upload")
-	}
 	return n, err
 }
 
-func (v *verified) Close() error { return v.rc.Close() }
+func (v *verified) ok() bool { return v.want == "" || hex.EncodeToString(v.h.Sum(nil)) == v.want }
+
+// stripQuery keeps scheme, host and path of a URL: a presigned signature
+// never reaches a log, a job reason or an error.
+func stripQuery(u *url.URL) string {
+	if u == nil {
+		return ""
+	}
+	return u.Scheme + "://" + u.Host + u.Path
+}
+
+// redact renders a client error without the URL's query.
+func redact(err error) string {
+	var ue *url.Error
+	if errors.As(err, &ue) {
+		parsed, perr := url.Parse(ue.URL)
+		target := "?"
+		if perr == nil {
+			target = stripQuery(parsed)
+		}
+		return ue.Op + " " + target + ": " + ue.Err.Error()
+	}
+	return err.Error()
+}

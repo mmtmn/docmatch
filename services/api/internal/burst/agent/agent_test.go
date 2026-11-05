@@ -1,15 +1,20 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -39,8 +44,9 @@ type env struct {
 }
 
 // newEnv starts the internal endpoint over TLS on a memory store and a fake
-// harness on a Unix socket, the two ends a burst worker talks to.
-func newEnv(t *testing.T, opts harnesstest.Options) *env {
+// harness on a Unix socket, the two ends a burst worker talks to; wrap sits
+// in front of the endpoint (tests break it on purpose).
+func newEnv(t *testing.T, opts harnesstest.Options, wrap ...func(http.Handler) http.Handler) *env {
 	t.Helper()
 	keys, err := burst.DeriveKeys(testSecret)
 	if err != nil {
@@ -61,7 +67,11 @@ func newEnv(t *testing.T, opts harnesstest.Options) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ts := httptest.NewUnstartedServer(srv.Handler())
+	h := srv.Handler()
+	for _, w := range wrap {
+		h = w(h)
+	}
+	ts := httptest.NewUnstartedServer(h)
 	ts.TLS = tlsCfg
 	ts.StartTLS()
 	t.Cleanup(ts.Close)
@@ -99,7 +109,7 @@ func (e *env) queue(sha string) burst.Job {
 		{Id: "upl_bank", Uri: "local://t/quarantine/bank", Sha256: sha, SizeBytes: uint64(len(sourceBody)), FileName: "bank.csv", Mime: "text/csv"},
 	}}
 	raw, _ := proto.Marshal(req)
-	j, err := e.store.CreateJob(context.Background(), burst.Job{ID: uuid.New(), OrgID: uuid.New(), RunID: runID, Request: raw, DeadlineSeconds: 600, CreatedAt: time.Now()})
+	j, err := e.store.CreateJob(context.Background(), burst.Job{ID: uuid.New(), OrgID: uuid.New(), RunID: runID, Request: raw, DeadlineSeconds: 600}, 0)
 	if err != nil {
 		e.t.Fatal(err)
 	}
@@ -108,7 +118,13 @@ func (e *env) queue(sha string) burst.Job {
 
 func (e *env) agent(o Options) *Agent {
 	e.t.Helper()
-	o.APIURL, o.Keys, o.Harness, o.MediaRoot = e.api, e.keys, e.h, e.t.TempDir()
+	o.APIURL, o.Keys = e.api, e.keys
+	if o.Harness == nil {
+		o.Harness = e.h
+	}
+	if o.MediaRoot == "" {
+		o.MediaRoot = e.t.TempDir()
+	}
 	if o.Identity.InstanceID == "" {
 		o.Identity = Identity{InstanceID: "i-test", InstanceType: "c7g.large", Lifecycle: "spot"}
 	}
@@ -123,7 +139,7 @@ func (e *env) agent(o Options) *Agent {
 
 func (e *env) events(job burst.Job) []*pb.RunEvent {
 	e.t.Helper()
-	raw, err := e.store.Events(context.Background(), job.ID, 0, 10_000)
+	raw, err := e.store.Events(context.Background(), job.ID, 0, 100_000, 1<<40)
 	if err != nil {
 		e.t.Fatal(err)
 	}
@@ -151,7 +167,8 @@ func TestAgentRunsAJobToTheEnd(t *testing.T) {
 	t.Parallel()
 	e := newEnv(t, harnesstest.Options{})
 	job := e.queue(sum(sourceBody))
-	a := e.agent(Options{Once: true})
+	media := t.TempDir()
+	a := e.agent(Options{Once: true, MediaRoot: media})
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := a.Run(ctx); err != nil {
@@ -174,13 +191,52 @@ func TestAgentRunsAJobToTheEnd(t *testing.T) {
 	if evs[len(evs)-1].GetCompleted() == nil || findings != len(harnesstest.MustLoadGolden().Findings) {
 		t.Fatalf("eventos = %d, achados = %d", len(evs), findings)
 	}
-	// The harness read a staged copy of the source, never the store URI.
+	// The harness read a staged copy of the source, never the store URI, and
+	// the copy is gone once the job ends.
 	runs := e.fake.Runs()
-	if len(runs) != 1 || !strings.HasPrefix(runs[0].GetSources()[0].GetUri(), "local://staging/.staging/") {
+	want := "local://staging/job-" + job.ID.String() + "/000"
+	if len(runs) != 1 || runs[0].GetSources()[0].GetUri() != want {
 		t.Fatalf("pedido ao harness = %v", runs)
 	}
 	if runs[0].GetOptions().GetDeadline() == nil {
 		t.Fatal("o prazo carimbado na entrega deveria chegar ao harness")
+	}
+	if left, _ := os.ReadDir(media); len(left) != 0 {
+		t.Fatalf("cópias deixadas para trás: %v", left)
+	}
+}
+
+func TestAgentStagesGroupReadableCopies(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t, harnesstest.Options{})
+	job := e.queue(sum(sourceBody))
+	a := e.agent(Options{})
+	m := burst.Manifest{JobID: job.ID.String(), Token: "t", Request: job.Request, Sources: []burst.Source{{URL: "/x", Size: 3}}}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "abc") }))
+	t.Cleanup(srv.Close)
+	m.Sources[0].URL = srv.URL + "/k?X-Amz-Signature=segredo"
+	req, cleanup, err := a.stage(context.Background(), m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(a.o.MediaRoot, "job-"+job.ID.String())
+	di, _ := os.Stat(dir)
+	fi, _ := os.Stat(filepath.Join(dir, "000"))
+	// The harness runs as another user of the shared group on a pool instance.
+	if di.Mode().Perm()&0o050 != 0o050 || fi.Mode().Perm()&0o040 == 0 || fi.Mode().Perm()&0o007 != 0 {
+		t.Fatalf("permissões: pasta %v, arquivo %v", di.Mode().Perm(), fi.Mode().Perm())
+	}
+	if !strings.HasSuffix(req.GetSources()[0].GetUri(), "/000") {
+		t.Fatalf("uri = %s", req.GetSources()[0].GetUri())
+	}
+	cleanup()
+	if _, err := os.Stat(dir); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("limpeza: %v", err)
+	}
+	// Bigger than the upload: refused.
+	m.Sources[0].Size = 2
+	if _, _, err := a.stage(context.Background(), m); err == nil || !strings.Contains(err.Error(), "maior") {
+		t.Fatalf("tamanho: %v", err)
 	}
 }
 
@@ -200,6 +256,145 @@ func TestAgentRefusesASourceThatDoesNotMatch(t *testing.T) {
 	}
 	if len(e.fake.Runs()) != 0 {
 		t.Fatal("o harness não deveria rodar com uma fonte adulterada")
+	}
+}
+
+// manyEvents is a harness that emits n progress events at once, then the
+// terminal one, and closes emitted when it is done.
+type manyEvents struct {
+	harness.Unavailable
+	n       int
+	emitted chan struct{}
+}
+
+type manyStream struct {
+	h   *manyEvents
+	run string
+	seq int
+}
+
+func (m *manyEvents) Run(_ context.Context, req *pb.RunRequest) (harness.EventStream, error) {
+	return &manyStream{h: m, run: req.GetRunId()}, nil
+}
+
+func (s *manyStream) Recv() (*pb.RunEvent, error) {
+	s.seq++
+	ev := &pb.RunEvent{RunId: s.run, Seq: uint64(s.seq)} //nolint:gosec // small
+	switch {
+	case s.seq <= s.h.n:
+		ev.Event = &pb.RunEvent_Progress{Progress: &pb.Progress{Done: uint64(s.seq), Total: uint64(s.h.n)}} //nolint:gosec // small
+	case s.seq == s.h.n+1:
+		close(s.h.emitted)
+		ev.Event = &pb.RunEvent_Completed{Completed: &pb.Completed{}}
+	default:
+		return nil, io.EOF
+	}
+	return ev, nil
+}
+
+// eventsGate answers 503 to event posts while closed and records the largest
+// batch that went through.
+type eventsGate struct {
+	open     atomic.Bool
+	status   atomic.Int32
+	maxBatch atomic.Int64
+}
+
+func (g *eventsGate) wrap(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/events") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		body, _ := io.ReadAll(r.Body)
+		r.Body = io.NopCloser(bytes.NewReader(body))
+		if !g.open.Load() {
+			w.WriteHeader(int(g.status.Load()))
+			return
+		}
+		var req burst.EventsRequest
+		_ = json.Unmarshal(body, &req)
+		for {
+			cur := g.maxBatch.Load()
+			if int64(len(req.Events)) <= cur || g.maxBatch.CompareAndSwap(cur, int64(len(req.Events))) {
+				break
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func TestAgentCatchesUpInBatchesTheAPIAccepts(t *testing.T) {
+	t.Parallel()
+	gate := &eventsGate{}
+	gate.status.Store(http.StatusServiceUnavailable)
+	e := newEnv(t, harnesstest.Options{}, gate.wrap)
+	job := e.queue(sum(sourceBody))
+	h := &manyEvents{n: 2500, emitted: make(chan struct{})}
+	a := e.agent(Options{Once: true, Harness: h})
+	go func() {
+		<-h.emitted
+		time.Sleep(200 * time.Millisecond)
+		gate.open.Store(true) // the API comes back with 2500 events pending
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	if err := a.Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	got := e.job(job.ID)
+	if got.State != burst.StateDone {
+		t.Fatalf("job = %s (%s)", got.State, got.Reason)
+	}
+	if n := len(e.events(job)); n != 2501 {
+		t.Fatalf("eventos gravados = %d", n)
+	}
+	if mb := gate.maxBatch.Load(); mb > burst.MaxEventsPerCall || mb == 0 {
+		t.Fatalf("maior lote = %d (teto %d)", mb, burst.MaxEventsPerCall)
+	}
+}
+
+func TestAgentStopsOnARefusalARetryCannotFix(t *testing.T) {
+	t.Parallel()
+	gate := &eventsGate{}
+	gate.status.Store(http.StatusBadRequest)
+	e := newEnv(t, harnesstest.Options{}, gate.wrap)
+	job := e.queue(sum(sourceBody))
+	a := e.agent(Options{Once: true, Harness: &manyEvents{n: 50, emitted: make(chan struct{})}})
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	start := time.Now()
+	if err := a.Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	got := e.job(job.ID)
+	if got.State != burst.StateFailed || !strings.Contains(got.Reason, "400") || time.Since(start) > 10*time.Second {
+		t.Fatalf("job = %s (%s) em %v", got.State, got.Reason, time.Since(start))
+	}
+}
+
+func TestTwoAgentsOneJobOneClaim(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t, harnesstest.Options{})
+	job := e.queue(sum(sourceBody))
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	var wg sync.WaitGroup
+	for _, id := range []string{"i-a", "i-b"} {
+		a := e.agent(Options{Identity: Identity{InstanceID: id}, MaxIdle: 400 * time.Millisecond})
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = a.Run(ctx)
+		}()
+	}
+	wg.Wait()
+	got := e.job(job.ID)
+	if got.State != burst.StateDone || (got.InstanceID != "i-a" && got.InstanceID != "i-b") {
+		t.Fatalf("job = %+v", got)
+	}
+	if n := len(e.fake.Runs()); n != 1 {
+		t.Fatalf("o harness rodou %d vezes para um trabalho", n)
 	}
 }
 
@@ -294,7 +489,7 @@ func TestAgentStopsAJobTheAPIDropped(t *testing.T) {
 			time.Sleep(10 * time.Millisecond)
 		}
 		time.Sleep(100 * time.Millisecond)
-		_, _ = e.store.Cancel(context.Background(), job.ID, "cancelada pelo cliente", time.Now())
+		_, _ = e.store.Cancel(context.Background(), job.ID, "cancelada pelo cliente")
 	}()
 	start := time.Now()
 	if err := a.Run(ctx); err != nil {
@@ -305,6 +500,26 @@ func TestAgentStopsAJobTheAPIDropped(t *testing.T) {
 	}
 	if time.Since(start) > 10*time.Second {
 		t.Fatal("o trabalho cancelado deveria parar logo")
+	}
+}
+
+func TestAgentReportsTheLastError(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t, harnesstest.Options{})
+	state := t.TempDir()
+	RecordFailure(state, errors.New(`agent: endpoint interno sem resposta: Get "https://10.0.0.5:8444/x?X-Amz-Signature=zz": timeout`))
+	a := e.agent(Options{Identity: Identity{InstanceID: "local-x"}, StateDir: state, MaxIdle: 100 * time.Millisecond, Version: "dev+abc"})
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	if err := a.Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	c, ok := e.store.LastContact("local-x")
+	if !ok || c.Version != "dev+abc" || !strings.Contains(c.LastError, "sem resposta") || strings.Contains(c.LastError, "X-Amz") {
+		t.Fatalf("contato = %+v %v", c, ok)
+	}
+	if _, err := os.Stat(filepath.Join(state, LastErrorFile)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("o erro relatado deveria sair da pasta de estado: %v", err)
 	}
 }
 
@@ -324,11 +539,27 @@ func TestAgentGivesUpWhenTheAPIIsGone(t *testing.T) {
 	if _, err := New(Options{}); err == nil {
 		t.Fatal("opções vazias deveriam falhar")
 	}
-	// MaxIdle ends a worker without jobs (local runs).
-	e := newEnv(t, harnesstest.Options{})
-	idle := e.agent(Options{MaxIdle: time.Millisecond})
-	if err := idle.Run(ctx); err != nil {
-		t.Fatal(err)
+}
+
+func TestRedactKeepsNoSignature(t *testing.T) {
+	t.Parallel()
+	err := &url.Error{Op: "Get", URL: "https://uploads.s3.amazonaws.com/quarantine/x?X-Amz-Signature=segredo&X-Amz-Credential=k", Err: errors.New("i/o timeout")}
+	got := redact(err)
+	if strings.Contains(got, "segredo") || strings.Contains(got, "X-Amz") || got != "Get https://uploads.s3.amazonaws.com/quarantine/x: i/o timeout" {
+		t.Fatalf("redact = %q", got)
+	}
+	if redact(errors.New("outro")) != "outro" || stripQuery(nil) != "" {
+		t.Fatal("redact sem URL")
+	}
+	for status, want := range map[int]error{410: errGone, 400: errFatal, 401: errFatal, 413: errFatal} {
+		if err := classify("/x", status); !errors.Is(err, want) {
+			t.Errorf("%d: %v", status, err)
+		}
+	}
+	for _, status := range []int{409, 429, 503, 500} {
+		if err := classify("/x", status); err == nil || errors.Is(err, errFatal) || errors.Is(err, errGone) {
+			t.Errorf("%d deveria ser transitório: %v", status, err)
+		}
 	}
 }
 

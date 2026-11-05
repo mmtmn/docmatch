@@ -23,6 +23,7 @@ const (
 	ReasonPoolUnknown = "pool_unknown" // the pool state could not be read
 	ReasonNoCapacity  = "no_capacity"  // queued, but no worker claimed it in time
 	ReasonFasterLocal = "faster_local" // heavy by time only, but the pool (boot included) would not be faster
+	ReasonReattached  = "reattached"   // the pool already had a job for the run (main worker restarted)
 	PlacementLocal    = "local"
 	PlacementBurst    = "burst"
 )

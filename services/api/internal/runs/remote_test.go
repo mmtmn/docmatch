@@ -3,15 +3,20 @@ package runs
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/mmtmn/docmatch/services/api/internal/estimate"
 	"github.com/mmtmn/docmatch/services/api/internal/harness"
 	"github.com/mmtmn/docmatch/services/api/internal/harness/harnesstest"
 	pb "github.com/mmtmn/docmatch/services/api/internal/harness/pb"
 	"github.com/mmtmn/docmatch/services/api/internal/logx"
+	"github.com/mmtmn/docmatch/services/api/internal/runs/apix"
 )
 
 // burstPlacer sends every run to the pool (by memory: the speed check of
@@ -30,21 +35,68 @@ func (p burstPlacer) Place(context.Context, estimate.PlaceInput) estimate.Placem
 type fakeRemote struct {
 	h harness.Client
 	// mode: "" runs, "nocap" reports no capacity, "cancelled", "error"
-	// fails the dispatch; interruptAfter > 0 loses the worker after N events.
+	// fails the dispatch, "full" has no place; interruptAfter > 0 loses the
+	// worker after N events.
 	mode           string
 	interruptAfter int
+	// live is a job the pool already has for the run (Attach streams it on
+	// liveHarness); attachErr fails Attach.
+	live        bool
+	liveHarness harness.Client
+	attachErr   error
 
-	mu    sync.Mutex
-	runs  []RemoteRun
-	stops []string
+	mu       sync.Mutex
+	runs     []RemoteRun
+	attaches int
+	stops    []string
+	drops    []string
+}
+
+func (r *fakeRemote) Attach(ctx context.Context, rr RemoteRun, afterSeq int64) (RemoteStream, bool, error) {
+	r.mu.Lock()
+	r.attaches++
+	r.mu.Unlock()
+	if r.attachErr != nil {
+		return nil, false, r.attachErr
+	}
+	if !r.live {
+		return nil, false, nil
+	}
+	req := &pb.RunRequest{RunId: rr.RunID.String()}
+	if rr.Request != nil {
+		req = rr.Request
+	}
+	inner, err := r.liveHarness.Run(ctx, attachRequest(req, rr))
+	if err != nil {
+		return nil, false, err
+	}
+	return &fakeRemoteStream{r: r, inner: inner}, true, nil
+}
+
+// attachRequest is the request the live job was queued with: the run's id.
+func attachRequest(req *pb.RunRequest, rr RemoteRun) *pb.RunRequest {
+	if req.GetRunId() == "" || req.GetRunId() == rr.RunID.String() {
+		return &pb.RunRequest{RunId: apix.Encode(apix.PrefixRun, rr.RunID), Sources: []*pb.Source{{Id: "upl_1", Uri: "local://t/x"}}}
+	}
+	return req
+}
+
+func (r *fakeRemote) Drop(_ context.Context, runID uuid.UUID, reason string) error {
+	r.mu.Lock()
+	r.drops = append(r.drops, reason+":"+runID.String())
+	r.mu.Unlock()
+	return nil
 }
 
 func (r *fakeRemote) Run(ctx context.Context, rr RemoteRun) (RemoteStream, error) {
 	r.mu.Lock()
 	r.runs = append(r.runs, rr)
 	r.mu.Unlock()
-	if r.mode == "error" {
-		return nil, errors.New("pool fora")
+	switch r.mode {
+	case "error":
+		return nil, fmt.Errorf("%w: pool fora", harness.ErrUnavailable)
+	case "full":
+		return nil, ErrPoolFull
 	}
 	s := &fakeRemoteStream{r: r}
 	switch r.mode {
@@ -136,7 +188,7 @@ func TestRunOnThePool(t *testing.T) {
 
 func TestNoCapacityFallsBackToTheMainBox(t *testing.T) {
 	t.Parallel()
-	for _, mode := range []string{"nocap", "error"} {
+	for mode, want := range map[string]string{"nocap": estimate.ReasonNoCapacity, "full": estimate.ReasonFull} {
 		remote := &fakeRemote{mode: mode}
 		f := poolFixture(t, burstPlacer{}, remote)
 		ctx := context.Background()
@@ -147,10 +199,6 @@ func TestNoCapacityFallsBackToTheMainBox(t *testing.T) {
 		}
 		done, _ := f.svc.Get(ctx, f.org, run.ID)
 		tm := done.Timing()
-		want := estimate.ReasonNoCapacity
-		if mode == "error" {
-			want = estimate.ReasonPoolUnknown
-		}
 		if done.Status != StatusCompleted || tm.Placement != estimate.PlacementLocal || tm.Reason != want {
 			t.Fatalf("%s: run = %s, timing = %+v", mode, done.Status, tm)
 		}
@@ -159,6 +207,88 @@ func TestNoCapacityFallsBackToTheMainBox(t *testing.T) {
 		if time.Until(dl) < f.svc.Deadlines().For(tm.Budget())-time.Minute {
 			t.Fatalf("%s: prazo do fallback curto: %v", mode, time.Until(dl))
 		}
+	}
+}
+
+func TestAPoolFailureIsRetriedNeverRunTwice(t *testing.T) {
+	t.Parallel()
+	for name, remote := range map[string]*fakeRemote{
+		"despacho":  {mode: "error"},
+		"reconexão": {attachErr: fmt.Errorf("%w: banco fora", harness.ErrUnavailable)},
+	} {
+		f := poolFixture(t, burstPlacer{}, remote)
+		ctx := context.Background()
+		f.grant(t, 1000)
+		run, _ := f.create(t)
+		// Not knowing whether the pool has the run, the main box does not start
+		// it: the job is retried.
+		if err := f.svc.Execute(ctx, f.org, run.ID, false); !errors.Is(err, ErrRetry) {
+			t.Fatalf("%s: err = %v", name, err)
+		}
+		if n := len(f.fake.Runs()); n != 0 {
+			t.Fatalf("%s: a máquina principal rodou %d vez(es)", name, n)
+		}
+	}
+}
+
+// TestALiveJobWinsOverANewPlacement: the River job is retried (deploy, a
+// database blip) while the pool still runs the run, and the pool would now
+// say "main box" (full, cap, unhealthy): the run follows the live job, and
+// the main box never starts a second execution.
+func TestALiveJobWinsOverANewPlacement(t *testing.T) {
+	t.Parallel()
+	pool, poolFake := freshHarness(t)
+	remote := &fakeRemote{live: true, liveHarness: pool}
+	f := poolFixture(t, burstPlacer{reason: estimate.ReasonFull}, remote)
+	ctx := context.Background()
+	f.grant(t, 1000)
+	run, _ := f.create(t)
+	if err := f.svc.Execute(ctx, f.org, run.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	done, _ := f.svc.Get(ctx, f.org, run.ID)
+	if done.Status != StatusCompleted || done.Summary.FindingsTotal != 23 {
+		t.Fatalf("run = %s", done.Status)
+	}
+	if n := len(f.fake.Runs()); n != 0 {
+		t.Fatalf("a máquina principal rodou %d vez(es) com o trabalho vivo no pool", n)
+	}
+	if len(poolFake.Runs()) != 1 || len(remote.runs) != 0 {
+		t.Fatalf("o pool deveria seguir com o trabalho que já tinha: %d execuções, %d despachos", len(poolFake.Runs()), len(remote.runs))
+	}
+	if tm := done.Timing(); tm.Placement != estimate.PlacementBurst || tm.Reason != estimate.ReasonReattached {
+		t.Fatalf("timing = %+v", tm)
+	}
+	// Without a live job, the same placer keeps the run local.
+	remote.live = false
+	run2, _ := f.create(t)
+	if err := f.svc.Execute(ctx, f.org, run2.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.fake.Runs()) != 1 || len(remote.runs) != 0 {
+		t.Fatalf("sem trabalho vivo: %d locais, %d despachos", len(f.fake.Runs()), len(remote.runs))
+	}
+}
+
+func TestCancelAndFinishedRunsDropThePoolJob(t *testing.T) {
+	t.Parallel()
+	remote := &fakeRemote{}
+	f := poolFixture(t, burstPlacer{}, remote)
+	ctx := context.Background()
+	f.grant(t, 1000)
+	run, _ := f.create(t)
+	if _, err := f.svc.Cancel(ctx, f.principal(), run.ID); err != nil {
+		t.Fatal(err)
+	}
+	if len(remote.drops) != 1 || !strings.HasSuffix(remote.drops[0], run.ID.String()) {
+		t.Fatalf("cancelar deveria derrubar o trabalho do pool: %v", remote.drops)
+	}
+	// A retry that finds the run already finished drops what the pool still has.
+	if err := f.svc.Execute(ctx, f.org, run.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if len(remote.drops) != 2 || remote.attaches != 0 {
+		t.Fatalf("execução encerrada: drops %v, reconexões %d", remote.drops, remote.attaches)
 	}
 }
 

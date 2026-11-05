@@ -7,7 +7,9 @@
 
 -- ------------------------------------------------------------------ trabalhos
 -- request: o pb.RunRequest (protobuf) montado pelo worker principal; token_hash: SHA-256 do token
--- do trabalho (o token em si só existe no manifesto); deadline_seconds conta a partir da entrega.
+-- do trabalho (o token em si só existe no manifesto); deadline_seconds conta a partir da entrega;
+-- events_count e events_bytes somam os eventos gravados (a cota por trabalho). Todo instante de
+-- concessão e de fim vem do relógio do banco (now()), nunca do de quem chama.
 CREATE TABLE burst_jobs (
   id                uuid PRIMARY KEY,
   org_id            uuid NOT NULL REFERENCES orgs (id) ON DELETE CASCADE,
@@ -22,6 +24,8 @@ CREATE TABLE burst_jobs (
   lease_expires_at  timestamptz,
   finished_at       timestamptz,
   reason            text NOT NULL DEFAULT '' CHECK (char_length(reason) <= 600),
+  events_count      integer NOT NULL DEFAULT 0 CHECK (events_count >= 0),
+  events_bytes      bigint NOT NULL DEFAULT 0 CHECK (events_bytes >= 0),
   created_at        timestamptz NOT NULL DEFAULT now(),
   updated_at        timestamptz NOT NULL DEFAULT now(),
   CHECK (state <> 'claimed' OR (instance_id IS NOT NULL AND token_hash IS NOT NULL AND lease_expires_at IS NOT NULL))
@@ -32,6 +36,7 @@ CREATE INDEX burst_jobs_queued_idx ON burst_jobs (created_at) WHERE state = 'que
 CREATE INDEX burst_jobs_claimed_idx ON burst_jobs (lease_expires_at) WHERE state = 'claimed';
 CREATE INDEX burst_jobs_finished_idx ON burst_jobs (finished_at) WHERE finished_at IS NOT NULL;
 CREATE INDEX burst_jobs_org_idx ON burst_jobs (org_id);
+CREATE INDEX burst_jobs_run_recent_idx ON burst_jobs (run_id, created_at DESC);
 CREATE TRIGGER burst_jobs_updated_at BEFORE UPDATE ON burst_jobs FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 -- ------------------------------------------------------------------- eventos
@@ -47,14 +52,20 @@ CREATE TABLE burst_events (
 CREATE INDEX burst_events_org_idx ON burst_events (org_id);
 
 -- ----------------------------------------------------------------- instâncias
--- Cada chamada assinada de um trabalhador atualiza last_seen_at: as horas do mês são a soma de
--- last_seen_at - first_seen_at dentro do mês, mais o boot de cada instância nova.
+-- Com o grupo de Auto Scaling, só o escalonador grava aqui (as instâncias que a AWS lista), a cada
+-- ajuste: as horas do mês são a soma de last_seen_at - first_seen_at dentro do mês. Sem grupo
+-- (trabalhadores à mão), um trabalho entregue ou uma chamada sobre ele conta, mais o boot de cada
+-- instância nova. last_contact_at, agent_version e last_error vêm do aviso de vida do trabalhador
+-- (o journal de uma instância Spot some com ela; o último erro fica aqui).
 CREATE TABLE burst_instances (
-  instance_id    text PRIMARY KEY CHECK (char_length(instance_id) BETWEEN 1 AND 64),
-  instance_type  text NOT NULL DEFAULT '' CHECK (char_length(instance_type) <= 64),
-  lifecycle      text NOT NULL DEFAULT '' CHECK (char_length(lifecycle) <= 32),
-  first_seen_at  timestamptz NOT NULL,
-  last_seen_at   timestamptz NOT NULL,
+  instance_id      text PRIMARY KEY CHECK (char_length(instance_id) BETWEEN 1 AND 64),
+  instance_type    text NOT NULL DEFAULT '' CHECK (char_length(instance_type) <= 64),
+  lifecycle        text NOT NULL DEFAULT '' CHECK (char_length(lifecycle) <= 32),
+  first_seen_at    timestamptz NOT NULL,
+  last_seen_at     timestamptz NOT NULL,
+  last_contact_at  timestamptz,
+  agent_version    text NOT NULL DEFAULT '' CHECK (char_length(agent_version) <= 64),
+  last_error       text NOT NULL DEFAULT '' CHECK (char_length(last_error) <= 600),
   CHECK (last_seen_at >= first_seen_at)
 );
 CREATE INDEX burst_instances_last_seen_idx ON burst_instances (last_seen_at);

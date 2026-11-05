@@ -15,6 +15,10 @@ import (
 // constants with defaults that tests shorten.
 type Settings struct {
 	Enabled bool
+	// Managed is true when an Auto Scaling group backs the pool: the scaler
+	// is then the only source of instances and usage (the AWS view), and the
+	// endpoint serves only instances the scaler has seen.
+	Managed bool
 	// MinSeconds: a run expected to take this long on the main box is heavy.
 	MinSeconds int64
 	// MemoryHeadroomMB: a run estimated above it is heavy.
@@ -36,21 +40,30 @@ type Settings struct {
 	LongPoll time.Duration
 	// Poll is how often the main worker reads the events of a job.
 	Poll time.Duration
-	// LiveWindow: an instance heard from within it is live.
+	// LiveWindow: an instance seen within it is live.
 	LiveWindow time.Duration
-	// BootSeconds are charged once per instance started in the month.
+	// BootSeconds are charged once per instance first seen in the month; zero
+	// for a managed pool, whose instances the scaler sees from Pending on.
 	BootSeconds float64
-	// NoClaimThreshold jobs in a row nobody claimed mark the pool unhealthy
-	// for Cooldown.
+	// NoClaimThreshold jobs in a row nobody claimed, while the pool had room,
+	// mark the pool unhealthy for Cooldown.
 	NoClaimThreshold int
 	Cooldown         time.Duration
 	// Retention keeps finished jobs and their events for debugging.
 	Retention time.Duration
 	// StatusTTL caches the pool status read by routing.
 	StatusTTL time.Duration
+	// Quota bounds the events one job may store; FillBytes what the main
+	// worker reads per poll.
+	Quota     EventQuota
+	FillBytes int64
+	// ClaimSlots bounds the claims the endpoint holds open at once (one per
+	// instance besides); EventSlots the event posts it processes at once.
+	ClaimSlots int
+	EventSlots int
 }
 
-// Default protocol timings.
+// Default protocol timings and limits.
 const (
 	DefaultLease            = 90 * time.Second
 	DefaultHeartbeat        = 15 * time.Second
@@ -63,6 +76,11 @@ const (
 	DefaultCooldown         = 30 * time.Minute
 	DefaultRetention        = 7 * 24 * time.Hour
 	DefaultStatusTTL        = 5 * time.Second
+	DefaultMaxJobEvents     = 100_000
+	DefaultMaxJobBytes      = 256 << 20
+	DefaultFillBytes        = 8 << 20
+	DefaultClaimSlots       = 8
+	DefaultEventSlots       = 4
 	// DefaultMinSeconds applies when neither DM_BURST_MIN_SECONDS nor
 	// throughput.yaml say (large_after_seconds of the repo file).
 	DefaultMinSeconds = 600
@@ -73,21 +91,30 @@ const (
 // bootSeconds its burst.boot_seconds.
 func FromConfig(b config.Burst, largeAfter int64, bootSeconds float64) Settings {
 	s := Settings{
-		Enabled: b.Enabled, MinSeconds: b.MinSeconds, MemoryHeadroomMB: float64(b.MemoryHeadroomMB), Kinds: slices.Clone(b.Kinds),
-		MaxInstances: b.MaxInstances, MonthlyHours: b.MonthlyHours, IdleAfter: b.IdleAfter, ClaimTimeout: b.ClaimTimeout,
-		BootSeconds: bootSeconds,
+		Enabled: b.Enabled, Managed: b.ASGName != "", MinSeconds: b.MinSeconds, MemoryHeadroomMB: float64(b.MemoryHeadroomMB),
+		Kinds: slices.Clone(b.Kinds), MaxInstances: b.MaxInstances, MonthlyHours: b.MonthlyHours, IdleAfter: b.IdleAfter,
+		ClaimTimeout: b.ClaimTimeout, BootSeconds: bootSeconds,
 	}
 	if s.MinSeconds <= 0 {
 		s.MinSeconds = largeAfter
 	}
-	return s.WithDefaults()
+	s = s.WithDefaults()
+	if s.Managed {
+		s.BootSeconds = 0
+	}
+	return s
 }
 
-// WithDefaults fills the zero timings.
+// WithDefaults fills the zero timings and limits.
 func (s Settings) WithDefaults() Settings {
 	set := func(d *time.Duration, def time.Duration) {
 		if *d <= 0 {
 			*d = def
+		}
+	}
+	setInt := func(n *int, def int) {
+		if *n <= 0 {
+			*n = def
 		}
 	}
 	set(&s.Lease, DefaultLease)
@@ -101,14 +128,23 @@ func (s Settings) WithDefaults() Settings {
 	set(&s.StatusTTL, DefaultStatusTTL)
 	set(&s.IdleAfter, time.Duration(config.DefaultBurstIdleMinutes)*time.Minute)
 	set(&s.ClaimTimeout, time.Duration(config.DefaultBurstClaimSeconds)*time.Second)
+	setInt(&s.NoClaimThreshold, DefaultNoClaimThreshold)
+	setInt(&s.ClaimSlots, DefaultClaimSlots)
+	setInt(&s.EventSlots, DefaultEventSlots)
 	if s.MinSeconds <= 0 {
 		s.MinSeconds = DefaultMinSeconds
 	}
 	if s.BootSeconds <= 0 {
 		s.BootSeconds = DefaultBootSeconds
 	}
-	if s.NoClaimThreshold <= 0 {
-		s.NoClaimThreshold = DefaultNoClaimThreshold
+	if s.Quota.MaxEvents <= 0 {
+		s.Quota.MaxEvents = DefaultMaxJobEvents
+	}
+	if s.Quota.MaxBytes <= 0 {
+		s.Quota.MaxBytes = DefaultMaxJobBytes
+	}
+	if s.FillBytes <= 0 {
+		s.FillBytes = DefaultFillBytes
 	}
 	return s
 }
@@ -129,9 +165,9 @@ func (s Settings) Heavy(in estimate.PlaceInput) (bool, string) {
 	return false, estimate.ReasonLight
 }
 
-// Query is the status query for now.
+// Query is the status query for the month of now.
 func (s Settings) Query(now time.Time) StatusQuery {
-	return StatusQuery{Now: now, MonthStart: MonthStart(now), LiveSince: now.Add(-s.LiveWindow), BootSeconds: s.BootSeconds}
+	return StatusQuery{MonthStart: MonthStart(now), LiveWindow: s.LiveWindow, BootSeconds: s.BootSeconds}
 }
 
 // CapReached reports whether the month's instance hours are used up.
@@ -139,9 +175,19 @@ func (s Settings) CapReached(st PoolStatus) bool {
 	return s.MaxInstances <= 0 || st.UsedHours() >= s.MonthlyHours
 }
 
+// Limited reports whether the pool has no room on purpose: switched off, at
+// the monthly cap or with every allowed instance holding a job. A job nobody
+// claims then is not the pool's failure (the breaker does not count it).
+func (s Settings) Limited(st PoolStatus) bool {
+	return !s.Enabled || s.CapReached(st) || st.Busy >= s.MaxInstances
+}
+
 // Router places runs (estimate.Placer): heavy runs go to the pool unless it
 // is off, capped, full or cooling down. It never refuses a run: every "no"
-// is the main box.
+// is the main box. Its status is a cache (StatusTTL) that quotes share, so
+// it is only a hint: the place itself is reserved atomically when the
+// dispatcher creates the job (Store.CreateJob), and a run that finds the pool
+// full there runs on the main box.
 type Router struct {
 	Settings Settings
 	Store    Store
@@ -163,6 +209,8 @@ func (r *Router) Place(ctx context.Context, in estimate.PlaceInput) estimate.Pla
 		return estimate.Placement{Reason: estimate.ReasonDisabled}
 	}
 	now := r.now()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	st, err := r.status(ctx, now)
 	switch {
 	case err != nil:
@@ -185,9 +233,8 @@ func (r *Router) now() time.Time {
 }
 
 // status reads the pool, cached for StatusTTL (a quote must stay cheap).
+// r.mu is held.
 func (r *Router) status(ctx context.Context, now time.Time) (PoolStatus, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
 	if !r.at.IsZero() && now.Sub(r.at) < r.Settings.StatusTTL && now.After(r.at.Add(-time.Second)) {
 		return r.cached, r.err
 	}

@@ -30,6 +30,7 @@ func runBurst(args []string) error {
 	once := fs.Bool("once", false, "termina depois do primeiro trabalho")
 	maxIdle := fs.Duration("max-idle", 0, "termina depois deste tempo sem trabalho (0 = nunca)")
 	noticeEvery := fs.Duration("notice-every", agent.DefaultNoticeInterval, "intervalo de consulta do aviso de encerramento (Spot, Auto Scaling)")
+	stateDir := fs.String("state-dir", os.Getenv("STATE_DIRECTORY"), "pasta onde fica o último erro, relatado no próximo início (padrão: STATE_DIRECTORY do systemd)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -69,12 +70,14 @@ func runBurst(args []string) error {
 	a, err := agent.New(agent.Options{
 		APIURL: cfg.APIURL, Keys: keys, Harness: h, MediaRoot: cfg.MediaLocalDir, Identity: id, IMDS: imds,
 		APIDownAfter: agent.DefaultAPIDownAfter, Once: *once, MaxIdle: *maxIdle, NoticeInterval: *noticeEvery, Logger: log,
+		StateDir: *stateDir, Version: version.Current().Version + "+" + version.Current().GitSHA,
 	})
 	if err != nil {
 		return err
 	}
 	log.Info("iniciando trabalhador sob demanda", slog.Any("version", version.Current()), slog.String("instance", id.InstanceID))
 	if err := a.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+		agent.RecordFailure(*stateDir, err)
 		return err
 	}
 	return nil

@@ -28,6 +28,9 @@ var (
 	// ErrRemoteCancelled ends a remote stream when the run was cancelled
 	// while it waited for a worker.
 	ErrRemoteCancelled = errors.New("runs: execução cancelada enquanto aguardava um trabalhador")
+	// ErrPoolFull is returned by Remote.Run when the pool has no place left
+	// (reserved atomically): nothing was queued, the run stays on the main box.
+	ErrPoolFull = errors.New("runs: o pool sob demanda está cheio")
 	// ErrRequeue asks the job to run again soon without spending an attempt
 	// (the River worker snoozes it).
 	ErrRequeue = errors.New("runs: execução devolvida à fila")
@@ -60,10 +63,17 @@ type RemoteStream interface {
 	Stop(ctx context.Context, reason string)
 }
 
-// Remote runs requests on the pool of on-demand workers. A main-worker
-// restart re-attaches to the job already running for the run.
+// Remote runs requests on the pool of on-demand workers.
 type Remote interface {
+	// Attach streams the job the pool already has for the run: a live one,
+	// or one that ended with events past afterSeq nobody applied. Execute
+	// calls it before deciding a placement, so a retry (deploy, database
+	// blip) never runs the run twice.
+	Attach(ctx context.Context, run RemoteRun, afterSeq int64) (RemoteStream, bool, error)
+	// Run queues a new job (ErrPoolFull when there is no place).
 	Run(ctx context.Context, run RemoteRun) (RemoteStream, error)
+	// Drop cancels the run's live job, if any (cancelled or finished run).
+	Drop(ctx context.Context, runID uuid.UUID, reason string) error
 }
 
 // Deadlines scales the deadline of a run with its expected time, on both
@@ -125,26 +135,62 @@ func (s *Service) place(ctx context.Context, t Timing) estimate.Placement {
 	return s.d.Estimates.Place(ctx, estimate.PlaceInput{Units: t.Units, LocalSeconds: local, Interruptions: t.Interruptions})
 }
 
-// open starts the harness stream where the placement says. On the pool, a
-// job nobody claims in time falls back to the main box (routedStream).
-func (s *Service) open(ctx context.Context, r *Run, req *pb.RunRequest, place estimate.Placement, budget time.Duration) (harness.EventStream, RemoteStream, error) {
-	if !place.Burst {
-		stream, err := s.d.Harness.Run(ctx, req)
-		return stream, nil, err
-	}
+// remoteRun describes the run for the pool.
+func (s *Service) remoteRun(r *Run, req *pb.RunRequest, budget time.Duration) RemoteRun {
 	orgID, runID := r.OrgID, r.ID
-	remote, err := s.d.Remote.Run(ctx, RemoteRun{
+	return RemoteRun{
 		OrgID: orgID, RunID: runID, Request: req, Deadline: budget, Wait: s.d.Deadlines.Wait,
 		Cancelled: func(ctx context.Context) bool {
 			cur, ok, gerr := s.d.Store.GetRun(ctx, orgID, runID)
 			return gerr == nil && ok && (cur.CancelRequested || cur.Status == StatusCancelled)
 		},
-	})
+	}
+}
+
+// attachOrPlace finds the job the pool already has for the run before any
+// new decision: when there is one, the run follows it (whatever the pool
+// would decide now); otherwise the placement is decided again.
+func (s *Service) attachOrPlace(ctx context.Context, r *Run, timing Timing, budget time.Duration) (estimate.Placement, RemoteStream, error) {
+	if s.d.Remote == nil {
+		return s.place(ctx, timing), nil, nil
+	}
+	rs, ok, err := s.d.Remote.Attach(ctx, s.remoteRun(r, nil, budget), r.LastSeq)
 	if err != nil {
-		s.d.Logger.Warn("pool sob demanda indisponível; execução na máquina principal", slog.String("run_id", r.PublicID()), slog.String("err", err.Error()))
-		s.setPlacement(r, estimate.Placement{Reason: estimate.ReasonPoolUnknown})
-		stream, lerr := s.d.Harness.Run(ctx, withDeadline(req, budget))
-		return stream, nil, lerr
+		return estimate.Placement{}, nil, err
+	}
+	if ok {
+		reason := timing.Reason
+		if timing.Placement != estimate.PlacementBurst || reason == "" {
+			reason = estimate.ReasonReattached
+		}
+		return estimate.Placement{Burst: true, Reason: reason}, rs, nil
+	}
+	return s.place(ctx, timing), nil, nil
+}
+
+// open starts the harness stream where the placement says: the attached pool
+// job, a new one, or the main box. On the pool, a job nobody claims in time
+// falls back to the main box (routedStream); a full pool means the main box
+// right away. Any other pool error is returned (the job is retried) rather
+// than risking a second execution.
+func (s *Service) open(ctx context.Context, r *Run, req *pb.RunRequest, place estimate.Placement, budget time.Duration, attached RemoteStream) (harness.EventStream, RemoteStream, error) {
+	if !place.Burst {
+		stream, err := s.d.Harness.Run(ctx, req)
+		return stream, nil, err
+	}
+	remote := attached
+	if remote == nil {
+		var err error
+		remote, err = s.d.Remote.Run(ctx, s.remoteRun(r, req, budget))
+		if errors.Is(err, ErrPoolFull) {
+			s.d.Logger.Info("pool sob demanda cheio; execução na máquina principal", slog.String("run_id", r.PublicID()))
+			s.setPlacement(r, estimate.Placement{Reason: estimate.ReasonFull})
+			stream, lerr := s.d.Harness.Run(ctx, withDeadline(req, budget))
+			return stream, nil, lerr
+		}
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 	rs := &routedStream{cur: remote, fallback: func() (harness.EventStream, error) {
 		s.d.Logger.Warn("nenhum trabalhador sob demanda a tempo; execução na máquina principal", slog.String("run_id", r.PublicID()))
@@ -152,6 +198,16 @@ func (s *Service) open(ctx context.Context, r *Run, req *pb.RunRequest, place es
 		return s.d.Harness.Run(ctx, withDeadline(req, budget))
 	}}
 	return rs, remote, nil
+}
+
+// dropRemote cancels the pool job of a run that no longer needs it.
+func (s *Service) dropRemote(ctx context.Context, r Run, reason string) {
+	if s.d.Remote == nil {
+		return
+	}
+	if err := s.d.Remote.Drop(context.WithoutCancel(ctx), r.ID, reason); err != nil {
+		s.d.Logger.Warn("cancelar o trabalho do pool falhou", slog.String("run_id", r.PublicID()), slog.String("err", err.Error()))
+	}
 }
 
 // setPlacement records where the run executes in its timing (saved with the

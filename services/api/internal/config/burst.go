@@ -81,6 +81,10 @@ type Burst struct {
 	// ClaimTimeout is how long a queued job waits for a worker before the
 	// run falls back to the main box.
 	ClaimTimeout time.Duration
+	// Off says why the pool was switched off despite DM_BURST_ENABLED or
+	// DM_BURST_LISTEN (the pool secret is empty or too short): the process
+	// boots without the pool instead of failing.
+	Off string
 }
 
 // Deadline bounds the deadline of a run, scaled with its expected time:
@@ -107,9 +111,12 @@ func (r *reader) readBurst(cfg *Config) {
 	b := &cfg.Burst
 	b.Enabled = r.boolean(VarBurstEnabled, false)
 	b.Listen = r.listenOptional(VarBurstListen)
-	b.PoolSecret = r.secret(VarBurstPoolSecret, b.Enabled || b.Listen != "")
-	if v := b.PoolSecret.Reveal(); v != "" && len(v) < minPoolSecretChars {
-		r.problem(VarBurstPoolSecret, fmt.Sprintf("precisa ter pelo menos %d caracteres", minPoolSecretChars))
+	// An unset secret (the __EMPTY__ placeholder renders as "") never stops
+	// production from booting: the pool just stays off, and says why.
+	b.PoolSecret = r.secret(VarBurstPoolSecret, false)
+	if (b.Enabled || b.Listen != "") && len(b.PoolSecret.Reveal()) < minPoolSecretChars {
+		b.Off = fmt.Sprintf("%s vazio ou com menos de %d caracteres: pool sob demanda desligado", VarBurstPoolSecret, minPoolSecretChars)
+		b.Enabled, b.Listen = false, ""
 	}
 	b.ASGName = r.optional(VarBurstASGName, "")
 	b.MinSeconds = int64(r.integer(VarBurstMinSeconds, 0, 0, 30*24*3600))

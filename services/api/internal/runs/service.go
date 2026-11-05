@@ -300,6 +300,7 @@ func (s *Service) Cancel(ctx context.Context, p apix.Principal, id uuid.UUID) (R
 		return Run{}, fmt.Errorf("runs: cancelar: %w", err)
 	}
 	s.appendEvent(ctx, &saved, EventFailed, failedData{Error: *saved.Error, CreditsSpent: saved.CreditsSpent})
+	s.dropRemote(ctx, saved, "cancelada pelo cliente")
 	if saved.PendingQuoteID != nil {
 		_ = s.d.Estimates.Expire(ctx, p.OrgID, *saved.PendingQuoteID)
 	}

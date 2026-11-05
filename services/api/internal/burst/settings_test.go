@@ -3,6 +3,7 @@ package burst
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -22,7 +23,8 @@ func testSettings() Settings {
 func TestFromConfigDefaults(t *testing.T) {
 	t.Parallel()
 	s := FromConfig(config.Burst{Enabled: true, MemoryHeadroomMB: 384, MaxInstances: 2, MonthlyHours: 60}, 900, 120)
-	if s.MinSeconds != 900 || s.BootSeconds != 120 || s.Lease != DefaultLease || s.Heartbeat != DefaultHeartbeat || s.ClaimTimeout != 10*time.Minute || s.IdleAfter != 10*time.Minute {
+	if s.MinSeconds != 900 || s.BootSeconds != 120 || s.Lease != DefaultLease || s.Heartbeat != DefaultHeartbeat || s.ClaimTimeout != 10*time.Minute ||
+		s.IdleAfter != 10*time.Minute || s.Managed || s.Quota.MaxEvents != DefaultMaxJobEvents || s.ClaimSlots != DefaultClaimSlots {
 		t.Fatalf("settings = %+v", s)
 	}
 	s = FromConfig(config.Burst{MinSeconds: 30}, 900, 0)
@@ -31,6 +33,11 @@ func TestFromConfigDefaults(t *testing.T) {
 	}
 	if FromConfig(config.Burst{}, 0, 0).MinSeconds != DefaultMinSeconds {
 		t.Fatal("sem throughput usa o padrão")
+	}
+	// With an Auto Scaling group the scaler measures the instances from
+	// Pending on: no extra boot charge.
+	if m := FromConfig(config.Burst{ASGName: "docmatch-test-worker"}, 600, 180); !m.Managed || m.BootSeconds != 0 {
+		t.Fatalf("pool gerenciado: %+v", m)
 	}
 }
 
@@ -67,6 +74,12 @@ func (failingStatus) Status(context.Context, StatusQuery) (PoolStatus, error) {
 	return PoolStatus{}, errors.New("banco fora")
 }
 
+func storeAt(now time.Time) *MemStore {
+	st := NewMemStore()
+	st.Now = func() time.Time { return now }
+	return st
+}
+
 func TestRouterNeverRefusesAndExplains(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, 11, 5, 12, 0, 0, 0, time.UTC)
@@ -75,7 +88,7 @@ func TestRouterNeverRefusesAndExplains(t *testing.T) {
 		r := &Router{Settings: s, Store: st, Now: func() time.Time { return now }}
 		return r.Place(context.Background(), in)
 	}
-	mem := NewMemStore()
+	mem := storeAt(now)
 	if p := place(testSettings(), mem, estimate.PlaceInput{LocalSeconds: 10}); p.Burst || p.Reason != estimate.ReasonLight {
 		t.Fatalf("leve: %+v", p)
 	}
@@ -91,33 +104,36 @@ func TestRouterNeverRefusesAndExplains(t *testing.T) {
 		t.Fatalf("pesada e pool frio: %+v", p)
 	}
 	// A live idle instance makes the pool warm (no boot in the estimate).
-	_ = mem.TouchInstance(context.Background(), Instance{ID: "i-1"}, now.Add(-time.Minute))
+	_ = mem.TouchInstance(context.Background(), Instance{ID: "i-1"})
 	if p := place(testSettings(), mem, heavy); !p.Burst || !p.Warm {
 		t.Fatalf("pool quente: %+v", p)
 	}
 	// Full: every instance the pool may have holds a job.
-	full := NewMemStore()
-	for i := range 2 {
-		_, _ = full.CreateJob(context.Background(), Job{ID: uuid.New(), RunID: uuid.New(), CreatedAt: now.Add(time.Duration(i) * time.Second)})
+	full := storeAt(now)
+	for range 2 {
+		_, _ = full.CreateJob(context.Background(), Job{ID: uuid.New(), RunID: uuid.New()}, 0)
 	}
 	if p := place(testSettings(), full, heavy); p.Burst || p.Reason != estimate.ReasonFull {
 		t.Fatalf("cheio: %+v", p)
 	}
 	// Cap: the month's instance hours are used up (10 h here).
+	clock := MonthStart(now).Add(time.Hour)
 	capped := NewMemStore()
-	_ = capped.TouchInstance(context.Background(), Instance{ID: "i-old"}, MonthStart(now).Add(time.Hour))
-	_ = capped.TouchInstance(context.Background(), Instance{ID: "i-old"}, MonthStart(now).Add(12*time.Hour))
+	capped.Now = func() time.Time { return clock }
+	_ = capped.TouchInstance(context.Background(), Instance{ID: "i-old"})
+	clock = clock.Add(11 * time.Hour)
+	_ = capped.TouchInstance(context.Background(), Instance{ID: "i-old"})
 	if p := place(testSettings(), capped, heavy); p.Burst || p.Reason != estimate.ReasonCap {
 		t.Fatalf("teto: %+v", p)
 	}
 	none := testSettings()
 	none.MaxInstances = 0
-	if p := place(none, NewMemStore(), heavy); p.Burst || p.Reason != estimate.ReasonCap {
+	if p := place(none, storeAt(now), heavy); p.Burst || p.Reason != estimate.ReasonCap {
 		t.Fatalf("sem instâncias: %+v", p)
 	}
 	// Unhealthy: scale-ups that produced no worker cool the pool down.
-	sick := NewMemStore()
-	_ = sick.NoteNoClaim(context.Background(), 1, now.Add(time.Hour))
+	sick := storeAt(now)
+	_ = sick.NoteNoClaim(context.Background(), 1, time.Hour)
 	if p := place(testSettings(), sick, heavy); p.Burst || p.Reason != estimate.ReasonUnhealthy {
 		t.Fatalf("em espera: %+v", p)
 	}
@@ -143,23 +159,37 @@ func TestRouterCachesThePoolStatus(t *testing.T) {
 	st := &countingStore{MemStore: NewMemStore()}
 	r := &Router{Settings: testSettings(), Store: st, Now: func() time.Time { return now }}
 	heavy := estimate.PlaceInput{LocalSeconds: 3600}
-	r.Place(context.Background(), heavy)
-	r.Place(context.Background(), heavy)
+	// Quotes, run creation and execution all ask: one read per StatusTTL. The
+	// answers are a hint (the dispatcher reserves the place atomically), so a
+	// quote never takes a place a run then misses.
+	for range 3 {
+		if p := r.Place(context.Background(), heavy); !p.Burst {
+			t.Fatalf("o cache não reserva lugar: %+v", p)
+		}
+	}
 	if st.reads != 1 {
 		t.Fatalf("leituras = %d, quer 1 (cache)", st.reads)
 	}
 	now = now.Add(DefaultStatusTTL)
-	r.Place(context.Background(), heavy)
-	if st.reads != 2 {
-		t.Fatalf("leituras = %d, quer 2 (cache vencido)", st.reads)
+	if p := r.Place(context.Background(), heavy); !p.Burst || st.reads != 2 {
+		t.Fatalf("cache vencido: %+v, leituras %d", p, st.reads)
 	}
 	if (&Router{}).now().IsZero() {
 		t.Fatal("relógio padrão")
 	}
 }
 
-func TestUsageAcrossTheMonth(t *testing.T) {
+func TestLimitedAndUsage(t *testing.T) {
 	t.Parallel()
+	s := testSettings()
+	if s.Limited(PoolStatus{Busy: 1}) || !s.Limited(PoolStatus{Busy: 2}) || !s.Limited(PoolStatus{UsedSeconds: 11 * 3600}) {
+		t.Fatal("Limited")
+	}
+	off := s
+	off.Enabled = false
+	if !off.Limited(PoolStatus{}) {
+		t.Fatal("desligado é limitado")
+	}
 	month := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 	now := month.Add(10 * 24 * time.Hour)
 	cases := []struct {
@@ -180,7 +210,29 @@ func TestUsageAcrossTheMonth(t *testing.T) {
 		t.Fatal("o mês é UTC")
 	}
 	st := PoolStatus{UsedSeconds: 7200}
-	if st.UsedHours() != 2 || !testSettings().CapReached(PoolStatus{UsedSeconds: 36000}) || testSettings().CapReached(st) {
+	if st.UsedHours() != 2 || !s.CapReached(PoolStatus{UsedSeconds: 36000}) || s.CapReached(st) {
 		t.Fatal("horas e teto")
+	}
+}
+
+func TestTruncateAndSanitize(t *testing.T) {
+	t.Parallel()
+	// "ção" is c + ç(2 bytes) + ã(2 bytes) + o: a cut at 2 must not split ç.
+	if got := Truncate("ação", 2); got != "a" {
+		t.Fatalf("Truncate = %q", got)
+	}
+	if got := Truncate("abc", 10); got != "abc" {
+		t.Fatalf("Truncate curto = %q", got)
+	}
+	long := strings.Repeat("é", 400) // 800 bytes
+	if got := Sanitize(long); len(got) > reasonMax || !strings.HasSuffix(got, "é") {
+		t.Fatalf("Sanitize cortou no meio de um caractere: %d bytes", len(got))
+	}
+	msg := `harness: abrir a fonte upl_1: Get "https://uploads.s3.amazonaws.com/quarantine/x?X-Amz-Signature=abc&X-Amz-Credential=k": EOF`
+	if got := Sanitize(msg); strings.Contains(got, "X-Amz") || !strings.Contains(got, "https://uploads.s3.amazonaws.com/quarantine/x") {
+		t.Fatalf("Sanitize deixou a assinatura: %s", got)
+	}
+	if Seconds(0) != 1 || Seconds(90*time.Second) != 90 || Seconds(1<<62) != 1<<30 {
+		t.Fatal("Seconds")
 	}
 }
