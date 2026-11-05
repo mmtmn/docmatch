@@ -16,6 +16,7 @@ ENV CARGO_TERM_COLOR=never \
 RUN rustup target add "$(uname -m)-unknown-linux-musl"
 WORKDIR /src
 COPY packages/contracts/harness.proto packages/contracts/
+COPY packages/contracts/gen/limits.rs packages/contracts/gen/
 COPY services/harness services/harness
 # rust-toolchain.toml would make rustup fetch clippy and rustfmt; the image already has 1.93.0.
 RUN --mount=type=cache,id=docmatch-cargo-registry,target=/usr/local/cargo/registry \

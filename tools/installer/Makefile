@@ -19,7 +19,7 @@ ASSETS := internal/assets
 CROSS_DIR ?= $(or $(TMPDIR),/tmp)/docmatch-installer-cross
 TARGETS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64
 
-.PHONY: help setup tools sync sync-check fmt vet lint scripts test ci ci-full build cross release-dry-run clean
+.PHONY: context help setup tools sync sync-check fmt vet lint scripts test ci ci-full build cross release-dry-run clean
 
 help: ## lista os alvos
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -89,7 +89,10 @@ cross: ## compila os seis alvos (CGO desligado) em CROSS_DIR e apaga
 	done
 	@rm -rf $(CROSS_DIR)
 
-ci: lint test cross ## portão rápido: lint, testes e os seis binários
+ci: lint test cross context ## portão rápido: lint, testes, os seis binários e o contexto das imagens
+
+context: ## o que o harness inclui de fora dele está no contexto da imagem (deploy/local)
+	python3 -I ../ci/check-docker-context.py
 
 ci-full: ci release-dry-run ## ci + o release em dry-run
 

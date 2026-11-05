@@ -62,11 +62,21 @@ func Main(args []string, b Build) int {
 var commands = map[string]bool{"install": true, "up": true, "down": true, "status": true, "logs": true, "doctor": true, "demo": true, "version": true, "help": true}
 
 func run(ctx context.Context, w world, args []string, b Build) int {
+	// The subcommand may follow global flags ("--plain version", as install.sh runs it without a
+	// terminal): it is the first known command among the arguments, and a bare word in first
+	// position that is not one is a typo.
 	cmd := ""
-	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
-		cmd, args = args[0], args[1:]
-		if !commands[cmd] {
-			outln(w.stderr, text.T("cli.unknown_command", "cmd", cmd))
+	for i, a := range args {
+		if strings.HasPrefix(a, "-") {
+			continue
+		}
+		if commands[a] {
+			cmd = a
+			args = append(append([]string{}, args[:i]...), args[i+1:]...)
+			break
+		}
+		if i == 0 {
+			outln(w.stderr, text.T("cli.unknown_command", "cmd", a))
 			printHelp(w.stderr)
 			return exitUsage
 		}

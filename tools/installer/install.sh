@@ -110,4 +110,4 @@ fi
 if [ -t 1 ] && [ -r /dev/tty ] && { : </dev/tty; } 2>/dev/null; then
   exec "$bin_dir/docmatch" "$@" </dev/tty
 fi
-exec "$bin_dir/docmatch" --plain "$@"
+exec "$bin_dir/docmatch" "$@" --plain

@@ -1,5 +1,6 @@
 # Context of harness.Dockerfile: the Rust workspace and the proto it compiles.
 *
 !packages/contracts/harness.proto
+!packages/contracts/gen/limits.rs
 !services/harness
 services/harness/target
