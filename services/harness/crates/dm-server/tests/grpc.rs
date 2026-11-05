@@ -291,3 +291,66 @@ async fn refuses_sources_it_must_not_read() {
     );
     h.stop().await;
 }
+
+/// The deadline stops the work itself: the engine, reading heavy files on a blocking thread,
+/// sees the cancellation at its next check and lets its folder go; the server then takes the
+/// next run.
+#[tokio::test]
+async fn the_deadline_stops_the_blocking_work() {
+    let h = Harness::start().await;
+    let mut sources = h.twin_sources();
+    let quarantine = h.root.path().join("quarantine");
+    let page = format!(
+        "<html><body>{}</body></html>",
+        "<div>linha de um relatório longo</div>".repeat(80_000)
+    );
+    for i in 0..12 {
+        let key = format!("pesado{i}");
+        std::fs::write(quarantine.join(&key), page.as_bytes()).unwrap_or_else(|e| panic!("{e}"));
+        sources.push(pb::Source {
+            id: format!("upl_p{i:025}"),
+            kind: pb::SourceKind::Table as i32,
+            uri: format!("local://docmatch-media-dev/quarantine/{key}"),
+            sha256: hex::encode(Sha256::digest(page.as_bytes())),
+            file_name: format!("{i:02}_relatorio.html"),
+            size_bytes: page.len() as u64,
+            ..pb::Source::default()
+        });
+    }
+    let mut req = run_request("run_prazo", sources);
+    if let Some(o) = req.options.as_mut() {
+        o.deadline = Some(prost_types::Timestamp::from(
+            std::time::SystemTime::now() + std::time::Duration::from_millis(400),
+        ));
+    }
+    let mut client = h.client().await;
+    let started = std::time::Instant::now();
+    let events = collect(&mut client, req).await;
+    let failed = events.iter().find_map(|e| match &e.event {
+        Some(Event::Failed(f)) => Some(f.code.clone()),
+        _ => None,
+    });
+    assert_eq!(failed.as_deref(), Some("run_timeout"), "{events:?}");
+    // The engine stopped: its run folder is gone soon after, not when all files are read.
+    let folder = h.root.path().join("work").join("run_prazo");
+    let mut waited = 0;
+    while folder.exists() && waited < 200 {
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        waited += 1;
+    }
+    assert!(!folder.exists(), "a pasta da execução continuou em uso");
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(20),
+        "{:?}",
+        started.elapsed()
+    );
+    // The slots are free again.
+    let events = collect(&mut client, run_request("run_depois", h.twin_sources())).await;
+    assert!(
+        events
+            .iter()
+            .any(|e| matches!(e.event, Some(Event::Completed(_)))),
+        "{events:?}"
+    );
+    h.stop().await;
+}

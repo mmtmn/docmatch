@@ -28,6 +28,8 @@ use dm_core::Money;
 use sha2::{Digest, Sha256};
 
 pub use config::{ApConfig, EngineConfig};
+/// Cancellation of a run, for the server: [`cancel::scope`] around [`run_dir`].
+pub use dm_ingest::cancel;
 pub use golden::{Brl, FlexStr, GFinding, GLine, GTitle, Golden, Period};
 
 use cascade::{Cascade, LineKind};
@@ -46,6 +48,9 @@ pub enum ReconError {
         "nenhuma fonte reconhecida em {0} (esperado: títulos a receber e/ou extrato bancário){1}"
     )]
     NoInputs(String, String),
+    /// The run was cancelled (its deadline passed) while the files were read.
+    #[error("execução interrompida: passou do prazo")]
+    Cancelled,
 }
 
 /// Everything a run computed, for the report and `dm explain`.

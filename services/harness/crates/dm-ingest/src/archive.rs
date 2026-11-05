@@ -161,6 +161,10 @@ pub fn read_zip(
     let mut warnings = Vec::new();
     let mut read_total: u64 = 0;
     for (i, locked) in encrypted.into_iter().enumerate() {
+        if crate::cancel::cancelled() {
+            warnings.push(crate::cancel::STOPPED.to_string());
+            break;
+        }
         if locked {
             // The zip crate refuses to open it without the password; say so in pt-BR.
             let name = archive

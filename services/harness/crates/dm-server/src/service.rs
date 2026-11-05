@@ -2,13 +2,13 @@
 
 use std::future::Future;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use dm_recon::EngineConfig;
 use prost_types::Timestamp;
-use tokio::sync::{mpsc, Semaphore};
+use tokio::sync::{mpsc, OwnedSemaphorePermit, Semaphore};
 use tokio_stream::wrappers::{ReceiverStream, UnixListenerStream};
 use tonic::{Request, Response, Status};
 
@@ -75,7 +75,8 @@ impl ServerConfig {
 
 struct Inner {
     cfg: ServerConfig,
-    slots: Semaphore,
+    /// A run holds its slot until its blocking work has stopped, not only until its deadline.
+    slots: Arc<Semaphore>,
     active: AtomicU32,
     started: SystemTime,
 }
@@ -92,7 +93,7 @@ impl Harness {
         Harness {
             inner: Arc::new(Inner {
                 cfg,
-                slots: Semaphore::new(MAX_CONCURRENT_RUNS),
+                slots: Arc::new(Semaphore::new(MAX_CONCURRENT_RUNS)),
                 active: AtomicU32::new(0),
                 started: SystemTime::now(),
             }),
@@ -216,9 +217,37 @@ fn safe_dir_name(run_id: &str) -> String {
     }
 }
 
+/// What the blocking work of a run shares with it: the cancellation flag it checks between
+/// files, archive entries, pages and in the parsers' long loops, and the run's slot, held by
+/// every blocking task until it returns.
+#[derive(Clone)]
+struct Work {
+    cancel: Arc<AtomicBool>,
+    slot: Arc<OwnedSemaphorePermit>,
+}
+
+impl Work {
+    /// Runs `f` on a blocking thread under the run's cancellation flag, holding its slot.
+    async fn blocking<R: Send + 'static>(
+        &self,
+        f: impl FnOnce() -> R + Send + 'static,
+    ) -> Result<R, tokio::task::JoinError> {
+        let work = self.clone();
+        tokio::task::spawn_blocking(move || {
+            let _slot = work.slot;
+            dm_recon::cancel::scope(work.cancel, f)
+        })
+        .await
+    }
+}
+
 async fn execute(inner: Arc<Inner>, req: pb::RunRequest, mut out: Emitter) {
-    let Ok(_slot) = inner.slots.acquire().await else {
+    let Ok(slot) = Arc::clone(&inner.slots).acquire_owned().await else {
         return;
+    };
+    let work = Work {
+        cancel: Arc::new(AtomicBool::new(false)),
+        slot: Arc::new(slot),
     };
     inner.active.fetch_add(1, Ordering::SeqCst);
     let deadline = req
@@ -228,7 +257,10 @@ async fn execute(inner: Arc<Inner>, req: pb::RunRequest, mut out: Emitter) {
         .and_then(|d| SystemTime::try_from(d).ok())
         .and_then(|d| d.duration_since(SystemTime::now()).ok())
         .unwrap_or(DEFAULT_DEADLINE);
-    let result = tokio::time::timeout(deadline, run_once(&inner, &req, &mut out)).await;
+    let result = tokio::time::timeout(deadline, run_once(&inner, &req, &mut out, &work)).await;
+    // Whatever ended the run (the deadline, the client leaving), work still running on a
+    // blocking thread stops at its next check and then gives the slot back.
+    work.cancel.store(true, Ordering::Relaxed);
     if result.is_err() {
         out.fail(
             "run_timeout",
@@ -240,7 +272,7 @@ async fn execute(inner: Arc<Inner>, req: pb::RunRequest, mut out: Emitter) {
     inner.active.fetch_sub(1, Ordering::SeqCst);
 }
 
-async fn run_once(inner: &Inner, req: &pb::RunRequest, out: &mut Emitter) {
+async fn run_once(inner: &Inner, req: &pb::RunRequest, out: &mut Emitter, work: &Work) {
     let n = req.sources.len() as u64;
     if req.sources.is_empty() || req.sources.len() > MAX_SOURCES {
         out.fail(
@@ -262,11 +294,15 @@ async fn run_once(inner: &Inner, req: &pb::RunRequest, out: &mut Emitter) {
         let run_dir = run_dir.clone();
         let sources = req.sources.clone();
         let root = inner.cfg.local_root.clone();
-        tokio::task::spawn_blocking(move || {
+        work.blocking(move || {
             let _ = std::fs::remove_dir_all(&run_dir);
             std::fs::create_dir_all(&run_dir).map_err(|e| e.to_string())?;
-            materialize(&sources, &run_dir, root.as_deref(), MAX_SOURCE_BYTES)
-                .map_err(|e| e.to_string())
+            let done = materialize(&sources, &run_dir, root.as_deref(), MAX_SOURCE_BYTES)
+                .map_err(|e| e.to_string());
+            if dm_recon::cancel::cancelled() {
+                let _ = std::fs::remove_dir_all(&run_dir);
+            }
+            done
         })
         .await
     };
@@ -302,8 +338,14 @@ async fn run_once(inner: &Inner, req: &pb::RunRequest, out: &mut Emitter) {
     }
     let engine = inner.cfg.engine.clone();
     let dir = run_dir.clone();
-    let run = tokio::task::spawn_blocking(move || dm_recon::run_dir(&dir, &engine)).await;
-    cleanup(&run_dir).await;
+    // The folder goes with the work that reads it, also when the deadline dropped this future.
+    let run = work
+        .blocking(move || {
+            let run = dm_recon::run_dir(&dir, &engine);
+            let _ = std::fs::remove_dir_all(&dir);
+            run
+        })
+        .await;
     let run = match run {
         Ok(Ok(run)) => run,
         Ok(Err(e)) => {
@@ -312,6 +354,7 @@ async fn run_once(inner: &Inner, req: &pb::RunRequest, out: &mut Emitter) {
             return;
         }
         Err(_) => {
+            cleanup(&run_dir).await;
             out.fail(
                 "internal_error",
                 "Falha interna no motor de conciliação.".to_string(),

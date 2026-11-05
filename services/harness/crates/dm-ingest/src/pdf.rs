@@ -1498,7 +1498,12 @@ pub fn parse_pdf(bytes: &[u8], name: &str, source_id: &str) -> Result<PdfParsed,
     };
     let mut unreadable_pages: Vec<u32> = Vec::new();
     let mut stopped_at: Option<u32> = None;
+    let mut cancelled = false;
     for (&number, &page_id) in pages.iter().take(MAX_PAGES) {
+        if crate::cancel::cancelled() {
+            cancelled = true;
+            break;
+        }
         let mbox = media_box(&doc, page_id);
         let resources = resource_dicts(&doc, page_id);
         let scope = Scope {
@@ -1534,6 +1539,9 @@ pub fn parse_pdf(bytes: &[u8], name: &str, source_id: &str) -> Result<PdfParsed,
         let lines = build_lines(glyphs, number, mbox);
         let left = statement.page(lines);
         leftovers.push((number, (mbox[2] - mbox[0], mbox[3] - mbox[1]), left));
+    }
+    if cancelled {
+        out.warnings.push(crate::cancel::STOPPED.to_string());
     }
     let (rows, year, header) = statement.finish();
     // One or two dated amounts in an invoice or a letter are not a statement.

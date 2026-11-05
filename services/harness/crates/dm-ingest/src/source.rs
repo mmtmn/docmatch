@@ -103,7 +103,29 @@ pub fn parse_bytes(
         .and_then(|s| s.to_str())
         .unwrap_or(name)
         .to_string();
-    Ok(parse_inner(name, &stem, source_id, bytes, ctx, 0))
+    Ok(guarded(name, &source_id, || {
+        parse_inner(name, &stem, source_id.clone(), bytes, ctx, 0)
+    }))
+}
+
+/// Runs a parse so that a panic in it (a bug a file triggers) becomes that file's warning: the
+/// run goes on with the other files.
+fn guarded(name: &str, source_id: &str, parse: impl FnOnce() -> ParsedSource) -> ParsedSource {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(parse)) {
+        Ok(parsed) => parsed,
+        Err(_) => ParsedSource {
+            source_id: source_id.to_string(),
+            name: name.to_string(),
+            sniff: sniff(b""),
+            tables: Vec::new(),
+            items: Vec::new(),
+            warnings: vec![format!(
+                "{name}: falha interna ao ler o arquivo; ele ficou fora desta conciliação"
+            )],
+            entries: Vec::new(),
+            text_parts: Vec::new(),
+        },
+    }
 }
 
 /// The table-name stem of an archive entry: its path without the extension, so row
@@ -415,6 +437,11 @@ fn push_entries(
 ) {
     let name = out.name.clone();
     for entry in entries {
+        if crate::cancel::cancelled() {
+            out.warnings
+                .push(format!("{name}: {}", crate::cancel::STOPPED));
+            break;
+        }
         let entry_name = format!("{name}/{}", entry.path);
         if entry.bytes.is_empty() {
             out.warnings
@@ -422,14 +449,16 @@ fn push_entries(
             continue;
         }
         let id = stable_id("src", &[source_id, &entry.path]);
-        let mut child = parse_inner(
-            &entry_name,
-            &entry_stem(&entry.path),
-            id,
-            &entry.bytes,
-            ctx,
-            depth + 1,
-        );
+        let mut child = guarded(&entry_name, &id, || {
+            parse_inner(
+                &entry_name,
+                &entry_stem(&entry.path),
+                id.clone(),
+                &entry.bytes,
+                ctx,
+                depth + 1,
+            )
+        });
         for item in &mut child.items {
             item.fields
                 .insert("archive_entry".to_string(), Value::Text(entry.path.clone()));
@@ -602,6 +631,51 @@ mod tests {
         assert_eq!(
             it.field("valor").and_then(Value::as_money),
             Some(dm_core::Money::from_centavos(1_000))
+        );
+    }
+
+    #[test]
+    fn a_panic_in_a_parser_is_that_file_s_warning() {
+        let src = guarded("quebrado.pdf", "src_x", || {
+            panic!("falha simulada no parser")
+        });
+        assert_eq!(src.name, "quebrado.pdf");
+        assert!(src.tables.is_empty() && src.items.is_empty());
+        assert_eq!(
+            src.warnings,
+            vec![
+                "quebrado.pdf: falha interna ao ler o arquivo; ele ficou fora desta conciliação"
+                    .to_string()
+            ]
+        );
+        let ok = guarded("a.csv", "src_a", || {
+            parse_inner(
+                "a.csv",
+                "a",
+                "src_a".into(),
+                b"a;b\n1;2\n",
+                &InboxContext::default(),
+                0,
+            )
+        });
+        assert_eq!(ok.tables.len(), 1);
+    }
+
+    #[test]
+    fn a_cancelled_run_stops_between_entries() {
+        use std::sync::atomic::AtomicBool;
+        use std::sync::Arc;
+        let zip =
+            crate::archive::tests::zip_of(&[("a.csv", b"a;b\n1;2\n"), ("b.csv", b"a;b\n1;2\n")]);
+        let src = crate::cancel::scope(Arc::new(AtomicBool::new(true)), || {
+            parse_bytes("lote.zip", &zip, &InboxContext::default())
+        })
+        .unwrap_or_else(|e| panic!("{e}"));
+        assert!(src.entries.is_empty());
+        assert!(
+            src.warnings.iter().any(|w| w.contains("passou do prazo")),
+            "{:?}",
+            src.warnings
         );
     }
 

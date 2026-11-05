@@ -301,6 +301,10 @@ pub fn read_7z(bytes: &[u8], lim: &ZipLimits) -> Result<(Vec<ZipEntry>, Vec<Stri
     let mut read_total: u64 = 0;
     let mut too_big: Option<String> = None;
     for block in 0..archive.blocks.len() {
+        if crate::cancel::cancelled() {
+            warnings.push(crate::cancel::STOPPED.to_string());
+            break;
+        }
         if let Some(reason) = unsupported_method(&archive, block) {
             let start = archive
                 .stream_map
@@ -334,6 +338,9 @@ pub fn read_7z(bytes: &[u8], lim: &ZipLimits) -> Result<(Vec<ZipEntry>, Vec<Stri
         // One thread: a run decodes its sources one after another.
         let decoder = BlockDecoder::new(1, block, &archive, &password, &mut source);
         let result = decoder.for_each_entries(&mut |entry, reader| {
+            if crate::cancel::cancelled() {
+                return Ok(false);
+            }
             if entry.is_directory || entry.is_anti_item {
                 return Ok(true);
             }
