@@ -332,7 +332,13 @@ fn text_kind(text: &str, lines: &[&str]) -> Option<SourceKind> {
         return Some(SourceKind::Ofx);
     }
     if trimmed.starts_with('<') {
-        let upper = trimmed[..trimmed.len().min(SAMPLE_BYTES)].to_ascii_uppercase();
+        // Cut on a character boundary: byte SAMPLE_BYTES can fall inside a multi-byte char
+        // (and decoded replacement characters are three bytes long).
+        let mut end = trimmed.len().min(SAMPLE_BYTES);
+        while !trimmed.is_char_boundary(end) {
+            end -= 1;
+        }
+        let upper = trimmed[..end].to_ascii_uppercase();
         if upper.contains("<NFEPROC")
             || upper.contains("<NFE")
             || upper.contains("<INFNFE")
@@ -708,5 +714,21 @@ mod tests {
         assert!(sniff(b"valor;data\n1,00;05/03/2025\n").has_header);
         assert!(!sniff(b"1,00;05/03/2025\n2,00;06/03/2025\n").has_header);
         assert!(sniff(b"Fornecedor;Valor\n").has_header);
+    }
+
+    #[test]
+    fn markup_sample_cut_respects_char_boundaries() {
+        // An 80 KB UTF-8 document starting with '<' and full of multi-byte characters: the
+        // sample cut at SAMPLE_BYTES used to land inside a character and panic.
+        let mut text = String::from("<");
+        while text.len() < 80 * 1024 {
+            text.push('ã');
+        }
+        let _ = sniff(text.as_bytes());
+        let mut odd = String::from("< ");
+        while odd.len() < 80 * 1024 {
+            odd.push('€');
+        }
+        let _ = sniff(odd.as_bytes());
     }
 }

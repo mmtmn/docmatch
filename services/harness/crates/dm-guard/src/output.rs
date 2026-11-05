@@ -290,7 +290,7 @@ mod tests {
             "findings": [{
                 "code": "TITLE_WITHOUT_PAYMENT",
                 "title": "Título sem pagamento",
-                "explanation": "A NF 88231 de R$ 18.450,00 venceu em 20/03/2025 e não há crédito correspondente no extrato do Banco 237 até 31/03/2025.",
+                "explanation": "A NF 88231 de R$ 17.380,00 venceu em 20/03/2025 e não há crédito correspondente no extrato do Banco 237 até 31/03/2025.",
                 "confidence": 0.97
             }]
         });

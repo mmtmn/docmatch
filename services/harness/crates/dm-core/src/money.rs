@@ -34,6 +34,17 @@ pub enum DecimalStyle {
     Point,
 }
 
+/// Strips an ASCII `prefix` from `s` ignoring ASCII case, without ever slicing inside a
+/// multi-byte character.
+fn strip_prefix_ascii_ci<'a>(s: &'a str, prefix: &str) -> Option<&'a str> {
+    let n = prefix.len();
+    if s.len() >= n && s.is_char_boundary(n) && s[..n].eq_ignore_ascii_case(prefix) {
+        Some(&s[n..])
+    } else {
+        None
+    }
+}
+
 impl Money {
     /// Zero reais.
     pub const ZERO: Money = Money(Decimal::ZERO);
@@ -186,10 +197,12 @@ impl Money {
         // peel them until only the number is left.
         loop {
             let before = s.len();
-            let upper = s.to_uppercase();
+            // Case-insensitive ASCII prefixes compared on the original string: slicing by the
+            // length of an uppercased copy breaks on letters whose uppercase has another byte
+            // length (ı → I, ﬁ → FI) and would panic inside a character.
             for prefix in ["R$", "BRL", "RS$", "R $"] {
-                if let Some(rest) = upper.strip_prefix(prefix) {
-                    s = s[s.len() - rest.len()..].to_string();
+                if let Some(rest) = strip_prefix_ascii_ci(&s, prefix) {
+                    s = rest.to_string();
                     break;
                 }
             }
@@ -479,7 +492,7 @@ mod tests {
     #[test]
     fn parses_common_brazilian_formats() {
         let cases = [
-            ("18.450,00", 1_845_000),
+            ("17.380,00", 1_738_000),
             ("R$ 1.234,56", 123_456),
             ("R$1.234,56", 123_456),
             ("1234.56", 123_456),
@@ -692,5 +705,22 @@ mod tests {
         assert!(m(-1) < m(0));
         let set: HashSet<Money> = [m(1), m(1), m(2)].into_iter().collect();
         assert_eq!(set.len(), 2);
+    }
+
+    #[test]
+    fn unicode_case_changes_never_panic() {
+        // Uppercasing changes the byte length of these letters; the parser used to slice the
+        // original by the uppercased copy's length and panic inside a character.
+        for input in ["ı1,00", "ﬁ", "ŉ1", "R$ı", "brlı2,00", "ßR$ 1,00", "ǰ10,00"] {
+            let _ = Money::parse_brl(input);
+        }
+        assert_eq!(
+            Money::parse_brl("r$ 1.234,56").unwrap(),
+            Money::from_centavos(123_456)
+        );
+        assert_eq!(
+            Money::parse_brl("BrL 10,00").unwrap(),
+            Money::from_centavos(1_000)
+        );
     }
 }

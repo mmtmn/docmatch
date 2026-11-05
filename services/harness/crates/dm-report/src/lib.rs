@@ -351,7 +351,7 @@ mod tests {
             finding(
                 "TITLE_WITHOUT_PAYMENT",
                 "Título sem pagamento",
-                1_845_000,
+                1_738_000,
                 Severity::High,
             ),
             finding("LATE", "Pago com atraso", 100, Severity::Low),
@@ -365,9 +365,9 @@ mod tests {
         }];
         let md = render_markdown_ptbr(&findings, &matches).unwrap();
         assert!(md.starts_with("# Relatório de conciliação"));
-        assert!(md.contains("Achados: **2** (valor em risco: R$ 18.451,00)"));
+        assert!(md.contains("Achados: **2** (valor em risco: R$ 17.381,00)"));
         assert!(
-            md.contains("| `TITLE_WITHOUT_PAYMENT` | alta | R$ 18.450,00 | Título sem pagamento |")
+            md.contains("| `TITLE_WITHOUT_PAYMENT` | alta | R$ 17.380,00 | Título sem pagamento |")
         );
         assert!(
             md.contains("crédito \\| correspondente"),
@@ -381,7 +381,7 @@ mod tests {
         );
         let j = to_json(&findings, &matches).unwrap();
         assert_eq!(j["summary"]["findings"], 2);
-        assert_eq!(j["summary"]["amount_at_risk"], 1_845_100);
+        assert_eq!(j["summary"]["amount_at_risk"], 1_738_100);
         assert_eq!(j["findings"][0]["code"], "TITLE_WITHOUT_PAYMENT");
         assert!(render_markdown_ptbr(&[], &[])
             .unwrap()

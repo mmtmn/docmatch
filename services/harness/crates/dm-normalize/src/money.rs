@@ -29,7 +29,7 @@ impl From<DecimalStyle> for CoreStyle {
 
 /// Parses a pt-BR amount, deciding the decimal separator per value.
 ///
-/// Handles `18.450,00`, `R$ 1.234,56`, `1234.56`, `(1.234,56)` (negative), `1.234,56-`,
+/// Handles `17.380,00`, `R$ 1.234,56`, `1234.56`, `(1.234,56)` (negative), `1.234,56-`,
 /// `-R$ 1,00`, `1.234,56 D` (débito), `R$1.234`, unicode minus and non-breaking spaces.
 /// Empty or dash-only cells (`-`, `--`) are errors, not zero: the caller decides.
 pub fn money_ptbr(input: &str) -> Result<Money, NormalizeError> {
@@ -54,10 +54,15 @@ fn pre_clean(input: &str) -> String {
         .trim_matches(['"', '\'', '=', '*'])
         .trim()
         .to_string();
-    let upper = s.to_uppercase();
+    // Case-insensitive ASCII suffixes compared on the original string (see dm-core's money
+    // parser): an uppercased copy can have another byte length and the slice would panic.
     for word in ["REAIS", "REAL", "BRL"] {
-        if let Some(rest) = upper.strip_suffix(word) {
-            s = s[..rest.len()].trim().to_string();
+        let n = word.len();
+        if s.len() >= n
+            && s.is_char_boundary(s.len() - n)
+            && s[s.len() - n..].eq_ignore_ascii_case(word)
+        {
+            s = s[..s.len() - n].trim().to_string();
             break;
         }
     }
@@ -124,7 +129,7 @@ mod tests {
     #[test]
     fn real_world_mess() {
         let cases = [
-            ("18.450,00", 1_845_000),
+            ("17.380,00", 1_738_000),
             ("R$ 1.234,56", 123_456),
             ("1234.56", 123_456),
             ("(1.234,56)", -123_456),
@@ -188,5 +193,22 @@ mod tests {
             money_with_style("1,234", DecimalStyle::Point).unwrap(),
             c(123_400)
         );
+    }
+
+    #[test]
+    fn unicode_suffix_never_panics() {
+        for input in [
+            "ıı reais",
+            "1ıı brl",
+            "1,00 ı",
+            "ﬁ reais",
+            "2,00 ŉ",
+            "3,00 REAİS",
+            "ǰ",
+        ] {
+            let _ = money_ptbr(input);
+        }
+        assert!(money_ptbr("1.234,56 reais").is_ok());
+        assert!(money_ptbr("10,00 BRL").is_ok());
     }
 }

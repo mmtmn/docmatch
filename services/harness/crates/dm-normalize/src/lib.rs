@@ -1,6 +1,6 @@
 //! Normalização pt-BR dos valores que chegam sujos de planilhas, extratos e mensagens.
 //!
-//! Dinheiro (`18.450,00`, `R$ 1.234,56`, `(1.234,56)`), datas (`dd/mm/aaaa`, ISO, `dd/mm hh:mm`
+//! Dinheiro (`17.380,00`, `R$ 1.234,56`, `(1.234,56)`), datas (`dd/mm/aaaa`, ISO, `dd/mm hh:mm`
 //! sem ano, meses por extenso), CNPJ/CPF com ou sem máscara, nomes de empresas (acentos,
 //! abreviações, formas jurídicas, descritores truncados de extrato), números de documento
 //! (zeros à esquerda), percentuais/taxas e status de pagamento. Tudo determinístico.

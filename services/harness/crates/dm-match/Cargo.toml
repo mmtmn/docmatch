@@ -22,3 +22,6 @@ pathfinding.workspace = true
 thiserror.workspace = true
 indexmap.workspace = true
 dm-validators.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true

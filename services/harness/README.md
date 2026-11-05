@@ -19,11 +19,12 @@ token; modelos de linguagem só veem o resíduo, sempre atrás de uma guarda.
 | `dm-sandbox` | implementado | DuckDB em memória sem acesso externo, configuração travada, validador léxico de sondas, tempo limite com interrupção; corpus de escape |
 | `dm-graph` | esqueleto | grafo de evidências em DuckDB (`item`, `fact`, `fact_arg`, `fact_qual`, `lineage`, `source_reliability`), `explain`, `Constraint` → SQL |
 | `dm-discover` | esqueleto | hipóteses executáveis: replay no histórico confirmado, experimento em reservado, simplicidade, dedup por hash de saída, orçamento |
+| `dm-recon` | implementado | motor determinístico de conciliação: perfil das fontes (razões a receber, extrato, caixa de contas a pagar), cascata de casamento, controles de recebíveis e de pagáveis, totais e resultado no formato dourado; tudo configurável em [`config/recon.yaml`](config/recon.yaml) |
 | `dm-report` | esqueleto | Markdown pt-BR, JSON, CSV e XLSX com escape de fórmulas |
-| `dm-eval` | esqueleto | esperado × obtido de um caso dourado com diff em pt-BR; lê `DM_VANTARA_PATH` ou o gêmeo público |
+| `dm-eval` | implementado | placar esperado × obtido com diff em pt-BR (títulos casados por arquivo + referência, nunca por id), casos dourados com verificação de determinismo e variações perturbadas contra sobreajuste |
 | `dm-media`, `dm-tools`, `dm-planner` | esqueleto | tipos e estados de mídia, ferramentas geradas e planejamento por estágio |
 | `dm-server` | esqueleto | trait `HarnessService`; o gRPC em socket Unix chega com `harness.proto` |
-| `dm` | implementado | CLI: `sniff`, `parse`, `validate`, `bizdays`, `probe`, `run` |
+| `dm` | implementado | CLI: `sniff`, `parse`, `validate`, `bizdays`, `probe`, `run`, `eval score`, `eval golden` |
 
 ## Como os dados fluem
 
@@ -46,6 +47,46 @@ arquivos ──► dm-ingest (sniff → Table/Item + menções) ──► dm-nor
 4. **Resíduo** vai ao modelo só com orçamento e só depois do `dm-guard`; a resposta volta pela
    triagem de saída e por verificação cruzada (fase 1).
 5. **Relatório** cita a evidência de cada achado; nada sem evidência é reportado.
+
+## O motor de conciliação (`dm-recon`)
+
+Uma pasta entra, o resultado sai em `result.json` no mesmo formato do gabarito
+(`testdata/golden/*/expected.yaml`). Nada depende de relógio, rede ou aleatoriedade: o id da
+execução vem dos hashes dos arquivos e dez execuções dão o mesmo JSON byte a byte.
+
+1. **Fontes.** Cada arquivo é classificado pelas colunas inferidas: razão de títulos a receber
+   (cliente + CNPJ ou documento + valor + vencimento), extrato (data + histórico + valor + C/D)
+   e caixa de entrada (e-mails e conversa de aprovação). O razão principal é o que tem os
+   nossos números que o extrato liquida; os demais são unidades adquiridas. Clientes são
+   unificados entre razões pelo CNPJ e, sem ele, pelo nome.
+2. **Cascata** (cada etapa só vê o que sobrou; o saldo de cada título encolhe a cada baixa):
+   nosso número no documento (exato ou parcial) → CNPJ no histórico (exato ou com multa) →
+   nome do pagador (valor exato, retenção em nota de serviço, multa, ou subconjunto dos
+   títulos do cliente) → valor único quando o depositante não é identificado (só proposta) →
+   não aplicado. Nome ambíguo só se resolve por valor único entre os candidatos. Débitos:
+   tarifas e pagamentos a fornecedor cujo histórico cita uma nota da caixa de entrada.
+   Títulos iguais em dois razões (CNPJ, valor e vencimento) viram duplicata antes da cascata.
+3. **Títulos.** Status, valores pago e em aberto, vencimento rolado para dia útil, dias de
+   atraso, flags e o encargo não cobrado (multa + juros pro rata; a liquidação de boleto em
+   D+1 não conta como atraso para encargos).
+4. **Controles.** Recebíveis: pagamento único de várias notas, antecipação, atraso sem
+   encargos, parcial, retenção, duplicata entre ERPs, multa recebida, nome ambíguo,
+   recebimento intercompany, proposta por valor, cadastro duplicado, caixa não aplicado,
+   tarifas, vencidos, pagamento sem nosso número, encargos não cobrados, CNPJs inválidos.
+   Pagáveis: nota já paga sendo recobrada, recobrança antes do vencimento, boleto inválido,
+   troca de remetente ou de forma de pagamento, conferência de três vias falha (volumes),
+   fatura vencida sem pagamento nem aprovação; instruções embutidas em e-mail ou conversa
+   viram achado e nunca são executadas.
+5. **Consolidação.** Uma história por linha: achados "de condição" (intercompany, sem nosso
+   número) só aparecem quando nenhum achado mais específico cobre a linha, e um atraso sem
+   encargos só ganha achado próprio acima da materialidade configurada (os demais entram no
+   agregado).
+
+Resultado nos casos dourados (`dm eval golden`): gêmeo público e caso privado com
+**18/18 linhas, 17/17 títulos, 23/23 achados e 11/11 totais**, dez execuções idênticas cada.
+O gêmeo também passa em oito variações (linhas embaralhadas, colunas reordenadas,
+Windows-1252, cabeçalhos no outro idioma, coluna vazia, ponto decimal, extrato invertido e
+todas as empresas renomeadas, inclusive nos históricos truncados do extrato).
 
 ## Decisões
 
@@ -89,11 +130,13 @@ cargo run -p dm -- parse titulos.xlsx --json
 cargo run -p dm -- validate boleto "23793.38128 60007.827136 95000.063305 1 84340000012345"
 cargo run -p dm -- bizdays 28/02/2025 10/03/2025
 cargo run -p dm -- probe "SELECT fornecedor, SUM(valor) FROM t GROUP BY 1" --table t=titulos.csv
-cargo run -p dm -- run ./pasta --out report.json
+cargo run -p dm -- run ./pasta --out result.json            # --config para outra recon.yaml
+cargo run -p dm -- eval score --expected expected.yaml --actual result.json
+cargo run -p dm -- eval golden --runs 10                     # gêmeo + DM_VANTARA_PATH
 ```
 
-O target dir é compartilhado entre worktrees (`CARGO_TARGET_DIR=~/.cache/docmatch/cargo-target`),
-então o DuckDB embutido compila uma vez por máquina.
+O target dir padrão é compartilhado (`CARGO_TARGET_DIR ?= ~/.cache/docmatch/cargo-target`), então o
+DuckDB embutido compila uma vez por máquina; o ambiente pode apontar outro.
 
 ## Variáveis de ambiente usadas aqui
 
@@ -112,4 +155,4 @@ então o DuckDB embutido compila uma vez por máquina.
   mínimo de 60 caracteres: texto livre curto em inglês passa) pelo papel `guard` de
   `config/models.yaml`.
 - Parsers CNAB 240/400 e texto de PDF (assinaturas prontas em `dm-ingest`).
-- Cascata completa em `dm-server`, gRPC e o teste dourado do gêmeo Vantara.
+- Ligar o `dm-recon` ao `dm-server` (gRPC em socket Unix) e gravar a linhagem no `dm-graph`.

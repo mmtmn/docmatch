@@ -329,7 +329,7 @@ fn parse_date(value: &str, ctx: &DateContext) -> Option<TimeRef> {
 mod tests {
     use super::*;
 
-    const EML: &str = "From: Rafael <compras@example.com>\r\nTo: financeiro@example.com\r\nSubject: NF 088231\r\nDate: Thu, 06 Mar 2025 10:00:00 -0300\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"b1\"\r\n\r\n--b1\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nSegue a NF 088231 de R$ 18.450,00.\r\n\r\nVencimento 20/03/2025.\r\n--b1\r\nContent-Type: application/pdf\r\nContent-Disposition: attachment; filename=\"nf_088231.pdf\"\r\n\r\n%PDF-fake\r\n--b1--\r\n";
+    const EML: &str = "From: Rafael <compras@example.com>\r\nTo: financeiro@example.com\r\nSubject: NF 088231\r\nDate: Thu, 06 Mar 2025 10:00:00 -0300\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"b1\"\r\n\r\n--b1\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nSegue a NF 088231 de R$ 17.380,00.\r\n\r\nVencimento 20/03/2025.\r\n--b1\r\nContent-Type: application/pdf\r\nContent-Disposition: attachment; filename=\"nf_088231.pdf\"\r\n\r\n%PDF-fake\r\n--b1--\r\n";
 
     #[test]
     fn eml_with_attachment() {
@@ -355,7 +355,7 @@ mod tests {
         assert!(event
             .entity_mentions
             .iter()
-            .any(|m| m.normalized.as_deref() == Some("1845000")));
+            .any(|m| m.normalized.as_deref() == Some("1738000")));
         assert_eq!(
             items
                 .iter()

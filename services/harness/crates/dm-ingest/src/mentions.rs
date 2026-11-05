@@ -420,11 +420,11 @@ mod tests {
 
     #[test]
     fn document_numbers_amounts_and_dates() {
-        let got = kinds("Oi, a NF 088231 (pedido PC-4521) de R$ 18.450,00 vence em 05/03, ok? Boleto nº 77 no valor de 1.234,56.");
+        let got = kinds("Oi, a NF 088231 (pedido PC-4521) de R$ 17.380,00 vence em 05/03, ok? Boleto nº 77 no valor de 1.234,56.");
         assert!(got.contains(&(MentionKind::DocNumber, "88231".into())));
         assert!(got.contains(&(MentionKind::DocNumber, "4521".into())));
         assert!(got.contains(&(MentionKind::DocNumber, "77".into())));
-        assert!(got.contains(&(MentionKind::Amount, "1845000".into())));
+        assert!(got.contains(&(MentionKind::Amount, "1738000".into())));
         assert!(got.contains(&(MentionKind::Amount, "123456".into())));
         assert!(got.contains(&(MentionKind::Date, "2025-03-05".into())));
     }

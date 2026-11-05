@@ -1,6 +1,6 @@
 [package]
 name = "dm-eval"
-description = "docmatch: avaliação de casos dourados (esperado vs. obtido) com diff em pt-BR"
+description = "docmatch: avaliação de casos dourados (esperado vs. obtido) com diff em pt-BR e verificação de determinismo"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,11 +12,12 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
-dm-core.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-serde-saphyr.workspace = true
+dm-recon.workspace = true
+dm-normalize.workspace = true
 thiserror.workspace = true
+sha2.workspace = true
+hex.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+encoding_rs.workspace = true

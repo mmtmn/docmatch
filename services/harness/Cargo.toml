@@ -18,6 +18,7 @@ members = [
   "crates/dm-tools",
   "crates/dm-planner",
   "crates/dm",
+  "crates/dm-recon",
 ]
 
 [workspace.package]
@@ -46,6 +47,7 @@ dm-eval = { path = "crates/dm-eval" }
 dm-media = { path = "crates/dm-media" }
 dm-tools = { path = "crates/dm-tools" }
 dm-planner = { path = "crates/dm-planner" }
+dm-recon = { path = "crates/dm-recon" }
 
 # serialization
 serde = { version = "1.0.229", features = ["derive"] }

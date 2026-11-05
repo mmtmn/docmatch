@@ -628,7 +628,7 @@ mod tests {
             code: "TITLE_WITHOUT_PAYMENT".into(),
             kind: FindingKind::MissingPayment,
             severity: Severity::High,
-            amount_at_risk: Money::from_centavos(1_845_000),
+            amount_at_risk: Money::from_centavos(1_738_000),
             title: "Título sem pagamento".into(),
             explanation: "A NF 88231 venceu e não há crédito correspondente.".into(),
             confidence: 0.97,
@@ -665,7 +665,7 @@ mod tests {
         assert_eq!(keys, expected);
         assert_eq!(v["severity"], "high");
         assert_eq!(v["kind"], "missing_payment");
-        assert_eq!(v["amount_at_risk"], 1_845_000);
+        assert_eq!(v["amount_at_risk"], 1_738_000);
         assert_eq!(v["status"], "open");
         assert_eq!(
             v["evidence"][0]["locator"],
