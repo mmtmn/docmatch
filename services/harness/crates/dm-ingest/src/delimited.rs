@@ -145,7 +145,7 @@ mod tests {
 
     #[test]
     fn semicolon_pt_csv() {
-        let csv = "Vencimento;Fornecedor;Nº Documento;Valor;Status;CNPJ\r\n05/03/2025;Empório Bela Vista;088231;18.450,00;Aberto;11.222.333/0001-81\r\n10/03/2025;Padaria Central;088232;500,00;Pago;45.723.174/0001-10\r\n";
+        let csv = "Vencimento;Fornecedor;Nº Documento;Valor;Status;CNPJ\r\n05/03/2025;Empório Bela Vista;088231;17.380,00;Aberto;11.222.333/0001-81\r\n10/03/2025;Padaria Central;088232;500,00;Pago;45.723.174/0001-10\r\n";
         let t = parse_csv_auto(csv.as_bytes(), "titulos", "src_1").unwrap();
         assert_eq!(t.len(), 2);
         assert_eq!(t.columns.len(), 6);
@@ -153,7 +153,7 @@ mod tests {
         assert_eq!(t.columns[3].role, ColumnRole::Amount);
         assert_eq!(
             t.value(0, 3),
-            Some(&Value::Money(Money::from_centavos(1_845_000)))
+            Some(&Value::Money(Money::from_centavos(1_738_000)))
         );
         assert_eq!(
             t.value(0, 0),

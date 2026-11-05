@@ -418,7 +418,7 @@ mod tests {
         t.push_row(vec![
             Value::Date(chrono::NaiveDate::from_ymd_opt(2025, 3, 5).unwrap()),
             Value::from("Padaria Central"),
-            Value::Money(Money::from_centavos(1_845_000)),
+            Value::Money(Money::from_centavos(1_738_000)),
             Value::Bool(false),
         ])
         .unwrap();
@@ -454,14 +454,14 @@ mod tests {
         assert_eq!(r.rows.len(), 2);
         assert_eq!(r.rows[0][0], serde_json::json!("2025-03-05"));
         assert_eq!(r.rows[0][1], serde_json::json!("Padaria Central"));
-        assert_eq!(r.rows[0][2], serde_json::json!("18450.00"));
+        assert_eq!(r.rows[0][2], serde_json::json!("17380.00"));
         assert_eq!(r.rows[0][3], serde_json::json!(false));
         assert_eq!(r.rows[1][0], serde_json::Value::Null);
         assert!(!r.truncated);
         let sum = sb
             .run_probe("SELECT SUM(valor) AS total FROM titulos")
             .unwrap();
-        assert_eq!(sum.rows[0][0], serde_json::json!("18449.01"));
+        assert_eq!(sum.rows[0][0], serde_json::json!("17379.01"));
         // re-registering replaces the table
         sb.register_table(
             "titulos",

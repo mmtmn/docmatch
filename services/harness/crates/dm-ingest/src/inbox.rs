@@ -555,7 +555,7 @@ fn split_sender(sender: &str) -> (Option<&str>, &str) {
 mod tests {
     use super::*;
 
-    const DUMP: &str = "--- E-MAIL 1 ---\nDe: Rafael Compras <compras@example.com>\nPara: financeiro@example.com\nData: 05/03/2025 09:12\nAssunto: NF 088231 - Empório Bela Vista\n\nBom dia,\n\nsegue a NF 088231 no valor de R$ 18.450,00 com vencimento em 20/03/2025.\n[anexo: nf_088231.pdf]\n\nAtt,\nRafael\n\n--- E-MAIL 2 ---\nFrom: Ana <ana@example.com>\nTo: compras@example.com\nDate: Thu, 06 Mar 2025 10:00:00 -0300\nSubject: Re: NF 088231\n\nRecebido, vamos pagar no boleto do Banco 237.\n";
+    const DUMP: &str = "--- E-MAIL 1 ---\nDe: Rafael Compras <compras@example.com>\nPara: financeiro@example.com\nData: 05/03/2025 09:12\nAssunto: NF 088231 - Empório Bela Vista\n\nBom dia,\n\nsegue a NF 088231 no valor de R$ 17.380,00 com vencimento em 20/03/2025.\n[anexo: nf_088231.pdf]\n\nAtt,\nRafael\n\n--- E-MAIL 2 ---\nFrom: Ana <ana@example.com>\nTo: compras@example.com\nDate: Thu, 06 Mar 2025 10:00:00 -0300\nSubject: Re: NF 088231\n\nRecebido, vamos pagar no boleto do Banco 237.\n";
 
     #[test]
     fn email_blocks_become_events_and_spans() {
@@ -591,7 +591,7 @@ mod tests {
         assert!(first
             .entity_mentions
             .iter()
-            .any(|m| m.normalized.as_deref() == Some("1845000")));
+            .any(|m| m.normalized.as_deref() == Some("1738000")));
         assert!(first
             .entity_mentions
             .iter()

@@ -230,7 +230,7 @@ mod tests {
         )
         .unwrap();
         format!(
-            "<?xml version=\"1.0\" encoding=\"UTF-8\"?><nfeProc versao=\"4.00\"><NFe><infNFe Id=\"NFe{key}\" versao=\"4.00\"><ide><nNF>88231</nNF><serie>1</serie><dhEmi>2025-03-05T10:00:00-03:00</dhEmi></ide><emit><CNPJ>11222333000181</CNPJ><xNome>Emp&#243;rio Bela Vista Ltda</xNome></emit><dest><CNPJ>45723174000110</CNPJ><xNome>Cliente X</xNome></dest><total><ICMSTot><vNF>18450.00</vNF></ICMSTot></total><cobr><dup><nDup>001</nDup><dVenc>2025-03-20</dVenc><vDup>9225.00</vDup></dup><dup><nDup>002</nDup><dVenc>2025-04-20</dVenc><vDup>9225.00</vDup></dup></cobr></infNFe></NFe></nfeProc>"
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?><nfeProc versao=\"4.00\"><NFe><infNFe Id=\"NFe{key}\" versao=\"4.00\"><ide><nNF>88231</nNF><serie>1</serie><dhEmi>2025-03-05T10:00:00-03:00</dhEmi></ide><emit><CNPJ>11222333000181</CNPJ><xNome>Emp&#243;rio Bela Vista Ltda</xNome></emit><dest><CNPJ>45723174000110</CNPJ><xNome>Cliente X</xNome></dest><total><ICMSTot><vNF>17380.00</vNF></ICMSTot></total><cobr><dup><nDup>001</nDup><dVenc>2025-03-20</dVenc><vDup>9225.00</vDup></dup><dup><nDup>002</nDup><dVenc>2025-04-20</dVenc><vDup>9225.00</vDup></dup></cobr></infNFe></NFe></nfeProc>"
         )
     }
 
@@ -249,7 +249,7 @@ mod tests {
         );
         assert_eq!(
             t.value(0, 8),
-            Some(&Value::Money(Money::from_centavos(1_845_000)))
+            Some(&Value::Money(Money::from_centavos(1_738_000)))
         );
         assert_eq!(t.value(0, 9).unwrap().as_text(), Some("001"));
         assert_eq!(

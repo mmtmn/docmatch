@@ -211,7 +211,7 @@ mod tests {
             .unwrap();
         ws.write_string(3, 1, "Empório Bela Vista").unwrap();
         ws.write_string(3, 2, "088231").unwrap();
-        ws.write_number(3, 3, 18450.0).unwrap();
+        ws.write_number(3, 3, 17380.0).unwrap();
         ws.write_string(3, 4, "Aberto").unwrap();
         ws.write_string(4, 0, "10/03/2025").unwrap();
         ws.write_string(4, 1, "Padaria Central").unwrap();
@@ -248,7 +248,7 @@ mod tests {
         );
         assert_eq!(
             t.value(0, 3),
-            Some(&Value::Money(Money::from_centavos(1_845_000)))
+            Some(&Value::Money(Money::from_centavos(1_738_000)))
         );
         assert_eq!(
             t.value(1, 3),

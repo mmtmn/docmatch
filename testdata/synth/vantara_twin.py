@@ -20,7 +20,7 @@ D = Decimal
 
 
 def brl(v: Decimal) -> str:
-    """18450.00 -> '18.450,00' (formato Protheus/Itaú)."""
+    """17380.00 -> '17.380,00' (formato Protheus/Itaú)."""
     q = v.quantize(D("0.01"), rounding=ROUND_HALF_UP)
     sign = "-" if q < 0 else ""
     inteiro, frac = f"{abs(q):.2f}".split(".")

@@ -250,14 +250,14 @@ mod tests {
     fn title_vs_bank_line() {
         let scorer = Scorer::default();
         let title = rec(&[
-            ("amount", "18.450,00"),
+            ("amount", "17.380,00"),
             ("date", "20/03/2025"),
             ("doc_number", "88231"),
             ("name", "Empório Bela Vista Comércio de Alimentos Ltda"),
             ("tax_id", "11222333000181"),
         ]);
         let bank = rec(&[
-            ("amount", "-18450.00"),
+            ("amount", "-17380.00"),
             ("date", "21/03/2025"),
             ("name", "EMPORIO BELA VISTA COM DE ALIM"),
         ]);
@@ -273,7 +273,7 @@ mod tests {
             .filter(|f| f.name == "name")
             .any(|f| f.agreed == Some(true)));
         let other = rec(&[
-            ("amount", "-18450.00"),
+            ("amount", "-17380.00"),
             ("date", "21/03/2025"),
             ("name", "PADARIA CENTRAL NORTE"),
         ]);
