@@ -153,6 +153,11 @@ func TestCommands(t *testing.T) {
 		t.Fatalf("%d %q", code, out)
 	}
 	out.Reset()
+	// install.sh puts --plain before the user's arguments when there is no terminal.
+	if code := run(context.Background(), w, []string{"--plain", "version"}, Build{Version: "0.1.0"}); code != 0 || out.String() != "docmatch 0.1.0\n" {
+		t.Fatalf("subcomando depois de flags: %d %q", code, out)
+	}
+	out.Reset()
 	if code := run(context.Background(), w, []string{"--help"}, Build{}); code != 0 || !strings.Contains(out.String(), "uso: docmatch") {
 		t.Fatalf("%d %q", code, out)
 	}
