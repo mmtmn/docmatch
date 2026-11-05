@@ -96,7 +96,9 @@ export function ResultsLive() {
 
   const onDecision = useCallback(
     (findingId: string, status: FindingStatus, note?: string) => {
-      if (!runId) return;
+      // The API records decisions (confirmed, dismissed, resolved); going back to "open" only
+      // changes this screen.
+      if (!runId || status === 'open') return;
       void sendFeedback(runId, findingId, feedbackStatus(status), note).catch(() => undefined);
     },
     [runId],

@@ -10,7 +10,9 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -20,6 +22,7 @@ import (
 	"github.com/mmtmn/docmatch/services/api/internal/audit"
 	"github.com/mmtmn/docmatch/services/api/internal/auth"
 	"github.com/mmtmn/docmatch/services/api/internal/config"
+	"github.com/mmtmn/docmatch/services/api/internal/credits"
 	"github.com/mmtmn/docmatch/services/api/internal/crypto"
 	"github.com/mmtmn/docmatch/services/api/internal/db"
 	"github.com/mmtmn/docmatch/services/api/internal/db/pgstore"
@@ -144,9 +147,15 @@ func authStack(cfg *config.Config, log *slog.Logger, pool *pgxpool.Pool) (*auth.
 	if emailErr != nil {
 		log.Warn("login por e-mail desativado", slog.String("reason", emailErr.Error()))
 	}
+	var devGrant auth.DevGrantFunc
+	if cfg.Auth.DevLogin {
+		log.Warn("LOGIN LOCAL LIGADO (DM_DEV_LOGIN): qualquer pessoa entra sem provedor; só para desenvolvimento")
+		devGrant = localCreditGrant(credits.New(pgstore.NewCreditStore(pool)))
+	}
 	authSvc, err := auth.New(auth.Deps{
 		Store: store, Sessions: sessions, Keys: keys, Limits: limits.Must(), Audit: auditSvc,
 		Google: google, Apple: apple, EmailEnabled: emailErr == nil,
+		GoogleAudiences: cfg.Auth.GoogleNativeClientIDs, DevLogin: cfg.Auth.DevLogin, DevGrant: devGrant,
 		PublicBaseURL: cfg.PublicBaseURL, APIBaseURL: cfg.APIBaseURL, Secure: secure,
 		Limiter: limiter, Lockout: ratelimit.NewLockout(policies.Lockout, nil), Policy: policies.Auth,
 		ClientIP: edge.ClientIP, Country: edge.Country, Logger: log,
@@ -170,6 +179,23 @@ func authStack(cfg *config.Config, log *slog.Logger, pool *pgxpool.Pool) (*auth.
 		return nil, nil, nil, err
 	}
 	return authSvc, accountSvc, sessions, nil
+}
+
+// devLoginCredits is what the local sign-in tops the organization up with,
+// at most once a day (five times the starter plan): enough to run the
+// examples over and over without Stripe.
+const devLoginCredits = 10000
+
+// localCreditGrant gives the local sign-in's organization its daily credits;
+// the idempotency key makes every further sign-in that day a no-op.
+func localCreditGrant(ledger *credits.Service) auth.DevGrantFunc {
+	return func(ctx context.Context, orgID uuid.UUID) error {
+		key := "dev-login:" + orgID.String() + ":" + time.Now().UTC().Format(time.DateOnly)
+		_, err := ledger.Grant(ctx, orgID, credits.GrantParams{
+			Kind: credits.GrantBonus, Amount: devLoginCredits, Source: "login local (desenvolvimento)", IdempotencyKey: key,
+		})
+		return err
+	}
 }
 
 // sessionResolver identifies callers of the business endpoints by the session

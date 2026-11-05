@@ -338,6 +338,111 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /auth/methods:
+    get:
+      operationId: authMethods
+      summary: Formas de entrar disponíveis
+      description: |
+        Quais logins esta instalação oferece agora (um provedor sem chave configurada aparece
+        como `false`). O site e os apps mostram só os botões que funcionam.
+      tags: [auth]
+      security: []
+      responses:
+        "200":
+          description: Formas de entrar.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthMethods"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /auth/google/native:
+    post:
+      operationId: authGoogleNative
+      summary: Entra com o token do Google obtido pelo app
+      description: |
+        Para os apps Android e iOS: o `id_token` vem do login do próprio Google no aparelho. A
+        audiência precisa ser o client id do servidor ou um de `GOOGLE_OAUTH_NATIVE_CLIENT_IDS`.
+        A conta é resolvida como no site (sujeito do Google, depois e-mail verificado), então a
+        mesma pessoa cai na mesma conta em qualquer aparelho.
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GoogleNativeRequest"
+      responses:
+        "200":
+          description: Sessão aberta.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "400":
+          description: Token inválido, expirado ou de outra audiência.
+          x-error-codes: [oauth_state_mismatch, validation_failed]
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: E-mail do Google não verificado, conta suspensa ou em processo de exclusão.
+          x-error-codes: [oauth_email_unverified, account_suspended, account_deletion_pending]
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          description: Login com Google não configurado.
+          x-error-codes: [service_unavailable]
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /auth/dev/login:
+    post:
+      operationId: authDevLogin
+      summary: Entra sem provedor (só desenvolvimento local)
+      description: |
+        Existe só com `DM_DEV_LOGIN` ligado, que a API recusa fora de `DM_ENV=dev`. Cria a conta no
+        primeiro uso e credita a organização uma vez por dia, para rodar exemplos sem Stripe.
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DevLoginRequest"
+      responses:
+        "200":
+          description: Sessão aberta.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "400":
+          description: E-mail inválido.
+          x-error-codes: [validation_failed]
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /auth/password/login:
     post:
       operationId: authPasswordLogin
@@ -533,6 +638,45 @@ paths:
               schema:
                 type: string
                 format: binary
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /me/sessions:
+    get:
+      operationId: listDevices
+      summary: Aparelhos com sessão aberta
+      description: |
+        Cada login (navegador ou instalação do app) é uma sessão presa àquele aparelho, todas na
+        mesma conta. A sessão que faz a chamada vem primeiro, com `current: true`.
+      tags: [account]
+      responses:
+        "200":
+          description: Sessões ativas.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /me/sessions/{id}:
+    delete:
+      operationId: revokeDevice
+      summary: Encerra a sessão de um aparelho
+      description: Encerrar a própria sessão também limpa os cookies desta resposta.
+      tags: [account]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^ses_[0-9A-Z]{26}$"
+      responses:
+        "204":
+          description: Sessão encerrada.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -2585,6 +2729,75 @@ components:
           type: string
           pattern: "^[0-9]{6}$|^[A-Za-z0-9_-]{43}$"
           description: O código de 6 dígitos digitado pelo usuário ou o token do link mágico recebido no mesmo e-mail (32 bytes em base64url).
+      additionalProperties: false
+    AuthMethods:
+      type: object
+      required: [email, google, apple, password, dev]
+      properties:
+        email:
+          type: boolean
+        google:
+          type: boolean
+        apple:
+          type: boolean
+        password:
+          type: boolean
+        dev:
+          type: boolean
+          description: Login local sem provedor (só em desenvolvimento).
+      additionalProperties: false
+    GoogleNativeRequest:
+      type: object
+      required: [id_token]
+      properties:
+        id_token:
+          type: string
+          minLength: 1
+      additionalProperties: false
+    DevLoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          x-limit: text.email
+          description: Vazio usa dev@docmatch.test.
+        name:
+          type: string
+          maxLength: 80
+          x-limit: text.display_name
+      additionalProperties: false
+    Device:
+      type: object
+      required: [id, platform, name, created_at, last_seen_at, current]
+      properties:
+        id:
+          type: string
+          pattern: "^ses_[0-9A-Z]{26}$"
+        platform:
+          type: string
+          enum: [web, android, ios]
+        name:
+          type: string
+          description: Nome curto do aparelho (navegador e sistema, ou app e modelo).
+        created_at:
+          $ref: "#/components/schemas/Timestamp"
+        last_seen_at:
+          $ref: "#/components/schemas/Timestamp"
+        ip_prefix:
+          type: string
+        current:
+          type: boolean
+      additionalProperties: false
+    DeviceList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Device"
       additionalProperties: false
     PasswordLoginRequest:
       type: object

@@ -6,8 +6,8 @@ const run: RunView = {
   id: 'run_1',
   status: 'completed',
   sources: [
-    { id: 'upl_bank', file_name: 'extrato.csv', status: 'clean' },
-    { id: 'upl_erp', file_name: 'titulos.csv', status: 'clean' },
+    { id: 'upl_bank', file_name: 'extrato.csv', status: 'ready' },
+    { id: 'upl_erp', file_name: 'titulos.csv', status: 'ready' },
   ],
 };
 

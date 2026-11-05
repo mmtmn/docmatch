@@ -200,6 +200,12 @@ func (f *flakyAudit) Record(ctx context.Context, orgID *uuid.UUID, actor audit.A
 
 func newHarness(t *testing.T) *harness {
 	t.Helper()
+	return newHarnessWith(t, nil)
+}
+
+// newHarnessWith lets a test adjust the dependencies before the service is built.
+func newHarnessWith(t *testing.T, mutate func(*Deps)) *harness {
+	t.Helper()
 	h := &harness{t: t, now: time.Date(2026, 11, 4, 12, 0, 0, 0, time.UTC)}
 	h.clock = func() time.Time { return h.now }
 	h.store = NewMemoryStore(h.clock)
@@ -216,7 +222,7 @@ func newHarness(t *testing.T) *harness {
 	api, _ := url.Parse("https://api.example.com")
 	h.limiter = ratelimit.NewMemory(ratelimit.WithClock(h.clock))
 	h.lockout = ratelimit.NewLockout(ratelimit.DefaultLockoutPolicy(), h.clock)
-	svc, err := New(Deps{
+	d := Deps{
 		Store: h.store, Sessions: h.sessions, Keys: keys, Audit: h.auditRec,
 		Google:       h.google.provider(ProviderGoogle, true, func(time.Time) (string, error) { return "google-secret", nil }),
 		Apple:        h.apple.provider(ProviderApple, false, appleSecret(h.appleKey, "TEAM", "apple-client", "KEY1", h.apple.srv.URL)),
@@ -224,7 +230,11 @@ func newHarness(t *testing.T) *harness {
 		// Generous by default: the tests that exercise the limit install the real policy.
 		Limiter: h.limiter, Lockout: h.lockout, Policy: ratelimit.Policy{Limit: 1000, Period: time.Minute}, Logger: logx.Discard(), Now: h.clock,
 		Country: func(*http.Request) string { return "BR" },
-	})
+	}
+	if mutate != nil {
+		mutate(&d)
+	}
+	svc, err := New(d)
 	if err != nil {
 		t.Fatal(err)
 	}

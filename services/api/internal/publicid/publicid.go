@@ -18,6 +18,7 @@ const (
 	PrefixOrg       = "org"
 	PrefixChallenge = "chl"
 	PrefixExport    = "exp"
+	PrefixSession   = "ses"
 )
 
 // ErrInvalid is returned by Decode for malformed ids.

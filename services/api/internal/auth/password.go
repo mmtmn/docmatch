@@ -166,4 +166,9 @@ func (s *Service) Mount(r *httpx.Router) {
 	r.HandleFunc(http.MethodPost, PasswordLoginPath, httpx.BodyJSON, s.passwordLogin)
 	r.HandleFunc(http.MethodPost, RefreshPath, httpx.BodyNone, s.refresh)
 	r.HandleFunc(http.MethodPost, LogoutPath, httpx.BodyNone, s.logout)
+	r.HandleFunc(http.MethodGet, MethodsPath, httpx.BodyNone, s.methods)
+	r.HandleFunc(http.MethodPost, GoogleNativePath, httpx.BodyJSON, s.googleNative)
+	if s.d.DevLogin {
+		r.HandleFunc(http.MethodPost, DevLoginPath, httpx.BodyJSON, s.devLogin)
+	}
 }

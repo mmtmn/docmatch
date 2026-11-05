@@ -37,10 +37,17 @@ Pré-requisitos: Go 1.22+ (baixa a toolchain do `go.mod` automaticamente), Rust 
 
 ```bash
 git clone git@github.com:mmtmn/docmatch.git && cd docmatch
-cp .env.example .env        # preencha o que precisar; nada funciona sem DATABASE_URL
 make setup                  # ativa os git hooks e instala ferramentas locais
-make dev                    # Postgres, MinIO, Mailpit, stripe-mock, modelo local e os apps
+make local                  # tudo nesta máquina, sem chave nem login: http://localhost:4321/app
+make e2e-local              # o mesmo + Playwright no fluxo real (envio, estimativa, execução, resultados)
+make local-down             # para tudo (o banco fica no volume do Docker)
 ```
+
+`make local` cria o `.env` a partir do `.env.example` (gerando só os segredos locais), sobe o
+Postgres e o Mailpit no Docker, aplica as migrações e roda o harness, a API, o worker e o site. O
+site entra sozinho pelo login local (`DM_DEV_LOGIN`, que a API recusa fora de `DM_ENV=dev`), e a
+conta local recebe créditos de desenvolvimento uma vez por dia. Para o ambiente completo de
+desenvolvimento (MinIO, stripe-mock, modelo local), `make dev`.
 
 Com `DM_LLM_MODE=local` o harness usa qualquer endpoint compatível com a API da OpenAI (Ollama, llama.cpp, vLLM). Com `openrouter` usa a sua chave da OpenRouter. Com `off` roda só a parte determinística.
 
