@@ -6,6 +6,13 @@ execução parada), acompanha a conciliação, mostra os achados com as evidênc
 (aceitar, rejeitar, editar com observação), exporta XLSX/CSV e mostra a conta com todos os
 aparelhos. A conta também se exclui pelo app (`DELETE /v1/me`), como o Google Play exige.
 
+<img src="../../docs/media/android.gif" alt="O app Android no emulador: login local, os quatro arquivos do gêmeo da Vantara, a confirmação da estimativa, os 23 achados, a evidência de um achado aceito e a conta com os aparelhos" width="300">
+
+<sub>O `make e2e-local` gravado no emulador, contra o `make local`: login local, gêmeo público da
+Vantara, estimativa, achados, evidência e decisão, a conta e a sessão encerrada por outro aparelho.
+Gravado por [`tools/media/android.sh`](../../tools/media/android.sh) (`make media`; ver
+[docs/media](../../docs/media/README.md)).</sub>
+
 O app diz o que o site diz: os textos vêm de [`packages/locales/pt-BR.json`](../../packages/locales)
 (lido em tempo de execução, com os mesmos `{nome}`), os limites de cada campo de
 `packages/contracts/gen/Limits.kt` (gerado de `limits.yaml`, os mesmos números que a API e o site

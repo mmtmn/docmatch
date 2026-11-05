@@ -60,6 +60,11 @@ O build de debug fala com `http://localhost:8080`, e o simulador usa o loopback 
 de verdade, use o endereço do Mac na rede (`DOCMATCH_API_BASE_URL=http://<ip-do-mac>:8080`, com a
 API ouvindo na rede). O build de debug troca o loopback dos links de envio pelo host da API.
 
+**Gravação para a documentação: a fazer.** O Android tem o fluxo gravado no emulador
+([apps/android](../android/README.md)); o iOS só grava num Mac e ainda não tem um teste de
+interface que percorra o fluxo. O caminho está em [docs/media](../../docs/media/README.md#ios)
+(`xcrun simctl io booted recordVideo` com o app no simulador e o `make local` no ar).
+
 ## Alvos
 
 ```bash

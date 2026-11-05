@@ -12,14 +12,15 @@ curl -fsSL https://docmatch.com.br/install/install.sh | sh
 irm https://docmatch.com.br/install/install.ps1 | iex
 ```
 
-Os endereços acima passam a existir depois do primeiro `release.sh` (ver
-[Publicando](#publicando)). Enquanto o repositório for privado, o caminho real é rodar a partir de
-um clone:
+Os scripts e os binários são publicados pelo `release.sh` (ver [Publicando](#publicando)). A
+partir de um clone, o mesmo instalador roda sem baixar nada:
 
 ```bash
 git clone git@github.com:mmtmn/docmatch.git && cd docmatch
 go run ./tools/installer          # ou: make -C tools/installer build && tools/installer/bin/docmatch
 ```
+
+![O instalador na primeira vez, no modo Experimentar, até o gêmeo da Vantara conciliado](../../docs/media/instalador.gif)
 
 ## O que acontece
 
