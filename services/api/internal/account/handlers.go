@@ -21,6 +21,8 @@ func (s *Service) Mount(r *httpx.Router) {
 	r.Handle(http.MethodPut, "/v1/me/password", httpx.BodyJSON, session.RequireFunc(s.putPassword))
 	r.Handle(http.MethodGet, "/v1/me/export", httpx.BodyNone, session.RequireFunc(s.getExport))
 	r.HandleFunc(http.MethodGet, DownloadPath, httpx.BodyNone, s.download)
+	r.Handle(http.MethodGet, DevicesPath, httpx.BodyNone, session.RequireFunc(s.getDevices))
+	r.Handle(http.MethodDelete, devicePath, httpx.BodyNone, session.RequireFunc(s.deleteDevice))
 }
 
 func principal(r *http.Request) session.Principal {

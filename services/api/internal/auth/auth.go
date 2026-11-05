@@ -50,6 +50,9 @@ const (
 	PasswordLoginPath  = "/v1/auth/password/login" //nolint:gosec // route path, not a credential
 	RefreshPath        = "/v1/auth/refresh"
 	LogoutPath         = "/v1/auth/logout"
+	MethodsPath        = "/v1/auth/methods"
+	GoogleNativePath   = "/v1/auth/google/native"
+	DevLoginPath       = "/v1/auth/dev/login"
 )
 
 // Web app paths the API redirects to or links. The web app (apps/web) owns
@@ -186,6 +189,13 @@ type Deps struct {
 	// Google and Apple are nil when the provider is not configured (503).
 	Google *Provider
 	Apple  *Provider
+	// GoogleAudiences are extra client ids accepted for native ID tokens
+	// (the Android and iOS apps), besides Google.ClientID.
+	GoogleAudiences []string
+	// DevLogin mounts POST /v1/auth/dev/login (DM_DEV_LOGIN, dev only);
+	// DevGrant, when set, tops up the organization after that sign-in.
+	DevLogin bool
+	DevGrant DevGrantFunc
 	// EmailEnabled is false when no sender is configured (503 on e-mail login).
 	EmailEnabled bool
 	// PublicBaseURL is the web app (redirects, magic links); APIBaseURL

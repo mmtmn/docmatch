@@ -536,3 +536,41 @@ func TestSMTPAddr(t *testing.T) {
 		t.Fatalf("SMTP em prod: %v", vars)
 	}
 }
+
+func TestDevLoginOnlyInDev(t *testing.T) {
+	t.Parallel()
+	env := validEnv()
+	env[VarDevLogin] = "1"
+	if cfg := mustLoad(t, env); !cfg.Auth.DevLogin {
+		t.Fatal("DM_DEV_LOGIN=1 em dev deveria ligar o login local")
+	}
+	if cfg := mustLoad(t, validEnv()); cfg.Auth.DevLogin {
+		t.Fatal("o login local é desligado por padrão")
+	}
+	for _, e := range []string{EnvStaging, EnvProd} {
+		env := validEnv()
+		env[VarEnv] = e
+		env[VarDevLogin] = "true"
+		_, err := LoadFrom(lookupFrom(env))
+		if err == nil || !strings.Contains(err.Error(), VarDevLogin) {
+			t.Fatalf("%s com DM_DEV_LOGIN deveria falhar citando a variável, veio %v", e, err)
+		}
+	}
+}
+
+func TestGoogleNativeClientIDs(t *testing.T) {
+	t.Parallel()
+	env := validEnv()
+	env[VarGoogleNativeClientIDs] = " 123-and.apps.googleusercontent.com, 456-ios.apps.googleusercontent.com,,123-and.apps.googleusercontent.com "
+	cfg := mustLoad(t, env)
+	if got, want := strings.Join(cfg.Auth.GoogleNativeClientIDs, ","), "123-and.apps.googleusercontent.com,456-ios.apps.googleusercontent.com"; got != want {
+		t.Fatalf("GoogleNativeClientIDs = %q, quer %q", got, want)
+	}
+	for _, bad := range []string{"tem espaço.apps", "-começa-com-hífen", "a/b"} {
+		env := validEnv()
+		env[VarGoogleNativeClientIDs] = bad
+		if _, err := LoadFrom(lookupFrom(env)); err == nil {
+			t.Fatalf("%q deveria ser rejeitado", bad)
+		}
+	}
+}

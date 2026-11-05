@@ -15,6 +15,8 @@ import (
 	"net/mail"
 	"net/url"
 	"os"
+	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -82,6 +84,12 @@ const (
 	VarAppleKeyID         = "APPLE_KEY_ID"
 	VarApplePrivateKey    = "APPLE_PRIVATE_KEY"
 	VarSessionSecret      = "DM_SESSION_SECRET"
+	// VarGoogleNativeClientIDs lists the extra audiences accepted for ID
+	// tokens obtained by the mobile apps (Android and iOS client ids).
+	VarGoogleNativeClientIDs = "GOOGLE_OAUTH_NATIVE_CLIENT_IDS"
+	// VarDevLogin enables POST /v1/auth/dev/login (local only: refused
+	// outside DM_ENV=dev).
+	VarDevLogin = "DM_DEV_LOGIN"
 
 	VarStripeSecretKey      = "STRIPE_SECRET_KEY"
 	VarStripeWebhookSecret  = "STRIPE_WEBHOOK_SECRET"
@@ -222,6 +230,10 @@ type Auth struct {
 	ApplePrivateKey    Secret
 	// SessionSecret is the decoded DM_SESSION_SECRET (32+ random bytes).
 	SessionSecret SecretBytes
+	// GoogleNativeClientIDs are extra audiences for native Google ID tokens.
+	GoogleNativeClientIDs []string
+	// DevLogin signs in without any provider (DM_ENV=dev only).
+	DevLogin bool
 }
 
 // Billing holds Stripe keys and the optional rate overrides.
@@ -328,6 +340,11 @@ func LoadFrom(lookup Lookup) (*Config, error) {
 	cfg.Auth.AppleKeyID = r.optional(VarAppleKeyID, "")
 	cfg.Auth.ApplePrivateKey = r.secret(VarApplePrivateKey, false)
 	cfg.Auth.SessionSecret = r.base64Secret(VarSessionSecret, minSessionSecretBytes)
+	cfg.Auth.GoogleNativeClientIDs = r.clientIDs(VarGoogleNativeClientIDs)
+	cfg.Auth.DevLogin = r.boolean(VarDevLogin, false)
+	if cfg.Auth.DevLogin && cfg.Env != EnvDev {
+		r.problem(VarDevLogin, "só pode ser ligada com DM_ENV=dev")
+	}
 
 	cfg.Billing.StripeSecretKey = r.secret(VarStripeSecretKey, false)
 	cfg.Billing.StripeWebhookSecret = r.secret(VarStripeWebhookSecret, false)
@@ -476,6 +493,8 @@ func (c *Config) redacted() [][2]string {
 		{VarAppleKeyID, c.Auth.AppleKeyID},
 		{VarApplePrivateKey, presence(c.Auth.ApplePrivateKey)},
 		{VarSessionSecret, sessionSecret},
+		{VarGoogleNativeClientIDs, strings.Join(c.Auth.GoogleNativeClientIDs, ",")},
+		{VarDevLogin, strconv.FormatBool(c.Auth.DevLogin)},
 		{VarStripeSecretKey, presence(c.Billing.StripeSecretKey)},
 		{VarStripeWebhookSecret, presence(c.Billing.StripeWebhookSecret)},
 		{VarStripePublishableKey, c.Billing.StripePublishableKey},
@@ -594,6 +613,29 @@ func (r *reader) list(name string) []string {
 	}
 	return out
 }
+
+// clientIDs reads a comma-separated list of OAuth client ids.
+func (r *reader) clientIDs(name string) []string {
+	v, ok := r.get(name)
+	if !ok {
+		return nil
+	}
+	var out []string
+	for _, item := range strings.Split(v, ",") {
+		item = strings.TrimSpace(item)
+		if item == "" || slices.Contains(out, item) {
+			continue
+		}
+		if !clientIDRe.MatchString(item) {
+			r.problem(name, fmt.Sprintf("client id %q inválido", item))
+			return nil
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
+var clientIDRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$`)
 
 // boolean reads a switch: 1/0, true/false, on/off, yes/no, sim/não.
 func (r *reader) boolean(name string, def bool) bool {
@@ -811,6 +853,7 @@ func KnownVars() []string {
 		VarHarnessSocket, VarScanQueueURL, VarScannerBin,
 		VarLLMMode, VarOpenRouterKey, VarLocalLLMBaseURL, VarModelsFile, VarLLMCacheDir,
 		VarGoogleClientID, VarGoogleClientSecret, VarAppleTeamID, VarAppleClientID, VarAppleKeyID, VarApplePrivateKey, VarSessionSecret,
+		VarGoogleNativeClientIDs, VarDevLogin,
 		VarStripeSecretKey, VarStripeWebhookSecret, VarStripePublishableKey,
 		VarTargetMargin, VarIncomeTaxRate, VarPaymentRate, VarInfraRate, VarOpenRouterFee, VarPricingFile,
 		VarResendAPIKey, VarEmailFrom, VarSecurityContact, VarSMTPAddr,
