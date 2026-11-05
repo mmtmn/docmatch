@@ -14,9 +14,11 @@ var dynamic = map[string][]string{
 	"cli.demo_phase_": {"login", "upload", "estimate", "run", "findings"},
 	"mode.":           {"try_name", "try_text", "dev_name", "dev_text"},
 	"ports.":          {"web", "api", "postgres", "mailpit"},
-	"preflight.":      {"fix_git", "fix_make", "fix_go", "fix_cargo", "fix_node", "fix_pnpm", "fix_openssl", "fix_curl"},
-	"steps.":          {"prepare", "base_images", "images", "database", "migrate", "services", "dev_local", "verify", "demo"},
-	"nav.":            {"mode", "checks", "choices", "install", "done"},
+	"steps.":          {"prepare", "base_images", "images", "database", "migrate", "services", "dev_clone", "dev_setup", "dev_local", "verify", "demo"},
+	"steps.clone_":    {"objects", "deltas", "files"},
+	"nav.":            {"mode", "checks", "tools", "choices", "install", "done"},
+	"tools.names.":    {"git", "make", "cc", "go", "rust", "node", "pnpm", "docker", "openssl", "curl", "wsl"},
+	"tools.fix.":      {"make", "cc", "go", "rust", "node", "pnpm", "openssl", "curl"},
 }
 
 var call = regexp.MustCompile(`text\.(?:T|L|Has)\("([a-z0-9_.]+)"`)

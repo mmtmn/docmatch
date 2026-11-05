@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,8 +18,10 @@ import (
 	"github.com/mmtmn/docmatch/tools/installer/internal/install"
 	"github.com/mmtmn/docmatch/tools/installer/internal/platform"
 	"github.com/mmtmn/docmatch/tools/installer/internal/ports"
+	"github.com/mmtmn/docmatch/tools/installer/internal/selfupdate"
 	"github.com/mmtmn/docmatch/tools/installer/internal/state"
 	"github.com/mmtmn/docmatch/tools/installer/internal/text"
+	"github.com/mmtmn/docmatch/tools/installer/internal/toolchain"
 )
 
 // Build carries what the release script stamps into the binary (-ldflags -X).
@@ -60,6 +63,7 @@ type installFlags struct {
 	registry, tag, source              string
 	build, noBuild, noDemo, noBrowser  bool
 	verbose                            bool
+	installTools                       bool
 }
 
 func newFlagSet(name string) *flag.FlagSet {
@@ -87,6 +91,7 @@ func (f *installFlags) register(fs *flag.FlagSet) {
 	fs.BoolVar(&f.noDemo, "no-demo", false, "")
 	fs.BoolVar(&f.noBrowser, "no-browser", false, "")
 	fs.BoolVar(&f.verbose, "verbose", false, "")
+	fs.BoolVar(&f.installTools, "install-tools", false, "")
 }
 
 // world is the machine and its environment (replaced in tests).
@@ -102,6 +107,15 @@ type world struct {
 	isTTY   bool // stdin and stdout are terminals
 	now     func() time.Time
 	version string
+
+	// Lifecycle (update, uninstall); nil means the real ones.
+	fs    selfupdate.FS
+	http  *http.Client
+	probe func(ctx context.Context, path string) (string, error)
+	ops   uninstallOps
+	// Desenvolver toolchain (nil means the machine's).
+	runner toolchain.Runner
+	exists func(path string) bool
 }
 
 func (w world) installDir(flagDir string) string {
@@ -226,13 +240,18 @@ func resolveOptions(ctx context.Context, w world, f installFlags, b Build) (reso
 	o.OpenRouter = first(f.openRouterKey, w.env.Get("OPENROUTER_API_KEY"), saved["OPENROUTER_API_KEY"])
 
 	o.SourceDir = first(f.source, w.env.Get("DOCMATCH_SOURCE"))
+	o.CloneDir = filepath.Join(w.home, "docmatch")
 	if o.SourceDir != "" {
 		o.SourceDir = platform.ExpandHome(o.SourceDir, w.home)
 		if abs, err := filepath.Abs(o.SourceDir); err == nil {
 			o.SourceDir = abs
 		}
 		if !install.IsSource(o.SourceDir) {
-			return resolved{}, fmt.Errorf("%w: %s", errUsage, text.T("cli.not_source", "dir", o.SourceDir))
+			// Desenvolver clones into a folder that is not a checkout yet.
+			if o.Mode != state.ModeDev || !install.CanClone(o.SourceDir) {
+				return resolved{}, fmt.Errorf("%w: %s", errUsage, text.T("cli.not_source", "dir", o.SourceDir))
+			}
+			o.CloneDir, o.SourceDir = o.SourceDir, ""
 		}
 	} else if st != nil && install.IsSource(st.SourceDir) {
 		o.SourceDir = st.SourceDir
@@ -260,7 +279,7 @@ func resolveOptions(ctx context.Context, w world, f installFlags, b Build) (reso
 	case f.noBuild:
 		o.Build = install.BuildNever
 	}
-	r.opts = o
+	r.opts = o.Resolved()
 	return r, nil
 }
 

@@ -6,6 +6,7 @@ package install
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -29,6 +31,7 @@ import (
 	"github.com/mmtmn/docmatch/tools/installer/internal/ports"
 	"github.com/mmtmn/docmatch/tools/installer/internal/state"
 	"github.com/mmtmn/docmatch/tools/installer/internal/text"
+	"github.com/mmtmn/docmatch/tools/installer/internal/toolchain"
 )
 
 // Build policies for the docmatch images.
@@ -57,6 +60,8 @@ const (
 	StepDatabase   = "database"
 	StepMigrate    = "migrate"
 	StepServices   = "services"
+	StepDevClone   = "dev_clone"
+	StepDevSetup   = "dev_setup"
 	StepDevLocal   = "dev_local"
 	StepVerify     = "verify"
 	StepDemo       = "demo"
@@ -74,11 +79,30 @@ type Options struct {
 	Registry   string // "" or LocalRegistry: never pull
 	Tag        string
 	SourceDir  string // repository root ("" when none was found)
+	CloneDir   string // Desenvolver without a checkout: where to clone it
 	RepoURL    string // where to clone the code from when the registry lacks the images
 	RepoRef    string // branch or tag to clone ("" = the default branch)
 	Build      string
 	Demo       bool
 	Info       platform.Info
+}
+
+// Resolved adjusts the options to their mode: a Desenvolver installation without a checkout
+// uses the clone folder when an earlier run (or the user) already cloned there.
+func (o Options) Resolved() Options {
+	if o.Mode == state.ModeDev && !IsSource(o.SourceDir) && IsSource(o.CloneDir) {
+		o.SourceDir = o.CloneDir
+	}
+	return o
+}
+
+// CanClone reports whether dir can receive a clone: missing, or an empty folder.
+func CanClone(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return true
+	}
+	return err == nil && len(entries) == 0
 }
 
 // URLs of a running installation.
@@ -123,6 +147,30 @@ func DevURLs(source string) URLs {
 		u.Mailpit = "http://localhost:" + v
 	}
 	return u
+}
+
+// DevPorts are the ports `make local` takes: the repository's .env (DM_PUBLIC_BASE_URL,
+// DM_API_BASE_URL, DATABASE_URL, DM_DEV_MAILPIT_PORT), the defaults where it says nothing.
+func DevPorts(source string) ports.Set {
+	p := ports.Defaults()
+	env, err := envfile.Read(filepath.Join(source, ".env"))
+	if err != nil {
+		return p
+	}
+	fromURL := func(name, raw string) {
+		if u, err := url.Parse(strings.TrimSpace(raw)); err == nil {
+			if n, err := strconv.Atoi(u.Port()); err == nil {
+				p[name] = n
+			}
+		}
+	}
+	fromURL(ports.Web, env["DM_PUBLIC_BASE_URL"])
+	fromURL(ports.API, env["DM_API_BASE_URL"])
+	fromURL(ports.Postgres, env["DATABASE_URL"])
+	if n, err := strconv.Atoi(strings.TrimSpace(env["DM_DEV_MAILPIT_PORT"])); err == nil {
+		p[ports.Mailpit] = n
+	}
+	return p
 }
 
 // Image is the full name of a docmatch image ("ghcr.io/owner/docmatch-api:0.1.0").
@@ -190,11 +238,16 @@ func (in *Installer) MarkDone(id string) {
 func (in *Installer) Steps() []flow.Step {
 	t := func(id string) string { return text.T("steps." + id) }
 	if in.Opts.Mode == state.ModeDev {
-		return []flow.Step{
-			{ID: StepDevLocal, Title: t(StepDevLocal), Run: in.devLocal},
-			{ID: StepVerify, Title: t(StepVerify), Run: in.verify},
-			{ID: StepDemo, Title: t(StepDemo), Run: in.demo},
+		var steps []flow.Step
+		if !IsSource(in.Opts.SourceDir) {
+			steps = append(steps, flow.Step{ID: StepDevClone, Title: t(StepDevClone), Run: in.devClone})
 		}
+		return append(steps,
+			flow.Step{ID: StepDevSetup, Title: t(StepDevSetup), Run: in.devSetup},
+			flow.Step{ID: StepDevLocal, Title: t(StepDevLocal), Run: in.devLocal},
+			flow.Step{ID: StepVerify, Title: t(StepVerify), Run: in.verify},
+			flow.Step{ID: StepDemo, Title: t(StepDemo), Run: in.demo},
+		)
 	}
 	return []flow.Step{
 		{ID: StepPrepare, Title: t(StepPrepare), Run: in.prepare},
@@ -523,11 +576,147 @@ func (in *Installer) demo(ctx context.Context, r *flow.Reporter) (flow.Result, e
 	return flow.Done(text.T("payoff.findings", "count", res.Findings, "amount", demo.FormatMoney(res.AmountAtRisk, res.Currency))), nil
 }
 
+// DevEnv is the environment of `make setup` and `make local`: this process's (with the PATH the
+// tools screen may have extended) plus goToolchain as GOTOOLCHAIN unless the user chose one, so a
+// Go older than the go.mod downloads the pinned toolchain even where the distribution's go.env
+// says local (toolchain.GoToolchainFor).
+func DevEnv(environ []string, goToolchain string) []string {
+	out := append([]string{}, environ...)
+	for _, kv := range environ {
+		if strings.HasPrefix(kv, "GOTOOLCHAIN=") {
+			return out
+		}
+	}
+	if goToolchain == "" {
+		goToolchain = "auto"
+	}
+	return append(out, "GOTOOLCHAIN="+goToolchain)
+}
+
+// devEnv is DevEnv for this checkout and this machine's Go.
+func (in *Installer) devEnv(ctx context.Context) []string {
+	local, _ := toolchain.System{}.Output(ctx, "", "go", "env", "GOVERSION")
+	return DevEnv(os.Environ(), toolchain.GoToolchainFor(firstLine(local), toolchain.ReadRequirements(in.Opts.SourceDir).GoToolchain))
+}
+
+func firstLine(s string) string {
+	s, _, _ = strings.Cut(strings.TrimSpace(s), "\n")
+	return s
+}
+
+// devClone clones the repository for Desenvolver (a full clone: it is a working copy).
+func (in *Installer) devClone(ctx context.Context, r *flow.Reporter) (flow.Result, error) {
+	dest := in.Opts.CloneDir
+	if dest == "" {
+		return flow.Result{}, ErrNoSource
+	}
+	if in.Opts.RepoURL == "" {
+		return flow.Result{}, fmt.Errorf("%w: %s", ErrNoSource, text.T("steps.clone_no_repo"))
+	}
+	if entries, err := os.ReadDir(dest); err == nil && len(entries) > 0 {
+		return flow.Result{}, errors.New(text.T("steps.clone_not_empty", "dir", dest))
+	}
+	r.Note(in.Opts.RepoURL + " -> " + dest)
+	cmd := gitCommand(ctx, "clone", "--progress", in.Opts.RepoURL, dest)
+	cmd.Env = append(cmd.Env, "GIT_TERMINAL_PROMPT=0")
+	if err := streamCmd(cmd, cloneProgress(r)); err != nil {
+		_ = os.RemoveAll(dest) // a half clone would block the next try
+		return flow.Result{}, fmt.Errorf("%s: %w. %s", in.Opts.RepoURL, err, text.T("steps.clone_hint"))
+	}
+	if !IsSource(dest) {
+		return flow.Result{}, fmt.Errorf("%w: %s", ErrNoSource, dest)
+	}
+	in.mu.Lock()
+	in.Opts.SourceDir = dest
+	in.State.SourceDir = dest
+	_ = in.State.Save(in.Opts.Dir)
+	in.mu.Unlock()
+	return flow.Done(dest), nil
+}
+
+var gitPhase = regexp.MustCompile(`^(?:remote: )?(Counting objects|Compressing objects|Receiving objects|Resolving deltas|Updating files):\s+(\d+)%`)
+
+// cloneProgress turns the progress lines of the clone ("Receiving objects:  45% (..)") into a
+// bar; everything else goes to the log.
+func cloneProgress(r *flow.Reporter) func(string) {
+	labels := map[string]string{"Receiving objects": "objects", "Resolving deltas": "deltas", "Updating files": "files"}
+	return func(line string) {
+		m := gitPhase.FindStringSubmatch(strings.TrimSpace(line))
+		if m == nil {
+			r.Log(line)
+			return
+		}
+		key, ok := labels[m[1]]
+		if !ok {
+			return
+		}
+		pct, _ := strconv.Atoi(m[2])
+		r.Progress([]flow.Bar{{Label: text.T("steps.clone_" + key), Fraction: float64(pct) / 100, Text: m[2] + "%"}}, "")
+		if pct == 100 {
+			r.Log(strings.TrimSpace(line))
+		}
+	}
+}
+
+var (
+	subsystemsVar = regexp.MustCompile(`(?m)^SUBSYSTEMS\s*:?=((?:.*\\\n)*.*)$`)
+	enteringDir   = regexp.MustCompile(`^make\[\d+\]: Entering directory '(.+)'`)
+)
+
+// Subsystems reads the SUBSYSTEMS list of the root Makefile (what `make setup` walks through).
+func Subsystems(source string) []string {
+	data, err := os.ReadFile(filepath.Join(source, "Makefile")) //nolint:gosec // the checkout
+	if err != nil {
+		return nil
+	}
+	m := subsystemsVar.FindSubmatch(data)
+	if m == nil {
+		return nil
+	}
+	return strings.Fields(strings.ReplaceAll(string(m[1]), "\\\n", " "))
+}
+
+// devSetup runs `make setup` (the git hooks and each subsystem's tools), one bar step per
+// subsystem. A resumed installation of the same checkout skips it.
+func (in *Installer) devSetup(ctx context.Context, r *flow.Reporter) (flow.Result, error) {
+	if in.State.Done(StepDevSetup) && in.State.SourceDir == in.Opts.SourceDir {
+		return flow.Skip(text.T("steps.setup_done_before")), nil
+	}
+	subs := Subsystems(in.Opts.SourceDir)
+	index := map[string]int{}
+	for i, s := range subs {
+		index[s] = i
+	}
+	root := filepath.Clean(in.Opts.SourceDir)
+	cmd := exec.CommandContext(ctx, "make", "setup") //nolint:gosec // fixed command
+	cmd.Dir = in.Opts.SourceDir
+	cmd.Env = in.devEnv(ctx)
+	err := streamCmd(cmd, func(line string) {
+		r.Log(line)
+		m := enteringDir.FindStringSubmatch(line)
+		if m == nil {
+			return
+		}
+		rel, err := filepath.Rel(root, filepath.Clean(m[1]))
+		if err != nil {
+			return
+		}
+		rel = filepath.ToSlash(rel)
+		if i, ok := index[rel]; ok {
+			r.Progress([]flow.Bar{{Label: "make setup", Fraction: float64(i) / float64(len(subs)), Text: fmt.Sprintf("%d/%d %s", i+1, len(subs), rel)}}, rel)
+		}
+	})
+	if err != nil {
+		return flow.Result{}, err
+	}
+	return flow.Done(text.T("steps.setup_done", "count", len(subs))), nil
+}
+
 // devLocal runs `make local` in the repository (Desenvolver mode).
 func (in *Installer) devLocal(ctx context.Context, r *flow.Reporter) (flow.Result, error) {
 	cmd := exec.CommandContext(ctx, "make", "local") //nolint:gosec // fixed command
 	cmd.Dir = in.Opts.SourceDir
-	cmd.Env = os.Environ()
+	cmd.Env = in.devEnv(ctx)
 	err := streamCmd(cmd, func(line string) {
 		r.Log(line)
 		if strings.HasPrefix(line, "==> ") {
@@ -553,6 +742,7 @@ func streamCmd(cmd *exec.Cmd, onLine func(string)) error {
 		defer close(done)
 		sc := bufio.NewScanner(pr)
 		sc.Buffer(make([]byte, 64*1024), 4*1024*1024)
+		sc.Split(ScanLinesCR)
 		for sc.Scan() {
 			if s := strings.TrimSpace(sc.Text()); s != "" {
 				last = s
@@ -687,6 +877,30 @@ func CloneURL(remote string) string {
 		return ""
 	}
 	return (&url.URL{Scheme: "https", Host: host, Path: "/" + owner + "/" + repo}).String()
+}
+
+// ScanLinesCR splits like bufio.ScanLines but also at a lone \r: progress lines rewritten in
+// place (the clone's progress, curl) arrive one by one instead of as a single huge line.
+func ScanLinesCR(data []byte, atEOF bool) (int, []byte, error) {
+	if atEOF && len(data) == 0 {
+		return 0, nil, nil
+	}
+	if i := bytes.IndexAny(data, "\r\n"); i >= 0 {
+		advance := i + 1
+		if data[i] == '\r' {
+			switch {
+			case i+1 < len(data) && data[i+1] == '\n':
+				advance++
+			case i+1 == len(data) && !atEOF:
+				return 0, nil, nil // a \n may follow
+			}
+		}
+		return advance, data[:i], nil
+	}
+	if atEOF {
+		return len(data), data, nil
+	}
+	return 0, nil, nil
 }
 
 // Remote is the origin remote of the checkout ("" when unknown).

@@ -1,0 +1,14 @@
+
+  docmatch 0.1.0      modo · verificações · ferramentas · escolhas · instalação · pronto
+
+  Verificando esta máquina
+
+  ✓ Sistema                   linux/amd64
+  ✓ Docker                    29.1.3
+  ✗ Go                        não encontrado
+      Instale o Go 1.21 ou mais novo (go.dev/dl).
+
+  1 verificação(ões) precisam de atenção antes de instalar.
+
+  Enter ver como instalar · r verificar de novo · q sair
+

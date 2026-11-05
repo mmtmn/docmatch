@@ -15,6 +15,7 @@ import (
 	"github.com/mmtmn/docmatch/tools/installer/internal/install"
 	"github.com/mmtmn/docmatch/tools/installer/internal/platform"
 	"github.com/mmtmn/docmatch/tools/installer/internal/ports"
+	"github.com/mmtmn/docmatch/tools/installer/internal/preflight"
 	"github.com/mmtmn/docmatch/tools/installer/internal/state"
 	"github.com/mmtmn/docmatch/tools/installer/internal/text"
 )
@@ -31,7 +32,7 @@ const (
 type choiceValues struct {
 	llm, localURL, key  string
 	web, api, pg, mail  string
-	dir                 string
+	dir, source         string
 	portByName          map[string]*string
 	ours                map[int]bool
 	free                ports.Prober
@@ -110,7 +111,7 @@ func newChoices(t Theme, opts install.Options, ours map[int]bool, free ports.Pro
 		llm: opts.LLMMode, localURL: opts.LocalLLM, key: opts.OpenRouter,
 		web: strconv.Itoa(opts.Ports[ports.Web]), api: strconv.Itoa(opts.Ports[ports.API]),
 		pg: strconv.Itoa(opts.Ports[ports.Postgres]), mail: strconv.Itoa(opts.Ports[ports.Mailpit]),
-		dir: opts.Dir, ours: ours, free: free, homeForExpand: home, goos: goos,
+		dir: opts.Dir, source: opts.CloneDir, ours: ours, free: free, homeForExpand: home, goos: goos,
 	}
 	if v.llm == "" {
 		v.llm = envfile.LLMOff
@@ -121,11 +122,26 @@ func newChoices(t Theme, opts install.Options, ours map[int]bool, free ports.Pro
 	v.portByName = map[string]*string{ports.Web: &v.web, ports.API: &v.api, ports.Postgres: &v.pg, ports.Mailpit: &v.mail}
 
 	var groups []*huh.Group
-	if opts.Mode == state.ModeDev {
+	switch {
+	case opts.Mode == state.ModeDev && opts.SourceDir == "":
+		groups = append(groups, huh.NewGroup(
+			huh.NewInput().Title(text.T("form.clone_title")).Description(t.plainText(text.T("form.clone_desc"))).
+				Value(&v.source).Validate(func(s string) error {
+				dir := expandDir(strings.TrimSpace(s), v.homeForExpand)
+				if strings.TrimSpace(s) == "" || !install.IsSource(dir) && !install.CanClone(dir) {
+					return errors.New(text.T("form.err_clone"))
+				}
+				if len(preflight.HarnessSocket(dir)) > preflight.MaxSocketPath {
+					return errors.New(text.T("form.err_clone_long"))
+				}
+				return nil
+			}),
+		))
+	case opts.Mode == state.ModeDev:
 		groups = append(groups, huh.NewGroup(
 			huh.NewNote().Title(text.T("form.dev_title")).Description(t.plainText(text.T("form.dev_text", "dir", opts.SourceDir))),
 		))
-	} else {
+	default:
 		groups = append(groups,
 			huh.NewGroup(
 				huh.NewSelect[string]().Title(text.T("form.llm_title")).Description(t.plainText(text.T("form.llm_desc"))).
@@ -233,7 +249,10 @@ func (m *choicesModel) apply(opts install.Options) install.Options {
 	v := m.v
 	opts.Dir = expandDir(strings.TrimSpace(v.dir), v.homeForExpand)
 	if m.mode == state.ModeDev {
-		return opts
+		if opts.SourceDir == "" {
+			opts.CloneDir = expandDir(strings.TrimSpace(v.source), v.homeForExpand)
+		}
+		return opts.Resolved()
 	}
 	opts.LLMMode = v.llm
 	opts.LocalLLM, opts.OpenRouter = "", ""
