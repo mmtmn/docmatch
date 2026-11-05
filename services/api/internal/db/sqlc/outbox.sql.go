@@ -17,15 +17,23 @@ UPDATE outbox SET attempts = attempts + 1
 WHERE id IN (
   SELECT id FROM outbox
   WHERE sent_at IS NULL AND available_at <= now()
+    AND NOT (kind = ANY($1::text[]))
   ORDER BY available_at
-  LIMIT $1
+  LIMIT $2
   FOR UPDATE SKIP LOCKED
 )
 RETURNING id, org_id, kind, payload, available_at, attempts, last_error, created_at, sent_at
 `
 
-func (q *Queries) ClaimOutbox(ctx context.Context, limit int32) ([]Outbox, error) {
-	rows, err := q.db.Query(ctx, claimOutbox, limit)
+type ClaimOutboxParams struct {
+	SkipKinds []string
+	MaxRows   int32
+}
+
+// Kinds owned by a dedicated worker (e-mail) are skipped: claiming them here
+// would mark them sent without delivering.
+func (q *Queries) ClaimOutbox(ctx context.Context, arg ClaimOutboxParams) ([]Outbox, error) {
+	rows, err := q.db.Query(ctx, claimOutbox, arg.SkipKinds, arg.MaxRows)
 	if err != nil {
 		return nil, err
 	}

@@ -6,10 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/mmtmn/docmatch/services/api/internal/account"
@@ -25,9 +27,13 @@ import (
 	"github.com/mmtmn/docmatch/services/api/internal/email/emailpg"
 	"github.com/mmtmn/docmatch/services/api/internal/geo"
 	"github.com/mmtmn/docmatch/services/api/internal/httpx"
+	"github.com/mmtmn/docmatch/services/api/internal/jobs"
+	"github.com/mmtmn/docmatch/services/api/internal/jobs/jobargs"
 	"github.com/mmtmn/docmatch/services/api/internal/limits"
 	"github.com/mmtmn/docmatch/services/api/internal/logx"
 	"github.com/mmtmn/docmatch/services/api/internal/ratelimit"
+	"github.com/mmtmn/docmatch/services/api/internal/runs/apix"
+	"github.com/mmtmn/docmatch/services/api/internal/runs/wire"
 	"github.com/mmtmn/docmatch/services/api/internal/session"
 	"github.com/mmtmn/docmatch/services/api/internal/session/sessionpg"
 	"github.com/mmtmn/docmatch/services/api/internal/version"
@@ -72,9 +78,23 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	// Pipeline route groups (uploads, estimates, runs, workflows, rules),
+	// identified by the session the middleware above authenticated.
+	sys, err := wire.New(ctx, wire.Options{Config: cfg, Logger: log, Pool: pool, Auth: sessionResolver(pool)})
+	if err != nil {
+		return err
+	}
+	defer sys.Close()
+	queue, err := jobs.NewClient(pool, jobs.Deps{Logger: log, DB: pool}, jobs.ClientOptions{Periodic: false})
+	if err != nil {
+		return err
+	}
+	sys.Jobs.Set(jobargs.RiverEnqueuer{Client: queue})
+	go func() { _ = sys.ListenEvents(ctx) }()
+
 	handler := api.NewHandler(api.Deps{
 		Config: cfg, Logger: log, Limits: limits.Must(), DB: pool,
-		Mount:        []func(*httpx.Router){authSvc.Mount, accountSvc.Mount},
+		Mount:        append([]func(*httpx.Router){authSvc.Mount, accountSvc.Mount}, sys.Mount()...),
 		Middleware:   []httpx.Middleware{sessions.Middleware},
 		OriginExempt: auth.OriginExempt,
 	})
@@ -150,4 +170,28 @@ func authStack(cfg *config.Config, log *slog.Logger, pool *pgxpool.Pool) (*auth.
 		return nil, nil, nil, err
 	}
 	return authSvc, accountSvc, sessions, nil
+}
+
+// sessionResolver identifies callers of the business endpoints by the session
+// the middleware already authenticated, and reads the organization's plan
+// under row-level security.
+func sessionResolver(pool *pgxpool.Pool) apix.Resolver {
+	return func(r *http.Request) (apix.Principal, error) {
+		p, ok := session.FromContext(r.Context())
+		if !ok {
+			if errors.Is(session.AuthError(r.Context()), session.ErrAccessExpired) {
+				return apix.Principal{}, apix.ErrSessionExpired
+			}
+			return apix.Principal{}, apix.ErrUnauthenticated
+		}
+		var plan string
+		err := db.WithOrgTx(r.Context(), pool, p.OrgID, func(ctx context.Context, tx pgx.Tx) error {
+			return tx.QueryRow(ctx, "SELECT plan_code FROM orgs WHERE id = $1", p.OrgID).Scan(&plan)
+		})
+		if err != nil {
+			return apix.Principal{}, fmt.Errorf("plano da organização: %w", err)
+		}
+		uid := p.UserID
+		return apix.Principal{OrgID: p.OrgID, UserID: &uid, Plan: plan}, nil
+	}
 }

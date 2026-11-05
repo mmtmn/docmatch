@@ -28,7 +28,9 @@ import (
 	"github.com/mmtmn/docmatch/services/api/internal/email"
 	"github.com/mmtmn/docmatch/services/api/internal/email/emailpg"
 	"github.com/mmtmn/docmatch/services/api/internal/jobs"
+	"github.com/mmtmn/docmatch/services/api/internal/jobs/jobargs"
 	"github.com/mmtmn/docmatch/services/api/internal/logx"
+	"github.com/mmtmn/docmatch/services/api/internal/runs/wire"
 	"github.com/mmtmn/docmatch/services/api/internal/session"
 	"github.com/mmtmn/docmatch/services/api/internal/session/sessionpg"
 	"github.com/mmtmn/docmatch/services/api/internal/version"
@@ -69,9 +71,17 @@ func run() error {
 	}
 	defer pool.Close()
 
+	// Pipeline jobs (scan, run, learn, outbox) and the scanner verdict consumer.
+	sys, err := wire.New(ctx, wire.Options{Config: cfg, Logger: log, Pool: pool})
+	if err != nil {
+		return err
+	}
+	defer sys.Close()
+
 	creditSvc := credits.New(pgstore.NewCreditStore(pool))
 	host, _ := os.Hostname()
 	deps := jobs.Deps{
+		Pipeline:    sys.Pipeline(),
 		Logger:      log,
 		DB:          pool,
 		Partitioner: jobs.PoolPartitioner(pool),
@@ -91,8 +101,14 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	sys.Jobs.Set(jobargs.RiverEnqueuer{Client: client})
 	if err := client.Start(ctx); err != nil {
 		return fmt.Errorf("iniciar River: %w", err)
+	}
+	if consume, ok, err := sys.ScanConsumer(ctx); err != nil {
+		return err
+	} else if ok {
+		go func() { _ = consume(ctx) }()
 	}
 	log.Info("worker pronto", slog.String("host", host))
 

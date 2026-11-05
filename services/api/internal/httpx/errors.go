@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"net/http"
 
+	contracts "github.com/mmtmn/docmatch/packages/contracts/gen"
+
 	"github.com/mmtmn/docmatch/services/api/internal/logx"
 )
 
@@ -13,31 +15,32 @@ import (
 // pt-BR text shown to people. Details never leave the server: they go to the
 // log line that carries the same request_id.
 const (
-	CodeInvalidJSON      = "json_invalido"
-	CodeValidation       = "dados_invalidos"
-	CodePayloadTooLarge  = "corpo_grande_demais"
-	CodeUnsupportedMedia = "tipo_de_conteudo_invalido"
-	CodeNotFound         = "nao_encontrado"
-	CodeMethodNotAllowed = "metodo_nao_permitido"
-	CodeRateLimited      = "limite_excedido"
-	CodeForbiddenOrigin  = "origem_nao_permitida"
-	CodeUnavailable      = "indisponivel"
-	CodeInternal         = "erro_interno"
+	CodeInvalidJSON      = string(contracts.ErrInvalidJSON)
+	CodeValidation       = string(contracts.ErrValidationFailed)
+	CodePayloadTooLarge  = string(contracts.ErrBodyTooLarge)
+	CodeUnsupportedMedia = string(contracts.ErrUnsupportedMediaType)
+	CodeNotFound         = string(contracts.ErrNotFound)
+	CodeMethodNotAllowed = string(contracts.ErrMethodNotAllowed)
+	CodeRateLimited      = string(contracts.ErrRateLimited)
+	CodeForbiddenOrigin  = string(contracts.ErrForbidden)
+	CodeUnavailable      = string(contracts.ErrServiceUnavailable)
+	CodeInternal         = string(contracts.ErrInternalError)
 )
 
-// Messages are the default pt-BR texts for each code.
-var Messages = map[string]string{
-	CodeInvalidJSON:      "O corpo da requisição não é um JSON válido.",
-	CodeValidation:       "Os dados enviados são inválidos.",
-	CodePayloadTooLarge:  "O corpo da requisição excede o tamanho permitido.",
-	CodeUnsupportedMedia: "O tipo de conteúdo da requisição não é aceito.",
-	CodeNotFound:         "Recurso não encontrado.",
-	CodeMethodNotAllowed: "Método não permitido para este recurso.",
-	CodeRateLimited:      "Muitas requisições. Tente novamente em instantes.",
-	CodeForbiddenOrigin:  "A origem desta requisição não é permitida.",
-	CodeUnavailable:      "Serviço temporariamente indisponível. Tente novamente.",
-	CodeInternal:         "Erro interno. Tente novamente; se persistir, informe o identificador da requisição.",
-}
+// Messages are the pt-BR texts for each code, from the error catalog
+// (packages/contracts/errors.yaml), so the codes and texts clients see are the
+// ones the contract documents.
+var Messages = func() map[string]string {
+	m := map[string]string{}
+	for _, c := range []contracts.ErrorCode{
+		contracts.ErrInvalidJSON, contracts.ErrValidationFailed, contracts.ErrBodyTooLarge,
+		contracts.ErrUnsupportedMediaType, contracts.ErrNotFound, contracts.ErrMethodNotAllowed,
+		contracts.ErrRateLimited, contracts.ErrForbidden, contracts.ErrServiceUnavailable, contracts.ErrInternalError,
+	} {
+		m[string(c)] = c.Message()
+	}
+	return m
+}()
 
 // Envelope is the JSON body of every error response.
 type Envelope struct {

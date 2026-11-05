@@ -115,7 +115,7 @@ func TestExplainBudget(t *testing.T) {
 		{name: "SearchRules", org: tenant, args: []any{org, "iof retido", int32(10)}},
 		{name: "ListRecentlyUsedRules", org: tenant, args: []any{org, int32(20)}},
 		{name: "GetRule", org: tenant, args: []any{org, uuid.New()}},
-		{name: "ClaimOutbox", args: []any{int32(10)}},
+		{name: "ClaimOutbox", args: []any{[]string{"email"}, int32(10)}},
 		{name: "CountUnsentOutbox"},
 		{name: "GetAuditChainTail", org: tenant, args: []any{org}},
 		{name: "ListAuditRange", org: tenant, args: []any{org, int64(10), int64(60)}},
@@ -371,7 +371,7 @@ func seed(t *testing.T, d *testdb.DB) seeded {
 	      FROM (SELECT $1::uuid[] AS o) s, generate_series(1, $3) g`, orgs, seedOrgs, seedAPIKeys, tag)
 	exec(`INSERT INTO stripe_events (id, type, payload) SELECT 'evt_' || $2 || '_' || g, 'invoice.paid', '{}'::jsonb FROM generate_series(1, $1) g`, seedStripe, tag)
 	exec(`INSERT INTO runs (id, org_id, lane, status, created_at)
-	      SELECT uuidv7(), o[1 + (g % $2)], 'app', CASE WHEN g % 50 = 0 THEN 'queued' WHEN g % 51 = 0 THEN 'running' ELSE 'succeeded' END,
+	      SELECT uuidv7(), o[1 + (g % $2)], 'app', CASE WHEN g % 50 = 0 THEN 'queued' WHEN g % 51 = 0 THEN 'running' ELSE 'completed' END,
 	             now() - (g % 80) * interval '1 day'
 	      FROM (SELECT $1::uuid[] AS o) s, generate_series(1, $3) g`, orgs, seedOrgs, seedRuns)
 	exec(`INSERT INTO findings (org_id, run_id, kind, amount_at_risk, title, created_at)

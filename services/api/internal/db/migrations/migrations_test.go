@@ -74,6 +74,8 @@ func TestLoadParsing(t *testing.T) {
 		{"sem up", map[string]string{"0001_a.down.sql": "x"}, "sem script up", 0},
 		{"up vazio", map[string]string{"0001_a.up.sql": "  \n", "0001_a.down.sql": "y"}, "sem script up", 0},
 		{"nomes divergentes", map[string]string{"0001_a.up.sql": "x", "0001_b.down.sql": "y"}, "nomes diferentes", 0},
+		// Numeração por área (0010 auth, 0020 runs...): lacunas são esperadas.
+		{"lacuna entre áreas", map[string]string{"0001_a.up.sql": "x", "0001_a.down.sql": "y", "0020_c.up.sql": "x", "0020_c.down.sql": "y"}, "", 2},
 		{"lacuna por área é permitida", map[string]string{"0001_a.up.sql": "x", "0001_a.down.sql": "y", "0010_c.up.sql": "x", "0010_c.down.sql": "y"}, "", 2},
 	}
 	for _, tc := range cases {

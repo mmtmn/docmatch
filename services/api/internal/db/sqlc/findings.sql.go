@@ -31,7 +31,7 @@ func (q *Queries) CountFindingsByRun(ctx context.Context, arg CountFindingsByRun
 const insertFeedback = `-- name: InsertFeedback :one
 INSERT INTO feedback (org_id, user_id, run_id, finding_id, finding_created_at, verdict, note)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, org_id, user_id, run_id, finding_id, finding_created_at, verdict, note, created_at
+RETURNING id, org_id, user_id, run_id, finding_id, finding_created_at, verdict, note, created_at, reason
 `
 
 type InsertFeedbackParams struct {
@@ -65,6 +65,7 @@ func (q *Queries) InsertFeedback(ctx context.Context, arg InsertFeedbackParams) 
 		&i.Verdict,
 		&i.Note,
 		&i.CreatedAt,
+		&i.Reason,
 	)
 	return i, err
 }
@@ -73,7 +74,7 @@ const insertFinding = `-- name: InsertFinding :one
 
 INSERT INTO findings (org_id, run_id, kind, severity, amount_at_risk, currency, title, explanation, evidence, verified, verification)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-RETURNING id, org_id, run_id, kind, severity, amount_at_risk, currency, title, explanation, evidence, verified, verification, created_at
+RETURNING id, org_id, run_id, kind, severity, amount_at_risk, currency, title, explanation, evidence, verified, verification, created_at, code, confidence, status, rule_id, match_id, source_ids, details, feedback, updated_at
 `
 
 type InsertFindingParams struct {
@@ -120,6 +121,15 @@ func (q *Queries) InsertFinding(ctx context.Context, arg InsertFindingParams) (F
 		&i.Verified,
 		&i.Verification,
 		&i.CreatedAt,
+		&i.Code,
+		&i.Confidence,
+		&i.Status,
+		&i.RuleID,
+		&i.MatchID,
+		&i.SourceIds,
+		&i.Details,
+		&i.Feedback,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -127,7 +137,7 @@ func (q *Queries) InsertFinding(ctx context.Context, arg InsertFindingParams) (F
 const insertMatch = `-- name: InsertMatch :one
 INSERT INTO matches (org_id, run_id, left_ref, right_ref, rule_id, confidence, amount, meta)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, org_id, run_id, left_ref, right_ref, rule_id, confidence, amount, meta, created_at
+RETURNING id, org_id, run_id, left_ref, right_ref, rule_id, confidence, amount, meta, created_at, kind, left_evidence, right_evidence, currency, explanation
 `
 
 type InsertMatchParams struct {
@@ -164,12 +174,17 @@ func (q *Queries) InsertMatch(ctx context.Context, arg InsertMatchParams) (Match
 		&i.Amount,
 		&i.Meta,
 		&i.CreatedAt,
+		&i.Kind,
+		&i.LeftEvidence,
+		&i.RightEvidence,
+		&i.Currency,
+		&i.Explanation,
 	)
 	return i, err
 }
 
 const listFeedbackByFinding = `-- name: ListFeedbackByFinding :many
-SELECT id, org_id, user_id, run_id, finding_id, finding_created_at, verdict, note, created_at FROM feedback WHERE org_id = $1 AND finding_id = $2 ORDER BY created_at
+SELECT id, org_id, user_id, run_id, finding_id, finding_created_at, verdict, note, created_at, reason FROM feedback WHERE org_id = $1 AND finding_id = $2 ORDER BY created_at
 `
 
 type ListFeedbackByFindingParams struct {
@@ -196,6 +211,7 @@ func (q *Queries) ListFeedbackByFinding(ctx context.Context, arg ListFeedbackByF
 			&i.Verdict,
 			&i.Note,
 			&i.CreatedAt,
+			&i.Reason,
 		); err != nil {
 			return nil, err
 		}
@@ -208,7 +224,7 @@ func (q *Queries) ListFeedbackByFinding(ctx context.Context, arg ListFeedbackByF
 }
 
 const listFindingsByRun = `-- name: ListFindingsByRun :many
-SELECT id, org_id, run_id, kind, severity, amount_at_risk, currency, title, explanation, evidence, verified, verification, created_at FROM findings
+SELECT id, org_id, run_id, kind, severity, amount_at_risk, currency, title, explanation, evidence, verified, verification, created_at, code, confidence, status, rule_id, match_id, source_ids, details, feedback, updated_at FROM findings
 WHERE org_id = $1 AND run_id = $2
 ORDER BY amount_at_risk DESC, created_at DESC
 LIMIT $3 OFFSET $4
@@ -249,6 +265,15 @@ func (q *Queries) ListFindingsByRun(ctx context.Context, arg ListFindingsByRunPa
 			&i.Verified,
 			&i.Verification,
 			&i.CreatedAt,
+			&i.Code,
+			&i.Confidence,
+			&i.Status,
+			&i.RuleID,
+			&i.MatchID,
+			&i.SourceIds,
+			&i.Details,
+			&i.Feedback,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -261,7 +286,7 @@ func (q *Queries) ListFindingsByRun(ctx context.Context, arg ListFindingsByRunPa
 }
 
 const listMatchesByRun = `-- name: ListMatchesByRun :many
-SELECT id, org_id, run_id, left_ref, right_ref, rule_id, confidence, amount, meta, created_at FROM matches WHERE org_id = $1 AND run_id = $2 ORDER BY created_at LIMIT $3 OFFSET $4
+SELECT id, org_id, run_id, left_ref, right_ref, rule_id, confidence, amount, meta, created_at, kind, left_evidence, right_evidence, currency, explanation FROM matches WHERE org_id = $1 AND run_id = $2 ORDER BY created_at LIMIT $3 OFFSET $4
 `
 
 type ListMatchesByRunParams struct {
@@ -296,6 +321,11 @@ func (q *Queries) ListMatchesByRun(ctx context.Context, arg ListMatchesByRunPara
 			&i.Amount,
 			&i.Meta,
 			&i.CreatedAt,
+			&i.Kind,
+			&i.LeftEvidence,
+			&i.RightEvidence,
+			&i.Currency,
+			&i.Explanation,
 		); err != nil {
 			return nil, err
 		}
