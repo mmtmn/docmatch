@@ -29,6 +29,7 @@ final class ApiTests: XCTestCase {
     func testAnExpiredAccessWindowIsRefreshedOnceAndTheCallRetried() async throws {
         let server = FakeServer()
         let dm = try newClient(server)
+        try await signedIn(server, dm)
         server.enqueue(401, #"{"code":"session_expired","message":"Sua sessão expirou. Entre de novo."}"#)
         server.enqueue(204, setCookie: [sessionCookie("s1.rotated")])
         server.enqueue(200, #"{"items":[]}"#)
@@ -44,14 +45,14 @@ final class ApiTests: XCTestCase {
         let dm = try newClient(server)
         server.enqueue(402, #"{"code":"insufficient_credits","message":"Saldo insuficiente.","request_id":"r1"}"#)
         do {
-            _ = try await dm.api.estimate(uploadIds: ["upl_1"], rulesText: "")
+            _ = try await dm.api.estimate(uploadIds: ["upl_1"], options: RunOptions())
             XCTFail("esperava erro")
         } catch let e as ApiError {
             XCTAssertEqual(e, ApiError(status: 402, code: "insufficient_credits", message: "Saldo insuficiente.", requestId: "r1"))
         }
         server.enqueue(502, "")
         do {
-            _ = try await dm.api.estimate(uploadIds: ["upl_1"], rulesText: "")
+            _ = try await dm.api.estimate(uploadIds: ["upl_1"], options: RunOptions())
             XCTFail("esperava erro")
         } catch let e as ApiError {
             XCTAssertEqual(e.code, "server")
@@ -129,6 +130,85 @@ final class ApiTests: XCTestCase {
         XCTAssertEqual(announced.value, 0)
     }
 
+    func testCallsInFlightWhenTheAccessWindowClosesRefreshOnceAndKeepTheSession() async throws {
+        let server = FakeServer()
+        let dm = try newClient(server)
+        try await signedIn(server, dm)
+        let refreshes = Locked(0)
+        server.route { req in
+            if req.url?.path == "/v1/auth/refresh" {
+                refreshes.mutate { $0 += 1 }
+                Thread.sleep(forTimeInterval: 0.15)  // the others' 401s arrive while this rotates
+                return FakeServer.Reply(status: 204, body: Data(), headers: ["Set-Cookie": sessionCookie("s1.rotated")])
+            }
+            if (req.value(forHTTPHeaderField: "Cookie") ?? "").contains("s1.rotated") { return fakeReply(200, #"{"items":[]}"#) }
+            return fakeReply(401, #"{"code":"session_expired","message":"Sua sessão expirou. Entre de novo."}"#)
+        }
+        let results = try await withThrowingTaskGroup(of: [Device].self) { group in
+            for _ in 0..<4 { group.addTask { try await dm.api.devices() } }
+            var out: [[Device]] = []
+            for try await r in group { out.append(r) }
+            return out
+        }
+        XCTAssertEqual(results, Array(repeating: [], count: 4))
+        XCTAssertEqual(refreshes.value, 1, "uma renovação só: a segunda com o segredo antigo derrubaria a sessão")
+        XCTAssertEqual(dm.cookies.sessionValue(), "s1.rotated")
+    }
+
+    func testA401ForASessionAnotherCallAlreadyRotatedRetriesInsteadOfSigningOut() async throws {
+        let server = FakeServer()
+        let dm = try newClient(server)
+        try await signedIn(server, dm)
+        let announced = Locked(0)
+        dm.transport.onSessionEnded { _ in announced.mutate { $0 += 1 } }
+        server.route { req in
+            if (req.value(forHTTPHeaderField: "Cookie") ?? "").contains("s1.secret") {
+                // Meanwhile another call refreshed: the old access secret is refused.
+                dm.cookies.save(setCookie: [sessionCookie("s1.rotated")], from: apiBase)
+                return fakeReply(401, unauthenticated)
+            }
+            return fakeReply(200, #"{"items":[]}"#)
+        }
+        let devices = try await dm.api.devices()
+        XCTAssertEqual(devices, [])
+        XCTAssertTrue(dm.cookies.hasSession(), "a sessão nova continua")
+        XCTAssertEqual(announced.value, 0, "nada de sair: outra chamada já renovou")
+    }
+
+    func testARunWaitingForApprovalStopsThePollingAndIsApprovedOnce() async throws {
+        let server = FakeServer()
+        let dm = try newClient(server)
+        server.enqueue(200, #"{"id":"run_9","status":"running"}"#)
+        server.enqueue(200, #"{"id":"run_9","status":"needs_approval","pending_quote":{"id":"quo_2","expected_credits":90,"cap_credits":120,"signature":"v1=ab"}}"#)
+        let parked = try await dm.reconciler.follow("run_9")
+        XCTAssertEqual(parked.status, RunStatus.needsApproval)
+        XCTAssertEqual(parked.pendingQuote?.capCredits, 120)
+        _ = server.take()
+        _ = server.take()
+        server.enqueue(200, #"{"id":"run_9","status":"running"}"#)
+        _ = try await dm.api.approveQuote(runId: "run_9", quote: XCTUnwrap(parked.pendingQuote), idempotencyKey: "key-1")
+        let approve = server.take()
+        XCTAssertEqual(approve.url?.path, "/v1/runs/run_9/approve-quote")
+        XCTAssertEqual(header(approve, "Idempotency-Key"), "key-1")
+        XCTAssertEqual(jsonBody(approve) as? [String: String], ["quote_id": "quo_2", "quote_signature": "v1=ab"])
+    }
+
+    func testConfirmingTheSameEstimateTwiceSendsTheSameKey() async throws {
+        let server = FakeServer()
+        let dm = try newClient(server)
+        let quote = try JSONDecoder().decode(Quote.self, from: Data(#"{"id":"quo_1","expected_credits":40,"cap_credits":50,"signature":"sig"}"#.utf8))
+        let prepared = Prepared(uploadIds: ["upl_1"], quote: quote, options: RunOptions())
+        server.enqueue(504)
+        do {
+            _ = try await dm.reconciler.start(prepared)
+            XCTFail("esperava erro")
+        } catch {}
+        server.enqueue(202, #"{"id":"run_1","status":"queued"}"#)
+        _ = try await dm.reconciler.start(prepared)
+        let first = header(server.take(), "Idempotency-Key")
+        XCTAssertEqual(first, header(server.take(), "Idempotency-Key"), "um orçamento aceito vira uma execução só")
+    }
+
     func testDebugBuildsReachALoopbackUploadURLThroughTheAPIHost() throws {
         let server = FakeServer()
         let local = "http://localhost:8080/v1/uploads/local/upl_1?sig=abc"
@@ -154,7 +234,7 @@ final class ApiTests: XCTestCase {
             from: Data(#"{"id":"upl_1","method":"POST","url":"https://uploads.docmatch.invalid/","fields":{"key":"k/1","success_action_status":"201"}}"#.utf8))
         XCTAssertEqual(ticket.fields["success_action_status"], "201", "campos do S3 chegam como assinados")
         server.enqueue(204)
-        try await dm.api.putObject(ticket, LocalFile(name: "extrato \"julho\".csv", mime: "text/csv", bytes: Data("a;b\n1;2\n".utf8)))
+        try await dm.api.putObject(ticket, LocalFile.of(name: "extrato \"julho\".csv", bytes: Data("a;b\n1;2\n".utf8)))
         let put = server.take()
         XCTAssertEqual(put.httpMethod, "POST")
         XCTAssertNil(header(put, "Cookie"), "link pré-assinado nunca leva cookie")
@@ -170,7 +250,7 @@ final class ApiTests: XCTestCase {
             UploadTicket.self,
             from: Data(#"{"id":"upl_2","method":"PUT","url":"https://uploads.docmatch.invalid/m","headers":{"x-amz-checksum-sha256":"abc"}}"#.utf8))
         server.enqueue(200)
-        try await dm.api.putObject(media, LocalFile(name: "a.pdf", mime: "application/pdf", bytes: Data([1, 2, 3])))
+        try await dm.api.putObject(media, LocalFile(name: "nota.mp3", mime: "audio/mpeg", size: 3, kind: .audio, source: .data(Data([1, 2, 3]))))
         let raw = server.take()
         XCTAssertEqual(raw.httpMethod, "PUT")
         XCTAssertEqual(header(raw, "x-amz-checksum-sha256"), "abc")
@@ -181,17 +261,17 @@ final class ApiTests: XCTestCase {
         let server = FakeServer()
         let dm = try newClient(server)
         server.enqueue(200, #"{"id":"qte_1","expected_credits":120,"cap_credits":180,"signature":"sig"}"#)
-        let quote = try await dm.api.estimate(uploadIds: ["upl_1", "upl_2"], rulesText: "  só julho  ")
+        let quote = try await dm.api.estimate(uploadIds: ["upl_1", "upl_2"], options: RunOptions(rulesText: "  só julho  ", webSearch: true))
         let estimate = jsonBody(server.take())
         XCTAssertEqual((estimate["sources"] as? [[String: String]])?.compactMap { $0["upload_id"] }, ["upl_1", "upl_2"])
         XCTAssertEqual(estimate["rules_text"] as? String, "só julho")
-        XCTAssertEqual((estimate["options"] as? [String: Bool])?["use_rules"], true)
+        XCTAssertEqual(estimate["options"] as? [String: Bool], ["use_rules": true, "web_search": true])
 
         server.enqueue(202, #"{"id":"run_1","status":"queued"}"#)
-        let run = try await dm.api.createRun(quote, uploadIds: ["upl_1"], rulesText: "")
+        let run = try await dm.api.createRun(quote, uploadIds: ["upl_1"], options: RunOptions(), idempotencyKey: "key-1")
         XCTAssertEqual(run.id, "run_1")
         let create = server.take()
-        XCTAssertNotNil(header(create, "Idempotency-Key"))
+        XCTAssertEqual(header(create, "Idempotency-Key"), "key-1")
         XCTAssertEqual(jsonBody(create)["quote_id"] as? String, "qte_1")
         XCTAssertEqual(jsonBody(create)["quote_signature"] as? String, "sig")
         XCTAssertNil(jsonBody(create)["rules_text"])

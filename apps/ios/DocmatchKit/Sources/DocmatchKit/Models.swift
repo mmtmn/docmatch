@@ -238,6 +238,22 @@ public enum RunStatus {
     public static let cancelled = "cancelled"
 
     public static func terminal(_ status: String) -> Bool { status == completed || status == failed || status == cancelled }
+
+    /// Nothing changes without the user: finished, or parked until the extra estimate is approved.
+    public static func settled(_ status: String) -> Bool { terminal(status) || status == needsApproval }
+}
+
+/// The run options of the form, the same as the site's (rules text, "Usar regras", web search).
+public struct RunOptions: Sendable, Equatable {
+    public var rulesText: String
+    public var useRules: Bool
+    public var webSearch: Bool
+
+    public init(rulesText: String = "", useRules: Bool = true, webSearch: Bool = false) {
+        self.rulesText = rulesText
+        self.useRules = useRules
+        self.webSearch = webSearch
+    }
 }
 
 public struct RunProgress: Decodable, Sendable, Equatable {
@@ -294,6 +310,8 @@ public struct Run: Decodable, Sendable, Equatable, Identifiable {
     public let progress: RunProgress?
     public let summary: RunSummary?
     public let error: RunError?
+    /// The extra estimate a run parked at needs_approval waits for (POST /runs/{id}/approve-quote).
+    public let pendingQuote: Quote?
     public let createdAt: String?
     public let finishedAt: String?
 
@@ -305,12 +323,14 @@ public struct Run: Decodable, Sendable, Equatable, Identifiable {
         progress = try c.decodeIfPresent(RunProgress.self, forKey: .progress)
         summary = try c.decodeIfPresent(RunSummary.self, forKey: .summary)
         error = try c.decodeIfPresent(RunError.self, forKey: .error)
+        pendingQuote = try c.decodeIfPresent(Quote.self, forKey: .pendingQuote)
         createdAt = try c.decodeIfPresent(String.self, forKey: .createdAt)
         finishedAt = try c.decodeIfPresent(String.self, forKey: .finishedAt)
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, status, sources, progress, summary, error
+        case pendingQuote = "pending_quote"
         case createdAt = "created_at"
         case finishedAt = "finished_at"
     }

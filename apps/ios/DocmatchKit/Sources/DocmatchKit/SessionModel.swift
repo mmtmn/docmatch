@@ -31,9 +31,12 @@ public enum SessionState: Sendable, Equatable {
 public final class SessionModel {
     public private(set) var state: SessionState = .loading
     @ObservationIgnored public let dm: Docmatch
+    @ObservationIgnored private let cleanup: @Sendable () -> Void
 
-    public init(dm: Docmatch) {
+    /// `cleanup` removes what a session leaves on the device (exported reports) when it ends.
+    public init(dm: Docmatch, cleanup: @escaping @Sendable () -> Void = { RunModel.clearExports() }) {
         self.dm = dm
+        self.cleanup = cleanup
         // Revoked from another device's account page (or ended on the server): back to sign-in
         // with the API's own message, wherever the user was.
         dm.transport.onSessionEnded { [weak self] e in
@@ -48,6 +51,7 @@ public final class SessionModel {
 
     /// After a sign-out (here or from another device): back to the sign-in, with a notice.
     public func signedOut(notice: String?) async {
+        cleanup()
         state = .signedOut(SignedOut(methods: await dm.api.methods(), error: notice))
     }
 
@@ -92,8 +96,8 @@ public final class SessionModel {
         }
     }
 
-    /// A sign-in that failed before reaching the API (the user closed Apple's sheet...).
-    public func failed(_ message: String) {
+    /// A sign-in that ended before reaching the API (nil: the user closed the sheet).
+    public func failed(_ message: String?) {
         guard case .signedOut(var current) = state else { return }
         current.busy = false
         current.error = message
@@ -101,6 +105,7 @@ public final class SessionModel {
     }
 
     func ended(_ e: ApiError) async {
+        cleanup()
         guard case .signedIn = state else { return }
         state = .signedOut(SignedOut(methods: await dm.api.methods(), error: e.message))
     }

@@ -8,7 +8,10 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(texts.t("mobile.run_findings", ["count": 1234]), "1.234 achado(s)")
         XCTAssertEqual(texts.t("chave.que.nao.existe"), "chave.que.nao.existe")
         XCTAssertTrue(texts.has("auth.dev_sign_in"))
-        XCTAssertEqual(texts.t("mobile.files_selected", ["count": 2, "size": "1,5 KB"]), "2 arquivo(s) · 1,5 KB")
+        XCTAssertEqual(Labels.files(texts, count: 2, bytes: 1_536), "2 arquivos · 1,5 KB no total")
+        XCTAssertEqual(Labels.counter(texts, count: 10, max: 100), nil, "o contador aparece a partir de 80%")
+        XCTAssertEqual(Labels.counter(texts, count: 80, max: 100), "80 de 100 caracteres")
+        XCTAssertEqual(Labels.counter(texts, count: 100, max: 100), "Limite de 100 caracteres atingido.")
         // An unknown placeholder stays as it is.
         XCTAssertEqual(Texts.render("x"), "x")
     }
@@ -20,21 +23,57 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(Format.date("não é data"), "")
         XCTAssertEqual(Format.dateTime("2026-11-05T08:16:55Z", zone: TimeZone(secondsFromGMT: -3 * 3600)!), "05/11/2026 05:16")
         XCTAssertEqual(Format.dateTime("2026-11-05T08:16:55.123Z", zone: TimeZone(secondsFromGMT: 0)!), "05/11/2026 08:16")
-        XCTAssertEqual(Format.size(512), "512 B")
-        XCTAssertEqual(Format.size(5_430), "5,3 KB")
-        XCTAssertEqual(Format.size(1_258_291), "1,2 MB")
+        let texts = try! realTexts()
+        XCTAssertEqual(Format.size(texts, 512), "512 B")
+        XCTAssertEqual(Format.size(texts, 5_430), "5,3 KB")
+        XCTAssertEqual(Format.size(texts, 1_258_291), "1,2 MB")
+        XCTAssertEqual(Format.size(texts, 12_900_000), "12 MB", "acima de 10, sem casa decimal, como o site")
     }
 
-    func testFileTypesRefuseWhatTheSiteRefuses() throws {
+    /// testdata/precheck/cases.json: the verdicts the site and Android give too.
+    func testTheSharedCasesGetTheSitesVerdictAndMIME() throws {
+        var root = URL(fileURLWithPath: #filePath)
+        for _ in 0..<6 { root.deleteLastPathComponent() }
+        let data = try Data(contentsOf: root.appendingPathComponent("testdata/precheck/cases.json"))
+        let cases = try XCTUnwrap((try JSONSerialization.jsonObject(with: data) as? [String: Any])?["cases"] as? [[String: String]])
+        XCTAssertGreaterThanOrEqual(cases.count, 20)
+        for c in cases {
+            let name = c["name"]!
+            let hex = Array(c["hex"]!)
+            let head = Data(stride(from: 0, to: hex.count, by: 2).map { UInt8(String(hex[$0..<$0 + 2]), radix: 16)! })
+            let (kind, refusal) = Precheck.classify(name, head)
+            XCTAssertEqual(kind?.rawValue, c["kind"], name)
+            XCTAssertEqual(refusal?.key, c["reason"], name)
+            if let kind { XCTAssertEqual(Precheck.mime(kind, name), c["mime"], name) }
+        }
+    }
+
+    func testThePickersFilesAreCheckedInTheSitesOrderWithItsMessages() throws {
         let texts = try realTexts()
-        XCTAssertEqual(FileTypes.mime(for: "Extrato.CSV"), "text/csv")
-        XCTAssertNil(FileTypes.mime(for: "foto.heic"))
-        XCTAssertNil(FileTypes.mime(for: "sem-extensao"))
-        XCTAssertEqual(FileTypes.problem(texts, name: "foto.heic", size: 10), texts.t("errors.file_type_unknown", ["name": "foto.heic"]))
-        XCTAssertEqual(FileTypes.problem(texts, name: "a.csv", size: 0), texts.t("errors.file_empty", ["name": "a.csv"]))
-        XCTAssertNotNil(FileTypes.problem(texts, name: "a.csv", size: FileTypes.maxDocumentBytes + 1))
-        XCTAssertNotNil(FileTypes.problem(texts, name: String(repeating: "á", count: 128) + ".csv", size: 10), "nome acima dos bytes do limite")
-        XCTAssertNil(FileTypes.problem(texts, name: "a.csv", size: 10))
+        let csv = Data("a;b\n1;2\n".utf8)
+        let existing = [try LocalFile.of(name: "ja.csv", bytes: Data("a;b\n".utf8))]
+        func candidate(_ name: String, _ size: Int64, _ head: Data = csv) -> Candidate { Candidate(name: name, size: size) { head } }
+        let (accepted, problems) = Precheck.check(
+            texts,
+            [
+                candidate("ok.csv", 10), candidate("vazio.csv", 0), candidate("ja.csv", 4),
+                Candidate(name: "ilegivel.csv", size: 10) { throw CocoaError(.fileReadUnknown) },
+                candidate("foto.png", 8, Data([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
+                candidate("grande.csv", Precheck.documentFileBytes + 1), candidate("ok.csv", 11),
+            ],
+            existing: existing)
+        XCTAssertEqual(accepted.map(\.name), ["ok.csv", "ok.csv"], "mesmo nome e outro tamanho é outro arquivo")
+        XCTAssertEqual(
+            problems,
+            [
+                texts.t("errors.file_empty", ["name": "vazio.csv"]), texts.t("errors.file_duplicate", ["name": "ja.csv"]),
+                texts.t("errors.read_failed", ["name": "ilegivel.csv"]), texts.t("mobile.image_unsupported", ["name": "foto.png"]),
+                texts.t("errors.file_too_large", ["name": "grande.csv", "max": "50 MB"]),
+            ])
+        let many = (1...(Limits.IDs.filesPerRunHardMax + 1)).map { candidate("f\($0).csv", 10) }
+        let (some, refusals) = Precheck.check(texts, many, existing: [])
+        XCTAssertEqual(some.count, Limits.IDs.filesPerRunHardMax)
+        XCTAssertEqual(refusals, [texts.t("errors.too_many_files", ["max": Limits.IDs.filesPerRunHardMax])])
     }
 
     func testCookiesPersistExpireAndStayOnTheirPath() {
@@ -96,5 +135,6 @@ final class CoreTests: XCTestCase {
 
     func testTheUserAgentNamesTheDevice() {
         XCTAssertEqual(Docmatch.iosUserAgent(version: "1.2.0", model: "iPad(13;1)", system: "18.1"), "docmatch-ios/1.2.0 (iPad 13 1; iOS 18.1)")
+        XCTAssertEqual(Docmatch.iosUserAgent(version: "1.2.0", model: "iPhone de Zé", system: "18.1"), "docmatch-ios/1.2.0 (iPhone de Z; iOS 18.1)", "só ASCII imprimível no cabeçalho")
     }
 }

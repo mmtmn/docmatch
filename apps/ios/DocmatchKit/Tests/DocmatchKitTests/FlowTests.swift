@@ -60,10 +60,11 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(me.user.email, "dev@docmatch.test")
 
         let newRun = NewRunModel(dm: dm)
+        let csv = Data("a;b\n1;2\n".utf8)
         await newRun.add([
-            PickedFile(name: "01_contas.csv", size: 8) { Data("a;b\n1;2\n".utf8) },
-            PickedFile(name: "foto.heic", size: 8) { Data() },
-            PickedFile(name: "01_contas.csv", size: 8) { Data("a;b\n1;2\n".utf8) },
+            PickedFile(name: "01_contas.csv", size: 8, source: .data(csv)) { csv },
+            PickedFile(name: "foto.heic", size: 8, source: .data(Data())) { Data() },
+            PickedFile(name: "01_contas.csv", size: 8, source: .data(csv)) { csv },
         ])
         XCTAssertEqual(newRun.files.map(\.name), ["01_contas.csv"])
         let texts = try realTexts()
@@ -71,18 +72,18 @@ final class FlowTests: XCTestCase {
             newRun.error,
             [texts.t("errors.file_type_unknown", ["name": "foto.heic"]), texts.t("errors.file_duplicate", ["name": "01_contas.csv"])].joined(separator: "\n"))
         newRun.setRules(String(repeating: "x", count: Limits.Text.rulesText + 10))
-        XCTAssertEqual(newRun.rules.unicodeScalars.count, Limits.Text.rulesText)
+        XCTAssertEqual(newRun.options.rulesText.unicodeScalars.count, Limits.Text.rulesText)
 
         await newRun.submit()
         guard case .confirm(let prepared) = newRun.phase else { return XCTFail("esperava a confirmação: \(newRun.phase)") }
         XCTAssertEqual(prepared.quote.expectedCredits, 120)
-        let runId = await newRun.confirm()
-        XCTAssertEqual(runId, "run_1")
+        await newRun.confirm()
+        XCTAssertEqual(newRun.started, "run_1")
         XCTAssertTrue(newRun.files.isEmpty)
         XCTAssertEqual(newRun.phase, .idle)
 
         let run = RunModel(dm: dm, runId: "run_1")
-        await run.load()
+        await run.follow()
         guard case .done(_, let findings) = run.state else { return XCTFail("esperava os achados: \(run.state)") }
         XCTAssertEqual(findings.map(\.id), ["fnd_big", "fnd_small"], "por valor em risco")
         await run.decide(findings[0], Decision.confirmed)
@@ -174,7 +175,7 @@ final class FlowTests: XCTestCase {
         await history.refresh()
         server.enqueue(200, #"{"items":[{"id":"run_1","status":"failed"},{"id":"run_0","status":"cancelled"}]}"#)
         await history.more()
-        guard case .ready(let runs, let next) = history.state else { return XCTFail() }
+        guard case .ready(let runs, let next, _) = history.state else { return XCTFail() }
         XCTAssertEqual(runs.map(\.id), ["run_2", "run_1", "run_0"])
         XCTAssertNil(next)
         let texts = try realTexts()
@@ -188,11 +189,27 @@ final class FlowTests: XCTestCase {
         server.enqueue(204)
         server.enqueue(200, #"{"id":"upl_1","status":"rejected","rejected_reason":"macro"}"#)
         do {
-            _ = try await dm.reconciler.upload(LocalFile(name: "a.xlsm", mime: "application/vnd.ms-excel.sheet.macroEnabled.12", bytes: Data([1])))
+            _ = try await dm.reconciler.upload(
+                LocalFile(name: "a.xlsm", mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", size: 1, kind: .xlsx, source: .data(Data([1]))))
             XCTFail("esperava recusa")
         } catch let e as ApiError {
             XCTAssertEqual(e.code, ApiError.uploadRejected)
             XCTAssertEqual(e.message, try realTexts().t("app.rejected", ["name": "a.xlsm", "reason": "macro"]))
         }
+    }
+
+    @MainActor
+    func testAParkedRunShowsTheExtraEstimateAndResumesOnceApproved() async throws {
+        let server = FakeServer()
+        let dm = try newClient(server)
+        server.enqueue(200, #"{"id":"run_9","status":"needs_approval","pending_quote":{"id":"quo_2","expected_credits":90,"cap_credits":120,"signature":"v1=ab"}}"#)
+        let run = RunModel(dm: dm, runId: "run_9")
+        await run.follow()
+        guard case .needsApproval(let parked, false) = run.state else { return XCTFail("\(run.state)") }
+        XCTAssertEqual(parked.pendingQuote?.expectedCredits, 90)
+        server.enqueue(200, #"{"id":"run_9","status":"running"}"#)
+        await run.approve()
+        XCTAssertEqual(run.state, .running(nil))
+        XCTAssertEqual(run.attempt, 1, "a tela volta a acompanhar")
     }
 }

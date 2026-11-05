@@ -33,16 +33,22 @@ public enum Format {
         return formatter("dd/MM/yyyy", utc).string(from: day)
     }
 
-    /// Bytes as "512 B", "5,3 KB" or "1,2 MB".
-    public static func size(_ bytes: Int64) -> String {
-        let f = NumberFormatter()
-        f.locale = ptBR
-        f.numberStyle = .decimal
-        f.maximumFractionDigits = 1
-        f.minimumFractionDigits = 0
-        if bytes < 1024 { return "\(bytes) B" }
-        if bytes < 1024 * 1024 { return "\(f.string(from: NSNumber(value: Double(bytes) / 1024)) ?? "") KB" }
-        return "\(f.string(from: NSNumber(value: Double(bytes) / (1024 * 1024))) ?? "") MB"
+    /// Bytes the site's way (apps/web/src/lib/format.ts): binary units, one decimal under 10.
+    public static func size(_ texts: Texts, _ bytes: Int64) -> String {
+        func scaled(_ v: Double) -> String {
+            let f = NumberFormatter()
+            f.locale = ptBR
+            f.numberStyle = .decimal
+            f.minimumFractionDigits = 0
+            f.maximumFractionDigits = v < 10 ? 1 : 0
+            return f.string(from: NSNumber(value: v)) ?? "\(v)"
+        }
+        let kb = 1024.0, mb = kb * 1024, gb = mb * 1024
+        let b = Double(bytes)
+        if b >= gb { return texts.t("files.size_gb", ["n": scaled(b / gb)]) }
+        if b >= mb { return texts.t("files.size_mb", ["n": scaled(b / mb)]) }
+        if b >= kb { return texts.t("files.size_kb", ["n": scaled(b / kb)]) }
+        return texts.t("files.size_bytes", ["n": integer(bytes)])
     }
 
     static func parseTimestamp(_ s: String) -> Date? {

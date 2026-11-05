@@ -96,10 +96,13 @@ public final class CookieJar: @unchecked Sendable {
     }
 
     /// Whether a session cookie is held (the account may still have revoked it server-side).
-    public func hasSession() -> Bool {
+    public func hasSession() -> Bool { sessionValue() != nil }
+
+    /// The session cookie's value, which changes on every refresh; nil without a session.
+    public func sessionValue() -> String? {
         lock.withLock {
             let t = CookieJar.millis(now())
-            return cookies.contains { $0.name == CookieJar.sessionCookie && $0.expiresAt > t }
+            return cookies.first { $0.name == CookieJar.sessionCookie && $0.expiresAt > t }?.value
         }
     }
 

@@ -5,16 +5,52 @@ import Foundation
 import FoundationNetworking
 #endif
 
-/// A file picked on the phone, read into memory (documents are capped at tens of MB).
+/// A file picked on the phone. Only its name, size and kind are kept; the bytes are read while
+/// uploading, one file at a time, and media is streamed from disk.
 public struct LocalFile: Sendable, Equatable {
+    public enum Source: Sendable, Equatable {
+        case data(Data)
+        /// A file the picker returned; `scoped` asks for security-scoped access around each read.
+        case file(URL, scoped: Bool)
+    }
+
     public let name: String
     public let mime: String
-    public let bytes: Data
+    public let size: Int64
+    public let kind: FileKind
+    public let source: Source
 
-    public init(name: String, mime: String, bytes: Data) {
+    public init(name: String, mime: String, size: Int64, kind: FileKind, source: Source) {
         self.name = name
         self.mime = mime
-        self.bytes = bytes
+        self.size = size
+        self.kind = kind
+        self.source = source
+    }
+
+    /// A file from bytes in memory (tests, pasted text), classified like a picked one.
+    public static func of(name: String, bytes: Data) throws -> LocalFile {
+        let (kind, refusal) = Precheck.classify(name, bytes.prefix(Precheck.headBytes))
+        guard let kind, let mime = Precheck.mime(kind, name) else {
+            throw ApiError(status: 0, code: ApiError.uploadRejected, message: refusal?.key ?? "image")
+        }
+        return LocalFile(name: name, mime: mime, size: Int64(bytes.count), kind: kind, source: .data(bytes))
+    }
+
+    /// Every byte (documents only: they are capped at tens of MB).
+    public func readAll() throws -> Data {
+        switch source {
+        case .data(let d): return d
+        case .file(let url, let scoped): return try LocalFile.withAccess(url, scoped) { try Data(contentsOf: url, options: .mappedIfSafe) }
+        }
+    }
+
+    static func withAccess<T>(_ url: URL, _ scoped: Bool, _ body: () throws -> T) rethrows -> T {
+        #if os(iOS) || os(macOS)
+        let granted = scoped && url.startAccessingSecurityScopedResource()
+        defer { if granted { url.stopAccessingSecurityScopedResource() } }
+        #endif
+        return try body()
     }
 }
 
@@ -95,31 +131,51 @@ public final class DocmatchAPI: Sendable {
 
     // MARK: - uploads
 
-    public func createUpload(_ file: LocalFile, sha256: String) async throws -> UploadTicket {
-        try await http.call(
-            "POST", "/v1/uploads",
-            body: [
-                "kind": .string("document"), "file_name": .string(file.name), "size_bytes": .int(Int64(file.bytes.count)),
-                "mime": .string(file.mime), "sha256": .string(sha256),
-            ],
-            as: UploadTicket.self)
+    /// A document (with its SHA-256) or media (audio, video: a PUT, no hash) upload ticket.
+    public func createUpload(_ file: LocalFile, sha256: String?) async throws -> UploadTicket {
+        var body: [String: JSONValue] = [
+            "kind": .string(file.kind.media ? "media" : "document"), "file_name": .string(file.name), "size_bytes": .int(file.size),
+            "mime": .string(file.mime),
+        ]
+        if let sha256 { body["sha256"] = .string(sha256) }
+        return try await http.call("POST", "/v1/uploads", body: body, as: UploadTicket.self)
     }
 
-    /// Sends the bytes to the presigned ticket (S3 in production, the API's local folder in dev).
+    /// Sends the file to the presigned ticket (S3 in production, the API's local folder in dev):
+    /// a form for documents, a PUT streamed from disk for media.
     public func putObject(_ ticket: UploadTicket, _ file: LocalFile) async throws {
         var req = URLRequest(url: try http.presignedURL(ticket.url))
         if ticket.method.caseInsensitiveCompare("POST") == .orderedSame {
             let boundary = "docmatch-\(UUID().uuidString.lowercased())"
             req.httpMethod = "POST"
             req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-            req.httpBody = Self.multipart(fields: ticket.fields, file: file, boundary: boundary)
-        } else {
-            req.httpMethod = "PUT"
-            req.setValue(file.mime, forHTTPHeaderField: "Content-Type")
-            for (k, v) in ticket.headers { req.setValue(v, forHTTPHeaderField: k) }
-            req.httpBody = file.bytes
+            req.httpBody = Self.multipart(fields: ticket.fields, file: file, bytes: try read(file), boundary: boundary)
+            try await http.sendPresigned(req)
+            return
         }
-        try await http.sendPresigned(req)
+        req.httpMethod = "PUT"
+        req.setValue(file.mime, forHTTPHeaderField: "Content-Type")
+        for (k, v) in ticket.headers { req.setValue(v, forHTTPHeaderField: k) }
+        switch file.source {
+        case .data(let bytes):
+            req.httpBody = bytes
+            try await http.sendPresigned(req)
+        case .file(let url, let scoped):
+            #if os(iOS) || os(macOS)
+            let granted = scoped && url.startAccessingSecurityScopedResource()
+            defer { if granted { url.stopAccessingSecurityScopedResource() } }
+            #endif
+            try await http.sendPresigned(req, file: url)
+        }
+    }
+
+    /// The bytes of a document, or the site's "could not read" message.
+    func read(_ file: LocalFile) throws -> Data {
+        do {
+            return try file.readAll()
+        } catch {
+            throw ApiError(status: 0, code: ApiError.uploadFailed, message: http.message("errors.read_failed", ["name": file.name]))
+        }
     }
 
     public func completeUpload(_ id: String, sha256: String?) async throws -> Upload {
@@ -130,15 +186,24 @@ public final class DocmatchAPI: Sendable {
 
     // MARK: - runs
 
-    public func estimate(uploadIds: [String], rulesText: String) async throws -> Quote {
-        try await http.call("POST", "/v1/runs/estimate", body: Self.runBody(uploadIds, rulesText), as: Quote.self)
+    public func estimate(uploadIds: [String], options: RunOptions) async throws -> Quote {
+        try await http.call("POST", "/v1/runs/estimate", body: Self.runBody(uploadIds, options), as: Quote.self)
     }
 
-    public func createRun(_ quote: Quote, uploadIds: [String], rulesText: String) async throws -> Run {
-        var body = Self.runBody(uploadIds, rulesText)
+    /// Starts the run of an accepted estimate; the same key on a retry never starts a second run.
+    public func createRun(_ quote: Quote, uploadIds: [String], options: RunOptions, idempotencyKey: String) async throws -> Run {
+        var body = Self.runBody(uploadIds, options)
         body["quote_id"] = .string(quote.id)
         body["quote_signature"] = .string(quote.signature)
-        return try await http.call("POST", "/v1/runs", body: body, as: Run.self, idempotent: true)
+        return try await http.call("POST", "/v1/runs", body: body, as: Run.self, idempotencyKey: idempotencyKey)
+    }
+
+    /// Approves the extra estimate of a run parked at needs_approval; it resumes from its checkpoint.
+    public func approveQuote(runId: String, quote: Quote, idempotencyKey: String) async throws -> Run {
+        try await http.call(
+            "POST", "/v1/runs/\(Self.segment(runId))/approve-quote",
+            body: ["quote_id": .string(quote.id), "quote_signature": .string(quote.signature)], as: Run.self,
+            idempotencyKey: idempotencyKey)
     }
 
     public func run(_ id: String) async throws -> Run {
@@ -159,7 +224,7 @@ public final class DocmatchAPI: Sendable {
             var query = [("limit", "100")]
             if let cursor { query.append(("cursor", cursor)) }
             let page = try await http.call("GET", "/v1/runs/\(Self.segment(runId))/findings", as: FindingList.self, query: query)
-            out += page.items
+            out += page.items.filter { f in !out.contains { $0.id == f.id } }
             guard let next = page.nextCursor, !next.isEmpty else { return out }
             cursor = next
         }
@@ -174,19 +239,19 @@ public final class DocmatchAPI: Sendable {
             "POST", "/v1/runs/\(Self.segment(runId))/findings/\(Self.segment(findingId))/feedback", body: body, idempotent: true)
     }
 
-    /// The run's report as XLSX or PDF bytes.
+    /// The run's report as XLSX or CSV bytes (the formats the API exports).
     public func export(runId: String, format: String) async throws -> Data {
         try await http.bytes("/v1/runs/\(Self.segment(runId))/export", query: [("format", format)])
     }
 
     // MARK: - helpers
 
-    static func runBody(_ uploadIds: [String], _ rulesText: String) -> [String: JSONValue] {
+    static func runBody(_ uploadIds: [String], _ options: RunOptions) -> [String: JSONValue] {
         var body: [String: JSONValue] = [
             "sources": .array(uploadIds.map { .object(["upload_id": .string($0)]) }),
-            "options": .object(["use_rules": .bool(true)]),
+            "options": .object(["use_rules": .bool(options.useRules), "web_search": .bool(options.webSearch)]),
         ]
-        let rules = rulesText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let rules = options.rulesText.trimmingCharacters(in: .whitespacesAndNewlines)
         if !rules.isEmpty { body["rules_text"] = .string(rules) }
         return body
     }
@@ -199,7 +264,7 @@ public final class DocmatchAPI: Sendable {
     }
 
     /// A multipart form with the policy fields first and the file last (S3 ignores what follows it).
-    static func multipart(fields: [String: String], file: LocalFile, boundary: String) -> Data {
+    static func multipart(fields: [String: String], file: LocalFile, bytes: Data, boundary: String) -> Data {
         var body = Data()
         func line(_ s: String) { body.append(Data((s + "\r\n").utf8)) }
         for (k, v) in fields.sorted(by: { $0.key < $1.key }) {
@@ -212,7 +277,7 @@ public final class DocmatchAPI: Sendable {
         line("Content-Disposition: form-data; name=\"file\"; filename=\"\(quoted(file.name))\"")
         line("Content-Type: \(file.mime)")
         line("")
-        body.append(file.bytes)
+        body.append(bytes)
         line("")
         line("--\(boundary)--")
         return body

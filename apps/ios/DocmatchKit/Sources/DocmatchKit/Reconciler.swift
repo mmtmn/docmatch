@@ -14,11 +14,20 @@ public enum Step: Sendable, Equatable {
     case running(message: String?)
 }
 
-/// Uploads ready to run, and the signed estimate the user has to accept.
+/// Uploads ready to run and the signed estimate the user has to accept. The idempotency key is
+/// this estimate's: confirming again after a lost answer finds the run already started.
 public struct Prepared: Sendable, Equatable {
     public let uploadIds: [String]
     public let quote: Quote
-    public let rulesText: String
+    public let options: RunOptions
+    public let idempotencyKey: String
+
+    public init(uploadIds: [String], quote: Quote, options: RunOptions, idempotencyKey: String = UUID().uuidString.lowercased()) {
+        self.uploadIds = uploadIds
+        self.quote = quote
+        self.options = options
+        self.idempotencyKey = idempotencyKey
+    }
 }
 
 public final class Reconciler: Sendable {
@@ -40,7 +49,7 @@ public final class Reconciler: Sendable {
     }
 
     /// Uploads every file (waiting for the scan) and returns the estimate to confirm.
-    public func prepare(_ files: [LocalFile], rulesText: String, onStep: @Sendable (Step) -> Void = { _ in }) async throws -> Prepared {
+    public func prepare(_ files: [LocalFile], options: RunOptions, onStep: @Sendable (Step) -> Void = { _ in }) async throws -> Prepared {
         precondition(!files.isEmpty, "nenhum arquivo")
         var ids: [String] = []
         for (i, file) in files.enumerated() {
@@ -48,20 +57,20 @@ public final class Reconciler: Sendable {
             ids.append(try await upload(file, onStep: onStep).id)
         }
         onStep(.estimating)
-        return Prepared(uploadIds: ids, quote: try await api.estimate(uploadIds: ids, rulesText: rulesText), rulesText: rulesText)
+        return Prepared(uploadIds: ids, quote: try await api.estimate(uploadIds: ids, options: options), options: options)
     }
 
     /// Starts the run the user accepted.
     public func start(_ prepared: Prepared, onStep: @Sendable (Step) -> Void = { _ in }) async throws -> Run {
         onStep(.starting)
-        return try await api.createRun(prepared.quote, uploadIds: prepared.uploadIds, rulesText: prepared.rulesText)
+        return try await api.createRun(prepared.quote, uploadIds: prepared.uploadIds, options: prepared.options, idempotencyKey: prepared.idempotencyKey)
     }
 
-    /// Polls the run until it finishes; failed and cancelled runs come back as they are.
+    /// Polls the run until it settles: finished (as it is) or waiting for an approval.
     public func follow(_ runId: String, onStep: @Sendable (Step) -> Void = { _ in }) async throws -> Run {
         while true {
             let run = try await api.run(runId)
-            if RunStatus.terminal(run.status) { return run }
+            if RunStatus.settled(run.status) { return run }
             onStep(.running(message: run.progress?.message))
             try await sleep(pollNanos * 2)
         }
@@ -69,7 +78,7 @@ public final class Reconciler: Sendable {
 
     /// One file: ticket, bytes to the presigned URL, then the scanner's verdict.
     public func upload(_ file: LocalFile, onStep: @Sendable (Step) -> Void = { _ in }) async throws -> Upload {
-        let sha = Reconciler.sha256Hex(file.bytes)
+        let sha = file.kind.media ? nil : Reconciler.sha256Hex(try api.read(file))
         let ticket = try await api.createUpload(file, sha256: sha)
         try await api.putObject(ticket, file)
         var view = try await api.completeUpload(ticket.id, sha256: sha)

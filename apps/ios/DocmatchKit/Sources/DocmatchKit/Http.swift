@@ -51,6 +51,16 @@ public enum JSONValue: Encodable, Sendable, Equatable {
 /// One request, one answer: URLSession in the app, a fake in the tests.
 public protocol HTTPClient: Sendable {
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse)
+    /// The request with a file as its body, streamed from disk (media can be gigabytes).
+    func upload(_ request: URLRequest, fromFile file: URL) async throws -> (Data, HTTPURLResponse)
+}
+
+extension HTTPClient {
+    public func upload(_ request: URLRequest, fromFile file: URL) async throws -> (Data, HTTPURLResponse) {
+        var req = request
+        req.httpBody = try Data(contentsOf: file, options: .mappedIfSafe)
+        return try await send(req)
+    }
 }
 
 /// URLSession without its own cookie storage or cache: the jar decides what is sent.
@@ -73,6 +83,35 @@ public final class URLSessionClient: HTTPClient, @unchecked Sendable {
         guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         return (data, http)
     }
+
+    public func upload(_ request: URLRequest, fromFile file: URL) async throws -> (Data, HTTPURLResponse) {
+        let (data, response) = try await session.upload(for: request, fromFile: file)
+        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        return (data, http)
+    }
+}
+
+/// An async lock: one refresh at a time, the others wait for it (an actor alone would let them
+/// interleave at every await).
+actor AsyncLock {
+    private var locked = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func lock() async {
+        if !locked {
+            locked = true
+            return
+        }
+        await withCheckedContinuation { waiters.append($0) }
+    }
+
+    func unlock() {
+        if waiters.isEmpty {
+            locked = false
+        } else {
+            waiters.removeFirst().resume()
+        }
+    }
 }
 
 /// Builds requests against one API origin with one cookie jar. `aliasLoopback` is for debug builds
@@ -90,6 +129,8 @@ public final class Transport: Sendable {
     private let presigned: any HTTPClient
     private let aliasLoopback: Bool
     private let handlers = Locked<[@Sendable (ApiError) -> Void]>([])
+    private let refreshing = AsyncLock()
+    private let lastEnded = Locked<String?>(nil)
 
     public init(
         base: URL, cookies: CookieJar, userAgent: String, texts: Texts, api: any HTTPClient, presigned: any HTTPClient,
@@ -110,12 +151,14 @@ public final class Transport: Sendable {
         handlers.mutate { $0.append(handler) }
     }
 
-    /// A call answered with JSON.
+    /// A call answered with JSON. `idempotencyKey` makes a retry of the same operation safe (the
+    /// run of one accepted estimate); `idempotent` asks for a fresh key, kept across the refresh.
     public func call<T: Decodable & Sendable>(
         _ method: String, _ path: String, body: [String: JSONValue]? = nil, as type: T.Type, idempotent: Bool = false,
-        query: [(String, String)] = []
+        query: [(String, String)] = [], idempotencyKey: String? = nil
     ) async throws -> T {
-        let data = try await authed(path) { try await self.send(method, path, body: body, idempotent: idempotent, query: query) }
+        let key = idempotencyKey ?? (idempotent ? UUID().uuidString.lowercased() : nil)
+        let data = try await authed(path) { try await self.send(method, path, body: body, key: key, query: query) }
         do {
             return try JSONDecoder().decode(T.self, from: data)
         } catch {
@@ -125,21 +168,35 @@ public final class Transport: Sendable {
 
     /// A call whose answer is not read (204s, feedback).
     public func call(_ method: String, _ path: String, body: [String: JSONValue]? = nil, idempotent: Bool = false) async throws {
-        _ = try await authed(path) { try await self.send(method, path, body: body, idempotent: idempotent, query: []) }
+        let key = idempotent ? UUID().uuidString.lowercased() : nil
+        _ = try await authed(path) { try await self.send(method, path, body: body, key: key, query: []) }
     }
 
     /// Raw bytes of a GET (exports).
     public func bytes(_ path: String, query: [(String, String)]) async throws -> Data {
-        try await authed(path) { try await self.send("GET", path, body: nil, idempotent: false, query: query, accept: "*/*") }
+        try await authed(path) { try await self.send("GET", path, body: nil, key: nil, query: query, accept: "*/*") }
     }
 
-    /// A request to a presigned URL: never any cookie (the signature is the credential).
-    public func sendPresigned(_ request: URLRequest) async throws {
+    /// A request to a presigned URL: never any cookie (the signature is the credential). With a
+    /// file, the body is streamed from disk.
+    public func sendPresigned(_ request: URLRequest, file: URL? = nil) async throws {
         var req = request
         req.setValue(userAgent, forHTTPHeaderField: "User-Agent")
-        let (data, response) = try await execute(presigned, req)
+        let (data, response): (Data, HTTPURLResponse)
+        if let file {
+            do {
+                (data, response) = try await presigned.upload(req, fromFile: file)
+            } catch {
+                throw networkError(error)
+            }
+        } else {
+            (data, response) = try await execute(presigned, req)
+        }
         try check(data, response)
     }
+
+    /// A pt-BR message of the shared texts.
+    func message(_ key: String, _ vars: [String: any Sendable] = [:]) -> String { texts.t(key, vars) }
 
     /// A presigned URL from the API, with the loopback alias applied when enabled.
     public func presignedURL(_ raw: String) throws -> URL {
@@ -166,34 +223,63 @@ public final class Transport: Sendable {
 
     // MARK: - internals
 
-    /// One silent refresh when the access window closed. Any other 401 (or a refused refresh)
-    /// means the session is over, so this device forgets it too. Whether there was a session is
-    /// read before the call: a refused refresh clears the cookies in its own answer.
+    /// The session rules of every call. A 401 for a session that another call already refreshed
+    /// just retries; `session_expired` refreshes, one call at a time (a second refresh with the
+    /// rotated-out secret would make the server revoke the whole session); any other 401 for the
+    /// session this request carried means it is over, and this device forgets it too. Whether
+    /// there was a session is read before the call: a refused refresh clears the cookies in its
+    /// own answer.
     private func authed<T: Sendable>(_ path: String, _ attempt: () async throws -> T) async throws -> T {
-        let hadSession = cookies.hasSession()
+        let sent = cookies.sessionValue()
         do {
             return try await attempt()
         } catch let e as ApiError {
-            guard e.status == 401, path != Transport.refreshPath else { throw e }
-            guard e.code == Transport.sessionExpired else { throw end(e, hadSession) }
+            guard e.status == 401, path != Transport.refreshPath, let sent else { throw e }
+            await refreshing.lock()
+            do {
+                let current = cookies.sessionValue()
+                if current == nil {
+                    throw e  // ended by another call, which announced it
+                } else if current == sent {
+                    guard e.code == Transport.sessionExpired else { throw end(e, sent) }
+                    do {
+                        _ = try await send("POST", Transport.refreshPath, body: nil, key: nil, query: [])
+                    } catch let r as ApiError {
+                        throw r.status == 401 ? end(r, sent) : r
+                    }
+                }  // else: refreshed by another call meanwhile, just retry
+                await refreshing.unlock()
+            } catch {
+                await refreshing.unlock()
+                throw error
+            }
         }
+        let retried = cookies.sessionValue()
         do {
-            _ = try await send("POST", Transport.refreshPath, body: nil, idempotent: false, query: [])
             return try await attempt()
         } catch let e as ApiError {
-            throw e.status == 401 ? end(e, hadSession) : e
+            if e.status == 401, let retried, cookies.sessionValue() == retried { throw end(e, retried) }
+            throw e
         }
     }
 
-    private func end(_ e: ApiError, _ hadSession: Bool) -> ApiError {
-        guard hadSession else { return e }
+    /// Forgets the session (once per session value) and announces it.
+    private func end(_ e: ApiError, _ session: String) -> ApiError {
+        var first = false
+        lastEnded.mutate {
+            if $0 != session {
+                $0 = session
+                first = true
+            }
+        }
+        guard first else { return e }
         cookies.clear()
         for handler in handlers.value { handler(e) }
         return e
     }
 
     private func send(
-        _ method: String, _ path: String, body: [String: JSONValue]?, idempotent: Bool, query: [(String, String)],
+        _ method: String, _ path: String, body: [String: JSONValue]?, key: String?, query: [(String, String)],
         accept: String = "application/json"
     ) async throws -> Data {
         let target = url(path, query)
@@ -209,7 +295,7 @@ public final class Transport: Sendable {
         } else if ["POST", "PUT", "PATCH"].contains(method) {
             req.httpBody = Data()
         }
-        if idempotent { req.setValue(UUID().uuidString.lowercased(), forHTTPHeaderField: "Idempotency-Key") }
+        if let key { req.setValue(key, forHTTPHeaderField: "Idempotency-Key") }
         if let cookie = cookies.header(for: target) { req.setValue(cookie, forHTTPHeaderField: "Cookie") }
         let (data, response) = try await execute(api, req)
         // Errors carry cookies too (a refused refresh clears them), so they are read first.
@@ -221,12 +307,15 @@ public final class Transport: Sendable {
     private func execute(_ client: any HTTPClient, _ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         do {
             return try await client.send(request)
-        } catch let e as ApiError {
-            throw e
         } catch {
-            if error is CancellationError || (error as? URLError)?.code == .cancelled || Task.isCancelled { throw CancellationError() }
-            throw ApiError(status: 0, code: ApiError.network, message: texts.t("errors.network"))
+            throw networkError(error)
         }
+    }
+
+    private func networkError(_ error: any Error) -> any Error {
+        if let e = error as? ApiError { return e }
+        if error is CancellationError || (error as? URLError)?.code == .cancelled || Task.isCancelled { return CancellationError() }
+        return ApiError(status: 0, code: ApiError.network, message: texts.t("errors.network"))
     }
 
     private func check(_ data: Data, _ response: HTTPURLResponse) throws {

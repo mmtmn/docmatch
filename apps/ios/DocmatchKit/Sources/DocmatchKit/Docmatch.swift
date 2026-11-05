@@ -33,7 +33,12 @@ public final class Docmatch: Sendable {
 
     /// The User-Agent the API turns into "App iOS · <model>" in every device list.
     public static func iosUserAgent(version: String, model: String, system: String) -> String {
-        let clean = model.map { ";()".contains($0) ? " " : $0 }.reduce(into: "") { $0.append($1) }.trimmingCharacters(in: .whitespaces)
-        return "docmatch-ios/\(version) (\(clean); iOS \(system))"
+        "docmatch-ios/\(ascii(version)) (\(ascii(model)); iOS \(ascii(system)))"
+    }
+
+    /// Header values in printable ASCII; `;()` delimit the User-Agent's comment.
+    static func ascii(_ s: String) -> String {
+        let kept = s.unicodeScalars.map { $0.isASCII && $0.value >= 0x20 && $0.value <= 0x7e && !";()".unicodeScalars.contains($0) ? Character($0) : " " }
+        return String(kept).split(separator: " ").joined(separator: " ")
     }
 }
