@@ -1,4 +1,4 @@
-# Storage: five private buckets, all with public access blocked, bucket-owner-enforced ownership
+# Storage: six private buckets, all with public access blocked, bucket-owner-enforced ownership
 # (no ACLs), SSE-S3 and a TLS-only policy. Bucket names embed the account id to be unique.
 #
 #   uploads     quarantine/ (fresh uploads, scanned by the sandbox) · clean/ · derived/ ·
@@ -14,6 +14,7 @@ locals {
     backups    = { versioning = "Enabled", access_logs = true }
     site       = { versioning = "Disabled", access_logs = true }
     signatures = { versioning = "Disabled", access_logs = true }
+    releases   = { versioning = "Enabled", access_logs = true }
     logs       = { versioning = "Disabled", access_logs = false }
   }
   bucket_names = { for k, v in local.buckets : k => "${var.name}-${k}-${var.account_id}" }
@@ -208,6 +209,44 @@ resource "aws_s3_bucket_lifecycle_configuration" "signatures" {
   }
 
   depends_on = [aws_s3_bucket_versioning.this]
+}
+
+# Releases: application binaries published by infra/scripts/deploy-app.sh under releases/<sha>/.
+# Current versions stay (any past release can be reinstalled); overwritten ones go after a week.
+resource "aws_s3_bucket_lifecycle_configuration" "releases" {
+  bucket = aws_s3_bucket.this["releases"].id
+
+  rule {
+    id     = "expire-replaced-versions"
+    status = "Enabled"
+    filter {
+      prefix = ""
+    }
+    noncurrent_version_expiration {
+      noncurrent_days = var.releases_noncurrent_days
+    }
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 1
+    }
+  }
+
+  depends_on = [aws_s3_bucket_versioning.this]
+}
+
+# The browser uploads documents straight to the bucket with a presigned POST (the API never sees
+# the bytes). S3 must answer with CORS headers or the page cannot read the 204 and reports a
+# network error although the object was stored.
+resource "aws_s3_bucket_cors_configuration" "uploads" {
+  count  = length(var.uploads_cors_origins) > 0 ? 1 : 0
+  bucket = aws_s3_bucket.this["uploads"].id
+
+  cors_rule {
+    allowed_methods = ["POST", "PUT"]
+    allowed_origins = var.uploads_cors_origins
+    allowed_headers = ["*"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3600
+  }
 }
 
 resource "aws_s3_bucket_lifecycle_configuration" "logs" {

@@ -82,3 +82,28 @@ output "operators_group_name" {
   description = "IAM group human operators must join."
   value       = module.iam_guardrails.operators_group_name
 }
+
+output "releases_bucket_name" {
+  description = "Bucket that holds the application releases (infra/scripts/deploy-app.sh)."
+  value       = module.storage.bucket_names["releases"]
+}
+
+output "uploads_origin" {
+  description = "Origin of the uploads bucket, for the site build (PUBLIC_DM_UPLOAD_ORIGINS)."
+  value       = module.storage.uploads_origin
+}
+
+output "packer_instance_profile_name" {
+  description = "Instance profile for the Packer build (empty when this environment does not create it)."
+  value       = module.compute.packer_instance_profile_name
+}
+
+output "site_url" {
+  description = "Public origin of the site and of the API (CloudFront routes /v1/* to the instance)."
+  value       = "https://${var.domain}"
+}
+
+output "security_contact_email" {
+  description = "Contact published in /.well-known/security.txt."
+  value       = var.security_contact_email
+}

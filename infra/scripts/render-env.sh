@@ -23,10 +23,14 @@ die() { log "erro: $*"; exit 1; }
 # (including the one just written) is doubled; then double quotes are escaped. systemd turns \\
 # back into one backslash and leaves \n alone, so the service receives single backslashes, real
 # quotes and \n as two characters. Doubling the backslash twice (an earlier bug) delivered \\n.
+# SSM refuses empty values, so a parameter holding the sentinel $DM_EMPTY_VALUE (__EMPTY__) is
+# rendered as an empty value: the operator's explicit "not configured yet" for an optional
+# secret (a provider key not issued yet), unlike the placeholder, which blocks the boot.
 render() {
-  jq -r "$1"'
+  jq -r --arg empty "${DM_EMPTY_VALUE:-__EMPTY__}" "$1"'
     | (.Name | split("/") | last) as $k
-    | (.Value | gsub("\n"; "\\n") | gsub("\\\\"; "\\\\") | gsub("\""; "\\\"")) as $v
+    | (if .Value == $empty then "" else .Value end
+       | gsub("\n"; "\\n") | gsub("\\\\"; "\\\\") | gsub("\""; "\\\"")) as $v
     | "\($k)=\"\($v)\""' <<<"$params"
 }
 
@@ -40,7 +44,7 @@ write_atomic() { # write_atomic <path> <owner> <content>
 }
 
 main() {
-  local out owner placeholder allow_placeholders instance_env count unset_keys
+  local out owner placeholder allow_placeholders instance_env count unset_keys empty_keys
   local spec sub_user sub_file sub_keys keys_json
   ssm_path="${DM_SSM_PATH:-}"
   out="/run/docmatch/env"
@@ -94,6 +98,9 @@ main() {
     printf '  %s\n' "$unset_keys" >&2
     [[ $allow_placeholders -eq 1 ]] || die "preencha-os com aws ssm put-parameter --overwrite (ver infra/README.md)"
   fi
+
+  empty_keys="$(jq -r --arg e "${DM_EMPTY_VALUE:-__EMPTY__}" '.Parameters[] | select(.Value == $e) | .Name | split("/") | last' <<<"$params" | sort | paste -sd ' ' -)"
+  [[ -z "$empty_keys" ]] || log "vazios por escolha (${DM_EMPTY_VALUE:-__EMPTY__}): $empty_keys"
 
   write_atomic "$out" "$owner" "$(render '.Parameters[]')"
   log "escrito $out ($count variáveis, dono $owner, modo 0400)"

@@ -62,9 +62,9 @@ variable "viewer_ip_header_name" {
 }
 
 variable "api_path_patterns" {
-  description = "Path patterns routed to the application origin instead of the static site."
+  description = "Path patterns routed to the application origin instead of the static site (the API serves every route, webhooks and OAuth callbacks included, under /v1)."
   type        = list(string)
-  default     = ["/api/*", "/auth/*", "/webhooks/*"]
+  default     = ["/v1/*"]
 }
 
 variable "site_bucket_name" {
@@ -183,4 +183,15 @@ variable "tags" {
   description = "Extra tags merged into every resource."
   type        = map(string)
   default     = {}
+}
+
+variable "connect_src_extra" {
+  description = "Extra origins for connect-src of the static CSP (the uploads bucket the browser posts documents to)."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for o in var.connect_src_extra : can(regex("^https://[a-z0-9.-]+$", o))])
+    error_message = "connect_src_extra must be https origins without a path."
+  }
 }

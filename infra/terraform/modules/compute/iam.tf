@@ -88,6 +88,26 @@ data "aws_iam_policy_document" "workload" {
     resources = [for p in local.upload_prefixes : "${var.uploads_bucket_arn}/${p}/*"]
   }
 
+  # Application binaries (infra/scripts/deploy-app.sh): read-only, installed by root over SSM.
+  statement {
+    sid       = "ReadReleases"
+    effect    = "Allow"
+    actions   = ["s3:GetObject"]
+    resources = ["${var.releases_bucket_arn}/releases/*"]
+  }
+
+  statement {
+    sid       = "ListReleases"
+    effect    = "Allow"
+    actions   = ["s3:ListBucket"]
+    resources = [var.releases_bucket_arn]
+    condition {
+      test     = "StringLike"
+      variable = "s3:prefix"
+      values   = ["releases/*"]
+    }
+  }
+
   # Verdict objects are written by the scanner only; the worker reads one when its S3 event
   # arrives on the queue and deletes it afterwards.
   statement {

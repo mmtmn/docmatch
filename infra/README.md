@@ -14,10 +14,10 @@ CloudFront com `node --test`, `render-env.sh` com `systemd-run`), e nunca toca a
                               │
                      CloudFront (plano gratuito)
           função de borda: 404 vazio para scanners/sondas, www → apex,
-          index.html de diretórios, cabeçalho x-docmatch-origin-secret (KVS)
+          URLs limpas → <página>.html, cabeçalho x-docmatch-origin-secret (KVS)
           política de cabeçalhos: CSP, HSTS 2 anos preload, COOP/CORP, ...
                │                                   │
-      /  (site estático)                /api/* /auth/* /webhooks/*
+      /  (site estático)                /v1/* (API, OAuth e webhooks)
       S3 site (OAC, privado)            origin.<domínio> → EIP da instância
                                                    │ 443 só do prefix list do CloudFront
                                         ┌──────────┴──────────────────────────────┐
@@ -108,8 +108,21 @@ por `aws iam get-user` e depois por `aws ec2 describe-security-groups`.
    pela validação e então troca a distribuição para o certificado ACM com os aliases do domínio;
    o output `custom_domain_enabled` confirma). Para o dev, adicione o NS de `dev` em
    `extra_dns_records` do prod.
-6. **Site**: `make -C apps/web build` e `infra/scripts/deploy-site.sh --env prod` (sincroniza
-   `apps/web/dist` com o bucket e invalida a distribuição, lendo tudo dos outputs).
+6. **Aplicação**: `infra/scripts/deploy-app.sh --env prod` compila API, worker, migrações
+   (`GOOS=linux GOARCH=arm64`) e o harness (`aarch64-unknown-linux-musl`, ligado pelo `rust-lld`,
+   sem toolchain C cruzada), publica em `s3://<releases>/releases/<sha>/` com `SHA256SUMS` e
+   instala pela SSM Run Command: binários em `/opt/docmatch/bin`, `pricing.yaml` e `models.yaml`
+   em `/opt/docmatch/config`, `docmatch-migrate up`, reinício de harness, API e worker e checagem
+   de `/v1/version`. Uma release é um commit (árvore limpa); `--release <sha> --skip-build`
+   reinstala uma anterior (rollback).
+7. **Site**: `infra/scripts/deploy-site.sh --env prod` compila `apps/web` com a origem do site
+   (que também é a da API: o CloudFront leva `/v1/*` à instância), a origem do bucket de uploads
+   (CSP `connect-src`) e o contato de segurança, tudo dos outputs, sincroniza com o bucket e
+   invalida a distribuição.
+
+Sem um ambiente dev, o prod faz o papel dele no passo 3: `create_packer_profile` (padrão `true`
+no prod) cria o perfil da construção, e os outputs `app_subnet_id`, `app_security_group_id` e
+`packer_instance_profile_name` do prod alimentam o `build.auto.pkrvars.hcl`.
 
 `make -C infra plan-<env>` sempre antes de `apply-<env>`; o plano fica salvo em `<env>.tfplan`.
 
@@ -122,6 +135,11 @@ por `aws iam get-user` e depois por `aws ec2 describe-security-groups`.
   e a configuração não secreta (buckets, URLs, nomes de função, lista de saída) como `String`
   gerenciada pelo Terraform.
 - Preencha cada segredo uma vez: `aws ssm put-parameter --name /docmatch/prod/DM_SESSION_SECRET --type SecureString --overwrite --value "$(openssl rand -base64 48)"`.
+  Uma chave de provedor que ainda não existe (Stripe, Resend, Google, Apple, R2, OpenRouter)
+  recebe o valor `__EMPTY__`: o SSM não aceita valor vazio, e o `render-env.sh` entrega esse
+  valor como vazio, de modo que a API desliga só o recurso (login por e-mail sem Resend, Google
+  sem as credenciais OAuth, `DM_LLM_MODE=off` sem OpenRouter). O espaço reservado `__UNSET__`
+  continua bloqueando o boot: esquecer um segredo nunca passa calado.
   A lista completa está no output `ssm_secret_parameters`. `DATABASE_URL` segue o formato
   `postgres://docmatch:<senha>@localhost:5432/docmatch?sslmode=require`; o papel e o banco são
   criados no primeiro boot por `docmatch-pg-init` a partir dela.
@@ -166,8 +184,8 @@ reinício às 04:00 (America/Sao_Paulo) quando necessário.
 - Envio de logs da instância para o CloudWatch Logs (o grupo `/docmatch/<env>/app` existe e o papel
   pode escrever; o agente fica para a fase seguinte). VPC Flow Logs desligados por padrão.
 - Páginas de erro personalizadas no CloudFront: elas valem para a distribuição inteira, então um
-  `/404.html` estático também substituiria os corpos JSON 403/404 de `/api/*`, `/auth/*` e
-  `/webhooks/*` (e transformaria proibido em não encontrado). Um caminho inexistente do site recebe
+  `/404.html` estático também substituiria os corpos JSON 403/404 de `/v1/*` (e transformaria
+  proibido em não encontrado). Um caminho inexistente do site recebe
   o 404 simples do S3; o site trata "não encontrado" no cliente até a API ganhar a própria
   distribuição.
 - S3 gateway endpoint na sub-rede pública (`s3_endpoint_on_app_route_table = false`): a política do
@@ -178,9 +196,11 @@ reinício às 04:00 (America/Sao_Paulo) quando necessário.
   endpoint custaria ~US$ 7/mês, por isso o veredicto é um objeto em `verdicts/` e o S3 é quem
   publica na fila.
 - Alarmes a partir de eventos do CloudTrail, GuardDuty, Security Hub, Config, Inspector.
-- Imagens do sandbox e binários da aplicação: os repositórios ECR e as unidades systemd existem;
-  as Lambdas só nascem quando `lambda_image_tag` aponta para imagens já enviadas, e as unidades
-  `docmatch-*` têm `ConditionPathExists` até o primeiro deploy em `/opt/docmatch/bin`.
+- Imagens do sandbox: os repositórios ECR existem, mas as Lambdas só nascem quando
+  `lambda_image_tag` aponta para imagens já enviadas. Até lá `DM_SCAN_QUEUE_URL` fica fora do SSM
+  e a API usa as verificações embutidas (bytes mágicos, listas de reprodução, bombas zip), com um
+  aviso no log; o harness lê os arquivos com o sandbox do systemd. As unidades `docmatch-*` têm
+  `ConditionPathExists` até o primeiro `deploy-app.sh`.
 - SSH, chaves de acesso de longa duração, usuários IAM além do grupo de operadores.
 - Credenciais do R2 (criadas no painel da Cloudflare e gravadas no SSM) e o token do provedor
   Cloudflare: com `cloudflare_account_id` vazio o módulo `r2` não é instanciado.

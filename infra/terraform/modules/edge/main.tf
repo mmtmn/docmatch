@@ -23,6 +23,14 @@ data "aws_cloudfront_origin_request_policy" "cors_s3" {
 }
 
 locals {
+  # Origins the pages fetch besides their own (the uploads bucket for presigned POSTs) join
+  # connect-src of the static policy; the page's own <meta> policy lists them as well.
+  content_security_policy = length(var.connect_src_extra) == 0 ? var.content_security_policy : replace(
+    var.content_security_policy, "connect-src 'self'", "connect-src 'self' ${join(" ", var.connect_src_extra)}"
+  )
+}
+
+locals {
   site_origin_id = "site-s3"
   app_origin_id  = "app-origin"
 }
@@ -63,7 +71,7 @@ resource "aws_cloudfront_response_headers_policy" "this" {
 
   security_headers_config {
     content_security_policy {
-      content_security_policy = var.content_security_policy
+      content_security_policy = local.content_security_policy
       override                = false
     }
     content_type_options {
