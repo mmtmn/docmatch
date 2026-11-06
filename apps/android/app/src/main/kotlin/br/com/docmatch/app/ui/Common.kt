@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -53,7 +52,7 @@ fun ErrorState(message: String, onRetry: () -> Unit) {
                 textAlign = TextAlign.Center,
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
             )
-            Button(onClick = onRetry) { Text(t("mobile.retry")) }
+            DmPrimaryButton(onClick = onRetry) { Text(t("mobile.retry")) }
         }
     }
 }

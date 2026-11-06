@@ -2,8 +2,6 @@ import DocmatchKit
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// A new reconciliation: the files from the system picker, the rules and options of the site's
-/// form, the estimate to confirm, and the run.
 struct NewRunView: View {
     var tokenExempt = false
     let model: NewRunModel
@@ -12,150 +10,113 @@ struct NewRunView: View {
     @Environment(\.texts) private var texts
 
     init(model: NewRunModel, tokenExempt: Bool = false, onStarted: @escaping (String) -> Void) {
-        self.tokenExempt = tokenExempt
-        self.model = model
-        self.onStarted = onStarted
+        self.model = model; self.tokenExempt = tokenExempt; self.onStarted = onStarted
     }
 
     var body: some View {
-        Form {
-            pickerSection
-            filesSection
-            rulesSection
-            optionsSection
-            submitSection
+        DmPage {
+            if case .working(let step) = model.phase {
+                DmProcessingScene(label: Labels.step(texts, step))
+            } else {
+                DmHeading(title: texts.t("landing.title"), subtitle: texts.t("landing.subtitle"), hero: true)
+                DmUploadTarget(compact: !model.files.isEmpty || model.options.rulesText.count > 120) { picking = true }
+                    .disabled(model.busy)
+                filesSection
+                rulesSection
+            }
         }
-        .navigationTitle(texts.t("common.app_title"))
+        .dmNavigation(texts.t("mobile.new_title"))
+        .safeAreaInset(edge: .bottom) { submitSection }
         .fileImporter(isPresented: $picking, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             guard case .success(let urls) = result else { return }
             Task { await model.add(urls.map { Self.picked($0) }) }
         }
-        .alert(texts.t("mobile.confirm_title"), isPresented: confirming) {
-            Button(texts.t("form.submit")) { Task { await model.confirm() } }
-            Button(texts.t("common.cancel"), role: .cancel) { model.cancel() }
-        } message: {
-            if case .confirm = model.phase {
-                Text(confirmationMessage)
-            }
-        }
+        .sheet(isPresented: confirming) { confirmationSheet }
         .onChange(of: model.started) { _, runId in
             guard let runId else { return }
-            model.startedShown()
-            onStarted(runId)
+            model.startedShown(); onStarted(runId)
         }
     }
 
-    @ViewBuilder
-    private var pickerSection: some View {
-        Section {
-            Text(texts.t("mobile.new_text"))
-                .foregroundStyle(.secondary)
-            Button(texts.t("mobile.pick_files")) { picking = true }
-                .disabled(model.busy)
-        }
-    }
-
-    @ViewBuilder
-    private var filesSection: some View {
+    @ViewBuilder private var filesSection: some View {
         if !model.files.isEmpty {
-            Section(Labels.files(texts, count: model.files.count, bytes: model.totalBytes)) {
+            DmCard {
+                Text(Labels.files(texts, count: model.files.count, bytes: model.totalBytes)).font(.subheadline.bold())
                 ForEach(model.files) { file in
-                    HStack {
-                        VStack(alignment: .leading) {
-                            Text(file.name)
+                    HStack(spacing: 10) {
+                        Image(systemName: "doc.text").foregroundStyle(Color(DmColors.brandPrimary)).accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(file.name).font(.subheadline).lineLimit(2)
                             Text(Labels.kind(texts, file.kind) + " · " + Format.size(texts, file.size))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .font(.caption).foregroundStyle(Color(DmColors.textMuted))
                         }
                         .accessibilityElement(children: .combine)
-                        Spacer()
-                        Button {
-                            model.remove(file)
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
+                        Spacer(minLength: 4)
+                        Button { model.remove(file) } label: {
+                            Image(systemName: "xmark").frame(width: 44, height: 44)
                         }
-                        .buttonStyle(.borderless)
-                        .accessibilityLabel(texts.t("dropzone.remove_file", ["name": file.name]))
-                        .disabled(model.busy)
+                        .buttonStyle(.plain).foregroundStyle(Color(DmColors.textMuted))
+                        .accessibilityLabel(texts.t("dropzone.remove_file", ["name": file.name])).disabled(model.busy)
                     }
                 }
             }
         }
     }
 
-    @ViewBuilder
     private var rulesSection: some View {
-        Section {
-            TextField(
-                texts.t("form.rules_label"),
-                text: Binding(get: { model.options.rulesText }, set: { model.setRules($0) }),
-                prompt: Text(texts.t("form.rules_placeholder")),
-                axis: .vertical
-            )
-            .lineLimit(3...8)
-            .disabled(model.busy)
+        VStack(alignment: .leading, spacing: 12) {
+            Text(texts.t("form.rules_label")).font(.headline).accessibilityAddTraits(.isHeader)
+            Toggle(texts.t("form.use_rules"), isOn: Binding(get: { model.options.useRules }, set: { model.setUseRules($0) }))
+                .accessibilityHint(texts.t("tooltips.use_rules"))
+            Toggle(texts.t("form.web_search"), isOn: Binding(get: { model.options.webSearch }, set: { model.setWebSearch($0) }))
+                .accessibilityHint(texts.t("tooltips.web_search"))
+            TextField(texts.t("form.rules_label"), text: Binding(get: { model.options.rulesText }, set: { model.setRules($0) }),
+                prompt: Text(texts.t("form.rules_placeholder")), axis: .vertical)
+                .lineLimit(2...6).dmField().disabled(!model.options.useRules)
             CounterText(count: NewRunModel.count(model.options.rulesText), max: Limits.Text.rulesText)
-            Text(texts.t("form.rules_help"))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
+            if !model.options.useRules {
+                Text(texts.t("form.rules_disabled_hint")).font(.caption).foregroundStyle(Color(DmColors.textMuted))
+            }
+            DmDisclosure(texts.t("mobile.rules_more")) {
+                Text(texts.t("tooltips.use_rules")).font(.subheadline)
+                Text(texts.t("tooltips.web_search")).font(.subheadline)
+            }
+        }.disabled(model.busy)
     }
 
-    @ViewBuilder
-    private var optionsSection: some View {
-        Section {
-            Toggle(isOn: Binding(get: { model.options.useRules }, set: { model.setUseRules($0) })) {
-                option(texts.t("form.use_rules"), texts.t("tooltips.use_rules"))
-            }
-            Toggle(isOn: Binding(get: { model.options.webSearch }, set: { model.setWebSearch($0) })) {
-                option(texts.t("form.web_search"), texts.t("tooltips.web_search"))
-            }
-        }
-        .disabled(model.busy)
-    }
-
-    @ViewBuilder
     private var submitSection: some View {
-        Section {
-            Button(model.busy ? texts.t("form.submitting") : texts.t("form.submit")) {
-                Task { await model.submit() }
-            }
-            .disabled(model.busy || model.files.isEmpty)
-            if case .working(let step) = model.phase {
-                ProgressView()
-                Text(Labels.step(texts, step))
-            }
-            if let error = model.error {
-                Text(error)
-                    .foregroundStyle(Color(DmColors.statusDanger))
-            }
+        VStack(alignment: .leading, spacing: 8) {
+            if let error = model.error { DmNotice(message: error, error: true) }
+            Button(model.busy ? texts.t("form.submitting") : texts.t("form.submit")) { Task { await model.submit() } }
+                .buttonStyle(DmButtonStyle()).disabled(model.busy || model.files.isEmpty)
+                .accessibilityIdentifier("submit-run")
+            Text(texts.t(model.files.isEmpty ? "form.disabled_no_files" : "mobile.files_private"))
+                .font(.caption).foregroundStyle(Color(DmColors.textMuted))
         }
+        .frame(maxWidth: 720).padding(.horizontal, 20).padding(.vertical, 12).frame(maxWidth: .infinity)
+        .background(Color(DmColors.bgCanvas))
     }
 
-    private var confirmationMessage: String {
-        guard case .confirm(let prepared) = model.phase else { return "" }
-        let price = tokenExempt ? texts.t("app.confirm_exempt") : Format.confirmRun(texts, prepared.quote)
-        var parts = [price, texts.t("app.confirm_scope")]
-        if let error = model.error { parts.append(error) }
-        return parts.joined(separator: "\n\n")
+    private var confirmationSheet: some View {
+        DmPage {
+            DmIconTile(name: "doc.text.magnifyingglass")
+            DmHeading(title: texts.t("mobile.confirm_title"), subtitle: texts.t("mobile.review_before_start"))
+            if case .confirm(let prepared) = model.phase {
+                DmCard {
+                    Text(tokenExempt ? texts.t("app.confirm_exempt") : Format.confirmRun(texts, prepared.quote)).font(.headline)
+                    Text(texts.t("app.confirm_scope")).font(.subheadline).foregroundStyle(Color(DmColors.textMuted))
+                    if let error = model.error { DmNotice(message: error, error: true) }
+                }
+            }
+            Button(texts.t("form.submit")) { Task { await model.confirm() } }.buttonStyle(DmButtonStyle())
+            Button(texts.t("common.cancel")) { model.cancel() }.buttonStyle(DmButtonStyle(.secondary))
+        }
+        .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
     }
 
     private var confirming: Binding<Bool> {
-        Binding(
-            get: {
-                if case .confirm = model.phase { return true }
-                return false
-            },
-            set: { _ in })
-    }
-
-    private func option(_ label: String, _ help: String) -> some View {
-        VStack(alignment: .leading) {
-            Text(label)
-            Text(help)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
+        Binding(get: { if case .confirm = model.phase { return true }; return false },
+            set: { showing in if !showing, case .confirm = model.phase { model.cancel() } })
     }
 
     /// A picked file: name and size now, the first bytes for the precheck, the rest at upload.

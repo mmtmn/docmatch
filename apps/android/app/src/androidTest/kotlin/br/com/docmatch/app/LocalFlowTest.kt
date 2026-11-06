@@ -16,6 +16,8 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.core.content.FileProvider
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
@@ -71,24 +73,44 @@ class LocalFlowTest {
     @Test
     fun reconcilesTheTwinAndKeepsTheAccountConsistentAcrossDevices() {
         ActivityScenario.launch(MainActivity::class.java).use {
+            await(hasText(t("auth.dev_sign_in")))
+            capture("01-login")
             // No key and no account: the local sign-in.
             click(hasText(t("auth.dev_sign_in")))
             await(hasText(t("common.app_title")))
 
+            await(hasTestTag("submit-run"))
+            capture("02-workspace")
             // The twin's inputs through the system picker (answered with this app's own provider).
             intending(hasAction(Intent.ACTION_OPEN_DOCUMENT)).respondWith(Instrumentation.ActivityResult(Activity.RESULT_OK, pickedInputs()))
             click(hasText(t("mobile.pick_files")))
             INPUTS.forEach { await(hasText(it, substring = true)) }
+            capture("03-files")
             click(hasTestTag("submit-run"))
 
             // The estimate, confirmed; the run, to the answer key.
+            await(hasText(t("form.submit")) and hasAnyAncestor(isDialog()), RUN_TIMEOUT_MS)
+            capture("04-confirm")
             click(hasText(t("form.submit")) and hasAnyAncestor(isDialog()), timeoutMs = RUN_TIMEOUT_MS)
             await(hasText(t("mobile.run_findings", mapOf("count" to expectedFindings()))), timeoutMs = RUN_TIMEOUT_MS)
 
             // Downloads are visible before opening the progressively disclosed details.
             await(hasText(t("results.download_corrected")))
             await(hasText(t("results.download_report")))
+            capture("05-results")
+            intending(hasAction(Intent.ACTION_CHOOSER)).respondWith(Instrumentation.ActivityResult(Activity.RESULT_OK, null))
+            val exportedRun = runBlocking { dm.api.runs() }.items.first().id
+            for ((label, extension, signature) in listOf(
+                Triple("results.download_corrected", "xlsx", "PK"),
+                Triple("results.download_report", "pdf", "%PDF"),
+            )) {
+                click(hasText(t(label)))
+                val export = File(Exports.dir(app), "docmatch-$exportedRun.$extension")
+                compose.waitUntil(UI_TIMEOUT_MS) { export.exists() && export.length() > 100 }
+                assertTrue(export.readBytes().take(signature.length).toByteArray().toString(Charsets.US_ASCII) == signature, "download $extension válido")
+            }
             // A decision, recorded on the API. Critical alerts remain visible even when collapsed.
+            compose.onNodeWithTag("run-results").performScrollToNode(hasTestTag(TAG_FINDING))
             compose.onAllNodesWithTag(TAG_FINDING).onFirst().performClick()
             if (InstrumentationRegistry.getArguments().getString("docmatchRequireModel") == "1") {
                 await(hasText("Próximo passo sugerido:", substring = true))
@@ -101,8 +123,11 @@ class LocalFlowTest {
             val phone = runBlocking { dm.api.devices() }.single { it.current }
             assertEquals("android", phone.platform)
             click(hasText(t("mobile.tab_account")))
+            await(hasTestTag("account-list"))
+            compose.onNodeWithTag("account-list").performScrollToNode(hasTestTag(TAG_DEVICE) and hasAnyDescendant(hasText(t("account.this_device"))))
             await(hasTestTag(TAG_DEVICE) and hasAnyDescendant(hasText(phone.name)))
             await(hasText(t("account.this_device")))
+            capture("06-account")
             val runId = runBlocking { dm.api.runs() }.items.first().id
 
             // The same account from another device: the same run, the same decision, both devices.
@@ -157,11 +182,24 @@ class LocalFlowTest {
                 assertTrue(findings.all { it.explanation.contains("Próximo passo sugerido:") })
             }
             android.util.Log.i("DOCMATCH_DEMO", "completed=" + runId)
+            compose.onNodeWithTag("run-results").performScrollToNode(hasTestTag(TAG_FINDING))
             compose.onAllNodesWithTag(TAG_FINDING).onFirst().performClick()
             Thread.sleep(3000)
             click(hasText(t("common.close")))
             Thread.sleep(1500)
         }
+    }
+
+    /** Opt-in screenshots contain only the local demo account and public fixtures. */
+    private fun capture(name: String) {
+        if (InstrumentationRegistry.getArguments().getString("docmatchScreenshots") != "1") return
+        compose.waitForIdle()
+        // SurfaceFlinger presents after Compose semantics settle; wait only in visual-audit mode.
+        Thread.sleep(350)
+        val bitmap = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot() ?: error("screenshot unavailable")
+        val directory = File(app.getExternalFilesDir(null), "ui-audit").apply { mkdirs() }
+        File(directory, "$name.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        bitmap.recycle()
     }
 
     private fun t(key: String, vars: Map<String, Any> = emptyMap()) = dm.texts.t(key, vars)

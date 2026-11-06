@@ -1,3 +1,5 @@
+@import './palette.generated.css';
+
 /* Design tokens. Light is the default; dark follows the system preference. Every colour pair used
    for text meets WCAG AA (4.5:1) against the surfaces it sits on. Type scales with clamp() so the
    first screen fits from 360×640 up to 2560×1440 without a breakpoint. */
@@ -8,26 +10,6 @@
     system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
 
-  --color-bg: #fcfcfd;
-  --color-fg: #1b1f24;
-  --color-muted: #4b5563;
-  --color-surface: #f4f6f8;
-  --color-surface-2: #e9edf1;
-  --color-border: #c9d1d9;
-  --color-border-strong: #6e7781;
-  --color-accent: #1d4ed8;
-  --color-accent-hover: #1e40af;
-  --color-accent-fg: #fcfcfd;
-  --color-accent-soft: #dbe4ff;
-  --color-danger: #9d352f;
-  --color-danger-soft: #f8efee;
-  --color-success: #256548;
-  --color-success-soft: #eef4f0;
-  --color-warning: #825919;
-  --color-warning-soft: #f7f2e8;
-  --color-info: #35588d;
-  --color-info-soft: #eef2f7;
-  --color-focus: #1d4ed8;
   --color-highlight: #f3ead5;
   --color-backdrop: rgb(16 24 40 / 0.45);
 
@@ -71,26 +53,6 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-bg: #0f1216;
-    --color-fg: #e6e8eb;
-    --color-muted: #a3abb5;
-    --color-surface: #171b21;
-    --color-surface-2: #1f252d;
-    --color-border: #2b323b;
-    --color-border-strong: #566270;
-    --color-accent: #8ab4ff;
-    --color-accent-hover: #a8c6ff;
-    --color-accent-fg: #0b1220;
-    --color-accent-soft: #1b2a4a;
-    --color-danger: #d8a09b;
-    --color-danger-soft: #322526;
-    --color-success: #99c3a9;
-    --color-success-soft: #202b25;
-    --color-warning: #d0b282;
-    --color-warning-soft: #302b22;
-    --color-info: #8ab4ff;
-    --color-info-soft: #1b2a4a;
-    --color-focus: #8ab4ff;
     --color-highlight: #373024;
     --color-backdrop: rgb(0 0 0 / 0.6);
 

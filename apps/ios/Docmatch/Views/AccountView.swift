@@ -19,60 +19,56 @@ struct AccountView: View {
             case .failed(let message):
                 ErrorView(message: message) { Task { await model.refresh() } }
             case .ready(let me, let devices, let notice):
-                List {
-                    if let notice {
-                        Text(notice)
-                    }
-                    Section {
-                        if !me.user.displayName.isEmpty {
-                            LabeledContent(texts.t("account.name_label"), value: me.user.displayName)
-                        }
-                        LabeledContent(texts.t("account.email_label"), value: me.user.email)
+                DmPage {
+                    DmHeading(title: texts.t("account.title"), subtitle: texts.t("mobile.account_text"))
+                    if let notice { DmNotice(message: notice) }
+                    DmCard {
+                        DmIconTile(name: "person.crop.circle")
+                        Text(texts.t("account.profile")).font(.headline).accessibilityAddTraits(.isHeader)
+                        if !me.user.displayName.isEmpty { profileValue(texts.t("account.name_label"), me.user.displayName) }
+                        profileValue(texts.t("account.email_label"), me.user.email)
                         if let credits = me.credits {
-                            LabeledContent(texts.t("account.credits"), value: credits.tokenExempt ? texts.t("account.token_exempt") : texts.t("account.credits_available", ["available": credits.available]))
+                            profileValue(texts.t("account.credits"), credits.tokenExempt ? texts.t("account.token_exempt") : texts.t("account.credits_available", ["available": credits.available]))
                         }
-                        Button(texts.t("account.sign_out")) { Task { await model.signOut() } }
-                    } header: {
-                        Text(texts.t("account.profile")).accessibilityAddTraits(.isHeader)
+                        Button(texts.t("account.sign_out")) { Task { await model.signOut() } }.buttonStyle(DmButtonStyle(.secondary))
                     }
-                    Section {
-                        ForEach(devices) { device in
-                            HStack {
-                                VStack(alignment: .leading) {
-                                    Text(device.name).bold()
-                                    if device.current {
-                                        Text(texts.t("account.this_device"))
-                                            .foregroundStyle(Color(DmColors.brandPrimary))
-                                    }
-                                    Text(texts.t("account.last_seen", ["when": Format.dateTime(device.lastSeenAt)]))
-                                        .font(.caption)
+                    DmHeading(title: texts.t("account.devices"), subtitle: texts.t("account.devices_text"))
+                    ForEach(devices) { device in
+                        DmCard {
+                            HStack(spacing: 12) {
+                                Image(systemName: device.current ? "iphone" : "desktopcomputer").foregroundStyle(Color(DmColors.textMuted)).accessibilityHidden(true)
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Text(device.name).font(.headline)
+                                    if device.current { Text(texts.t("account.this_device")).font(.caption).foregroundStyle(Color(DmColors.brandPrimary)) }
+                                    Text(texts.t("account.last_seen", ["when": Format.dateTime(device.lastSeenAt)])).font(.caption).foregroundStyle(Color(DmColors.textMuted))
                                 }
-                                .accessibilityElement(children: .combine)
-                                Spacer()
-                                Button(texts.t("account.revoke")) { Task { await model.revoke(device) } }
-                                    .buttonStyle(.bordered)
-                                    .accessibilityLabel(texts.t("account.revoke_label", ["name": device.name]))
-                            }
-                        }
-                    } header: {
-                        Text(texts.t("account.devices")).accessibilityAddTraits(.isHeader)
-                    } footer: {
-                        Text(texts.t("account.devices_text"))
+                            }.accessibilityElement(children: .combine)
+                            Button(texts.t("account.revoke")) { Task { await model.revoke(device) } }.buttonStyle(DmButtonStyle(.secondary))
+                                .accessibilityLabel(texts.t("account.revoke_label", ["name": device.name]))
+                        }.accessibilityIdentifier("device-row")
                     }
-                    Section {
-                        // The stores' rule: an app that creates accounts lets them be deleted in it.
-                        Button(texts.t("mobile.delete_account"), role: .destructive) { confirmingDeletion = true }
-                    }
+                    Button(texts.t("mobile.delete_account"), role: .destructive) { confirmingDeletion = true }.buttonStyle(DmButtonStyle(.destructive))
                 }
             }
         }
-        .navigationTitle(texts.t("account.title"))
+        .dmNavigation(texts.t("account.title"))
         .task { await model.refresh() }
-        .alert(texts.t("mobile.delete_title"), isPresented: $confirmingDeletion) {
-            Button(texts.t("mobile.delete_confirm"), role: .destructive) { Task { await model.deleteAccount() } }
-            Button(texts.t("common.cancel"), role: .cancel) {}
-        } message: {
-            Text(texts.t("mobile.delete_text"))
+        .sheet(isPresented: $confirmingDeletion) {
+            DmPage {
+                DmHeading(title: texts.t("mobile.delete_title"), subtitle: texts.t("mobile.delete_text"))
+                Button(texts.t("mobile.delete_confirm"), role: .destructive) {
+                    confirmingDeletion = false
+                    Task { await model.deleteAccount() }
+                }.buttonStyle(DmButtonStyle(.destructive))
+                Button(texts.t("common.cancel")) { confirmingDeletion = false }.buttonStyle(DmButtonStyle(.secondary))
+            }.presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
         }
+    }
+
+    private func profileValue(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label).font(.caption).foregroundStyle(Color(DmColors.textMuted))
+            Text(value).font(.body).textSelection(.enabled)
+        }.accessibilityElement(children: .combine)
     }
 }

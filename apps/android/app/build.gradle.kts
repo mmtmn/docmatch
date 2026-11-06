@@ -44,6 +44,9 @@ android {
 
     buildTypes {
         debug {
+            // Public Google web client: Credential Manager requests an ID token for this server
+            // audience. The Android debug client is registered by package + signing SHA-1.
+            buildConfigField("String", "GOOGLE_SERVER_CLIENT_ID", "\"${prop("docmatch.googleServerClientId", "118512591918-mmls51ou40ibjjj8m9oi9h555bnfq8kt.apps.googleusercontent.com")}\"")
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
             buildConfigField("String", "API_BASE_URL", "\"${apiBaseUrl ?: "http://10.0.2.2:8080"}\"")

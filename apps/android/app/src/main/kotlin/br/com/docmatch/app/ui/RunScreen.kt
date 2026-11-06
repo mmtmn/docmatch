@@ -20,14 +20,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -39,6 +36,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.Icons
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -191,22 +190,16 @@ fun RunScreen(vm: RunViewModel, onNewRun: () -> Unit) {
     when (val s = state) {
         RunState.Loading -> Loading(t("results.live_loading"))
         is RunState.Running ->
-            Column(Modifier.fillMaxSize().padding(DmSize.space3), verticalArrangement = Arrangement.spacedBy(DmSize.space2)) {
-                Text(t("mobile.run_title"), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
-                Card(Modifier.fillMaxWidth().animateContentSize()) {
-                    Column(Modifier.padding(DmSize.space3), verticalArrangement = Arrangement.spacedBy(DmSize.space2)) {
-                        Text("docmatch", fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(s.step?.let { stepLabel(it) } ?: t("mobile.run_waiting"), fontFamily = FontFamily.Monospace, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-                        LinearProgressIndicator(Modifier.fillMaxWidth())
-                    }
-                }
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
+                ProcessingScene(s.step?.let { stepLabel(it) } ?: t("mobile.run_waiting"))
+                Text(t("mobile.processing_keep_open"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         is RunState.NeedsApproval ->
             Column(Modifier.fillMaxSize().padding(DmSize.space3), verticalArrangement = Arrangement.spacedBy(DmSize.space2)) {
                 Text(t("mobile.approve_title"), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
                 s.run.pendingQuote?.let { q ->
                     Text(t("mobile.approve_text", mapOf("expected" to q.expectedCredits, "cap" to q.capCredits)))
-                    Button(onClick = vm::approve, enabled = !s.busy, modifier = Modifier.fillMaxWidth()) { Text(t("mobile.approve")) }
+                    DmPrimaryButton(onClick = vm::approve, enabled = !s.busy, modifier = Modifier.fillMaxWidth()) { Text(t("mobile.approve")) }
                 } ?: Text(t("mobile.status_needs_approval"))
                 notice?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive }) }
             }
@@ -216,18 +209,21 @@ fun RunScreen(vm: RunViewModel, onNewRun: () -> Unit) {
             val document = s.run.summary?.reconciliation
             val pending = s.findings.filter { it.status == "open" && it.severity != "info" }
             val critical = s.findings.filter { it.severity == "critical" }
-            LazyColumn(contentPadding = PaddingValues(DmSize.space3), verticalArrangement = Arrangement.spacedBy(DmSize.space2)) {
+            LazyColumn(modifier = Modifier.testTag("run-results"), contentPadding = PaddingValues(DmSize.space3), verticalArrangement = Arrangement.spacedBy(DmSize.space2)) {
                 item {
+                  DmCard(Modifier.fillMaxWidth()) {
+                   Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    DmIconTile(DmIcons.Check)
                     Text(t(if (document != null) "results.document_ready" else "results.report_ready"), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
                     Text(t(if (document != null) "results.output_description" else "results.report_subtitle"))
                     if (document != null) {
-                        Button(onClick = { vm.export(context, "xlsx") }, modifier = Modifier.fillMaxWidth()) { Text(t("results.download_corrected")) }
+                        DmPrimaryButton(onClick = { vm.export(context, "xlsx") }, modifier = Modifier.fillMaxWidth()) { Text(t("results.download_corrected")) }
                         Text(t("results.doc_open") + ": " + Format.money(document.totals.openBalance), fontWeight = FontWeight.SemiBold)
                     } else {
                         Text(t("results.legacy_output"))
-                        Button(onClick = onNewRun, modifier = Modifier.fillMaxWidth()) { Text(t("results.generate_corrected")) }
+                        DmPrimaryButton(onClick = onNewRun, modifier = Modifier.fillMaxWidth()) { Text(t("results.generate_corrected")) }
                     }
-                    OutlinedButton(onClick = { vm.export(context, "pdf") }, modifier = Modifier.fillMaxWidth()) { Text(t("results.download_report")) }
+                    DmSecondaryButton(onClick = { vm.export(context, "pdf") }, modifier = Modifier.fillMaxWidth()) { Text(t("results.download_report")) }
                     ResultsDisclosure(t("results.other_formats")) {
                         TextButton(onClick = { vm.export(context, "csv") }) { Text(t(if (document != null) "results.download_data_csv" else "results.download_findings_csv")) }
                         if (document == null) TextButton(onClick = { vm.export(context, "xlsx") }) { Text(t("results.download_findings_xlsx")) }
@@ -238,6 +234,8 @@ fun RunScreen(vm: RunViewModel, onNewRun: () -> Unit) {
                     }
                     Text(t("mobile.run_findings", mapOf("count" to s.findings.size)))
                     if (open == null) notice?.let { Text(it, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
+                }
+                }
                 }
                 if (critical.isNotEmpty()) item {
                     Text(t("results.critical_heading"), fontWeight = FontWeight.SemiBold)
@@ -287,7 +285,7 @@ fun RunScreen(vm: RunViewModel, onNewRun: () -> Unit) {
 private fun FindingCard(f: Finding, onOpen: () -> Unit) {
     val level = confidenceLabel(f)
     val described = t("results.confidence_label", mapOf("level" to level))
-    Card(Modifier.fillMaxWidth().testTag(TAG_FINDING).clickable(onClick = onOpen)) {
+    DmCard(Modifier.fillMaxWidth().testTag(TAG_FINDING).clickable(onClick = onOpen)) {
         Column(Modifier.padding(DmSize.space2), verticalArrangement = Arrangement.spacedBy(DmSize.space1)) {
             Text(f.title, fontWeight = FontWeight.SemiBold)
             Text(Format.money(f.amountAtRisk))
@@ -345,7 +343,7 @@ private fun FindingDetail(
             )
             CharCounter(codePoints(note), Limits.Text.FINDING_FEEDBACK_NOTE)
             Row(horizontalArrangement = Arrangement.spacedBy(DmSize.space2)) {
-                Button(
+                DmPrimaryButton(
                     onClick = {
                         onDecide(Decision.RESOLVED, note.trim())
                         editing = false
@@ -357,9 +355,9 @@ private fun FindingDetail(
         } else {
             // Every decision is recorded on the API, so changing it is changing it everywhere.
             Column(verticalArrangement = Arrangement.spacedBy(DmSize.space1)) {
-                Button(onClick = { onDecide(Decision.CONFIRMED, null) }, enabled = f.status != Decision.CONFIRMED) { Text(t("results.accept")) }
-                OutlinedButton(onClick = { onDecide(Decision.DISMISSED, null) }, enabled = f.status != Decision.DISMISSED) { Text(t("results.reject")) }
-                OutlinedButton(onClick = { editing = true }) { Text(t("results.edit")) }
+                DmPrimaryButton(onClick = { onDecide(Decision.CONFIRMED, null) }, enabled = f.status != Decision.CONFIRMED) { Text(t("results.accept")) }
+                DmSecondaryButton(onClick = { onDecide(Decision.DISMISSED, null) }, enabled = f.status != Decision.DISMISSED) { Text(t("results.reject")) }
+                DmSecondaryButton(onClick = { editing = true }) { Text(t("results.edit")) }
             }
         }
         notice?.let { Text(it, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
@@ -404,16 +402,12 @@ fun statusLabel(status: String): String =
 
 @Composable
 private fun ResultsDisclosure(label: String, content: @Composable () -> Unit) {
-    var expanded by rememberSaveable(label) { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(DmSize.space1)) {
-        OutlinedButton(onClick = { expanded = !expanded }, modifier = Modifier.fillMaxWidth()) { Text((if (expanded) "− " else "+ ") + label) }
-        if (expanded) content()
-    }
+    DmDisclosure(label) { content() }
 }
 
 @Composable
 private fun DocumentRow(row: ReconciledReceivable) {
-    Card(Modifier.fillMaxWidth()) {
+    DmCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(DmSize.space2), verticalArrangement = Arrangement.spacedBy(DmSize.space1)) {
             Text(row.reference + " · " + row.customer, fontWeight = FontWeight.SemiBold)
             Text(t("results.file_balance_change", mapOf("before" to Format.money(row.originalAmount), "after" to Format.money(row.openAmount))))

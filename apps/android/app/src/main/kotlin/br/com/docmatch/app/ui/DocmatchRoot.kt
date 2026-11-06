@@ -7,6 +7,9 @@ import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
+import androidx.compose.ui.unit.dp
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -38,7 +41,7 @@ fun DocmatchRoot(dm: Docmatch) {
             val session: SessionViewModel = viewModel { SessionViewModel(dm) { Exports.clear(app) } }
             when (val s = session.state.collectAsState().value) {
                 SessionState.Loading -> Scaffold { p -> androidx.compose.foundation.layout.Box(Modifier.padding(p)) { Loading(t("mobile.loading")) } }
-                is SessionState.SignedOut -> Scaffold { p -> androidx.compose.foundation.layout.Box(Modifier.padding(p)) { LoginScreen(s, session, dm.baseUrl) } }
+                is SessionState.SignedOut -> Scaffold(topBar = { DmHeader() }) { p -> androidx.compose.foundation.layout.Box(Modifier.padding(p)) { LoginScreen(s, session, dm.baseUrl) } }
                 is SessionState.SignedIn -> SignedIn(dm, s.me.credits?.tokenExempt == true) { notice -> session.signedOut(notice) }
             }
         }
@@ -56,8 +59,10 @@ private fun SignedIn(dm: Docmatch, tokenExempt: Boolean, onSignedOut: (String?) 
         )
     val entry by nav.currentBackStackEntryAsState()
     Scaffold(
+        topBar = { DmHeader(title = if (entry?.destination?.route == "new") t("common.app_title") else null,
+            onBack = if (entry?.destination?.route == "run/{id}") { { nav.popBackStack(); Unit } } else null) },
         bottomBar = {
-            NavigationBar {
+            NavigationBar(containerColor = MaterialTheme.colorScheme.background, tonalElevation = 0.dp) {
                 tabs.forEach { tab ->
                     NavigationBarItem(
                         selected = entry?.destination?.route == tab.route,
@@ -69,7 +74,8 @@ private fun SignedIn(dm: Docmatch, tokenExempt: Boolean, onSignedOut: (String?) 
                             }
                         },
                         icon = { Icon(tab.icon, contentDescription = null) },
-                        label = { Text(tab.label) },
+                        label = { Text(tab.label, style = MaterialTheme.typography.labelMedium) },
+                        colors = NavigationBarItemDefaults.colors(indicatorColor = MaterialTheme.colorScheme.primaryContainer),
                     )
                 }
             }

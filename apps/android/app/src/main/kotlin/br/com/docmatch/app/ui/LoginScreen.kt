@@ -1,6 +1,12 @@
 package br.com.docmatch.app.ui
 
 import androidx.activity.compose.LocalActivity
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.material.icons.Icons
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,10 +16,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.res.painterResource
+import br.com.docmatch.app.R
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -51,52 +63,67 @@ fun LoginScreen(state: SessionState.SignedOut, session: SessionViewModel, server
     var showPassword by remember { mutableStateOf(false) }
     var useCode by rememberSaveable { mutableStateOf(false) }
     var localError by remember { mutableStateOf<String?>(null) }
+    var providerBusy by remember { mutableStateOf(false) }
+    val busy = state.busy || providerBusy
     val m = state.methods
     val google = m.google && BuildConfig.GOOGLE_SERVER_CLIENT_ID.isNotEmpty()
     // What this app can offer: Apple is web-only on Android, Google needs this build's client id.
     val usable = m.email || m.password || m.dev || google
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(DmSize.space3),
-        verticalArrangement = Arrangement.spacedBy(DmSize.space2),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp), horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        DmIconTile(DmIcons.Check)
         Text(t("auth.login_title"), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
-        Text(t("auth.login_text"), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(t("auth.login_text"), color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+        DmCard(Modifier.widthIn(max = 440.dp).fillMaxWidth()) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
 
         if (m.dev) {
-            Button(onClick = session::devLogin, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
+            DmPrimaryButton(onClick = session::devLogin, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                 Text(if (state.busy) t("auth.dev_signing_in") else t("auth.dev_sign_in"))
             }
         }
         if (google) {
-            OutlinedButton(
+            DmSecondaryButton(
                 onClick = {
-                    val host = activity ?: return@OutlinedButton
+                    val host = activity ?: return@DmSecondaryButton
+                    providerBusy = true
                     scope.launch {
+                        try {
                         when (val outcome = GoogleSignIn.idToken(host, BuildConfig.GOOGLE_SERVER_CLIENT_ID)) {
                             is GoogleSignIn.Outcome.Token -> session.googleIdToken(outcome.idToken)
                             GoogleSignIn.Outcome.Cancelled -> session.failed(null)
                             GoogleSignIn.Outcome.NoAccount -> session.failed(texts.t("mobile.google_no_account"))
                             GoogleSignIn.Outcome.Failed -> session.failed(texts.t("auth.error_generic"))
                         }
+                        } finally { providerBusy = false }
                     }
                 },
-                enabled = !state.busy,
+                enabled = !busy,
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text(t("auth.sign_in_google")) }
+            ) {
+                Image(painterResource(R.drawable.google_mark), contentDescription = null, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(12.dp))
+                Text(t("auth.sign_in_google"))
+            }
         }
-        if (m.email && (m.dev || google)) {
-            HorizontalDivider()
-            Text(t("auth.or"), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if ((m.email || m.password) && (m.dev || google)) {
+            androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                HorizontalDivider(Modifier.weight(1f))
+                Text(t("auth.or"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                HorizontalDivider(Modifier.weight(1f))
+            }
         }
 
         if (m.password && !useCode) {
-            OutlinedTextField(value = email, onValueChange = { email = it.take(Limits.Text.EMAIL) }, label = { Text(t("auth.email_label")) }, singleLine = true, enabled = !state.busy, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email), modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(value = password, onValueChange = { password = it.take(Limits.Text.PASSWORD_MAX) }, label = { Text(t("auth.password_label")) }, singleLine = true, enabled = !state.busy, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(), trailingIcon = { TextButton(onClick = { showPassword = !showPassword }) { Text(t(if (showPassword) "auth.hide_password" else "auth.show_password")) } }, modifier = Modifier.fillMaxWidth())
-            Button(onClick = { session.passwordLogin(email, password); password = "" }, enabled = !state.busy && EMAIL.matches(email.trim()) && password.isNotEmpty(), modifier = Modifier.fillMaxWidth()) { Text(t(if (state.busy) "auth.signing_in" else "nav.login")) }
+            OutlinedTextField(value = email, onValueChange = { email = it.take(Limits.Text.EMAIL) }, label = { Text(t("auth.email_label")) }, singleLine = true, enabled = !busy, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email), modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = password, onValueChange = { password = it.take(Limits.Text.PASSWORD_MAX) }, label = { Text(t("auth.password_label")) }, singleLine = true, enabled = !busy, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(), trailingIcon = { IconButton(onClick = { showPassword = !showPassword }) { Icon(if (showPassword) DmIcons.EyeOff else DmIcons.Eye, contentDescription = t(if (showPassword) "auth.hide_password" else "auth.show_password")) } }, modifier = Modifier.fillMaxWidth())
+            DmPrimaryButton(onClick = { session.passwordLogin(email, password); password = "" }, enabled = !busy && EMAIL.matches(email.trim()) && password.isNotEmpty(), modifier = Modifier.fillMaxWidth()) { Text(t(if (state.busy) "auth.signing_in" else "nav.login")) }
         }
         if (m.email && m.password) {
-            TextButton(onClick = { useCode = !useCode; session.changeEmail(); password = "" }) { Text(t(if (useCode) "auth.use_password" else "auth.send_code")) }
+            TextButton(onClick = { useCode = !useCode; session.changeEmail(); password = "" }, enabled = !busy) { Text(t(if (useCode) "auth.use_password" else "auth.send_code")) }
         }
         if (m.email && (!m.password || useCode)) {
             if (state.challengeId == null) {
@@ -108,7 +135,7 @@ fun LoginScreen(state: SessionState.SignedOut, session: SessionViewModel, server
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Button(
+                DmPrimaryButton(
                     onClick = {
                         if (!EMAIL.matches(email.trim())) {
                             localError = texts.t("errors.invalid_email")
@@ -117,7 +144,7 @@ fun LoginScreen(state: SessionState.SignedOut, session: SessionViewModel, server
                             session.sendCode(email)
                         }
                     },
-                    enabled = !state.busy,
+                    enabled = !busy,
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text(t("auth.send_code")) }
             } else {
@@ -130,23 +157,26 @@ fun LoginScreen(state: SessionState.SignedOut, session: SessionViewModel, server
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Button(
+                DmPrimaryButton(
                     onClick = { session.verifyCode(code) },
-                    enabled = !state.busy && code.length == 6,
+                    enabled = !busy && code.length == 6,
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text(t("auth.verify")) }
-                TextButton(onClick = session::changeEmail) { Text(t("auth.change_email")) }
+                TextButton(onClick = session::changeEmail, enabled = !busy) { Text(t("auth.change_email")) }
             }
         }
 
         if (!usable) {
             // Nothing this app can use; usually the API is out of reach: let the user try again.
             Text(t("auth.none_available"))
-            OutlinedButton(onClick = session::refresh, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) { Text(t("mobile.retry")) }
+            DmSecondaryButton(onClick = session::refresh, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text(t("mobile.retry")) }
         }
         (localError ?: state.error)?.let {
-            Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive })
+            DmNotice(it, error = true)
         }
+        }
+        }
+        Text(t("mobile.legal_text"), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (BuildConfig.DEBUG) {
             Text(t("mobile.server", mapOf("url" to serverUrl)), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }

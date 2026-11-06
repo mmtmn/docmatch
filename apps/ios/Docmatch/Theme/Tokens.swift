@@ -15,42 +15,42 @@ public struct DmColor: Sendable {
 
 /// The palette of the site (tokens.json), light and dark.
 public enum DmColors {
-    /// FFFFFF / 0B1220
-    public static let bgCanvas = DmColor(light: .init(red: 1, green: 1, blue: 1), dark: .init(red: 0.0431, green: 0.0706, blue: 0.1255))
-    /// F4F6F8 / 121A2B
-    public static let bgSurface = DmColor(light: .init(red: 0.9569, green: 0.9647, blue: 0.9725), dark: .init(red: 0.0706, green: 0.102, blue: 0.1686))
-    /// FFFFFF / 1A2437
-    public static let bgElevated = DmColor(light: .init(red: 1, green: 1, blue: 1), dark: .init(red: 0.102, green: 0.1412, blue: 0.2157))
-    /// E9EDF1 / 243049
-    public static let bgSubtle = DmColor(light: .init(red: 0.9137, green: 0.9294, blue: 0.9451), dark: .init(red: 0.1412, green: 0.1882, blue: 0.2863))
-    /// 0F172A / F8FAFC
-    public static let bgInverse = DmColor(light: .init(red: 0.0588, green: 0.0902, blue: 0.1647), dark: .init(red: 0.9725, green: 0.9804, blue: 0.9882))
-    /// 0F172A / F1F5F9
-    public static let textPrimary = DmColor(light: .init(red: 0.0588, green: 0.0902, blue: 0.1647), dark: .init(red: 0.9451, green: 0.9608, blue: 0.9765))
-    /// 3F4A5A / C3CCD9
-    public static let textSecondary = DmColor(light: .init(red: 0.2471, green: 0.2902, blue: 0.3529), dark: .init(red: 0.7647, green: 0.8, blue: 0.851))
-    /// 5B6675 / 97A3B4
-    public static let textMuted = DmColor(light: .init(red: 0.3569, green: 0.4, blue: 0.4588), dark: .init(red: 0.5922, green: 0.6392, blue: 0.7059))
-    /// F8FAFC / 0F172A
-    public static let textInverse = DmColor(light: .init(red: 0.9725, green: 0.9804, blue: 0.9882), dark: .init(red: 0.0588, green: 0.0902, blue: 0.1647))
-    /// 1D4ED8 / 93C5FD
-    public static let textLink = DmColor(light: .init(red: 0.1137, green: 0.3059, blue: 0.8471), dark: .init(red: 0.5765, green: 0.7725, blue: 0.9922))
-    /// D5DBE3 / 2C3850
-    public static let borderDefault = DmColor(light: .init(red: 0.8353, green: 0.8588, blue: 0.8902), dark: .init(red: 0.1725, green: 0.2196, blue: 0.3137))
-    /// 9AA5B4 / 4A5872
-    public static let borderStrong = DmColor(light: .init(red: 0.6039, green: 0.6471, blue: 0.7059), dark: .init(red: 0.2902, green: 0.3451, blue: 0.4471))
-    /// 1D4ED8 / 93C5FD
-    public static let borderFocus = DmColor(light: .init(red: 0.1137, green: 0.3059, blue: 0.8471), dark: .init(red: 0.5765, green: 0.7725, blue: 0.9922))
-    /// 1D4ED8 / 60A5FA
-    public static let brandPrimary = DmColor(light: .init(red: 0.1137, green: 0.3059, blue: 0.8471), dark: .init(red: 0.3765, green: 0.6471, blue: 0.9804))
-    /// 1E40AF / 93C5FD
-    public static let brandPrimaryHover = DmColor(light: .init(red: 0.1176, green: 0.251, blue: 0.6863), dark: .init(red: 0.5765, green: 0.7725, blue: 0.9922))
-    /// FFFFFF / 0B1220
-    public static let brandOnPrimary = DmColor(light: .init(red: 1, green: 1, blue: 1), dark: .init(red: 0.0431, green: 0.0706, blue: 0.1255))
-    /// DBEAFE / 1E3A8A
-    public static let brandSubtle = DmColor(light: .init(red: 0.8588, green: 0.9176, blue: 0.9961), dark: .init(red: 0.1176, green: 0.2275, blue: 0.5412))
-    /// 1E3A8A / DBEAFE
-    public static let brandOnSubtle = DmColor(light: .init(red: 0.1176, green: 0.2275, blue: 0.5412), dark: .init(red: 0.8588, green: 0.9176, blue: 0.9961))
+    /// FCFCFD / 0F1216
+    public static let bgCanvas = DmColor(light: .init(red: 0.9882, green: 0.9882, blue: 0.9922), dark: .init(red: 0.0588, green: 0.0706, blue: 0.0863))
+    /// F4F6F8 / 171B21
+    public static let bgSurface = DmColor(light: .init(red: 0.9569, green: 0.9647, blue: 0.9725), dark: .init(red: 0.0902, green: 0.1059, blue: 0.1294))
+    /// FCFCFD / 171B21
+    public static let bgElevated = DmColor(light: .init(red: 0.9882, green: 0.9882, blue: 0.9922), dark: .init(red: 0.0902, green: 0.1059, blue: 0.1294))
+    /// E9EDF1 / 1F252D
+    public static let bgSubtle = DmColor(light: .init(red: 0.9137, green: 0.9294, blue: 0.9451), dark: .init(red: 0.1216, green: 0.1451, blue: 0.1765))
+    /// 1B1F24 / E6E8EB
+    public static let bgInverse = DmColor(light: .init(red: 0.1059, green: 0.1216, blue: 0.1412), dark: .init(red: 0.902, green: 0.9098, blue: 0.9216))
+    /// 1B1F24 / E6E8EB
+    public static let textPrimary = DmColor(light: .init(red: 0.1059, green: 0.1216, blue: 0.1412), dark: .init(red: 0.902, green: 0.9098, blue: 0.9216))
+    /// 4B5563 / A3ABB5
+    public static let textSecondary = DmColor(light: .init(red: 0.2941, green: 0.3333, blue: 0.3882), dark: .init(red: 0.6392, green: 0.6706, blue: 0.7098))
+    /// 4B5563 / A3ABB5
+    public static let textMuted = DmColor(light: .init(red: 0.2941, green: 0.3333, blue: 0.3882), dark: .init(red: 0.6392, green: 0.6706, blue: 0.7098))
+    /// FCFCFD / 0F1216
+    public static let textInverse = DmColor(light: .init(red: 0.9882, green: 0.9882, blue: 0.9922), dark: .init(red: 0.0588, green: 0.0706, blue: 0.0863))
+    /// 1D4ED8 / 8AB4FF
+    public static let textLink = DmColor(light: .init(red: 0.1137, green: 0.3059, blue: 0.8471), dark: .init(red: 0.5412, green: 0.7059, blue: 1))
+    /// C9D1D9 / 2B323B
+    public static let borderDefault = DmColor(light: .init(red: 0.7882, green: 0.8196, blue: 0.851), dark: .init(red: 0.1686, green: 0.1961, blue: 0.2314))
+    /// 6E7781 / 566270
+    public static let borderStrong = DmColor(light: .init(red: 0.4314, green: 0.4667, blue: 0.5059), dark: .init(red: 0.3373, green: 0.3843, blue: 0.4392))
+    /// 1D4ED8 / 8AB4FF
+    public static let borderFocus = DmColor(light: .init(red: 0.1137, green: 0.3059, blue: 0.8471), dark: .init(red: 0.5412, green: 0.7059, blue: 1))
+    /// 1D4ED8 / 8AB4FF
+    public static let brandPrimary = DmColor(light: .init(red: 0.1137, green: 0.3059, blue: 0.8471), dark: .init(red: 0.5412, green: 0.7059, blue: 1))
+    /// 1E40AF / A8C6FF
+    public static let brandPrimaryHover = DmColor(light: .init(red: 0.1176, green: 0.251, blue: 0.6863), dark: .init(red: 0.6588, green: 0.7765, blue: 1))
+    /// FCFCFD / 0B1220
+    public static let brandOnPrimary = DmColor(light: .init(red: 0.9882, green: 0.9882, blue: 0.9922), dark: .init(red: 0.0431, green: 0.0706, blue: 0.1255))
+    /// DBE4FF / 1B2A4A
+    public static let brandSubtle = DmColor(light: .init(red: 0.8588, green: 0.8941, blue: 1), dark: .init(red: 0.1059, green: 0.1647, blue: 0.2902))
+    /// 1E3A8A / 8AB4FF
+    public static let brandOnSubtle = DmColor(light: .init(red: 0.1176, green: 0.2275, blue: 0.5412), dark: .init(red: 0.5412, green: 0.7059, blue: 1))
     /// 35588D / 8AB4FF
     public static let statusInfo = DmColor(light: .init(red: 0.2078, green: 0.3451, blue: 0.5529), dark: .init(red: 0.5412, green: 0.7059, blue: 1))
     /// FFFFFF / 0F1216
@@ -121,7 +121,7 @@ public enum DmColors {
 public enum DmSize {
     public static let radiusNone: Double = 0
     public static let radiusSm: Double = 4
-    public static let radiusMd: Double = 8
+    public static let radiusMd: Double = 10
     public static let radiusLg: Double = 16
     public static let radiusFull: Double = 9999
     public static let space0: Double = 0

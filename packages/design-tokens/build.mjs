@@ -2,7 +2,7 @@
 // Builds tokens.css from tokens.json and checks the design rules that the tokens promise:
 //   - every named text/background pair in `contrast_pairs` reaches WCAG AA 4.5:1 in both modes
 //     (contrast is computed here, from the sRGB relative luminance formula);
-//   - spacing values are multiples of 8 and the default radius is 8;
+//   - spacing values are multiples of 8 and the default radius is 10;
 //   - every color is a 6-digit hex.
 // Zero dependencies. `node build.mjs` writes tokens.css; `node build.mjs --check` fails when
 // tokens.css is stale or any rule is broken. Exported functions are unit-tested by tools/codegen.
@@ -15,7 +15,7 @@ export const TOKENS_FILE = path.join(here, "tokens.json");
 export const CSS_FILE = path.join(here, "tokens.css");
 export const AA_MIN = 4.5;
 export const SPACE_STEP = 8;
-export const BASE_RADIUS = 8;
+export const BASE_RADIUS = 10;
 
 // ---------------------------------------------------------------------------- color math
 

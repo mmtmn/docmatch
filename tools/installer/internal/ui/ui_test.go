@@ -168,7 +168,7 @@ func TestWordmarkColors(t *testing.T) {
 		t.Fatal("o brilho precisa mudar as cores")
 	}
 	first, last := th.Gradient[0].Hex(), th.Gradient[len(th.Gradient)-1].Hex()
-	if first != "#1d4ed8" || last != "#93c5fd" {
+	if first != "#1d4ed8" || last != "#a8c6ff" {
 		t.Fatalf("gradiente fora dos tokens: %s -> %s", first, last)
 	}
 	golden.RequireEqualEscape(t, []byte(shimmer), true)

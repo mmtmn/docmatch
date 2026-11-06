@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -17,6 +16,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.material.icons.Icons
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
@@ -87,11 +87,11 @@ fun HistoryScreen(vm: HistoryViewModel, onOpen: (String) -> Unit) {
         is HistoryState.Failed -> ErrorState(s.message, vm::retry)
         is HistoryState.Ready ->
             LazyColumn(contentPadding = PaddingValues(DmSize.space3), verticalArrangement = Arrangement.spacedBy(DmSize.space2)) {
-                item { Text(t("mobile.tab_history"), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() }) }
-                if (s.runs.isEmpty()) item { Text(t("mobile.history_empty")) }
+                item { DmHeading(t("mobile.tab_history"), t("mobile.history_text")) }
+                if (s.runs.isEmpty()) item { DmEmptyState(DmIcons.Folder, t("mobile.tab_history"), t("mobile.history_empty")) }
                 items(s.runs, key = { it.id }) { run ->
-                    Card(Modifier.fillMaxWidth().clickable { onOpen(run.id) }) {
-                        Column(Modifier.padding(DmSize.space2)) {
+                    DmCard(Modifier.fillMaxWidth().clickable { onOpen(run.id) }) {
+                        Column(Modifier.padding(DmSize.space2), verticalArrangement = Arrangement.spacedBy(DmSize.space1)) {
                             Text(runStatus(run.status), fontWeight = FontWeight.SemiBold)
                             Text(t("mobile.history_item", mapOf("date" to Format.dateTime(run.createdAt), "count" to run.sources.size)))
                             run.summary?.let { Text(t("mobile.run_findings", mapOf("count" to it.findingsTotal)) + " · " + Format.money(it.amountAtRisk)) }

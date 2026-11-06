@@ -69,17 +69,21 @@ make app       # no Mac: xcodegen + xcodebuild para o simulador, sem assinatura
 make release   # no Mac: arquivo de release (ENV=prod), com a origem lida dos outputs do Terraform
 ```
 
-O workflow `ios` do GitHub compila as telas num runner macOS quando `apps/ios` muda. Ninguém
-espera por ele: o portão é o `make ci` local.
+Os workflows do GitHub são exclusivamente manuais. A validação acontece localmente: `make ci`
+para o núcleo e `make app` num Mac com Xcode para compilar as telas. Nenhum push inicia CI pago.
 
 ## Configuração
 
-Tudo por build setting (variável do `xcodebuild` ou do `make`), nada no código:
+Para testar o debug contra o site publicado: `DOCMATCH_API_BASE_URL=https://docmatch.com.br make app`.
+O `make app` encaminha os overrides de API e client Google ao Xcode.
+
+A configuração usa build settings (`xcodebuild`); o ID OAuth público de debug fica em `project.yml`.
+Nenhum segredo OAuth entra no app:
 
 | Build setting | Para quê |
 | --- | --- |
 | `DOCMATCH_API_BASE_URL` | Origem da API. Debug: `http://localhost:8080`. Release: obrigatória e `https://`; o `make release` lê do Terraform e o app se recusa a abrir com outra. |
-| `DOCMATCH_GOOGLE_IOS_CLIENT_ID` | Client OAuth do Google do tipo iOS, no mesmo projeto do client web. Vazio esconde o botão. Ele também entra em `GOOGLE_OAUTH_NATIVE_CLIENT_IDS` da API. |
+| `DOCMATCH_GOOGLE_IOS_CLIENT_ID` | Client OAuth do Google do tipo iOS, no mesmo projeto do client web. Debug já configura o cliente de `br.com.docmatch.debug`; Release continua vazio até receber um cliente de produção. Vazio esconde o botão. Ele também entra em `GOOGLE_OAUTH_NATIVE_CLIENT_IDS` da API. |
 | `DEVELOPMENT_TEAM` | O time da Apple que assina, o mesmo `APPLE_TEAM_ID` da API. |
 
 Para o Sign in with Apple, ative a capability no App ID `br.com.docmatch` (e no `.debug`, para
@@ -126,3 +130,15 @@ veja [API](../../docs/api.md) e [estruturas, algoritmos e padrões](../../docs/e
 Testes em Linux verificam DocmatchKit, incluindo o decode do resultado, sessões e pedidos de
 login/exportação. Eles **não compilam SwiftUI**. Antes de distribuir, execute `make app` em
 macOS ou o workflow `ios` sobre a revisão exata; um IPA exige Xcode, assinatura e time Apple.
+
+## Interface compartilhada
+
+A composição acompanha o site: marca discreta no topo, título e área de envio com borda tracejada,
+arquivos com remoção individual, regras que crescem até seis linhas e ação de envio sempre acessível.
+O resultado começa por Excel corrigido e PDF; os detalhes ficam em seções expansíveis. Conta e
+histórico usam cartões leves. Confirmação de análise e exclusão usam folhas com o mesmo tema.
+A animação de processamento informa a etapa real e respeita Reduzir Movimento. Tipografia dinâmica,
+rótulos de acessibilidade, campos de senha com olho e botões de pelo menos 44 pt preservam o uso nativo.
+
+Veja os [clientes Google de debug](../../docs/runbooks/google-sign-in.md#clientes-nativos-de-debug).
+No Linux, os testes Swift montam apenas fontes e fixtures, sem rede e sem acesso ao `.env`.

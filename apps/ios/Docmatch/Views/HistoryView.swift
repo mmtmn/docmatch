@@ -21,36 +21,39 @@ struct HistoryView: View {
             case .failed(let message):
                 ErrorView(message: message) { Task { await model.refresh() } }
             case .ready(let runs, let next, let notice):
-                List {
+                DmPage {
+                    DmHeading(title: texts.t("mobile.tab_history"), subtitle: texts.t("mobile.history_text"))
                     if runs.isEmpty {
-                        Text(texts.t("mobile.history_empty"))
+                        VStack(spacing: 14) {
+                            DmIconTile(name: "folder")
+                            Text(texts.t("mobile.history_empty")).font(.subheadline).foregroundStyle(Color(DmColors.textMuted)).multilineTextAlignment(.center)
+                        }.frame(maxWidth: .infinity).padding(.vertical, 32)
                     }
                     ForEach(runs) { run in
-                        Button {
-                            onOpen(run.id)
-                        } label: {
-                            VStack(alignment: .leading) {
-                                Text(Labels.runStatus(texts, run.status)).bold()
+                        Button { onOpen(run.id) } label: {
+                            DmCard {
+                                HStack {
+                                    Text(Labels.runStatus(texts, run.status)).font(.headline)
+                                    Spacer()
+                                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(Color(DmColors.textMuted))
+                                }
                                 Text(texts.t("mobile.history_item", ["date": Format.dateTime(run.createdAt), "count": run.sources.count]))
+                                    .font(.subheadline).foregroundStyle(Color(DmColors.textMuted))
                                 if let summary = run.summary {
-                                    Text(texts.t("mobile.run_findings", ["count": summary.findingsTotal]) + " · " + Format.money(summary.amountAtRisk))
+                                    Text(texts.t("mobile.run_findings", ["count": summary.findingsTotal]) + " · " + Format.money(summary.amountAtRisk)).font(.subheadline)
                                 }
                             }
-                            .foregroundStyle(.primary)
-                        }
+                        }.buttonStyle(.plain)
                     }
-                    if let notice {
-                        Text(notice)
-                            .foregroundStyle(Color(DmColors.statusDanger))
-                    }
+                    if let notice { DmNotice(message: notice, error: true) }
                     if next != nil {
-                        Button(texts.t("mobile.load_more")) { Task { await model.more() } }
+                        Button(texts.t("mobile.load_more")) { Task { await model.more() } }.buttonStyle(DmButtonStyle(.secondary))
                     }
                 }
                 .refreshable { await model.refresh() }
             }
         }
-        .navigationTitle(texts.t("mobile.tab_history"))
+        .dmNavigation(texts.t("mobile.tab_history"))
         .task { await model.refresh() }
     }
 }

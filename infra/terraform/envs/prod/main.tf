@@ -40,6 +40,7 @@ locals {
   # Secrets whose feature stays off while they are empty (created as __EMPTY__, never blocking the
   # boot): the pool of on-demand workers boots off until DM_BURST_POOL_SECRET holds 32+ characters.
   optional_secret_names = [
+    "GOOGLE_OAUTH_NATIVE_CLIENT_IDS",
     "DM_STRIPE_PRICE_STARTER", "DM_STRIPE_PRICE_PRO", "DM_STRIPE_PRICE_BUSINESS", "DM_STRIPE_PRICE_TOPUP",
     "DM_STRIPE_PORTAL_CONFIGURATION_ID", "DM_STRIPE_PAYMENT_METHOD_CONFIGURATION_ID", "DM_STRIPE_TEST_EMAILS",
     "DM_BURST_POOL_SECRET",
