@@ -13,7 +13,7 @@ try {
   const binary = await ensureBinary({ release, platform: process.platform, arch: process.arch, cache });
   // npm updates the package and its pinned checksum; do not mutate an npm-managed binary.
   if (process.argv[2] === 'update') {
-    console.log(`Atualize com: npm install -g ${release.packageURL || 'docmatch@latest'}`);
+    console.log(`Atualize com: npm install -g ${release.packageURL ? '--allow-remote=root ' + release.packageURL : 'docmatch@latest'}`);
   } else {
     const child = spawn(binary, process.argv.slice(2), { stdio: 'inherit', shell: false });
     const signals = ['SIGINT', 'SIGTERM'];

@@ -1,31 +1,31 @@
-# Fórmula do Homebrew para o docmatch 0.1.1, gerada pelo tools/installer/release.sh a partir
+# Fórmula do Homebrew para o docmatch 0.1.2, gerada pelo tools/installer/release.sh a partir
 # do SHA256SUMS.txt da versão (molde em tools/installer/packaging/templates/docmatch.rb). Os
 # binários são os mesmos do install.sh, nas cópias fixas da versão.
 class Docmatch < Formula
   desc "Instalador e linha de comando da docmatch: concilia documentos nesta máquina"
   homepage "https://docmatch.com.br"
-  version "0.1.1"
+  version "0.1.2"
   license "AGPL-3.0-only"
 
   on_macos do
     on_arm do
-      url "https://docmatch.com.br/install/v0.1.1/docmatch-darwin-arm64.bin"
-      sha256 "0b0ab52b67b8544df59247d680a72c4ca7f4b09b040843330ccb89342903b222"
+      url "https://docmatch.com.br/install/v0.1.2/docmatch-darwin-arm64.bin"
+      sha256 "57ec0cad2f3369403b9e411b6c7fca68189e232c3dab7ffec9c212e79efe986f"
     end
     on_intel do
-      url "https://docmatch.com.br/install/v0.1.1/docmatch-darwin-amd64.bin"
-      sha256 "107e7f01dc8754b85c46c5886677efb663309d00696bbd0b42432ee7a8d9e67c"
+      url "https://docmatch.com.br/install/v0.1.2/docmatch-darwin-amd64.bin"
+      sha256 "700b7a52470734818cbe2f83bd158ca24788a8bc5a95857d96ef818d37da3624"
     end
   end
 
   on_linux do
     on_arm do
-      url "https://docmatch.com.br/install/v0.1.1/docmatch-linux-arm64.bin"
-      sha256 "46109857b76a1cbb782a4581bc30e4136bd695ba3c62fa11db57d17f269b5048"
+      url "https://docmatch.com.br/install/v0.1.2/docmatch-linux-arm64.bin"
+      sha256 "4dfa8588e8faee8cd7598bd2a0dcfb0ca6aab10a7de7e7289bdb241834a8a76c"
     end
     on_intel do
-      url "https://docmatch.com.br/install/v0.1.1/docmatch-linux-amd64.bin"
-      sha256 "93e449acddf42e54c4624e424d43b9fb7bc72d9edd1f2ce2d30a3b42e213facb"
+      url "https://docmatch.com.br/install/v0.1.2/docmatch-linux-amd64.bin"
+      sha256 "af8a5f02e8c68357c10d719e5fc35737666880947114e0f811a540d82d6ec219"
     end
   end
 

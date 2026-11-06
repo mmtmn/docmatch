@@ -18,8 +18,9 @@ privado escrito atomicamente. A chave salva não acompanha uma troca de origem d
 Arquivos arrastados são dados para o parser de caminhos, nunca comandos de shell.
 
 Uma sessão PTY real passou por menu → conexão → seleção de quatro arquivos → aprovação →
-processamento → exportação XLSX → saída. A instalação npm também precisa ser verificada
-com cache vazio, para exercitar download e integridade, não somente o binário compilado.
+processamento → exportação XLSX → saída. O teste está em `tools/terminal/test/interactive.py`
+e faz parte do portão local completo. A instalação npm também foi verificada com prefixo
+e cache vazios, exercitando download e integridade.
 
 ## Testes executados
 
