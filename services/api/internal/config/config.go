@@ -243,6 +243,7 @@ type LLM struct {
 
 // Auth holds identity provider settings and the session secret.
 type Auth struct {
+	ExtensionClients   []ExtensionClient
 	GoogleClientID     string
 	GoogleClientSecret Secret
 	AppleTeamID        string
@@ -372,6 +373,7 @@ func LoadFrom(lookup Lookup) (*Config, error) {
 	cfg.Auth.SessionSecret = r.base64Secret(VarSessionSecret, minSessionSecretBytes)
 	cfg.Auth.GoogleNativeClientIDs = r.clientIDs(VarGoogleNativeClientIDs)
 	cfg.Auth.AppleNativeClientIDs = r.clientIDs(VarAppleNativeClientIDs)
+	cfg.Auth.ExtensionClients = r.extensionClients()
 	cfg.Auth.DevLogin = r.boolean(VarDevLogin, false)
 	if cfg.Auth.DevLogin && cfg.Env != EnvDev {
 		r.problem(VarDevLogin, "só pode ser ligada com DM_ENV=dev")
@@ -921,7 +923,7 @@ func KnownVars() []string {
 		VarHarnessSocket, VarScanQueueURL, VarScannerBin,
 		VarLLMMode, VarOpenRouterKey, VarLocalLLMBaseURL, VarModelsFile, VarLLMCacheDir,
 		VarGoogleClientID, VarGoogleClientSecret, VarAppleTeamID, VarAppleClientID, VarAppleKeyID, VarApplePrivateKey, VarSessionSecret,
-		VarGoogleNativeClientIDs, VarAppleNativeClientIDs, VarDevLogin,
+		VarGoogleNativeClientIDs, VarAppleNativeClientIDs, VarDevLogin, VarExtensionClients,
 		VarStripeSecretKey, VarStripeWebhookSecret, VarStripePublishableKey,
 		VarStripePriceStarter, VarStripePricePro, VarStripePriceBusiness, VarStripePriceTopup,
 		VarStripePortalConfig, VarStripePaymentConfig, VarStripeTestEmails,

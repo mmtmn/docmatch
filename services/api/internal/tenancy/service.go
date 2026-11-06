@@ -77,7 +77,7 @@ func (s *Service) List(ctx context.Context, user uuid.UUID) ([]Membership, error
 // removed. In particular the account selector must allow recovery to a personal
 // account; an explicit invalid account header is never silently substituted.
 func identityRoute(path string) bool {
-	return strings.HasPrefix(path, "/v1/auth/") || path == "/v1/me/organizations" ||
+	return strings.HasPrefix(path, "/v1/extensions/") || strings.HasPrefix(path, "/v1/auth/") || path == "/v1/me/organizations" ||
 		path == "/v1/me/sessions" || strings.HasPrefix(path, "/v1/me/sessions/") ||
 		path == "/v1/me/password" || path == "/v1/me/devices" || strings.HasPrefix(path, "/v1/me/devices/") ||
 		path == "/v1/me/invitations" || strings.HasPrefix(path, "/v1/invitations/")

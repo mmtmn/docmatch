@@ -27,6 +27,7 @@ import (
 	"github.com/mmtmn/docmatch/services/api/internal/db/pgstore"
 	"github.com/mmtmn/docmatch/services/api/internal/email"
 	"github.com/mmtmn/docmatch/services/api/internal/email/emailpg"
+	"github.com/mmtmn/docmatch/services/api/internal/extensions"
 	"github.com/mmtmn/docmatch/services/api/internal/jobs"
 	"github.com/mmtmn/docmatch/services/api/internal/jobs/jobargs"
 	"github.com/mmtmn/docmatch/services/api/internal/logx"
@@ -178,7 +179,8 @@ func accountJobs(cfg *config.Config, log *slog.Logger, pool *pgxpool.Pool, audit
 	if err != nil {
 		return nil, nil, err
 	}
-	register := []func(*river.Workers){emailpg.AddWorkers(deliverer), accountpg.AddWorkers(accountSvc)}
+	register := []func(*river.Workers){emailpg.AddWorkers(deliverer), accountpg.AddWorkers(accountSvc), extensions.AddWorkers(pool)}
 	periodic := append(emailpg.PeriodicJobs(), accountpg.PeriodicJobs()...)
+	periodic = append(periodic, extensions.PeriodicJobs()...)
 	return register, periodic, nil
 }

@@ -31,6 +31,7 @@ import (
 	"github.com/mmtmn/docmatch/services/api/internal/db/pgstore"
 	"github.com/mmtmn/docmatch/services/api/internal/email"
 	"github.com/mmtmn/docmatch/services/api/internal/email/emailpg"
+	"github.com/mmtmn/docmatch/services/api/internal/extensions"
 	"github.com/mmtmn/docmatch/services/api/internal/geo"
 	"github.com/mmtmn/docmatch/services/api/internal/httpx"
 	"github.com/mmtmn/docmatch/services/api/internal/jobs"
@@ -98,7 +99,11 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	baseResolver := keysSvc.Resolve(sessionResolver(pool))
+	extensionsSvc, err := extensions.New(cfg, pool)
+	if err != nil {
+		return err
+	}
+	baseResolver := extensionsSvc.Resolve(sessionResolver(pool), keysSvc.Resolve(sessionResolver(pool)))
 	projectsSvc := projects.New(pool, baseResolver, nil)
 	resolve := projectsSvc.Resolve(baseResolver)
 	// Pipeline route groups (uploads, estimates, runs, workflows, rules),
@@ -127,9 +132,9 @@ func run() error {
 	projectsSvc.SetEngine(projects.Engine{Config: cfg, Estimates: sys.Estimates, Runs: sys.Runs, Rules: sys.Rules, Uploads: sys.Uploads})
 	handler := api.NewHandler(api.Deps{
 		Config: cfg, Logger: log, Limits: limits.Must(), DB: pool,
-		Mount:        append([]func(*httpx.Router){authSvc.Mount, accountSvc.Mount, billingSvc.Mount, keysSvc.Mount, workspaceSvc.Mount, tenants.Mount, projectsSvc.Mount, teamsSvc.Mount}, sys.Mount()...),
-		Middleware:   []httpx.Middleware{sessions.Middleware, tenants.Middleware},
-		OriginExempt: auth.OriginExempt,
+		Mount:        append([]func(*httpx.Router){authSvc.Mount, accountSvc.Mount, billingSvc.Mount, keysSvc.Mount, workspaceSvc.Mount, tenants.Mount, projectsSvc.Mount, teamsSvc.Mount, extensionsSvc.Mount}, sys.Mount()...),
+		Middleware:   []httpx.Middleware{sessions.Middleware, extensionsSvc.Middleware, tenants.Middleware},
+		OriginExempt: func(r *http.Request) bool { return auth.OriginExempt(r) || extensions.OriginExempt(r) },
 	})
 	srv := httpx.New(httpx.ServerOptions{Addr: cfg.APIListen, Handler: handler, Limits: limits.Must(), Logger: log})
 	if err := srv.Listen(); err != nil {

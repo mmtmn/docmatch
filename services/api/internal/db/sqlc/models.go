@@ -284,6 +284,37 @@ type Customization struct {
 	RequestKey  *uuid.UUID
 }
 
+type ExtensionCode struct {
+	CodeHash           []byte
+	ClientID           string
+	RedirectUri        string
+	Challenge          string
+	UserID             uuid.UUID
+	OrgID              *uuid.UUID
+	AuthorizingSession uuid.UUID
+	CreatedAt          time.Time
+	ExpiresAt          time.Time
+	ConsumedAt         *time.Time
+	IssuedSession      *uuid.UUID
+}
+
+type ExtensionGrant struct {
+	SessionID           uuid.UUID
+	ClientID            string
+	AccessHash          []byte
+	RefreshHash         []byte
+	PreviousRefreshHash []byte
+	RefreshRequestID    *uuid.UUID
+	RetryUntil          *time.Time
+	RetryResponse       []byte
+}
+
+type ExtensionSpentRefresh struct {
+	TokenHash []byte
+	SessionID uuid.UUID
+	ExpiresAt time.Time
+}
+
 type Feedback struct {
 	ID               uuid.UUID
 	OrgID            uuid.UUID

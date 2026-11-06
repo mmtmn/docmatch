@@ -1501,5 +1501,29 @@
     "open_team": "Abrir equipe",
     "declined_message": "Convite recusado. Nenhum acesso foi adicionado.",
     "open_installed_app": "Abrir no app instalado"
+  },
+  "extensions": {
+    "authorize_title": "Conectar extensão",
+    "invalid_request": "Este pedido de conexão não é válido. Abra a extensão e tente entrar novamente.",
+    "permissions": "Permitir enviar documentos aos seus projetos, conciliar após aprovar o custo e consultar ou baixar resultados. As permissões de cada conta continuam valendo.",
+    "disconnect_hint": "Você pode desconectar a extensão em Meu perfil → Dispositivos.",
+    "signed_in": "Você está entrando como {email}.",
+    "allow": "Conectar extensão",
+    "deny": "Agora não",
+    "sign_in": "Entre para escolher suas contas e projetos na extensão.",
+    "local": "Local",
+    "projects": "Seus projetos",
+    "account": "Conta",
+    "open_projects": "Abrir projetos",
+    "sign_out": "Sair da extensão",
+    "connect_intro": "Envie documentos, concilie e acompanhe resultados nas suas contas.",
+    "connecting": "Conectando…",
+    "connection_failed": "A conexão não foi concluída. Tente entrar novamente.",
+    "open_failed": "Não foi possível abrir a extensão. Tente novamente.",
+    "sign_in_again": "Entre novamente para abrir seus projetos.",
+    "projects_failed": "Não foi possível carregar os projetos.",
+    "empty": "Nenhum projeto nesta conta.",
+    "document_count": "{count} documentos",
+    "safari_sign_in": "Abra o app docmatch para conectar o Safari."
   }
 }

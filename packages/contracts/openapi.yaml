@@ -48,6 +48,8 @@ security:
   - apiKey: []
 
 tags:
+  - name: extensions
+    description: Autorização com PKCE e sessões revogáveis das extensões oficiais.
   - name: teams
     description: Equipes e convites com aceite, sem cobrança adicional por assento.
   - name: projects
@@ -78,6 +80,157 @@ tags:
     description: Planos, saúde e versão. Sem autenticação.
 
 paths:
+  /extensions/clients/{client}:
+    get:
+      operationId: getExtensionClient
+      tags: [extensions]
+      summary: Confirma o nome e o retorno de uma extensão registrada
+      description: Consulta pública para a tela de consentimento. Exige um cliente e retorno cadastrados pelo operador.
+      security: []
+      parameters:
+        - name: client
+          in: path
+          required: true
+          schema: {type: string}
+        - name: redirect_uri
+          in: query
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          description: Cliente e retorno registrados; não cria autorização.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, name]
+                properties:
+                  id: {type: string}
+                  name: {type: string}
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /extensions/authorize:
+    post:
+      operationId: authorizeExtension
+      tags: [extensions]
+      summary: Autoriza a extensão após consentimento explícito
+      description: >-
+        Exige login em cookie, proteção de origem e e-mail verificado. Abrir a página não autoriza.
+        O retorno precisa corresponder exatamente ao cliente registrado. Código de uso único,
+        válido por dois minutos, protegido por PKCE S256. As permissões das contas continuam valendo.
+      security:
+        - cookieSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [client_id, redirect_uri, code_challenge, code_challenge_method, state]
+              properties:
+                client_id: {type: string}
+                redirect_uri: {type: string}
+                code_challenge:
+                  type: string
+                  pattern: '^[A-Za-z0-9_-]{43}$'
+                code_challenge_method: {type: string, enum: [S256]}
+                state:
+                  type: string
+                  pattern: '^[A-Za-z0-9_-]{43}$'
+      responses:
+        "200":
+          description: Retorno registrado com código e estado; Cache-Control no-store.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [redirect_uri]
+                properties:
+                  redirect_uri: {type: string}
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /extensions/token:
+    post:
+      operationId: exchangeExtensionToken
+      tags: [extensions]
+      summary: Troca o código ou renova a sessão da extensão
+      description: >-
+        Não aceita cookies. O código exige cliente, retorno e verificador PKCE correspondentes.
+        Acesso por dez minutos e renovação por trinta dias. Antes de renovar, persista um request_id
+        aleatório. Repetir o mesmo token e request_id em até dois minutos devolve a mesma resposta;
+        reutilizar um token já gasto em outro pedido revoga a sessão. Após esse prazo, entre novamente.
+        Respostas nunca podem ser armazenadas por caches HTTP.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  additionalProperties: false
+                  required: [grant_type, client_id, code, redirect_uri, code_verifier]
+                  properties:
+                    grant_type: {type: string, enum: [authorization_code]}
+                    client_id: {type: string}
+                    code: {type: string}
+                    redirect_uri: {type: string}
+                    code_verifier:
+                      type: string
+                      pattern: '^[A-Za-z0-9._~-]{43,128}$'
+                - type: object
+                  additionalProperties: false
+                  required: [grant_type, client_id, refresh_token, request_id]
+                  properties:
+                    grant_type: {type: string, enum: [refresh_token]}
+                    client_id: {type: string}
+                    refresh_token: {type: string}
+                    request_id: {type: string, format: uuid}
+      responses:
+        "200":
+          description: Credenciais da extensão; Cache-Control no-store.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [access_token, refresh_token, token_type, expires_in, expires_at, refresh_expires_at]
+                properties:
+                  access_token: {type: string}
+                  refresh_token: {type: string}
+                  token_type: {type: string, enum: [Bearer]}
+                  expires_in: {type: integer, minimum: 1}
+                  expires_at: {type: string, format: date-time}
+                  refresh_expires_at: {type: string, format: date-time}
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /extensions/revoke:
+    post:
+      operationId: revokeExtensionSession
+      tags: [extensions]
+      summary: Desconecta a própria sessão da extensão
+      description: Também pode ser revogada pela lista de dispositivos do usuário. Não exige vínculo na antiga conta selecionada.
+      security:
+        - extensionSession: []
+      responses:
+        "204":
+          description: Sessão revogada.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
   /team:
     parameters:
       - $ref: "#/components/parameters/OrgContext"
@@ -461,10 +614,15 @@ paths:
           $ref: "#/components/responses/Conflict"
       security:
         - cookieSession: []
+        - extensionSession: []
   /projects:
     parameters:
       - $ref: "#/components/parameters/OrgContext"
     get:
+      security:
+        - cookieSession: []
+        - apiKey: []
+        - extensionSession: []
       operationId: listProjects
       tags:
         - projects
@@ -496,6 +654,10 @@ paths:
             type: boolean
             default: false
     post:
+      security:
+        - cookieSession: []
+        - apiKey: []
+        - extensionSession: []
       operationId: createProject
       tags:
         - projects
@@ -529,6 +691,10 @@ paths:
       - $ref: "#/components/parameters/OrgContext"
       - $ref: "#/components/parameters/ProjectPath"
     get:
+      security:
+        - cookieSession: []
+        - apiKey: []
+        - extensionSession: []
       operationId: getProject
       tags:
         - projects
@@ -552,6 +718,10 @@ paths:
         "409":
           $ref: "#/components/responses/Conflict"
     patch:
+      security:
+        - cookieSession: []
+        - apiKey: []
+        - extensionSession: []
       operationId: updateProject
       tags:
         - projects
@@ -581,6 +751,10 @@ paths:
         "409":
           $ref: "#/components/responses/Conflict"
     delete:
+      security:
+        - cookieSession: []
+        - apiKey: []
+        - extensionSession: []
       operationId: deleteProject
       tags:
         - projects
@@ -605,6 +779,10 @@ paths:
     parameters:
       - $ref: "#/components/parameters/OrgContext"
     get:
+      security:
+        - cookieSession: []
+        - apiKey: []
+        - extensionSession: []
       operationId: accountActivity
       tags:
         - projects
@@ -636,6 +814,10 @@ paths:
       - $ref: "#/components/parameters/ProjectPath"
       - $ref: "#/components/parameters/DocumentPath"
     post:
+      security:
+        - cookieSession: []
+        - apiKey: []
+        - extensionSession: []
       operationId: replaceProjectDocument
       tags:
         - projects
@@ -670,6 +852,10 @@ paths:
       - $ref: "#/components/parameters/OrgContext"
       - $ref: "#/components/parameters/ProjectPath"
     put:
+      security:
+        - cookieSession: []
+        - apiKey: []
+        - extensionSession: []
       operationId: shareProject
       tags:
         - projects
@@ -703,6 +889,10 @@ paths:
       - $ref: "#/components/parameters/OrgContext"
       - $ref: "#/components/parameters/ProjectPath"
     get:
+      security:
+        - cookieSession: []
+        - apiKey: []
+        - extensionSession: []
       operationId: projectActivity
       tags:
         - projects
@@ -730,6 +920,10 @@ paths:
       - $ref: "#/components/parameters/OrgContext"
       - $ref: "#/components/parameters/ProjectPath"
     post:
+      security:
+        - cookieSession: []
+        - apiKey: []
+        - extensionSession: []
       operationId: attachProjectDocument
       tags:
         - projects
@@ -764,6 +958,10 @@ paths:
       - $ref: "#/components/parameters/ProjectPath"
       - $ref: "#/components/parameters/DocumentPath"
     delete:
+      security:
+        - cookieSession: []
+        - apiKey: []
+        - extensionSession: []
       operationId: removeProjectDocument
       tags:
         - projects
@@ -789,6 +987,10 @@ paths:
       - $ref: "#/components/parameters/OrgContext"
       - $ref: "#/components/parameters/ProjectPath"
     post:
+      security:
+        - cookieSession: []
+        - apiKey: []
+        - extensionSession: []
       operationId: createProjectUpload
       summary: Pede uma URL pré-assinada para enviar um arquivo
       description: Gera o envio na conta e no projeto escolhidos. O arquivo aparece como pendente até chegar e
@@ -848,6 +1050,10 @@ paths:
       - $ref: "#/components/parameters/ProjectPath"
       - $ref: "#/components/parameters/ProjectUploadPath"
     post:
+      security:
+        - cookieSession: []
+        - apiKey: []
+        - extensionSession: []
       operationId: completeProjectUpload
       summary: Confirma o envio e dispara a verificação
       description: Confirma o recebimento do próprio upload no projeto e retorna a situação da verificação.
@@ -910,6 +1116,10 @@ paths:
       - $ref: "#/components/parameters/OrgContext"
       - $ref: "#/components/parameters/ProjectPath"
     post:
+      security:
+        - cookieSession: []
+        - apiKey: []
+        - extensionSession: []
       operationId: estimateProject
       tags:
         - projects
@@ -954,6 +1164,10 @@ paths:
       - $ref: "#/components/parameters/OrgContext"
       - $ref: "#/components/parameters/ProjectPath"
     get:
+      security:
+        - cookieSession: []
+        - apiKey: []
+        - extensionSession: []
       operationId: listProjectRuns
       tags:
         - projects
@@ -980,6 +1194,10 @@ paths:
         - $ref: "#/components/parameters/Cursor"
         - $ref: "#/components/parameters/Limit"
     post:
+      security:
+        - cookieSession: []
+        - apiKey: []
+        - extensionSession: []
       operationId: reconcileProject
       tags:
         - projects
@@ -1044,6 +1262,10 @@ paths:
       x-spends-credits: true
   /projects/{project}/runs/{id}:
     get:
+      security:
+        - cookieSession: []
+        - apiKey: []
+        - extensionSession: []
       operationId: projectGetRun
       summary: Consulta uma execução
       description: Estado, progresso, créditos reservados e gastos, resumo quando concluída.
@@ -1075,6 +1297,10 @@ paths:
       - $ref: "#/components/parameters/ProjectPath"
   /projects/{project}/runs/{id}/cancel:
     post:
+      security:
+        - cookieSession: []
+        - apiKey: []
+        - extensionSession: []
       operationId: projectCancelRun
       summary: Cancela uma execução
       description: Para a execução e devolve os créditos não gastos. Execuções já terminadas não mudam.
@@ -1114,6 +1340,10 @@ paths:
       - $ref: "#/components/parameters/ProjectPath"
   /projects/{project}/runs/{id}/events:
     get:
+      security:
+        - cookieSession: []
+        - apiKey: []
+        - extensionSession: []
       operationId: projectStreamRunEvents
       summary: Eventos da execução em tempo real (SSE)
       description: |
@@ -1165,6 +1395,10 @@ paths:
       - $ref: "#/components/parameters/ProjectPath"
   /projects/{project}/runs/{id}/findings:
     get:
+      security:
+        - cookieSession: []
+        - apiKey: []
+        - extensionSession: []
       operationId: projectListFindings
       summary: Lista os achados de uma execução
       description: Ordenados por severidade e valor em risco. Disponível enquanto a execução roda (parcial) e depois.
@@ -1211,6 +1445,10 @@ paths:
       - $ref: "#/components/parameters/ProjectPath"
   /projects/{project}/runs/{id}/findings/{fid}/feedback:
     post:
+      security:
+        - cookieSession: []
+        - apiKey: []
+        - extensionSession: []
       operationId: projectGiveFindingFeedback
       summary: Confirma, descarta ou resolve um achado
       description: O feedback alimenta a calibração da confiança e, nos planos com aprendizado, a proposta de regras.
@@ -1254,6 +1492,10 @@ paths:
       - $ref: "#/components/parameters/ProjectPath"
   /projects/{project}/runs/{id}/export:
     get:
+      security:
+        - cookieSession: []
+        - apiKey: []
+        - extensionSession: []
       operationId: projectExportRun
       summary: Exporta os resultados (xlsx, csv ou pdf)
       description: |
@@ -1323,6 +1565,10 @@ paths:
       - $ref: "#/components/parameters/ProjectPath"
   /projects/{project}/runs/{id}/approve-quote:
     post:
+      security:
+        - cookieSession: []
+        - apiKey: []
+        - extensionSession: []
       operationId: projectApproveRunQuote
       summary: Aprova o orçamento adicional de uma execução parada
       description: |
@@ -1399,6 +1645,10 @@ paths:
       - $ref: "#/components/parameters/ProjectPath"
   /projects/{project}/rules:
     get:
+      security:
+        - cookieSession: []
+        - apiKey: []
+        - extensionSession: []
       operationId: projectListRules
       summary: Busca regras
       description: Regras da organização e regras globais, filtradas por texto (`q`) e estado.
@@ -1436,6 +1686,10 @@ paths:
         "422":
           $ref: "#/components/responses/Unprocessable"
     post:
+      security:
+        - cookieSession: []
+        - apiKey: []
+        - extensionSession: []
       operationId: projectCreateRule
       summary: Cria uma regra
       description: |
@@ -1482,6 +1736,10 @@ paths:
       - $ref: "#/components/parameters/ProjectPath"
   /projects/{project}/rules/{id}/versions:
     post:
+      security:
+        - cookieSession: []
+        - apiKey: []
+        - extensionSession: []
       operationId: projectCreateRuleVersion
       summary: Cria uma nova versão da regra
       description: Mantém o `id`, incrementa `version`, recompila e reavalia. A versão anterior continua ativa até a
@@ -1543,6 +1801,10 @@ paths:
       - $ref: "#/components/parameters/ProjectPath"
   /projects/{project}/rules/{id}/promote:
     post:
+      security:
+        - cookieSession: []
+        - apiKey: []
+        - extensionSession: []
       operationId: projectPromoteRule
       summary: Promove uma regra
       description: |
@@ -2056,6 +2318,9 @@ paths:
   # --------------------------------------------------------------- account
   /me:
     get:
+      security:
+        - cookieSession: []
+        - extensionSession: []
       operationId: getMe
       summary: Dados do usuário autenticado
       description: Usuário, organização, plano, créditos e limites efetivos do plano.
@@ -3856,6 +4121,13 @@ webhooks:
 # ================================================================ components
 components:
   securitySchemes:
+    extensionSession:
+      type: http
+      scheme: bearer
+      bearerFormat: dmxA1_<session>.<secret>
+      description: >-
+        Sessão da extensão. Permite contas, projetos e resultados conforme o vínculo atual;
+        não administra cobrança, pessoas, senhas ou chaves. Não é uma chave de API e usa preços do app.
     cookieSession:
       type: apiKey
       in: cookie

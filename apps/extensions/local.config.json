@@ -1,0 +1,20 @@
+{
+  "apiURL": "http://localhost:18080",
+  "siteURL": "http://localhost:14321",
+  "uploadOrigins": ["http://localhost:18080"],
+  "chrome": {
+    "clientID": "chrome-local",
+    "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtLXGbJIo8P4UkaQ7cdtkGzfgI31PoYdOGKZbbNqnrJD9IBPznAev1MuhHgA51sFugCZZyRSAj3DPKWJlecnUMGkkCIV3KOV4aLejFua6Q2Tc0f6W4rZ7Fqonu82lp39tMrIKJxHbAyxa0G7nO/FXlSdAYtmrkX20FDZmMviFg8nhi0kB7wbDnmMmJOBYH90IHibJkh1IL9+pGYnjD8dXaxwalerDRewyplL9NoVCMV1i9Pr+vdkAzQ8hqEb+UBuLoXb2dm7K21hHi3KHebUD2HbJnbnyZIiF4GXaXivBTJKoY4lkvAfYi8WJFTjXs9KDqlZHCH7XwxxOx4BOVSg9MwIDAQAB",
+    "id": "coicnmconkhaigfflbiemaaljdhelibo",
+    "redirectURI": "https://coicnmconkhaigfflbiemaaljdhelibo.chromiumapp.org/callback"
+  },
+  "firefox": {
+    "clientID": "firefox-local",
+    "id": "dev@extensions.docmatch.com.br",
+    "redirectURI": "https://5b0bc130302af73f419bed72fc198a124bb5429c.extensions.allizom.org/callback"
+  },
+  "safari": {
+    "clientID": "safari-local",
+    "redirectURI": "docmatch-extension-dev://auth"
+  }
+}

@@ -1,0 +1,11 @@
+---
+import { ExtensionAuthorizationPage } from '../../components/account/ExtensionAuthorizationPage';
+import Base from '../../layouts/Base.astro';
+import { t } from '../../lib/i18n';
+---
+
+<Base title={t('extensions.authorize_title')} noindex>
+  <main id="conteudo" class="container">
+    <ExtensionAuthorizationPage client:only="react" />
+  </main>
+</Base>

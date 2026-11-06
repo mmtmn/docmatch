@@ -11,6 +11,7 @@ subsystems=(
   services/api
   services/harness
   apps/web
+  apps/extensions
   apps/admin
   infra
   sdks/python

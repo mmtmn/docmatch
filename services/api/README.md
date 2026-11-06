@@ -207,3 +207,21 @@ Ambiente local (`tools/dev/compose.yaml`): o S3 local é o RustFS (mesma API do 
    estado; `down [N]` reverte. Migrações já aplicadas têm o checksum conferido: um arquivo
    alterado depois de aplicado é recusado (crie uma nova migração).
 4. `make -C services/api ci-full` roda os testes de integração com o esquema novo.
+
+### Sessões das extensões
+
+`DM_EXTENSION_CLIENTS` registra os clientes públicos e seus retornos exatos. Vazio,
+impede novas conexões de extensões. O site consulta o cliente e só envia
+`POST /v1/extensions/authorize` após consentimento; o código usa PKCE S256 e vence em
+2 minutos. `POST /v1/extensions/token` troca o código ou renova a sessão sem cookies.
+
+O acesso dura 10 minutos. Antes de renovar, a extensão persiste um `request_id`; repetir
+o mesmo pedido por até 2 minutos recupera a mesma resposta se a conexão caiu. Reutilizar
+um token gasto em outro pedido revoga a sessão. Depois desse prazo, é preciso entrar
+novamente. As credenciais são diferentes das usadas por cookies e chaves de API.
+
+A extensão acessa projetos com as permissões atuais da conta e preços do app. Não
+administra equipe, cobrança ou credenciais. A lista de dispositivos e o encerramento de
+sessões também a revogam. Uma tarefa horária da fila existente remove registros expirados.
+Os contratos estão em [OpenAPI](../../packages/contracts/openapi.yaml) e o ambiente local
+em [apps/extensions](../../apps/extensions/README.md).
