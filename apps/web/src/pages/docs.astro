@@ -1,0 +1,64 @@
+---
+import Base from '../layouts/Base.astro';
+import { t } from '../lib/i18n';
+---
+
+<Base title={t('books.title')} description={t('books.description')}>
+  <main id="conteudo" class="container section">
+    <div class="prose">
+      <h1>{t('books.title')}</h1>
+      <p class="muted">{t('books.lead')}</p>
+    </div>
+    <div class="guides">
+      <article class="guide">
+        <h2>{t('books.user_title')}</h2>
+        <p>{t('books.user_description')}</p>
+        <a href="/docs/usar/">{t('books.user_action')}</a>
+      </article>
+      <article class="guide">
+        <h2>{t('books.developer_title')}</h2>
+        <p>{t('books.developer_description')}</p>
+        <a href="/docs/desenvolver/">{t('books.developer_action')}</a>
+      </article>
+    </div>
+    <p class="edition muted">{t('books.edition')}</p>
+  </main>
+</Base>
+
+<style>
+  .guides {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-4);
+    margin-top: var(--space-6);
+  }
+  .guide {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-3);
+    padding: var(--space-5);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-2);
+    background: var(--color-surface);
+  }
+  .guide h2 {
+    font-size: var(--fs-xl);
+  }
+  .guide a {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--tap);
+    margin-top: auto;
+    font-weight: 600;
+  }
+  .edition {
+    margin-top: var(--space-4);
+    font-size: var(--fs-sm);
+  }
+  @media (max-width: 40em) {
+    .guides {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

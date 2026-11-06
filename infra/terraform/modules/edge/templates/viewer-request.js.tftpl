@@ -80,7 +80,17 @@ async function handler(event) {
   // own case (default_root_object no longer applies once the function rewrites the URI). Keep in
   // sync with rewriteUri() in apps/web/tools/serve-dist.mjs, which the e2e suite runs against.
   if (!isApi) {
-    if (uri === '/') {
+    // mdBook has directory indexes and relative assets. Canonicalize the two roots first.
+    if (uri === '/docs/usar' || uri === '/docs/desenvolver') {
+      return {
+        statusCode: 301,
+        statusDescription: 'Moved Permanently',
+        headers: { location: { value: uri + '/' + querySuffix(request.querystring) } }
+      };
+    }
+    if (uri === '/docs/usar/' || uri === '/docs/desenvolver/') {
+      request.uri = uri + 'index.html';
+    } else if (uri === '/') {
       request.uri = '/index.html';
     } else if (uri.charAt(uri.length - 1) === '/') {
       request.uri = uri.slice(0, -1) + '.html';

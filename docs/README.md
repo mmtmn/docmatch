@@ -7,6 +7,7 @@ enrolação. Identificadores de código e comentários em código ficam em ingl�
 
 | Documento | Para quê |
 | --- | --- |
+| [Livros públicos](book/README.md) | Guias curtos para usar a docmatch ou integrar seus sistemas; build estático junto do site. |
 | [desenvolvimento.md](desenvolvimento.md) | Setup local, modelos e comandos avançados. |
 | [auditoria-local.md](auditoria-local.md) | Evidências, correções, scanners e limites da auditoria local de release. |
 | [arquitetura.md](arquitetura.md) | Como o sistema é montado: diagrama, componentes, caminhos de requisição (upload → varredura → execução → relatório), fronteiras de confiança, onde cada dado vive, modelo de evidências, glossário. |

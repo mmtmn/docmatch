@@ -20,6 +20,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -67,6 +68,21 @@ var contentTypes = map[string]string{
 	".pdf":         "application/pdf",
 }
 
+// Astro's build uses a non-routable placeholder origin. Only the explicit HTTP
+// loopback runtime may omit its HTTPS upgrade; preserve every other directive
+// and every script byte (and therefore the build's CSP hashes).
+var cspMeta = regexp.MustCompile(`(?i)<meta http-equiv="content-security-policy" content="[^"]*">`)
+
+func localTransport(data []byte, site string) []byte {
+	u, err := url.Parse(site)
+	if err != nil || u.Scheme != "http" || (u.Hostname() != "localhost" && u.Hostname() != "127.0.0.1" && u.Hostname() != "::1") {
+		return data
+	}
+	return cspMeta.ReplaceAllFunc(data, func(meta []byte) []byte {
+		return bytes.ReplaceAll(meta, []byte("upgrade-insecure-requests;"), nil)
+	})
+}
+
 // Handler serves one directory.
 type Handler struct {
 	root     string
@@ -101,7 +117,11 @@ func New(root string, replace map[string]string) (*Handler, error) {
 		if err != nil {
 			return err
 		}
-		found := false
+		rendered := data
+		if strings.EqualFold(filepath.Ext(p), ".html") {
+			rendered = localTransport(data, replace[SitePlaceholder])
+		}
+		found := !bytes.Equal(rendered, data)
 		for from := range replace {
 			if bytes.Contains(data, []byte(from)) {
 				found = true
@@ -115,7 +135,7 @@ func New(root string, replace map[string]string) (*Handler, error) {
 		if err != nil {
 			return err
 		}
-		h.rendered["/"+filepath.ToSlash(rel)] = []byte(replacer.Replace(string(data)))
+		h.rendered["/"+filepath.ToSlash(rel)] = []byte(replacer.Replace(string(rendered)))
 		return nil
 	})
 	if err != nil {
@@ -129,6 +149,9 @@ func (h *Handler) Rendered() int { return len(h.rendered) }
 
 // RewriteURI is rewriteUri() of apps/web/tools/serve-dist.mjs (keep the two in sync).
 func RewriteURI(uri string) string {
+	if uri == "/docs/usar/" || uri == "/docs/desenvolver/" {
+		return uri + "index.html"
+	}
 	if strings.HasSuffix(uri, "/") {
 		if uri == "/" {
 			return "/index.html"
@@ -194,6 +217,20 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	sitePath := resolve(r.URL.EscapedPath())
 	if sitePath == "" {
 		http.Error(w, "400", http.StatusBadRequest)
+		return
+	}
+	location := ""
+	switch r.URL.Path {
+	case "/docs/usar":
+		location = "/docs/usar/"
+	case "/docs/desenvolver":
+		location = "/docs/desenvolver/"
+	}
+	if location != "" {
+		if r.URL.RawQuery != "" {
+			location += "?" + r.URL.Query().Encode()
+		}
+		http.Redirect(w, r, location, http.StatusMovedPermanently) //nolint:gosec // fixed local path; only the URL-encoded query comes from the request
 		return
 	}
 	if h.send(w, r, http.StatusOK, sitePath) {

@@ -5,12 +5,19 @@
 #
 #   docker build -f deploy/local/web.Dockerfile -t docmatch-web .
 ARG NODE_IMAGE=node:22.23.4-trixie-slim
+ARG RUST_IMAGE=rust:1.93.0-slim-trixie
 ARG GO_IMAGE=golang:1.27.3-alpine
 ARG RUNTIME_IMAGE=alpine:3.22
+
+FROM ${RUST_IMAGE} AS books
+RUN --mount=type=cache,id=docmatch-mdbook-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=docmatch-mdbook-target,target=/cache/target \
+    CARGO_TARGET_DIR=/cache/target cargo install mdbook --version 0.5.4 --locked --root /out
 
 FROM ${NODE_IMAGE} AS site
 ENV CI=1 ASTRO_TELEMETRY_DISABLED=1 COREPACK_ENABLE_DOWNLOAD_PROMPT=0 PNPM_HOME=/pnpm PATH=/pnpm:$PATH
 RUN corepack enable && corepack prepare pnpm@11.5.3 --activate
+COPY --from=books /out/bin/mdbook /usr/local/bin/mdbook
 WORKDIR /src
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./
 COPY apps/web/package.json apps/web/
@@ -21,8 +28,13 @@ RUN --mount=type=cache,id=docmatch-pnpm-store,target=/pnpm/store \
     pnpm install --frozen-lockfile --store-dir /pnpm/store --filter "@docmatch/web..."
 COPY packages/locales packages/locales
 COPY packages/design-tokens packages/design-tokens
-COPY packages/contracts/limits.yaml packages/contracts/
+COPY packages/contracts/limits.yaml packages/contracts/openapi.yaml packages/contracts/
 COPY config/pricing.yaml config/
+COPY docs/book docs/book
+COPY sdks/python/examples/project.py sdks/python/examples/project.py
+COPY sdks/go/examples/project/main.go sdks/go/examples/project/main.go
+COPY sdks/rust/examples/project.rs sdks/rust/examples/project.rs
+COPY sdks/typescript/examples/project.mjs sdks/typescript/examples/project.mjs
 COPY apps/web apps/web
 RUN cd apps/web && node tools/i18n-check.mjs && \
     DM_PUBLIC_BASE_URL=http://dm-site.invalid PUBLIC_DM_API_BASE_URL=http://dm-api.invalid \

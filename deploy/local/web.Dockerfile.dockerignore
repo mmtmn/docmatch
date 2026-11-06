@@ -16,7 +16,12 @@ apps/web/playwright-report
 !packages/design-tokens
 packages/*/node_modules
 !packages/contracts/limits.yaml
+!packages/contracts/openapi.yaml
 !config/pricing.yaml
+!docs/book
+!sdks/python/examples/project.py
+!sdks/rust/examples/project.rs
+!sdks/typescript/examples/project.mjs
 !tools/installer/go.mod
 !tools/installer/go.sum
 !tools/installer/internal/webserve

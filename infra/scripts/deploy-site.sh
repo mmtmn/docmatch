@@ -48,6 +48,9 @@ if [[ -z "$dist" ]]; then
   dist="$root/apps/web/dist"
 fi
 [[ -f "$dist/index.html" ]] || dm_die "build do site não encontrado em $dist"
+for guide in usar desenvolver; do
+  [[ -s "$dist/docs/$guide/index.html" ]] || dm_die "build incompleto: falta o guia $guide; reconstrua site e livros juntos"
+done
 # CloudFront supplies frame-ancestors; each HTML page must supply the strict hashed policy.
 node "$root/apps/web/tools/check-csp.mjs" "$dist"
 
@@ -63,8 +66,8 @@ if [[ -d "$dist/_astro" ]]; then
   aws s3 sync "$dist/_astro" "s3://$bucket/_astro" "${extra[@]}" \
     --cache-control "public, max-age=31536000, immutable" --size-only --no-progress | cat
 fi
-# install/ belongs to tools/installer/release.sh (the one-line installer): never deleted here.
-aws s3 sync "$dist" "s3://$bucket" "${extra[@]}" --exclude "_astro/*" --exclude "install/*" --delete --exact-timestamps \
+# Installer and incident status pages have separate publishers; never delete them here.
+aws s3 sync "$dist" "s3://$bucket" "${extra[@]}" --exclude "_astro/*" --exclude "install/*" --exclude "status/*" --delete --exact-timestamps \
   --cache-control "public, max-age=300, must-revalidate" --no-progress | cat
 
 if [[ $invalidate -eq 1 && $dry_run -eq 0 ]]; then

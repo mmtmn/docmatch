@@ -15,9 +15,28 @@ func TestRewriteURI(t *testing.T) {
 	for in, want := range map[string]string{
 		"/": "/index.html", "/app": "/app.html", "/blog/": "/blog.html", "/blog/post": "/blog/post.html",
 		"/_astro/x.js": "/_astro/x.js", "/favicon.svg": "/favicon.svg", "/v1.2/page": "/v1.2/page.html",
+		"/docs/usar/": "/docs/usar/index.html", "/docs/desenvolver/": "/docs/desenvolver/index.html",
+		"/docs/desenvolver/python": "/docs/desenvolver/python.html",
 	} {
 		if got := RewriteURI(in); got != want {
 			t.Errorf("RewriteURI(%q) = %q; quero %q", in, got, want)
+		}
+	}
+}
+
+func TestLocalTransportPreservesCSP(t *testing.T) {
+	meta := `<meta http-equiv="content-security-policy" content="default-src 'self';upgrade-insecure-requests; script-src 'self' 'sha256-unchanged';">`
+	script := `<script>const text="upgrade-insecure-requests;";</script>`
+	for _, origin := range []string{"http://localhost:14321", "http://127.0.0.1:14321", "http://[::1]:14321"} {
+		got := string(localTransport([]byte(meta+script), origin))
+		want := strings.Replace(meta, "upgrade-insecure-requests;", "", 1) + script
+		if got != want {
+			t.Fatalf("%s: altered more than the local transport policy: %s", origin, got)
+		}
+	}
+	for _, origin := range []string{"", "https://localhost:14321", "https://docmatch.example", "http://localhost.example", "http://10.0.0.1"} {
+		if got := string(localTransport([]byte(meta+script), origin)); got != meta+script {
+			t.Fatalf("%s: must preserve HTTPS upgrades", origin)
 		}
 	}
 }
@@ -26,13 +45,15 @@ func site(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	files := map[string]string{
-		"index.html":       `<meta http-equiv="content-security-policy" content="connect-src 'self' http://dm-api.invalid"><link rel="canonical" href="http://dm-site.invalid/">`,
-		"app.html":         "app",
-		"404.html":         "não achei",
-		"_astro/app.js":    `const api="http://dm-api.invalid";`,
-		"_astro/plain.js":  "console.log(1)",
-		"favicon.svg":      "<svg/>",
-		"blog/post-1.html": "post",
+		"index.html":                  `<meta http-equiv="content-security-policy" content="connect-src 'self' http://dm-api.invalid"><link rel="canonical" href="http://dm-site.invalid/">`,
+		"app.html":                    "app",
+		"404.html":                    "não achei",
+		"_astro/app.js":               `const api="http://dm-api.invalid";`,
+		"_astro/plain.js":             "console.log(1)",
+		"favicon.svg":                 "<svg/>",
+		"blog/post-1.html":            "post",
+		"docs/usar/index.html":        "guia",
+		"docs/desenvolver/index.html": "integração",
 	}
 	for name, content := range files {
 		p := filepath.Join(dir, filepath.FromSlash(name))
@@ -95,6 +116,20 @@ func TestServe(t *testing.T) {
 	}
 	if res = get(t, h, http.MethodGet, "/blog/post-1?x=1"); res.StatusCode != http.StatusOK {
 		t.Fatal("subpasta")
+	}
+	for _, guide := range []string{"usar", "desenvolver"} {
+		res = get(t, h, http.MethodGet, "/docs/"+guide+"?search=projeto")
+		if res.StatusCode != http.StatusMovedPermanently || res.Header.Get("Location") != "/docs/"+guide+"/?search=projeto" {
+			t.Fatalf("índice do livro: %d %v", res.StatusCode, res.Header)
+		}
+		res = get(t, h, http.MethodGet, "/docs/"+guide+"/")
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("livro %s: %d", guide, res.StatusCode)
+		}
+	}
+	res = get(t, h, http.MethodGet, "/docs/usar?next=https%3A%2F%2Fexample.invalid&search=%0D%0A")
+	if got := res.Header.Get("Location"); got != "/docs/usar/?next=https%3A%2F%2Fexample.invalid&search=%0D%0A" {
+		t.Fatalf("consulta não pode alterar o destino local: %q", got)
 	}
 	res = get(t, h, http.MethodGet, "/nada")
 	if res.StatusCode != http.StatusNotFound || body(t, res) != "não achei" {

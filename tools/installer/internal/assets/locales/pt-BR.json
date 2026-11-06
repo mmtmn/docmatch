@@ -11,6 +11,7 @@
     "plans": "Planos",
     "security": "Segurança",
     "blog": "Blog",
+    "docs": "Guias",
     "contact": "Contato",
     "app": "Abrir o app",
     "main_navigation": "Navegação principal",
@@ -19,6 +20,18 @@
     "menu_open": "Abrir menu",
     "account": "Minha conta",
     "login": "Entrar"
+  },
+  "books": {
+    "title": "Guias da docmatch",
+    "description": "Aprenda a conciliar documentos ou conectar seus sistemas à docmatch.",
+    "lead": "Escolha por onde começar. Os dois guias têm capítulos curtos, índice e busca.",
+    "user_title": "Usar a docmatch",
+    "user_description": "Crie seu primeiro projeto, convide pessoas e confira os resultados com suas evidências.",
+    "user_action": "Começar meu primeiro projeto",
+    "developer_title": "Integrar e desenvolver",
+    "developer_description": "Prepare o acesso, escolha um SDK e conecte projetos e conciliações ao seu sistema.",
+    "developer_action": "Preparar minha integração",
+    "edition": "Edição em preparação: projetos e equipes. Confira a disponibilidade de cada cliente no guia."
   },
   "landing": {
     "title": "Seus documentos. Novas possibilidades.",

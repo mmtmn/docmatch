@@ -6,7 +6,7 @@ SHELL := /usr/bin/env bash
 ROOT := $(abspath ../..)
 PNPM ?= pnpm
 PNPM_VERSION := 11.5.3
-export PATH := $(HOME)/.local/bin:$(PATH)
+export PATH := $(HOME)/.local/bin:$(HOME)/.cargo/bin:$(PATH)
 export PLAYWRIGHT_BROWSERS_PATH ?= $(HOME)/.cache/ms-playwright
 # Port of `make preview`. The e2e targets pick a free port per run (tools/free-port.mjs) so parallel
 # worktrees never attach to each other's servers; set E2E_PORT to force one.
@@ -26,6 +26,9 @@ setup: ## pnpm (local ao usuário), dependências do workspace e o Chromium do P
 	  corepack prepare pnpm@$(PNPM_VERSION) --activate; \
 	fi
 	cd $(ROOT) && $(PNPM) install --frozen-lockfile
+	@if ! command -v mdbook >/dev/null 2>&1 || [ "$$(mdbook --version)" != 'mdbook v0.5.4' ]; then \
+	  cargo install mdbook --version 0.5.4 --locked; \
+	fi
 	@$(PNPM) exec playwright install chromium \
 	  || echo "AVISO: não foi possível baixar o Chromium do Playwright; os testes e2e serão pulados."
 

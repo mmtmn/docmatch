@@ -1,0 +1,22 @@
+[book]
+title = "Integrar e desenvolver"
+description = "Uma integração segura com a docmatch, do primeiro projeto à operação."
+language = "pt-BR"
+src = "src"
+
+[output.html]
+theme = "theme"
+default-theme = "light"
+preferred-dark-theme = "navy"
+additional-css = ["theme/docmatch.css"]
+additional-js = ["theme/docmatch.js"]
+no-section-label = true
+site-url = "/docs/desenvolver/"
+input-404 = "nao-encontrado.md"
+
+[output.html.playground]
+runnable = false
+
+[output.html.search]
+use-boolean-and = true
+expand = true

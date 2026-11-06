@@ -123,26 +123,26 @@ O documento troca o link de volta e reinicia; migrações ficam (são compatíve
 
 ## C. Site
 
-Astro gera arquivos estáticos; não há servidor. Publicação é sincronizar com o bucket do site e
-invalidar o cache.
+Astro gera o site e o hook do mdBook acrescenta os dois guias ao mesmo artefato estático.
+O script local usa os outputs do Terraform, confere a CSP de todas as páginas, sincroniza
+com o bucket existente e invalida o cache. Não cria infraestrutura.
 
 ```bash
-SITE_BUCKET="$(terraform -chdir=infra/terraform/envs/$DM_ENV output -raw site_bucket)"
-CF_ID="$(terraform -chdir=infra/terraform/envs/$DM_ENV output -raw cloudfront_distribution_id)"
-pnpm -C apps/web install --frozen-lockfile && pnpm -C apps/web build
-# ativos com hash no nome: cache longo e imutável; HTML: sem cache.
-# status/* fica fora dos dois sync (o último filtro que casa decide): a página de status é publicada
-# só por incidente.md, e um deploy do site não pode apagá-la (--delete) nem sobrescrevê-la
-aws s3 sync apps/web/dist "s3://$SITE_BUCKET" --delete --exclude 'status/*' --exclude '*.html' --cache-control 'public, max-age=31536000, immutable'
-aws s3 sync apps/web/dist "s3://$SITE_BUCKET" --exclude '*' --include '*.html' --exclude 'status/*' --cache-control 'no-cache' --content-type 'text/html; charset=utf-8'
-aws cloudfront create-invalidation --distribution-id "$CF_ID" --paths '/*'
-curl -s "$DM_PUBLIC_BASE_URL/" | grep -o '<title>[^<]*</title>'
+infra/scripts/deploy-site.sh --env "$DM_ENV" --dry-run
+infra/scripts/deploy-site.sh --env "$DM_ENV"
+curl -fsS "$DM_PUBLIC_BASE_URL/docs/usar/" >/dev/null
+curl -fsS "$DM_PUBLIC_BASE_URL/docs/desenvolver/python.html" >/dev/null
 ```
 
-O blog (fase 5) usa o mesmo caminho a partir do worker, com `--include 'blog/*'` apenas. A página
-de status (`status/`) é publicada só por [incidente.md](incidente.md#comunicação) e fica fora dos
-dois `sync` acima pelo `--exclude 'status/*'`; o script de publicação de `apps/web` (fase 2) tem
-de manter o mesmo `--exclude`.
+Instale mdBook 0.5.4 antes do build (`make -C apps/web setup`). Um `--dist` fornecido pelo
+operador também precisa conter os dois livros e passar na CSP; o script rejeita um
+artefato incompleto antes do `sync --delete`. Na primeira publicação, aplique a reescrita
+dos índices do livro no CloudFront antes de verificar as URLs. Teste busca, um capítulo
+profundo e o download dos exemplos no destino publicado.
+
+Os prefixos `install/` e `status/` ficam fora do sync: pertencem ao instalador e ao
+[procedimento de incidente](incidente.md#comunicação). O livro pertence ao mesmo build
+do site, portanto seu prefixo acompanha a publicação inteira.
 
 **Rollback:** publique o commit anterior; o bucket tem versionamento como segunda opção.
 

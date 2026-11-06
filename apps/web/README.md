@@ -11,13 +11,19 @@ ou estilos inline nossos (ver [docs/headers.md](docs/headers.md)).
 make setup      # pnpm (local ao usuário), dependências e o Chromium do Playwright
 make dev        # http://localhost:4321
 make ci         # sync + lint + typecheck + testes + build (< 6 min)
-make ci-full    # ci + e2e em chromium/firefox/webkit (os que abrirem)
+make ci-full    # ci + e2e; exige chromium, firefox e webkit
 make e2e        # só o Playwright, contra o build de produção
 make preview    # serve dist/ como o CloudFront serviria (tools/serve-dist.mjs)
 make lhci       # Lighthouse CI com os orçamentos (fora do ci)
 ```
 
 Variáveis de build em [`.env.example`](.env.example). Nada aqui é segredo: tudo vai para o HTML.
+
+O build inclui os [dois livros públicos](../../docs/book/README.md) em `/docs/usar/` e
+`/docs/desenvolver/`, com mdBook 0.5.4 (instalado por `make setup`, via Cargo). O mesmo hook
+roda no build local, no e2e e na publicação. `/docs` apresenta as duas entradas; o preview
+e o CloudFront preservam os índices e os links relativos dos capítulos. Site e livros
+seguem juntos em `dist/`, sem infraestrutura adicional.
 
 `make sync` (`astro sync`) gera `.astro/` com os tipos de `astro:env`, das coleções e das rotas;
 `lint` e `typecheck` dependem dele porque as regras type-aware do ESLint veriam `error` no lugar

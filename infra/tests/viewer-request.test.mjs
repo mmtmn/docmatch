@@ -82,6 +82,17 @@ test('clean URLs: /docs and /docs/ both map to /docs.html', async () => {
   assert.equal(await rewrite('/docs/'), '/docs.html');
 });
 
+test('books: directory indexes preserve relative assets and query strings', async () => {
+  for (const guide of ['usar', 'desenvolver']) {
+    const result = await handler(event({ uri: `/docs/${guide}`, query: { search: { value: 'projeto' } } }));
+    assert.equal(result.statusCode, 301);
+    assert.equal(result.headers.location.value, `/docs/${guide}/?search=projeto`);
+    assert.equal(await rewrite(`/docs/${guide}/`), `/docs/${guide}/index.html`);
+    assert.equal(await rewrite(`/docs/${guide}/projetos`), `/docs/${guide}/projetos.html`);
+    assert.equal(await rewrite(`/docs/${guide}/css/book.123.css`), `/docs/${guide}/css/book.123.css`);
+  }
+});
+
 test('clean URLs: a page without an extension gets .html, at any depth', async () => {
   assert.equal(await rewrite('/termos'), '/termos.html');
   assert.equal(await rewrite('/blog/codigo-primeiro-modelo-depois'), '/blog/codigo-primeiro-modelo-depois.html');
