@@ -145,3 +145,32 @@ verificados; o progresso mostra a etapa real, sem percentual fictício.
 O app usa a API configurada e o modelo escolhido **no servidor** (Ollama ou OpenRouter).
 Não carrega o modelo no telefone. Planos e chaves de integração ficam na página web de conta;
 veja [API](../../docs/api.md) e [estruturas, algoritmos e padrões](../../docs/estruturas-algoritmos-padroes.md).
+
+## Interface compartilhada
+
+O app acompanha o site: marca no topo, título e envio com borda tracejada, arquivos com remoção
+individual, regras expansíveis e envio fixo no rodapé. Excel corrigido e PDF vêm primeiro nos
+resultados; detalhes ficam em seções recolhidas. Histórico, conta e confirmações usam cartões,
+cores e cantos do mesmo sistema visual. O processamento anima documentos sem inventar percentuais
+e respeita a configuração de animações do Android. Senhas têm botão de mostrar/ocultar e ações
+mantêm alvo de toque mínimo de 48 dp.
+
+O debug configura o **client Web** como `GOOGLE_SERVER_CLIENT_ID`; o client Android é associado
+no Google Cloud a `br.com.docmatch.debug` e ao SHA-1 do certificado. Veja os
+[IDs e a configuração da API](../../docs/runbooks/google-sign-in.md#clientes-nativos-de-debug).
+Release mantém configuração explícita e requer outro cliente Android para `br.com.docmatch`.
+
+O teste instrumentado aceita `-e docmatchScreenshots 1` para gravar as telas do fluxo real em
+`getExternalFilesDir()/ui-audit`. Ele usa apenas a conta local e os dados públicos do gêmeo Vantara.
+Em imagens AOSP ATD, habilite o desenho com `adb shell setprop debug.hwui.drawing_enabled true`.
+O runner do Gradle remove o app ao terminar; para inspecionar as imagens, use `adb install` dos dois
+APKs e `adb shell am instrument` em um emulador dedicado.
+
+<details>
+<summary>Telas do app real (emulador, dados públicos)</summary>
+
+<img src="../../docs/images/mobile/android-workspace.png" width="260" alt="Envio de arquivos e regras no Android" />
+<img src="../../docs/images/mobile/android-results.png" width="260" alt="Resultado com downloads de Excel corrigido e PDF" />
+<img src="../../docs/images/mobile/android-large-text.png" width="260" alt="Resultado em modo escuro com texto a 200%" />
+
+</details>

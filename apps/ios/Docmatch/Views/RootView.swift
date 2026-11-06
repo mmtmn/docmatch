@@ -16,11 +16,16 @@ struct RootView: View {
             case .loading:
                 LoadingView(label: texts.t("mobile.loading"))
             case .signedOut(let state):
-                LoginView(state: state, session: session)
+                VStack(spacing: 0) {
+                    HStack { DmBrand(); Spacer() }.padding(.horizontal, 20).padding(.vertical, 14)
+                    Divider()
+                    LoginView(state: state, session: session)
+                }
             case .signedIn:
                 SignedInView(session: session)
             }
         }
+        .background(Color(DmColors.bgCanvas)).foregroundStyle(Color(DmColors.textPrimary))
         .task { await session.refresh() }
     }
 }
@@ -73,5 +78,7 @@ private struct SignedInView: View {
             .tabItem { Label(texts.t("mobile.tab_account"), systemImage: "person.crop.circle") }
             .tag(AppTab.account)
         }
+        .toolbarBackground(Color(DmColors.bgCanvas), for: .tabBar)
+        .toolbarBackground(.visible, for: .tabBar)
     }
 }

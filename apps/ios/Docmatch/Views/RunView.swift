@@ -5,14 +5,10 @@ import SwiftUI
 /// at risk with their evidence and decisions, and the report to share.
 struct RunView: View {
     private let dm: Docmatch
-    @State private var reviewOpen = false
-    @State private var changesOpen = false
-    @State private var allOpen = false
     @State private var model: RunModel
     @State private var open: String?
     @State private var share: ShareItem?
     @Environment(\.texts) private var texts
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(dm: Docmatch, runId: String) {
         self.dm = dm
@@ -21,7 +17,7 @@ struct RunView: View {
 
     var body: some View {
         // The ZStack owns the polling task, so a change of state never restarts it.
-        ZStack { content }
+        ZStack { content }.background(Color(DmColors.bgCanvas))
             .navigationTitle(texts.t("mobile.run_title"))
             .navigationBarTitleDisplayMode(.inline)
             // Polls only while this screen is shown (and again on retry or after an approval).
@@ -34,17 +30,10 @@ struct RunView: View {
         case .loading:
             LoadingView(label: texts.t("results.live_loading"))
         case .running(let step):
-            VStack(spacing: DmSize.space2) {
-                VStack(alignment: .leading, spacing: DmSize.space2) {
-                    Text("docmatch").font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary)
-                    Text(step.map { Labels.step(texts, $0) } ?? texts.t("mobile.run_waiting"))
-                        .font(.system(.body, design: .monospaced))
-                        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: step.map { Labels.step(texts, $0) })
-                    ProgressView()
-                }.padding(DmSize.space3).background(.regularMaterial, in: RoundedRectangle(cornerRadius: DmSize.radiusMd))
+            DmPage {
+                DmProcessingScene(label: step.map { Labels.step(texts, $0) } ?? texts.t("mobile.run_waiting"))
+                Text(texts.t("mobile.processing_keep_open")).font(.caption).foregroundStyle(Color(DmColors.textMuted))
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .accessibilityElement(children: .combine)
         case .needsApproval(let run, let busy):
             approval(run, busy: busy)
         case .failed(let message):
@@ -55,15 +44,15 @@ struct RunView: View {
     }
 
     private func approval(_ run: Run, busy: Bool) -> some View {
-        Form {
-            Section {
+        DmPage {
+            DmCard {
                 Text(texts.t("mobile.approve_title"))
                     .font(.title3.bold())
                     .accessibilityAddTraits(.isHeader)
                 if let quote = run.pendingQuote {
                     Text(texts.t("mobile.approve_text", ["expected": quote.expectedCredits, "cap": quote.capCredits]))
                     Button(texts.t("mobile.approve")) { Task { await model.approve() } }
-                        .disabled(busy)
+                        .buttonStyle(DmButtonStyle()).disabled(busy)
                 } else {
                     Text(texts.t("mobile.status_needs_approval"))
                 }
@@ -80,12 +69,13 @@ struct RunView: View {
         let document = run.summary?.reconciliation
         let pending = findings.filter { $0.status == "open" && $0.severity != "info" }
         let critical = findings.filter { $0.severity == "critical" }
-        return List {
-            Section {
+        return DmPage {
+            DmCard {
+                DmIconTile(name: "checkmark.seal")
                 Text(texts.t(document == nil ? "results.report_ready" : "results.document_ready")).font(.title2.bold())
                 Text(texts.t(document == nil ? "results.report_subtitle" : "results.output_description"))
                 if let document {
-                    Button(texts.t("results.download_corrected")) { export("xlsx") }.buttonStyle(.borderedProminent)
+                    Button(texts.t("results.download_corrected")) { export("xlsx") }.buttonStyle(DmButtonStyle())
                     Text(texts.t("results.doc_open") + ": " + Format.money(document.totals.openBalance)).bold()
                 } else {
                     Text(texts.t("results.legacy_output"))
@@ -93,7 +83,7 @@ struct RunView: View {
                         ReprocessView(dm: dm)
                     }
                 }
-                Button(texts.t("results.download_report")) { export("pdf") }.buttonStyle(.bordered)
+                Button(texts.t("results.download_report")) { export("pdf") }.buttonStyle(DmButtonStyle(.secondary))
                 DisclosureGroup(texts.t("results.other_formats")) {
                     Button(texts.t(document == nil ? "results.download_findings_csv" : "results.download_data_csv")) { export("csv") }
                     if document == nil { Button(texts.t("results.download_findings_xlsx")) { export("xlsx") } }
@@ -102,17 +92,18 @@ struct RunView: View {
                     Text(texts.t("results.source_warnings_title")).bold()
                     ForEach(warnings, id: \.self) { Text("• " + $0).font(.caption) }
                 }
-                if open == nil, let notice = model.notice { Text(notice) }
+                Text(texts.t("mobile.run_findings", ["count": findings.count])).font(.caption).foregroundStyle(Color(DmColors.textMuted))
+                if open == nil, let notice = model.notice { DmNotice(message: notice) }
             }
             if !critical.isEmpty {
-                Section(texts.t("results.critical_heading")) {
-                    Text(texts.t("results.critical_scope"))
+                DmHeading(title: texts.t("results.critical_heading"), subtitle: texts.t("results.critical_scope"))
+                VStack(alignment: .leading, spacing: 12) {
                     findingRows(critical)
                 }
             }
-            Section {
-                DisclosureGroup(texts.t("results.review_heading") + " · " + String(pending.count), isExpanded: $reviewOpen) {
-                    if reviewOpen {
+            VStack(alignment: .leading, spacing: 16) {
+                DmDisclosure(texts.t("results.review_heading") + " · " + String(pending.count)) {
+                    Group {
                         Text(texts.t("results.review_scope"))
                         if pending.isEmpty { Text(texts.t("results.review_empty")) }
                         findingRows(pending)
@@ -120,8 +111,8 @@ struct RunView: View {
                     }
                 }
                 if let document {
-                    DisclosureGroup(texts.t("results.changes_heading"), isExpanded: $changesOpen) {
-                        if changesOpen {
+                    DmDisclosure(texts.t("results.changes_heading")) {
+                        Group {
                             Text(texts.t("results.doc_scope"))
                             Text(texts.t("results.doc_principal") + ": " + Format.money(document.totals.principalConfirmed))
                             Text(texts.t("results.doc_duplicate") + ": " + Format.money(document.totals.duplicateExcluded))
@@ -129,8 +120,8 @@ struct RunView: View {
                         }
                     }
                 }
-                DisclosureGroup(texts.t("results.all_heading"), isExpanded: $allOpen) {
-                    if allOpen {
+                DmDisclosure(texts.t("results.all_heading")) {
+                    Group {
                         Text(texts.t("results.findings_scope"))
                         if let document {
                             Text(texts.t("results.doc_ledger")).bold()
@@ -160,7 +151,8 @@ struct RunView: View {
 
     private func findingRows(_ findings: [Finding]) -> some View {
         ForEach(findings) { finding in
-            Button { open = finding.id } label: { FindingRow(finding: finding) }.accessibilityIdentifier("finding-row")
+            Button { open = finding.id } label: { DmCard { FindingRow(finding: finding) } }
+                .buttonStyle(.plain).accessibilityIdentifier("finding-row")
         }
     }
 
@@ -265,7 +257,7 @@ private struct FindingDetailView: View {
                     editing = false
                     Task { await model.decide(finding, Decision.resolved, note: text) }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(DmButtonStyle())
                 .disabled(note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 Button(texts.t("results.edit_cancel")) { editing = false }
             }
@@ -273,13 +265,13 @@ private struct FindingDetailView: View {
             // Every decision is recorded on the API, so changing it changes it everywhere.
             VStack(alignment: .leading) {
                 Button(texts.t("results.accept")) { Task { await model.decide(finding, Decision.confirmed) } }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(DmButtonStyle())
                     .disabled(finding.status == Decision.confirmed)
                 Button(texts.t("results.reject")) { Task { await model.decide(finding, Decision.dismissed) } }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(DmButtonStyle(.secondary))
                     .disabled(finding.status == Decision.dismissed)
                 Button(texts.t("results.edit")) { editing = true }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(DmButtonStyle(.secondary))
             }
         }
     }

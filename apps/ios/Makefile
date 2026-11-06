@@ -29,7 +29,11 @@ test: ## testes do DocmatchKit (API, sessão, pré-checagem, fluxo, modelos das 
 	@if [[ "$$(uname)" == Darwin ]]; then cd DocmatchKit && swift test; \
 	  else command -v docker >/dev/null || { echo "docker ausente: os testes do DocmatchKit rodam no contêiner $(SWIFT_IMAGE)" >&2; exit 1; }; \
 	  mkdir -p "$(SWIFT_CACHE)"; \
-	  docker run --rm --user "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(ROOT):/repo" -v "$(SWIFT_CACHE):/cache" \
+	  docker run --rm --network none --read-only --tmpfs /tmp:exec --user "$$(id -u):$$(id -g)" -e HOME=/tmp \
+	    -v "$(ROOT)/apps/ios/DocmatchKit:/repo/apps/ios/DocmatchKit:ro" \
+	    -v "$(ROOT)/packages/contracts/gen:/repo/packages/contracts/gen:ro" \
+	    -v "$(ROOT)/packages/locales:/repo/packages/locales:ro" \
+	    -v "$(ROOT)/testdata:/repo/testdata:ro" -v "$(SWIFT_CACHE):/cache" \
 	    -w /repo/apps/ios/DocmatchKit $(SWIFT_IMAGE) swift test --scratch-path /cache/build; fi
 
 ci: lint test ## tokens + testes do DocmatchKit (o que o pre-push roda)
@@ -39,8 +43,11 @@ ci-full: ci ## ci + o app inteiro, no Mac
 
 app: ## no Mac: gera o projeto e compila o app para o simulador, sem assinatura
 	xcodegen generate --quiet
-	xcodebuild -project Docmatch.xcodeproj -scheme Docmatch -configuration Debug -destination '$(SIMULATOR)' \
-	  CODE_SIGNING_ALLOWED=NO build -quiet
+	@settings=(); \
+	  if [[ -n "$${DOCMATCH_API_BASE_URL+x}" ]]; then settings+=("DOCMATCH_API_BASE_URL=$$DOCMATCH_API_BASE_URL"); fi; \
+	  if [[ -n "$${DOCMATCH_GOOGLE_IOS_CLIENT_ID+x}" ]]; then settings+=("DOCMATCH_GOOGLE_IOS_CLIENT_ID=$$DOCMATCH_GOOGLE_IOS_CLIENT_ID"); fi; \
+	  xcodebuild -project Docmatch.xcodeproj -scheme Docmatch -configuration Debug -destination '$(SIMULATOR)' \
+	    "$${settings[@]}" CODE_SIGNING_ALLOWED=NO build -quiet
 
 release: ## no Mac: arquivo de release para a origem do ambiente (outputs do Terraform; DOCMATCH_API_BASE_URL sobrepõe)
 	@url="$${DOCMATCH_API_BASE_URL:-$$(terraform -chdir=$(ROOT)/infra/terraform/envs/$(ENV) output -raw site_url)}"; \

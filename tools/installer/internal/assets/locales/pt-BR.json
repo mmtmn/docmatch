@@ -678,7 +678,7 @@
     "tab_history": "Histórico",
     "tab_account": "Conta",
     "new_title": "Nova conciliação",
-    "new_text": "Escolha extratos, planilhas, notas e e-mails. A docmatch encontra cada divergência e mostra a prova.",
+    "new_text": "Cruze informações, encontre inconsistências e transforme documentos em dados úteis. Descreva suas regras, confira as evidências e baixe o resultado.",
     "pick_files": "Escolher arquivos",
     "confirm_title": "Confirmar a conciliação",
     "run_title": "Conciliação",
@@ -711,7 +711,18 @@
     "delete_title": "Excluir a conta?",
     "delete_text": "A conta e todos os dados dela (conciliações, achados, regras e créditos) são excluídos em 7 dias, em todos os aparelhos. Até lá ninguém entra nela, e o suporte ainda pode cancelar o pedido.",
     "delete_confirm": "Excluir a conta",
-    "delete_done": "Exclusão agendada para {date}. Você saiu em todos os aparelhos."
+    "delete_done": "Exclusão agendada para {date}. Você saiu em todos os aparelhos.",
+    "pick_hint": "Toque para selecionar vários arquivos",
+    "files_private": "Seus originais são preservados.",
+    "history_text": "Seus documentos e resultados, em todos os aparelhos.",
+    "account_text": "Seu acesso, saldo e dispositivos em um só lugar.",
+    "process_title": "Transformando seus documentos",
+    "process_text": "Acompanhe as etapas. O resultado mantém as evidências de cada achado.",
+    "review_before_start": "Confira antes de começar",
+    "processing_keep_open": "Você pode acompanhar esta análise no Histórico.",
+    "rules_more": "Sobre as opções de análise",
+    "legal_text": "Ao continuar, você concorda com os termos e a política de privacidade.",
+    "back": "Voltar"
   },
   "installer": {
     "tagline": "concilie qualquer documento · instalação local, sem chave",

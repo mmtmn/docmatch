@@ -30,7 +30,7 @@ test("checkTokens catches a failing pair, a bad spacing step and a wrong radius"
   const problems = checkTokens(tokens);
   assert.ok(problems.some((p) => /light: text\.muted \(#999999\) sobre bg\.canvas/.test(p)), problems.join("\n"));
   assert.ok(problems.some((p) => /space\.7 = 52/.test(p)));
-  assert.ok(problems.some((p) => /radius\.md precisa ser 8/.test(p)));
+  assert.ok(problems.some((p) => /radius\.md precisa ser 10/.test(p)));
 });
 
 test("checkTokens requires identical color trees in both modes", () => {
@@ -44,10 +44,10 @@ test("checkTokens requires identical color trees in both modes", () => {
 test("buildCss emits light, dark and reduced-motion blocks with the dm prefix", () => {
   const css = buildCss(loadTokens());
   assert.match(css, /^:root \{\n  color-scheme: light dark;/m);
-  assert.match(css, /--dm-color-bg-canvas: #FFFFFF;/);
+  assert.match(css, /--dm-color-bg-canvas: #FCFCFD;/);
   assert.match(css, /--dm-space-2: 16px;/);
-  assert.match(css, /--dm-radius-md: 8px;/);
-  assert.match(css, /@media \(prefers-color-scheme: dark\) \{\n  :root:not\(\[data-theme="light"\]\) \{\n    --dm-color-bg-canvas: #0B1220;/);
-  assert.match(css, /:root\[data-theme="dark"\] \{\n  --dm-color-bg-canvas: #0B1220;/);
+  assert.match(css, /--dm-radius-md: 10px;/);
+  assert.match(css, /@media \(prefers-color-scheme: dark\) \{\n  :root:not\(\[data-theme="light"\]\) \{\n    --dm-color-bg-canvas: #0F1216;/);
+  assert.match(css, /:root\[data-theme="dark"\] \{\n  --dm-color-bg-canvas: #0F1216;/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
 });

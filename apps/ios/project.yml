@@ -42,6 +42,8 @@ targets:
       configs:
         Debug:
           PRODUCT_BUNDLE_IDENTIFIER: br.com.docmatch.debug
+          # Public OAuth identifier for br.com.docmatch.debug; no client secret in the app.
+          DOCMATCH_GOOGLE_IOS_CLIENT_ID: 118512591918-ui6bljd5o1jlghgsc5q67igbs755l9ou.apps.googleusercontent.com
           DOCMATCH_API_BASE_URL: http://localhost:8080
           DOCMATCH_ALIAS_LOOPBACK: "YES"
         Release:

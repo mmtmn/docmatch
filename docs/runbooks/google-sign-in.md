@@ -72,8 +72,8 @@ Localmente, os valores ficam no `.env` ignorado. Em produção, grave-os como `S
 arquivos públicos do site, variáveis `PUBLIC_*`, comandos registrados em histórico ou logs.
 Recarregue `docmatch-env` e reinicie a API após a importação. Não altere os segredos de sessão.
 
-Os apps Android/iOS precisam de clientes próprios. Seus IDs entram em
-`GOOGLE_OAUTH_NATIVE_CLIENT_IDS`; o JSON Web prepara apenas o fluxo web.
+Os apps Android/iOS precisam de clientes próprios. O Android solicita tokens para o client Web
+(audiência já aceita pela API). O client iOS entra em `GOOGLE_OAUTH_NATIVE_CLIENT_IDS`.
 
 ## Verificação e reversão
 
@@ -87,3 +87,38 @@ Os apps Android/iOS precisam de clientes próprios. Seus IDs entram em
 | --- | --- | --- |
 | 2026-11-05 | Preparação do logo e das URLs | PNGs e páginas públicas disponíveis |
 | 2026-11-05 | Cliente Web importado no SSM; API recarregada | Início do OAuth, callback, PKCE e chegada à tela do Google verificados; login completo depende de uma conta de teste autorizada |
+
+## Clientes nativos de debug
+
+Estes IDs são identificadores públicos, sem segredo, e ambos foram criados para `br.com.docmatch.debug`:
+
+| Cliente | ID público | Uso |
+| --- | --- | --- |
+| Android debug | `118512591918-d320b5tvj6u0vt85uu6dqvjfik6bo87i.apps.googleusercontent.com` | Google Cloud: pacote + SHA-1 do certificado. Não substituir o server client ID por este ID. |
+| iOS debug | `118512591918-ui6bljd5o1jlghgsc5q67igbs755l9ou.apps.googleusercontent.com` | `DOCMATCH_GOOGLE_IOS_CLIENT_ID` em Debug e audiência extra aceita pela API. |
+| Web / servidor | `118512591918-mmls51ou40ibjjj8m9oi9h555bnfq8kt.apps.googleusercontent.com` | `GOOGLE_SERVER_CLIENT_ID` no Android e `GOOGLE_OAUTH_CLIENT_ID` na API. |
+
+O client Android precisa do SHA-1 do **APK realmente instalado**. O keystore de debug de outro
+computador, inclusive o Mac, pode ter SHA-1 diferente: registre outro client Android com esse
+certificado ou distribua o mesmo APK de debug. Emuladores AOSP sem Google Play Services não
+validam o login interativo do Google; use um aparelho ou emulador Google Play.
+
+A API precisa das credenciais Web no ambiente privado para habilitar o provedor. Acrescente o ID
+iOS em `GOOGLE_OAUTH_NATIVE_CLIENT_IDS`, separado por vírgulas, preservando outras audiências.
+A variável aparece no `.env.example` para novos ambientes e na lista opcional do Terraform; ambientes
+existentes precisam receber o valor e recarregar a API. Não basta atualizar o app. Em produção,
+usam-se o parâmetro `/docmatch/prod/GOOGLE_OAUTH_NATIVE_CLIENT_IDS` e o mesmo processo de SSM
+[descrito para segredos](rotacionar-segredos.md). Publicar a configuração no Git não a instala no SSM.
+
+Android usa Credential Manager; iOS usa a sessão web do sistema com PKCE e callback reverso do ID.
+Ambos pedem somente `openid email profile`. No Google Cloud, deixe a opção de agente de IA desligada:
+este é login interativo de usuários. Não habilite App Check sem implementar sua validação.
+
+Para distribuir `br.com.docmatch`, crie clientes de produção com esse identificador e o certificado
+final de Android / time Apple. Os novos IDs acima não atendem ao identificador de Release.
+
+Em 2026-11-06, a audiência iOS debug foi adicionada ao SSM de produção, a API foi recarregada
+e o valor foi confirmado no processo em execução. O parâmetro foi importado no estado Terraform;
+a reconciliação da versão write-only preservou seu valor, e o plano direcionado final ficou sem
+mudanças. `/v1/auth/methods` continuou informando `google: true`. Isso verifica a configuração do
+servidor; o login interativo ainda exige uma conta autorizada e um aparelho compatível.

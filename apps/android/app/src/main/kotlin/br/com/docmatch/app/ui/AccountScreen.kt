@@ -1,5 +1,9 @@
 package br.com.docmatch.app.ui
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -8,11 +12,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import androidx.compose.ui.window.Dialog
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -110,18 +111,17 @@ fun AccountScreen(vm: AccountViewModel) {
     val state by vm.state.collectAsState()
     var confirmDeletion by remember { mutableStateOf(false) }
     if (confirmDeletion) {
-        AlertDialog(
-            onDismissRequest = { confirmDeletion = false },
-            title = { Text(t("mobile.delete_title")) },
-            text = { Text(t("mobile.delete_text")) },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirmDeletion = false
-                    vm.deleteAccount()
-                }) { Text(t("mobile.delete_confirm"), color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = { TextButton(onClick = { confirmDeletion = false }) { Text(t("common.cancel")) } },
-        )
+        Dialog(onDismissRequest = { confirmDeletion = false }) {
+            DmCard {
+                Column(Modifier.heightIn(max = 600.dp).verticalScroll(rememberScrollState()).padding(DmSize.space3), verticalArrangement = Arrangement.spacedBy(DmSize.space2)) {
+                    DmHeading(t("mobile.delete_title"), t("mobile.delete_text"))
+                    DmSecondaryButton(onClick = { confirmDeletion = false; vm.deleteAccount() }, modifier = Modifier.fillMaxWidth()) {
+                        Text(t("mobile.delete_confirm"), color = MaterialTheme.colorScheme.error)
+                    }
+                    DmSecondaryButton(onClick = { confirmDeletion = false }, modifier = Modifier.fillMaxWidth()) { Text(t("common.cancel")) }
+                }
+            }
+        }
     }
     // Every time the tab is shown: credits spent and devices added elsewhere appear.
     LaunchedEffect(Unit) { vm.load() }
@@ -129,19 +129,19 @@ fun AccountScreen(vm: AccountViewModel) {
         AccountState.Loading -> Loading(t("account.loading"))
         is AccountState.Failed -> ErrorState(s.message) { vm.refresh() }
         is AccountState.Ready ->
-            LazyColumn(contentPadding = PaddingValues(DmSize.space3), verticalArrangement = Arrangement.spacedBy(DmSize.space2)) {
+            LazyColumn(modifier = Modifier.testTag("account-list"), contentPadding = PaddingValues(DmSize.space3), verticalArrangement = Arrangement.spacedBy(DmSize.space2)) {
                 item {
-                    Text(t("account.title"), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
+                    DmHeading(t("account.title"), t("mobile.account_text"))
                     s.notice?.let { Text(it, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
                 }
                 item {
-                    Card(Modifier.fillMaxWidth()) {
+                    DmCard(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(DmSize.space2), verticalArrangement = Arrangement.spacedBy(DmSize.space1)) {
                             Text(t("account.profile"), fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
                             if (s.me.user.displayName.isNotBlank()) Labeled(t("account.name_label"), s.me.user.displayName)
                             Labeled(t("account.email_label"), s.me.user.email)
                             s.me.credits?.let { Labeled(t("account.credits"), if (it.tokenExempt) t("account.token_exempt") else t("account.credits_available", mapOf("available" to it.available))) }
-                            OutlinedButton(onClick = vm::signOut) { Text(t("account.sign_out")) }
+                            DmSecondaryButton(onClick = vm::signOut) { Text(t("account.sign_out")) }
                         }
                     }
                 }
@@ -150,15 +150,15 @@ fun AccountScreen(vm: AccountViewModel) {
                     Text(t("account.devices_text"), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 items(s.devices, key = { it.id }) { d ->
-                    Card(Modifier.fillMaxWidth().testTag(TAG_DEVICE)) {
-                        Row(Modifier.padding(DmSize.space2), verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
+                    DmCard(Modifier.fillMaxWidth().testTag(TAG_DEVICE)) {
+                        Column(Modifier.padding(DmSize.space2), verticalArrangement = Arrangement.spacedBy(DmSize.space2)) {
+                            Column {
                                 Text(d.name, fontWeight = FontWeight.SemiBold)
                                 if (d.current) Text(t("account.this_device"), color = MaterialTheme.colorScheme.primary)
                                 Text(t("account.last_seen", mapOf("when" to Format.dateTime(d.lastSeenAt))), style = MaterialTheme.typography.bodySmall)
                             }
                             val label = t("account.revoke_label", mapOf("name" to d.name))
-                            OutlinedButton(onClick = { vm.revoke(d) }, modifier = Modifier.semantics { contentDescription = label }) {
+                            DmSecondaryButton(onClick = { vm.revoke(d) }, modifier = Modifier.fillMaxWidth().semantics { contentDescription = label }) {
                                 Text(t("account.revoke"))
                             }
                         }

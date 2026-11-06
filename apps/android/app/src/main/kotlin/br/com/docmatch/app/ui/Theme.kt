@@ -3,6 +3,12 @@ package br.com.docmatch.app.ui
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Typography
+import androidx.compose.material3.Shapes
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -129,6 +135,19 @@ private fun darkExtras() =
 @Composable
 fun DocmatchTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalDmColors provides if (dark) darkExtras() else lightExtras()) {
-        MaterialTheme(colorScheme = if (dark) darkScheme() else lightScheme(), content = content)
+        MaterialTheme(colorScheme = if (dark) darkScheme() else lightScheme(),
+            typography = Typography(
+                headlineLarge = TextStyle(fontSize = 30.sp, lineHeight = 35.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.7).sp),
+                headlineSmall = TextStyle(fontSize = 24.sp, lineHeight = 30.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp),
+                titleLarge = TextStyle(fontSize = 21.sp, lineHeight = 28.sp, fontWeight = FontWeight.SemiBold),
+                titleMedium = TextStyle(fontSize = 17.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold),
+                titleSmall = TextStyle(fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold),
+                bodyLarge = TextStyle(fontSize = 16.sp, lineHeight = 25.sp),
+                bodyMedium = TextStyle(fontSize = 15.sp, lineHeight = 23.sp),
+                bodySmall = TextStyle(fontSize = 13.sp, lineHeight = 20.sp),
+                labelLarge = TextStyle(fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.SemiBold),
+            ),
+            shapes = Shapes(small = RoundedCornerShape(DmSize.radiusMd), medium = RoundedCornerShape(DmSize.radiusLg), large = RoundedCornerShape(DmSize.radiusLg)),
+            content = content)
     }
 }

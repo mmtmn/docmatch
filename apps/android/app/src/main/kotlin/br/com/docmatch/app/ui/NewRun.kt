@@ -5,6 +5,13 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.window.Dialog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,13 +25,10 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -40,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -285,64 +290,77 @@ fun NewRunScreen(vm: NewRunViewModel, tokenExempt: Boolean = false, onStarted: (
         }
     }
 
-    Column(
-        Modifier.fillMaxSize().verticalScroll(scroll).imePadding().padding(DmSize.space3),
-        verticalArrangement = Arrangement.spacedBy(DmSize.space2),
-    ) {
-        Text(t("common.app_title"), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
-        Text(t("mobile.new_text"), color = MaterialTheme.colorScheme.onSurfaceVariant)
-        OutlinedButton(onClick = { picker.launch(arrayOf("*/*")) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-            Text(t("mobile.pick_files"))
-        }
-        if (files.isNotEmpty()) {
-            val count = if (files.size == 1) t("dropzone.files_count_one") else t("dropzone.files_count_many", mapOf("count" to files.size))
-            Text("$count · " + t("dropzone.total_size", mapOf("size" to Format.size(texts, files.sumOf { it.size }))))
-            files.forEach { f ->
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("${f.name} · ${kindLabel(f.kind.id)} · ${Format.size(texts, f.size)}", modifier = Modifier.weight(1f))
-                    IconButton(onClick = { vm.remove(f) }, enabled = !busy) {
-                        Icon(Icons.Filled.Close, contentDescription = t("dropzone.remove_file", mapOf("name" to f.name)))
+    Column(Modifier.fillMaxSize().imePadding().padding(horizontal = 16.dp)) {
+        Column(Modifier.weight(1f).verticalScroll(scroll).padding(top = 20.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+            if (phase is NewRunPhase.Working) {
+                ProcessingScene(stepLabel((phase as NewRunPhase.Working).step))
+            } else {
+                DmHeading(t("landing.title"), t("landing.subtitle"), hero = true)
+                UploadTarget(!busy, files.isNotEmpty() || options.rulesText.length > 120) { picker.launch(arrayOf("*/*")) }
+                if (files.isNotEmpty()) {
+                    DmCard(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            val count = if (files.size == 1) t("dropzone.files_count_one") else t("dropzone.files_count_many", mapOf("count" to files.size))
+                            Text("$count · " + Format.size(texts, files.sumOf { it.size }), style = MaterialTheme.typography.labelLarge)
+                            Column(Modifier.heightIn(max = 240.dp).verticalScroll(rememberScrollState())) {
+                                files.forEach { f ->
+                                    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(DmIcons.File, null, tint = MaterialTheme.colorScheme.primary)
+                                        Spacer(Modifier.width(10.dp))
+                                        Column(Modifier.weight(1f)) {
+                                            Text(f.name, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                            Text(kindLabel(f.kind.id) + " · " + Format.size(texts, f.size), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                        IconButton(onClick = { vm.remove(f) }, enabled = !busy) {
+                                            Icon(Icons.Filled.Close, contentDescription = t("dropzone.remove_file", mapOf("name" to f.name)))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(t("form.rules_label"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.semantics { heading() })
+                    OptionSwitch(t("form.use_rules"), t("tooltips.use_rules"), options.useRules, !busy, vm::setUseRules)
+                    OptionSwitch(t("form.web_search"), t("tooltips.web_search"), options.webSearch, !busy, vm::setWebSearch)
+                    OutlinedTextField(value = options.rulesText, onValueChange = vm::setRules,
+                        placeholder = { Text(t("form.rules_placeholder")) }, enabled = !busy && options.useRules,
+                        minLines = 2, maxLines = 6, shape = RoundedCornerShape(DmSize.radiusMd),
+                        modifier = Modifier.fillMaxWidth().animateContentSize().semantics { contentDescription = texts.t("form.rules_label") })
+                    CharCounter(codePoints(options.rulesText), Limits.Text.RULES_TEXT)
+                    if (!options.useRules) Text(t("form.rules_disabled_hint"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    DmDisclosure(t("mobile.rules_more")) {
+                        Text(t("tooltips.use_rules"), style = MaterialTheme.typography.bodySmall)
+                        Text(t("tooltips.web_search"), style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
         }
-        OutlinedTextField(
-            value = options.rulesText,
-            onValueChange = vm::setRules,
-            label = { Text(t("form.rules_label")) },
-            placeholder = { Text(t("form.rules_placeholder")) },
-            supportingText = { Text(t("form.rules_help")) },
-            enabled = !busy,
-            modifier = Modifier.fillMaxWidth().heightIn(min = DmSize.space16),
-        )
-        CharCounter(codePoints(options.rulesText), Limits.Text.RULES_TEXT)
-        OptionSwitch(t("form.use_rules"), t("tooltips.use_rules"), options.useRules, !busy, vm::setUseRules)
-        OptionSwitch(t("form.web_search"), t("tooltips.web_search"), options.webSearch, !busy, vm::setWebSearch)
-        error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive }) }
-        Button(onClick = vm::submit, enabled = !busy && files.isNotEmpty(), modifier = Modifier.fillMaxWidth().testTag("submit-run")) {
-            Text(if (busy) t("form.submitting") else t("form.submit"))
-        }
-        (phase as? NewRunPhase.Working)?.let { w ->
-            LinearProgressIndicator(Modifier.fillMaxWidth())
-            Text(stepLabel(w.step), modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+        Column(Modifier.padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            error?.let { DmNotice(it, error = true) }
+            DmPrimaryButton(onClick = vm::submit, enabled = !busy && files.isNotEmpty(), modifier = Modifier.fillMaxWidth().testTag("submit-run")) {
+                Text(if (busy) t("form.submitting") else t("form.submit"))
+            }
+            Text(t(if (files.isEmpty()) "form.disabled_no_files" else "mobile.files_private"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 
     (phase as? NewRunPhase.Confirm)?.let { c ->
-        AlertDialog(
-            onDismissRequest = vm::cancel,
-            title = { Text(t("mobile.confirm_title")) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(DmSize.space1)) {
+        Dialog(onDismissRequest = vm::cancel) {
+            DmCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.heightIn(max = 600.dp).verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    DmIconTile(DmIcons.File)
+                    DmHeading(t("mobile.confirm_title"), t("mobile.review_before_start"))
                     Text(if (tokenExempt) t("app.confirm_exempt") else t("app.confirm_run", mapOf("expected" to c.prepared.quote.expectedCredits, "cap" to c.prepared.quote.capCredits)))
-                    Text(t("app.confirm_scope"))
-                    Format.largeNotice(texts, c.prepared.quote)?.let { Text(it) }
-                    error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    Text(t("app.confirm_scope"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Format.largeNotice(texts, c.prepared.quote)?.let { DmNotice(it) }
+                    error?.let { DmNotice(it, error = true) }
+                    DmPrimaryButton(onClick = vm::confirm, modifier = Modifier.fillMaxWidth()) { Text(t("form.submit")) }
+                    DmSecondaryButton(onClick = vm::cancel, modifier = Modifier.fillMaxWidth()) { Text(t("common.cancel")) }
                 }
-            },
-            confirmButton = { Button(onClick = vm::confirm) { Text(t("form.submit")) } },
-            dismissButton = { TextButton(onClick = vm::cancel) { Text(t("common.cancel")) } },
-        )
+            }
+        }
     }
 }
 
@@ -350,12 +368,12 @@ fun NewRunScreen(vm: NewRunViewModel, tokenExempt: Boolean = false, onStarted: (
 private fun OptionSwitch(label: String, help: String, checked: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit) {
     // The whole row is the switch, so TalkBack reads the label and the help with its state.
     Row(
-        Modifier.fillMaxWidth().toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onChange),
+        Modifier.fillMaxWidth().toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onChange).semantics { contentDescription = "$label. $help" },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
             Text(label)
-            Text(help, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
         }
         Switch(checked = checked, onCheckedChange = null, enabled = enabled)
     }

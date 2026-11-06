@@ -8,23 +8,23 @@ import androidx.compose.ui.unit.dp
 /** The palette of the site (tokens.json), light and dark. */
 object DmColors {
     object Light {
-        val bgCanvas = Color(0xFFFFFFFF)
+        val bgCanvas = Color(0xFFFCFCFD)
         val bgSurface = Color(0xFFF4F6F8)
-        val bgElevated = Color(0xFFFFFFFF)
+        val bgElevated = Color(0xFFFCFCFD)
         val bgSubtle = Color(0xFFE9EDF1)
-        val bgInverse = Color(0xFF0F172A)
-        val textPrimary = Color(0xFF0F172A)
-        val textSecondary = Color(0xFF3F4A5A)
-        val textMuted = Color(0xFF5B6675)
-        val textInverse = Color(0xFFF8FAFC)
+        val bgInverse = Color(0xFF1B1F24)
+        val textPrimary = Color(0xFF1B1F24)
+        val textSecondary = Color(0xFF4B5563)
+        val textMuted = Color(0xFF4B5563)
+        val textInverse = Color(0xFFFCFCFD)
         val textLink = Color(0xFF1D4ED8)
-        val borderDefault = Color(0xFFD5DBE3)
-        val borderStrong = Color(0xFF9AA5B4)
+        val borderDefault = Color(0xFFC9D1D9)
+        val borderStrong = Color(0xFF6E7781)
         val borderFocus = Color(0xFF1D4ED8)
         val brandPrimary = Color(0xFF1D4ED8)
         val brandPrimaryHover = Color(0xFF1E40AF)
-        val brandOnPrimary = Color(0xFFFFFFFF)
-        val brandSubtle = Color(0xFFDBEAFE)
+        val brandOnPrimary = Color(0xFFFCFCFD)
+        val brandSubtle = Color(0xFFDBE4FF)
         val brandOnSubtle = Color(0xFF1E3A8A)
         val statusInfo = Color(0xFF35588D)
         val statusOnInfo = Color(0xFFFFFFFF)
@@ -61,24 +61,24 @@ object DmColors {
     }
 
     object Dark {
-        val bgCanvas = Color(0xFF0B1220)
-        val bgSurface = Color(0xFF121A2B)
-        val bgElevated = Color(0xFF1A2437)
-        val bgSubtle = Color(0xFF243049)
-        val bgInverse = Color(0xFFF8FAFC)
-        val textPrimary = Color(0xFFF1F5F9)
-        val textSecondary = Color(0xFFC3CCD9)
-        val textMuted = Color(0xFF97A3B4)
-        val textInverse = Color(0xFF0F172A)
-        val textLink = Color(0xFF93C5FD)
-        val borderDefault = Color(0xFF2C3850)
-        val borderStrong = Color(0xFF4A5872)
-        val borderFocus = Color(0xFF93C5FD)
-        val brandPrimary = Color(0xFF60A5FA)
-        val brandPrimaryHover = Color(0xFF93C5FD)
+        val bgCanvas = Color(0xFF0F1216)
+        val bgSurface = Color(0xFF171B21)
+        val bgElevated = Color(0xFF171B21)
+        val bgSubtle = Color(0xFF1F252D)
+        val bgInverse = Color(0xFFE6E8EB)
+        val textPrimary = Color(0xFFE6E8EB)
+        val textSecondary = Color(0xFFA3ABB5)
+        val textMuted = Color(0xFFA3ABB5)
+        val textInverse = Color(0xFF0F1216)
+        val textLink = Color(0xFF8AB4FF)
+        val borderDefault = Color(0xFF2B323B)
+        val borderStrong = Color(0xFF566270)
+        val borderFocus = Color(0xFF8AB4FF)
+        val brandPrimary = Color(0xFF8AB4FF)
+        val brandPrimaryHover = Color(0xFFA8C6FF)
         val brandOnPrimary = Color(0xFF0B1220)
-        val brandSubtle = Color(0xFF1E3A8A)
-        val brandOnSubtle = Color(0xFFDBEAFE)
+        val brandSubtle = Color(0xFF1B2A4A)
+        val brandOnSubtle = Color(0xFF8AB4FF)
         val statusInfo = Color(0xFF8AB4FF)
         val statusOnInfo = Color(0xFF0F1216)
         val statusInfoSoft = Color(0xFF1B2A4A)
@@ -118,7 +118,7 @@ object DmColors {
 object DmSize {
     val radiusNone = 0.dp
     val radiusSm = 4.dp
-    val radiusMd = 8.dp
+    val radiusMd = 10.dp
     val radiusLg = 16.dp
     val radiusFull = 9999.dp
     val space0 = 0.dp

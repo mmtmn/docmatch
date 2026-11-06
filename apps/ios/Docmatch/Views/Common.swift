@@ -49,7 +49,7 @@ struct ErrorView: View {
                 .multilineTextAlignment(.center)
                 .foregroundStyle(Color(DmColors.statusDanger))
             Button(texts.t("mobile.retry"), action: retry)
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(DmButtonStyle())
         }
         .padding(DmSize.space3)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

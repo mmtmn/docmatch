@@ -47,7 +47,7 @@
   /* radius, borders, shadows */
   --dm-radius-none: 0px;
   --dm-radius-sm: 4px;
-  --dm-radius-md: 8px;
+  --dm-radius-md: 10px;
   --dm-radius-lg: 16px;
   --dm-radius-full: 9999px;
   --dm-border-thin: 1px;
@@ -76,23 +76,23 @@
   --dm-breakpoint-xl: 1280px;
 
   /* colors: light */
-  --dm-color-bg-canvas: #FFFFFF;
+  --dm-color-bg-canvas: #FCFCFD;
   --dm-color-bg-surface: #F4F6F8;
-  --dm-color-bg-elevated: #FFFFFF;
+  --dm-color-bg-elevated: #FCFCFD;
   --dm-color-bg-subtle: #E9EDF1;
-  --dm-color-bg-inverse: #0F172A;
-  --dm-color-text-primary: #0F172A;
-  --dm-color-text-secondary: #3F4A5A;
-  --dm-color-text-muted: #5B6675;
-  --dm-color-text-inverse: #F8FAFC;
+  --dm-color-bg-inverse: #1B1F24;
+  --dm-color-text-primary: #1B1F24;
+  --dm-color-text-secondary: #4B5563;
+  --dm-color-text-muted: #4B5563;
+  --dm-color-text-inverse: #FCFCFD;
   --dm-color-text-link: #1D4ED8;
-  --dm-color-border-default: #D5DBE3;
-  --dm-color-border-strong: #9AA5B4;
+  --dm-color-border-default: #C9D1D9;
+  --dm-color-border-strong: #6E7781;
   --dm-color-border-focus: #1D4ED8;
   --dm-color-brand-primary: #1D4ED8;
   --dm-color-brand-primary-hover: #1E40AF;
-  --dm-color-brand-on-primary: #FFFFFF;
-  --dm-color-brand-subtle: #DBEAFE;
+  --dm-color-brand-on-primary: #FCFCFD;
+  --dm-color-brand-subtle: #DBE4FF;
   --dm-color-brand-on-subtle: #1E3A8A;
   --dm-color-status-info: #35588D;
   --dm-color-status-on-info: #FFFFFF;
@@ -130,24 +130,24 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --dm-color-bg-canvas: #0B1220;
-    --dm-color-bg-surface: #121A2B;
-    --dm-color-bg-elevated: #1A2437;
-    --dm-color-bg-subtle: #243049;
-    --dm-color-bg-inverse: #F8FAFC;
-    --dm-color-text-primary: #F1F5F9;
-    --dm-color-text-secondary: #C3CCD9;
-    --dm-color-text-muted: #97A3B4;
-    --dm-color-text-inverse: #0F172A;
-    --dm-color-text-link: #93C5FD;
-    --dm-color-border-default: #2C3850;
-    --dm-color-border-strong: #4A5872;
-    --dm-color-border-focus: #93C5FD;
-    --dm-color-brand-primary: #60A5FA;
-    --dm-color-brand-primary-hover: #93C5FD;
+    --dm-color-bg-canvas: #0F1216;
+    --dm-color-bg-surface: #171B21;
+    --dm-color-bg-elevated: #171B21;
+    --dm-color-bg-subtle: #1F252D;
+    --dm-color-bg-inverse: #E6E8EB;
+    --dm-color-text-primary: #E6E8EB;
+    --dm-color-text-secondary: #A3ABB5;
+    --dm-color-text-muted: #A3ABB5;
+    --dm-color-text-inverse: #0F1216;
+    --dm-color-text-link: #8AB4FF;
+    --dm-color-border-default: #2B323B;
+    --dm-color-border-strong: #566270;
+    --dm-color-border-focus: #8AB4FF;
+    --dm-color-brand-primary: #8AB4FF;
+    --dm-color-brand-primary-hover: #A8C6FF;
     --dm-color-brand-on-primary: #0B1220;
-    --dm-color-brand-subtle: #1E3A8A;
-    --dm-color-brand-on-subtle: #DBEAFE;
+    --dm-color-brand-subtle: #1B2A4A;
+    --dm-color-brand-on-subtle: #8AB4FF;
     --dm-color-status-info: #8AB4FF;
     --dm-color-status-on-info: #0F1216;
     --dm-color-status-info-soft: #1B2A4A;
@@ -184,24 +184,24 @@
 }
 
 :root[data-theme="dark"] {
-  --dm-color-bg-canvas: #0B1220;
-  --dm-color-bg-surface: #121A2B;
-  --dm-color-bg-elevated: #1A2437;
-  --dm-color-bg-subtle: #243049;
-  --dm-color-bg-inverse: #F8FAFC;
-  --dm-color-text-primary: #F1F5F9;
-  --dm-color-text-secondary: #C3CCD9;
-  --dm-color-text-muted: #97A3B4;
-  --dm-color-text-inverse: #0F172A;
-  --dm-color-text-link: #93C5FD;
-  --dm-color-border-default: #2C3850;
-  --dm-color-border-strong: #4A5872;
-  --dm-color-border-focus: #93C5FD;
-  --dm-color-brand-primary: #60A5FA;
-  --dm-color-brand-primary-hover: #93C5FD;
+  --dm-color-bg-canvas: #0F1216;
+  --dm-color-bg-surface: #171B21;
+  --dm-color-bg-elevated: #171B21;
+  --dm-color-bg-subtle: #1F252D;
+  --dm-color-bg-inverse: #E6E8EB;
+  --dm-color-text-primary: #E6E8EB;
+  --dm-color-text-secondary: #A3ABB5;
+  --dm-color-text-muted: #A3ABB5;
+  --dm-color-text-inverse: #0F1216;
+  --dm-color-text-link: #8AB4FF;
+  --dm-color-border-default: #2B323B;
+  --dm-color-border-strong: #566270;
+  --dm-color-border-focus: #8AB4FF;
+  --dm-color-brand-primary: #8AB4FF;
+  --dm-color-brand-primary-hover: #A8C6FF;
   --dm-color-brand-on-primary: #0B1220;
-  --dm-color-brand-subtle: #1E3A8A;
-  --dm-color-brand-on-subtle: #DBEAFE;
+  --dm-color-brand-subtle: #1B2A4A;
+  --dm-color-brand-on-subtle: #8AB4FF;
   --dm-color-status-info: #8AB4FF;
   --dm-color-status-on-info: #0F1216;
   --dm-color-status-info-soft: #1B2A4A;
