@@ -2,6 +2,7 @@ package br.com.docmatch.app
 
 import android.app.Activity
 import android.app.Instrumentation
+import android.accessibilityservice.AccessibilityService
 import android.content.ClipData
 import android.content.Intent
 import androidx.compose.ui.test.SemanticsMatcher
@@ -17,6 +18,8 @@ import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.core.content.FileProvider
 import androidx.test.core.app.ActivityScenario
@@ -161,20 +164,24 @@ class LocalFlowTest {
     fun recordPublicTwinDemo() {
         assumeTrue(InstrumentationRegistry.getArguments().getString("docmatchRecord") == "1")
         ActivityScenario.launch(MainActivity::class.java).use {
+            await(hasText(t("auth.dev_sign_in")))
+            demoPause("login", 1800)
             click(hasText(t("auth.dev_sign_in")))
             await(hasText(t("common.app_title")))
-            Thread.sleep(1500)
+            await(hasTestTag("submit-run"))
+            demoPause("workspace", 2500)
             intending(hasAction(Intent.ACTION_OPEN_DOCUMENT)).respondWith(Instrumentation.ActivityResult(Activity.RESULT_OK, pickedInputs()))
             click(hasText(t("mobile.pick_files")))
             INPUTS.forEach { await(hasText(it, substring = true)) }
-            Thread.sleep(2000)
+            demoPause("files", 3000)
             click(hasTestTag("submit-run"))
             await(hasText(t("form.submit")) and hasAnyAncestor(isDialog()), RUN_TIMEOUT_MS)
-            Thread.sleep(2000)
+            demoPause("estimate", 2500)
+            demoPause("processing", 0)
             click(hasText(t("form.submit")) and hasAnyAncestor(isDialog()))
             await(hasText(t("mobile.run_findings", mapOf("count" to expectedFindings()))), RUN_TIMEOUT_MS)
             await(hasText(t("results.download_corrected")))
-            Thread.sleep(2500)
+            demoPause("results", 4500)
             val runId = runBlocking { dm.api.runs() }.items.first().id
             val findings = runBlocking { dm.api.findings(runId) }
             assertEquals(expectedFindings(), findings.size)
@@ -182,11 +189,48 @@ class LocalFlowTest {
                 assertTrue(findings.all { it.explanation.contains("Próximo passo sugerido:") })
             }
             android.util.Log.i("DOCMATCH_DEMO", "completed=" + runId)
+
+            // Real download and Android share sheet, not a simulated success message.
+            click(hasText(t("results.download_corrected")))
+            val export = File(Exports.dir(app), "docmatch-$runId.xlsx")
+            compose.waitUntil(UI_TIMEOUT_MS) { export.exists() && export.length() > 100 }
+            assertEquals("PK", export.readBytes().take(2).toByteArray().toString(Charsets.US_ASCII))
+            Thread.sleep(700) // Let the system share sheet finish its entrance animation.
+            demoPause("export", 2500)
+            InstrumentationRegistry.getInstrumentation().uiAutomation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+            await(hasText(t("results.download_corrected")))
+            Thread.sleep(600)
+
+            // A measured swipe leaves the results visible while introducing the findings below.
+            compose.onNodeWithTag("run-results").performTouchInput { swipeUp(durationMillis = 750) }
+            demoPause("findings", 2500)
             compose.onNodeWithTag("run-results").performScrollToNode(hasTestTag(TAG_FINDING))
             compose.onAllNodesWithTag(TAG_FINDING).onFirst().performClick()
-            Thread.sleep(3000)
+            demoPause("finding", 5500)
+            compose.onAllNodes(hasText(t("common.close"))).onFirst().performScrollTo()
+            demoPause("evidence", 3000)
             click(hasText(t("common.close")))
-            Thread.sleep(1500)
+            await(hasTestTag("run-results"))
+            compose.onNodeWithTag("run-results").performScrollToNode(hasText(t("results.download_corrected")))
+            demoPause("finish", 2500)
+        }
+    }
+
+    /** Scene boundaries let packaging trim only long waits, never speed through interactions. */
+    private fun demoPause(scene: String, millis: Long) {
+        android.util.Log.i("DOCMATCH_DEMO", "scene=$scene uptime_ms=${android.os.SystemClock.elapsedRealtime()}")
+        // Compose animations use a test clock. Sleeping alone freezes a just-opened sheet;
+        // advance frames with wall time so recorded pauses retain the app's normal motion.
+        val autoAdvance = compose.mainClock.autoAdvance
+        compose.mainClock.autoAdvance = false
+        try {
+            val until = android.os.SystemClock.elapsedRealtime() + millis
+            while (android.os.SystemClock.elapsedRealtime() < until) {
+                compose.mainClock.advanceTimeByFrame()
+                Thread.sleep(16)
+            }
+        } finally {
+            compose.mainClock.autoAdvance = autoAdvance
         }
     }
 
