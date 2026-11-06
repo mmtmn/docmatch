@@ -122,3 +122,10 @@ e o valor foi confirmado no processo em execução. O parâmetro foi importado n
 a reconciliação da versão write-only preservou seu valor, e o plano direcionado final ficou sem
 mudanças. `/v1/auth/methods` continuou informando `google: true`. Isso verifica a configuração do
 servidor; o login interativo ainda exige uma conta autorizada e um aparelho compatível.
+
+No Mac, o Debug conectado a `https://docmatch.com.br` foi validado no simulador iOS 26.4.1:
+o teste abriu o botão Google, aceitou o consentimento do sistema e encontrou o campo de
+e-mail da página de autenticação. O client e o bundle `br.com.docmatch.debug` correspondem.
+Os testes Swift verificam PKCE, destino e estado do callback, rejeição de parâmetros
+duplicados e a requisição de troca de código. A entrada das credenciais, o consentimento
+da conta e a sessão final na API ainda precisam de validação interativa pelo titular.

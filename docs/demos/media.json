@@ -26,5 +26,19 @@
     "processing_wait_original_seconds": 35.029,
     "processing_wait_shown_seconds": 8,
     "processing_wait_label": "Espera de processamento abreviada"
+  },
+  "ios": {
+    "kind": "real_simulator_ui_demo",
+    "benchmark_verified": true,
+    "source_sha256": "41db77d320346db2d31c61bad36248164298d0e1748e72b4131b21550808429f",
+    "trim_start_seconds": 49.0,
+    "trim_requested_duration_seconds": 145.0,
+    "mp4_sha256": "c533cacfb13421dd023d9510aaff29061a401b5a74583df8831dadb0c1dbcfc9",
+    "gif_sha256": "9733fa6b02dfcfccb083eaed6a19c96c48917cbeb6d154932c7ecd24ade09e47",
+    "mp4_speed": 1,
+    "gif_speed": 3,
+    "scorecard_seconds": 0,
+    "run_id": "run_01M6RRP9GZF9SVAY9WK5XYHWQV",
+    "score": "ios-score.json"
   }
 }
