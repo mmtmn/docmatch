@@ -38,8 +38,14 @@ describe('privileged extension messages', () => {
       }),
     ).toBe(true);
     expect(
-      validAPIRequest({ path: '/v1/projects', method: 'POST', body: { name: 'Fechamento' } }),
+      validAPIRequest({
+        path: '/v1/projects',
+        orgId: 'org_00000000000000000000000000',
+        method: 'POST',
+        body: { name: 'Fechamento' },
+      }),
     ).toBe(true);
+    expect(validAPIRequest({ path: '/v1/projects' })).toBe(false);
     expect(validAPIRequest({ path: '/v1/projects', orgId: 'foreign' })).toBe(false);
     expect(validAPIRequest({ path: '/v1/projects', idempotencyKey: 'header\r\ninjection' })).toBe(
       false,

@@ -2,6 +2,9 @@ import { build } from 'vite';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isIP } from 'node:net';
+import YAML from 'yaml';
+import { validateLimits } from '../../web/vite/limits-schema.ts';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const local = process.argv.includes('--local');
 const configPath = local
@@ -10,12 +13,16 @@ const configPath = local
 if (!configPath)
   throw new Error('Defina DM_EXTENSION_CONFIG_FILE com as origens e IDs de produção.');
 const settings = JSON.parse(await fs.readFile(configPath, 'utf8'));
+const publicHost = (hostname) =>
+  !isIP(hostname.replace(/^\[|\]$/g, '')) &&
+  hostname.includes('.') &&
+  !/(^|\.)(localhost|local)$/.test(hostname);
 for (const field of ['apiURL', 'siteURL']) {
   const url = new URL(settings[field]);
   if (
     local
       ? !['localhost', '127.0.0.1'].includes(url.hostname)
-      : url.protocol !== 'https:' || ['localhost', '127.0.0.1'].includes(url.hostname)
+      : url.protocol !== 'https:' || !publicHost(url.hostname)
   )
     throw new Error(`Origem inválida: ${field}`);
   if (url.pathname !== '/' || url.search || url.hash || url.username || url.password)
@@ -23,10 +30,7 @@ for (const field of ['apiURL', 'siteURL']) {
 }
 const hostPattern = (value) => {
   const url = new URL(value);
-  if (
-    !local &&
-    (url.protocol !== 'https:' || /^(localhost|127\.|10\.|192\.168\.|\[::1\])/.test(url.hostname))
-  )
+  if (!local && (url.protocol !== 'https:' || !publicHost(url.hostname)))
     throw new Error('Uploads precisam de uma origem HTTPS pública.');
   if (
     url.hostname.includes('*') ||
@@ -42,9 +46,37 @@ const hostPattern = (value) => {
 const hostPermissions = [
   ...new Set([settings.apiURL, ...(settings.uploadOrigins ?? [])].map(hostPattern)),
 ];
+const limitsPath = path.join(root, '../../packages/contracts/limits.yaml');
+const limits = validateLimits(YAML.parse(await fs.readFile(limitsPath, 'utf8')), limitsPath);
+const websiteAPI = path.resolve(root, '../web/src/lib/api');
+const sharedViews = {
+  name: 'docmatch-extension-shared-views',
+  enforce: 'pre',
+  resolveId(id, importer) {
+    if (id === 'virtual:limits' || id === 'astro:env/client') return '\0' + id;
+    if (
+      importer &&
+      id.startsWith('.') &&
+      path.resolve(path.dirname(importer), id).replace(/\.ts$/, '') === websiteAPI
+    )
+      return path.join(root, 'src/websiteTransport.ts');
+    return null;
+  },
+  load(id) {
+    if (id === '\0virtual:limits') return `export default ${JSON.stringify(limits)}`;
+    if (id === '\0astro:env/client')
+      return `export const PUBLIC_DM_API_BASE_URL = undefined; export const PUBLIC_DM_MEDIA_BASE_URL = undefined; export const PUBLIC_DM_FEATURE_RESULTS = true;`;
+    return null;
+  },
+};
 for (const browser of ['chrome', 'firefox', 'safari']) {
   const browserConfig = settings[browser];
   if (!browserConfig?.clientID) throw new Error(`Falta clientID de ${browser}`);
+  if (browser === 'safari') {
+    const expected = local ? 'docmatch-extension-dev://auth' : 'br.com.docmatch.extension://auth';
+    if (browserConfig.redirectURI !== expected)
+      throw new Error('Retorno nativo do Safari inválido.');
+  }
   const outDir = path.join(root, 'dist', local ? 'local' : 'production', browser);
   const define = {
     __EXTENSION_CONFIG__: JSON.stringify({
@@ -53,6 +85,11 @@ for (const browser of ['chrome', 'firefox', 'safari']) {
       clientID: browserConfig.clientID,
       browser,
       local,
+      uploadOrigins: (settings.uploadOrigins ?? [settings.apiURL]).map(
+        (value) => new URL(value).origin,
+      ),
+      hostPermissions,
+      redirectURI: browserConfig.redirectURI,
     }),
   };
   await build({
@@ -60,6 +97,7 @@ for (const browser of ['chrome', 'firefox', 'safari']) {
     root,
     base: './',
     define,
+    plugins: [sharedViews],
     build: {
       outDir,
       emptyOutDir: true,
@@ -115,5 +153,19 @@ for (const browser of ['chrome', 'firefox', 'safari']) {
     path.join(outDir, 'icon.png'),
   );
   await fs.writeFile(path.join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
+  if (browser === 'safari') {
+    await fs.writeFile(
+      path.join(outDir, 'docmatch-native.json'),
+      JSON.stringify({
+        siteURL: settings.siteURL,
+        clientID: browserConfig.clientID,
+        redirectURI: browserConfig.redirectURI,
+        local,
+      }) + '\n',
+    );
+    const nativeResources = path.join(root, 'safari/Web');
+    await fs.rm(nativeResources, { recursive: true, force: true });
+    await fs.cp(outDir, nativeResources, { recursive: true });
+  }
   console.log(`Pacote ${browser}: ${outDir}`);
 }

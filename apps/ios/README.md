@@ -38,6 +38,11 @@ funcionando no navegador. O token não é gravado nos logs.
 
 ## Estrutura
 
+O app também contém a extensão Safari. Ative-a nos ajustes do navegador; ela abre os mesmos
+projetos, concilia e baixa resultados. O login da extensão exige consentimento próprio no
+site e pode ser revogado em Dispositivos. A sessão do app permanece separada.
+O núcleo nativo e as telas web ficam em [apps/extensions](../extensions/README.md).
+
 | Pasta | O que tem |
 | --- | --- |
 | `DocmatchKit/` | Pacote Swift com tudo que não é tela: cliente da API, sessão por cookies, textos, formatação, pré-checagem, o fluxo envio → verificação → estimativa → execução, o Google por PKCE e os modelos das telas (`@Observable`). Testado no Linux (contêiner Swift) e no Mac. |
@@ -109,6 +114,7 @@ Nenhum segredo OAuth entra no app:
 | `DOCMATCH_API_BASE_URL` | Origem da API. Debug: `http://localhost:8080`. Release: obrigatória e `https://`; o `make release` lê do Terraform e o app se recusa a abrir com outra. |
 | `DOCMATCH_GOOGLE_IOS_CLIENT_ID` | Client OAuth do Google do tipo iOS, no mesmo projeto do client web. Debug já configura o cliente de `br.com.docmatch.debug`; Release continua vazio até receber um cliente de produção. Vazio esconde o botão. Ele também entra em `GOOGLE_OAUTH_NATIVE_CLIENT_IDS` da API. |
 | `DEVELOPMENT_TEAM` | O time da Apple que assina, o mesmo `APPLE_TEAM_ID` da API. |
+| `DOCMATCH_APP_GROUP` | Grupo compartilhado entre o app e a extensão Safari. Debug usa `group.br.com.docmatch.extensions.local`; Release usa `group.br.com.docmatch.extensions`. Habilite o grupo correspondente nos dois App IDs antes de assinar para aparelhos. |
 
 Para o Sign in with Apple, ative a capability no App ID `br.com.docmatch` (e no `.debug`, para
 testar), no mesmo time do Services ID do site, e ponha os bundle ids em `APPLE_NATIVE_CLIENT_IDS`.
@@ -121,6 +127,8 @@ verifica o código, mas não o troca.
 O `make release` usa `-allowProvisioningUpdates`. Numa máquina de CI, passe também a chave da App
 Store Connect: `APP_STORE_CONNECT_KEY_PATH`, `APP_STORE_CONNECT_KEY_ID` e
 `APP_STORE_CONNECT_ISSUER_ID`.
+Ele também exige `DM_EXTENSION_CONFIG_FILE` para gerar os recursos Safari de produção.
+`make app` e `make e2e-local` geram os recursos de desenvolvimento automaticamente.
 
 ## Segurança
 

@@ -8,11 +8,21 @@ interface StorageArea {
   remove(key: string): Promise<void>;
   setAccessLevel?(options: { accessLevel: 'TRUSTED_CONTEXTS' }): Promise<void>;
 }
+export interface MessagePort {
+  name: string;
+  sender?: MessageSender;
+  postMessage(message: unknown): void;
+  disconnect(): void;
+  onMessage: { addListener(listener: (message: unknown) => void): void };
+  onDisconnect: { addListener(listener: () => void): void };
+}
 export interface ExtensionBrowser {
   runtime: {
     id: string;
     getURL(path: string): string;
     sendMessage(message: unknown): Promise<unknown>;
+    connect(options: { name: string }): MessagePort;
+    onConnect: { addListener(listener: (port: MessagePort) => void): void };
     onMessage: {
       addListener(
         listener: (
@@ -25,6 +35,7 @@ export interface ExtensionBrowser {
     sendNativeMessage?(application: string, message: unknown): Promise<unknown>;
   };
   storage: { local: StorageArea };
+  permissions?: { request(options: { origins: string[] }): Promise<boolean> };
   identity?: {
     getRedirectURL(path?: string): string;
     launchWebAuthFlow(options: { url: string; interactive: boolean }): Promise<string | undefined>;

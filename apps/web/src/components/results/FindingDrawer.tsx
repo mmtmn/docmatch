@@ -39,6 +39,7 @@ export interface FindingDrawerProps {
   onClose: () => void;
   onDecision: (id: string, status: FindingStatus, note?: string) => Promise<void> | void;
   allowUndo?: boolean;
+  canDecide?: boolean;
 }
 
 /**
@@ -51,6 +52,7 @@ export function FindingDrawer({
   onClose,
   onDecision,
   allowUndo = true,
+  canDecide = true,
 }: FindingDrawerProps) {
   const id = useId();
   const panelRef = useRef<HTMLDialogElement>(null);
@@ -82,7 +84,7 @@ export function FindingDrawer({
   }, []);
 
   const decide = async (status: FindingStatus, withNote?: string): Promise<void> => {
-    if (busy) return;
+    if (busy || !canDecide) return;
     setBusy(true);
     setError(null);
     setSaved(null);
@@ -188,7 +190,11 @@ export function FindingDrawer({
 
       <footer className={styles.footer}>
         <p className={styles.reviewScope}>{t('results.review_scope')}</p>
-        <fieldset disabled={busy} className={styles.decisionFields}>
+        <fieldset
+          disabled={busy || !canDecide}
+          hidden={!canDecide}
+          className={styles.decisionFields}
+        >
           {editing ? (
             <form
               className={styles.editForm}

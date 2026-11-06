@@ -5,6 +5,7 @@ import SwiftUI
 struct RootView: View {
     let session: SessionModel
     @State private var invitationToken: String?
+    @StateObject private var safariAuthorization = SafariAuthorization()
     @Environment(\.texts) private var texts
     @Environment(\.scenePhase) private var scenePhase
 
@@ -30,10 +31,23 @@ struct RootView: View {
         .background(Color(DmColors.bgCanvas)).foregroundStyle(Color(DmColors.textPrimary))
         .task { await session.refresh() }
         .onOpenURL { url in
-            if let token = InvitationLink.token(url, site: AppConfig.shared.apiBaseURL) { invitationToken = token }
+            if ["docmatch-extension-dev", "br.com.docmatch.extension"].contains(url.scheme) {
+                invitationToken = nil
+                safariAuthorization.open(url)
+            } else if let token = InvitationLink.token(url, site: AppConfig.shared.apiBaseURL) {
+                invitationToken = token
+            }
         }
         .sheet(isPresented: Binding(get: { invitationToken != nil }, set: { if !$0 { invitationToken = nil } })) {
             if let invitationToken { InvitationView(session: session, token: invitationToken) }
+        }
+        .sheet(isPresented: $safariAuthorization.presented) {
+            VStack(alignment: .leading, spacing: 20) {
+                Text(texts.t("extensions.native_title")).font(.title.bold())
+                Text(safariAuthorization.status)
+                Text(texts.t("extensions.native_scope")).foregroundStyle(.secondary)
+                Button(texts.t("common.close")) { safariAuthorization.presented = false }
+            }.padding(24).presentationDetents([.medium])
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await session.validateAccounts() } }

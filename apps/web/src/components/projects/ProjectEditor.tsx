@@ -53,11 +53,17 @@ export function ProjectEditor({
   org,
   me,
   client,
+  upload = uploadFile,
+  links = { list: '/app', result: projectResultUrl },
+  manageSharing = true,
 }: {
   initial: ProjectDetail;
   org: Organization;
   me: Me;
   client: ReturnType<typeof projectClient>;
+  upload?: typeof uploadFile;
+  links?: { list: string; result: typeof projectResultUrl };
+  manageSharing?: boolean;
 }) {
   const saved = useSavedProject(initial, client);
   const { project } = saved;
@@ -144,7 +150,7 @@ export function ProjectEditor({
         for (const [index, file] of checked.accepted.entries()) {
           setProgress(t('app.uploading', { done: index + 1, total: checked.accepted.length }));
           try {
-            const uploaded = await uploadFile(
+            const uploaded = await upload(
               file,
               (fileName) => setProgress(t('app.scanning', { name: fileName })),
               controller.current.signal,
@@ -177,7 +183,7 @@ export function ProjectEditor({
       const current = await saved.save();
       const analysis = await client.estimate(current, reason.trim());
       if (analysis.run) {
-        window.location.assign(projectResultUrl(org.id, project.id, analysis.run.id));
+        window.location.assign(links.result(org.id, project.id, analysis.run.id));
       } else if (analysis.state === 'expired') {
         setExpired(true);
       } else if (analysis.quote) {
@@ -195,8 +201,7 @@ export function ProjectEditor({
         approved.key,
         reason.trim(),
       );
-      if (analysis.run)
-        window.location.assign(projectResultUrl(org.id, project.id, analysis.run.id));
+      if (analysis.run) window.location.assign(links.result(org.id, project.id, analysis.run.id));
       else if (analysis.state === 'expired') setExpired(true);
     });
   };
@@ -204,7 +209,7 @@ export function ProjectEditor({
 
   return (
     <>
-      <a className={styles.back} href="/app">
+      <a className={styles.back} href={links.list}>
         {t('projects.back')}
       </a>
       <header className={styles.heading}>
@@ -597,7 +602,7 @@ export function ProjectEditor({
             <ul className={styles.list}>
               {runs.map((run) => (
                 <li key={run.id}>
-                  <a className={styles.card} href={projectResultUrl(org.id, project.id, run.id)}>
+                  <a className={styles.card} href={links.result(org.id, project.id, run.id)}>
                     <strong>{t(runLabels[run.status])}</strong>
                     <small>{run.id}</small>
                   </a>
@@ -622,7 +627,7 @@ export function ProjectEditor({
       {project.capabilities.reconcile && (
         <details className={styles.manage}>
           <summary>{t('projects.manage')}</summary>
-          {org.kind === 'team' && project.capabilities.manage_account && (
+          {manageSharing && org.kind === 'team' && project.capabilities.manage_account && (
             <ProjectSharing
               key={`${project.visibility}:${(project.shared_with ?? []).join(',')}`}
               orgId={org.id}
@@ -663,7 +668,7 @@ export function ProjectEditor({
                 ask(t('projects.delete_confirm', { name: project.name }), async () => {
                   const current = await saved.save();
                   await client.remove(current);
-                  window.location.assign('/app');
+                  window.location.assign(links.list);
                 })
               }
             >

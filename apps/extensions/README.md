@@ -1,14 +1,15 @@
 # Extensões da docmatch
 
-Base compartilhada para Chrome, Firefox e Safari. O login usa consentimento no site e
-uma sessão própria, revogável em **Meu perfil → Dispositivos**. As permissões e o saldo
-continuam sendo os da conta escolhida.
+Chrome, Firefox e Safari compartilham a mesma tela de projetos: adicionar documentos,
+conciliar, acompanhar o processamento, consultar evidências e baixar resultados.
+A conta escolhida define permissões e saldo. Arquivos e opções começam recolhidos;
+o botão de conciliar permanece no rodapé. Sem alterações, o resultado anterior é reaberto.
 
-**Em desenvolvimento:** Chrome e Firefox já conectam e leem projetos localmente. A página
-completa de documentos e resultados e a ponte nativa do Safari ainda estão em implementação.
-Os pacotes desta etapa não são uma publicação nas lojas.
+**Em desenvolvimento:** o fluxo completo passou localmente em Chrome e Firefox. O Safari
+já tem a ponte nativa integrada ao app macOS e ao app iOS; a validação completa está em curso.
+Os pacotes locais ainda não são publicações nas lojas.
 
-## Rodar localmente
+## Começar localmente
 
 ```sh
 make -C apps/extensions setup
@@ -17,35 +18,54 @@ node apps/extensions/tools/client-config.mjs
 ```
 
 Coloque a lista JSON emitida em `DM_EXTENSION_CLIENTS` no `.env` da API e reinicie o ambiente
-local. As origens de desenvolvimento ficam em [local.config.json](local.config.json).
-A chave do manifesto Chrome é **pública** e mantém o ID local estável.
+local. Ajuste as origens em [local.config.json](local.config.json) se necessário.
+A chave do manifesto Chrome é pública e mantém o ID local estável.
 
 - **Chrome:** em `chrome://extensions`, ative o modo de desenvolvedor e carregue
   `apps/extensions/dist/local/chrome` sem compactação.
 - **Firefox:** em `about:debugging`, escolha **Este Firefox → Carregar extensão temporária**
   e selecione `apps/extensions/dist/local/firefox/manifest.json`.
-- **Safari:** o pacote web exige a extensão nativa e o app que apresenta o login.
-  Carregar apenas a pasta no Safari não habilita a comunicação nativa.
+- **Safari no Mac:** `make -C apps/extensions safari-app` confere a compilação. Abra o
+  projeto gerado em `safari/DocmatchSafari.xcodeproj`, escolha seu time de assinatura e
+  execute o app. Use o botão do app para ativar a extensão nos ajustes do Safari.
+- **Safari no iOS:** a extensão acompanha o [app iOS](../ios/README.md). Ative-a nos
+  ajustes de extensões do Safari. O app e a extensão precisam do mesmo App Group na assinatura.
 
-Entre, confirme **Conectar extensão** no site e escolha a conta. Fechar a janela não
-encerra a sessão. Para sair, use **Sair da extensão**.
+Entre e confirme **Conectar extensão** no site. No Safari, **Continuar no app** abre o
+pedido de conexão; depois da confirmação, volte à extensão. Escolha a conta e abra um
+projeto. Fechar a página não interrompe a conciliação nem encerra a sessão. Para sair,
+use **Sair da extensão**, ou revogue o dispositivo em **Meu perfil → Dispositivos**.
 
-## Verificação e produção
+## Verificar
 
-`make -C apps/extensions ci` verifica tipos, formato, mensagens permitidas, renovação após
-interrupção e gera os três pacotes. As verificações de API incluem PostgreSQL real,
-revogação, concorrência e isolamento entre contas.
+`make -C apps/extensions ci` confere tipos, formato, permissões das mensagens, renovação
+após interrupção e os três pacotes. No Mac, também testa a ponte nativa. `ci-full` acrescenta
+a compilação do app Safari. A API testa isolamento entre contas, concorrência e revogação
+com PostgreSQL real.
 
-O build de produção exige `DM_EXTENSION_CONFIG_FILE`, com o mesmo formato da configuração
-local, origens HTTPS e os IDs/retornos registrados para cada loja. Gere com
-`pnpm --dir apps/extensions build`. Nunca envie `dist/local` às lojas.
+Com a API e o site locais ligados, `make -C apps/extensions e2e-local` percorre o fluxo real
+no Chromium do Playwright, com perfil temporário. Inclui download, reinício do processo de
+fundo, reaproveitamento de resultado, separação de cookies e acessibilidade automatizada.
+Para Firefox, instale `tools/requirements-e2e.txt` num ambiente Python e execute
+`make -C apps/extensions e2e-firefox PYTHON=/caminho/do/ambiente/bin/python`.
+`FIREFOX_BINARY` permite indicar a instalação do Firefox. Os testes usam dados sintéticos
+do repositório; capturas e downloads ficam em `.cache/extensions-e2e`.
 
-Credenciais ficam no processo de fundo, sem sincronização. Não há scripts em páginas,
-monitoramento de downloads, acesso a todos os sites ou código remoto. Mensagens aceitam
-somente as telas da própria extensão e rotas de projetos; cada operação conserva sua
-conta e identidade. Uploads exigem origens específicas na configuração.
+## Preparar uma publicação
+
+O build exige `DM_EXTENSION_CONFIG_FILE`, com o formato da configuração local, origens
+HTTPS e os IDs/retornos registrados para cada loja. Gere com `pnpm --dir apps/extensions build`.
+O retorno Safari de produção é `br.com.docmatch.extension://auth`; o App Group e a assinatura
+separam produção e desenvolvimento. A compilação Release nativa rejeita configuração local.
+Nunca envie `dist/local` às lojas. Depois de gerar o pacote de produção, arquive os apps Apple
+em Release com o time e os perfis correspondentes.
+
+Credenciais ficam no processo de fundo, sem sincronização. A ponte Safari transporta apenas
+um código temporário, vinculado ao perfil do navegador; o verificador e os tokens permanecem
+na extensão. Uploads usam destinos assinados e origens explícitas; downloads são transferidos
+em blocos. Não há scripts em páginas, acesso a todos os sites ou código remoto.
 
 Referências: [requisições do Chrome](https://developer.chrome.com/docs/extensions/develop/concepts/network-requests),
-[retorno de login no Firefox](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/identity/getRedirectURL),
+[retorno no Firefox](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/identity/getRedirectURL),
 [comunicação nativa no Safari](https://developer.apple.com/documentation/safariservices/messaging-between-the-app-and-javascript-in-a-safari-web-extension)
 e [segurança OAuth](https://www.rfc-editor.org/rfc/rfc9700.html).

@@ -69,32 +69,32 @@ export interface ProjectPatch {
   archived?: boolean;
 }
 
-export function projectClient(orgId: string) {
+export function projectClient(orgId: string, request: typeof api = api) {
   const path = (id: string) => `/v1/projects/${encodeURIComponent(id)}`;
   return {
     list: (archived = false, cursor?: string, signal?: AbortSignal) =>
-      api<Page<Project>>(
+      request<Page<Project>>(
         `/v1/projects?archived=${archived}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
         { orgId, ...(signal ? { signal } : {}) },
       ),
-    create: (name: string) => api<Project>('/v1/projects', { orgId, body: { name } }),
+    create: (name: string) => request<Project>('/v1/projects', { orgId, body: { name } }),
     get: (id: string, signal?: AbortSignal) =>
-      api<ProjectDetail>(path(id), { orgId, ...(signal ? { signal } : {}) }),
+      request<ProjectDetail>(path(id), { orgId, ...(signal ? { signal } : {}) }),
     update: (project: Project, patch: ProjectPatch) =>
-      api<ProjectDetail>(path(project.id), {
+      request<ProjectDetail>(path(project.id), {
         orgId,
         method: 'PATCH',
         body: { version: project.version, ...patch },
       }),
     remove: (project: Project) =>
-      api<void>(`${path(project.id)}?version=${project.version}`, { orgId, method: 'DELETE' }),
+      request<void>(`${path(project.id)}?version=${project.version}`, { orgId, method: 'DELETE' }),
     removeDocument: (project: Project, doc: ProjectDocument) =>
-      api<void>(
+      request<void>(
         `${path(project.id)}/documents/${encodeURIComponent(doc.id)}?version=${project.version}`,
         { orgId, method: 'DELETE' },
       ),
     replaceDocument: (project: Project, previous: ProjectDocument, replacement: ProjectDocument) =>
-      api<ProjectDetail>(
+      request<ProjectDetail>(
         `${path(project.id)}/documents/${encodeURIComponent(previous.id)}/replace`,
         {
           orgId,
@@ -102,36 +102,36 @@ export function projectClient(orgId: string) {
         },
       ),
     rules: (id: string, cursor?: string, signal?: AbortSignal) =>
-      api<Page<ProjectRule>>(
+      request<Page<ProjectRule>>(
         `${path(id)}/rules${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`,
         { orgId, ...(signal ? { signal } : {}) },
       ),
     createRule: (id: string, title: string, body: string) =>
-      api<ProjectRule>(`${path(id)}/rules`, { orgId, body: { title, body }, idempotent: true }),
+      request<ProjectRule>(`${path(id)}/rules`, { orgId, body: { title, body }, idempotent: true }),
     versionRule: (id: string, ruleId: string, title: string, body: string) =>
-      api<ProjectRule>(`${path(id)}/rules/${encodeURIComponent(ruleId)}/versions`, {
+      request<ProjectRule>(`${path(id)}/rules/${encodeURIComponent(ruleId)}/versions`, {
         orgId,
         body: { title, body },
         idempotent: true,
       }),
     promoteRule: (id: string, ruleId: string, to: 'verified' | 'trusted' | 'retired') =>
-      api<ProjectRule>(`${path(id)}/rules/${encodeURIComponent(ruleId)}/promote`, {
+      request<ProjectRule>(`${path(id)}/rules/${encodeURIComponent(ruleId)}/promote`, {
         orgId,
         body: { to },
         idempotent: true,
       }),
     share: (project: Project, visibility: Project['visibility'], userIds: string[]) =>
-      api<ProjectDetail>(`${path(project.id)}/sharing`, {
+      request<ProjectDetail>(`${path(project.id)}/sharing`, {
         orgId,
         method: 'PUT',
         body: { version: project.version, visibility, user_ids: userIds },
       }),
     activity: (id: string, signal?: AbortSignal) =>
-      api<Page<ProjectEvent>>(`${path(id)}/activity`, { orgId, ...(signal ? { signal } : {}) }),
+      request<Page<ProjectEvent>>(`${path(id)}/activity`, { orgId, ...(signal ? { signal } : {}) }),
     runs: (id: string, signal?: AbortSignal) =>
-      api<Page<RunView>>(`${path(id)}/runs`, { orgId, ...(signal ? { signal } : {}) }),
+      request<Page<RunView>>(`${path(id)}/runs`, { orgId, ...(signal ? { signal } : {}) }),
     estimate: (project: Project, reprocessReason?: string) =>
-      api<ProjectAnalysis>(`${path(project.id)}/runs/estimate`, {
+      request<ProjectAnalysis>(`${path(project.id)}/runs/estimate`, {
         orgId,
         body: {
           revision: project.revision,
@@ -139,7 +139,7 @@ export function projectClient(orgId: string) {
         },
       }),
     reconcile: (project: Project, quote: QuoteView, key: string, reprocessReason?: string) =>
-      api<ProjectAnalysis>(`${path(project.id)}/runs`, {
+      request<ProjectAnalysis>(`${path(project.id)}/runs`, {
         orgId,
         body: {
           revision: project.revision,

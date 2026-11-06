@@ -6,6 +6,8 @@ import {
   randomSecret,
   trustedPage,
   validAPIRequest,
+  validExportRequest,
+  base64url,
   type APIRequest,
 } from './policy';
 
@@ -26,6 +28,7 @@ interface Pending {
   state: string;
   redirect: string;
   startedAt: number;
+  nativeID?: string;
 }
 const storageKey = `docmatch.session.${config.clientID}`;
 const pendingKey = `docmatch.authorization.${config.clientID}`;
@@ -80,6 +83,7 @@ async function tokenRequest(body: Record<string, unknown>): Promise<Tokens> {
 }
 let signingIn: Promise<unknown> | undefined;
 async function signIn() {
+  if (config.browser === 'safari') return beginNative();
   if (!browser.identity) throw new Failure('native_sign_in_required');
   const start = await serialized(state);
   const pending: Pending = {
@@ -120,6 +124,97 @@ async function signIn() {
   } finally {
     await browser.storage.local.remove(pendingKey);
   }
+}
+function native(message: Record<string, string>): Promise<Record<string, string>> {
+  if (!browser.runtime.sendNativeMessage) throw new Failure('native_sign_in_required');
+  return browser.runtime.sendNativeMessage('docmatch', message) as Promise<Record<string, string>>;
+}
+function nativeOpenURL(id: string) {
+  const url = new URL(config.redirectURI);
+  url.hostname = 'authorize';
+  url.search = new URLSearchParams({ request: id }).toString();
+  return url.href;
+}
+async function clearPending(pending?: Pending) {
+  await browser.storage.local.remove(pendingKey);
+  if (pending?.nativeID)
+    await native({ action: 'cancel', id: pending.nativeID }).catch(() => undefined);
+}
+async function beginNative() {
+  return serialized(async () => {
+    const current = await state();
+    const previous = (await browser.storage.local.get(pendingKey))[pendingKey] as
+      Pending | undefined;
+    await clearPending(previous);
+    const pending: Pending = {
+      epoch: current.epoch,
+      verifier: randomSecret(),
+      state: randomSecret(),
+      redirect: config.redirectURI,
+      startedAt: Date.now(),
+    };
+    const response = await native({
+      action: 'begin',
+      state: pending.state,
+      challenge: await pkceChallenge(pending.verifier),
+    });
+    if (
+      !/^[0-9a-f-]{36}$/i.test(response.id ?? '') ||
+      response.openURL !== nativeOpenURL(response.id!)
+    )
+      throw new Failure('invalid_response');
+    pending.nativeID = response.id!;
+    await browser.storage.local.set({ [pendingKey]: pending });
+    return { signedIn: false, openURL: nativeOpenURL(response.id!) };
+  });
+}
+async function status() {
+  return serialized(async () => {
+    let current = await state();
+    const pending = (await browser.storage.local.get(pendingKey))[pendingKey] as
+      Pending | undefined;
+    if (config.browser === 'safari' && pending?.nativeID) {
+      if (pending.epoch !== current.epoch || Date.now() - pending.startedAt >= 600000) {
+        await clearPending(pending);
+      } else {
+        const response = await native({ action: 'poll', id: pending.nativeID });
+        if (
+          response.error ||
+          response.state !== pending.state ||
+          !['pending', 'ready'].includes(response.status ?? '')
+        ) {
+          await clearPending(pending);
+          throw new Failure('authorization_declined');
+        }
+        if (response.status === 'ready') {
+          if (!/^[A-Za-z0-9_-]{43}$/.test(response.code ?? '')) {
+            await clearPending(pending);
+            throw new Failure('invalid_response');
+          }
+          try {
+            const tokens = await tokenRequest({
+              grant_type: 'authorization_code',
+              code: response.code,
+              redirect_uri: pending.redirect,
+              code_verifier: pending.verifier,
+            });
+            current = { epoch: crypto.randomUUID(), tokens };
+            await save(current);
+            await clearPending(pending);
+          } catch (error) {
+            if (error instanceof Failure) await clearPending(pending);
+            throw error;
+          }
+        } else
+          return {
+            signedIn: !!current.tokens,
+            epoch: current.epoch,
+            openURL: nativeOpenURL(pending.nativeID),
+          };
+      }
+    }
+    return { signedIn: !!current.tokens, epoch: current.epoch };
+  });
 }
 async function credentials(
   expectedEpoch: string,
@@ -168,12 +263,14 @@ async function signOut() {
   return serialized(async () => {
     const current = await state();
     await save({ epoch: crypto.randomUUID() });
-    await browser.storage.local.remove(pendingKey);
+    await clearPending(
+      (await browser.storage.local.get(pendingKey))[pendingKey] as Pending | undefined,
+    );
     if (current.tokens) await revoke(current.tokens).catch(() => undefined);
     return { signedIn: false };
   });
 }
-async function api(request: APIRequest) {
+async function apiResponse(request: APIRequest, signal?: AbortSignal) {
   const token = await credentials(request.sessionEpoch);
   const send = (t: Tokens) => {
     const headers: Record<string, string> = {
@@ -189,20 +286,111 @@ async function api(request: APIRequest) {
       credentials: 'omit',
       cache: 'no-store',
       redirect: 'error',
-      signal: AbortSignal.timeout(30000),
+      signal: signal ?? AbortSignal.timeout(30000),
       ...(request.body === undefined ? {} : { body: JSON.stringify(request.body) }),
     });
   };
   let response = await send(token);
   if (response.status === 401)
     response = await send(await credentials(request.sessionEpoch, true, token.access_token));
-  const data: unknown = response.status === 204 ? null : await response.json();
   if (!response.ok) {
+    const data: unknown = await response.json();
     const error = data as { code?: string; details?: unknown };
     throw new Failure(error.code ?? 'server_error', response.status, error.details);
   }
-  return data;
+  return response;
 }
+async function api(request: APIRequest) {
+  const response = await apiResponse(request);
+  return response.status === 204 ? null : response.json();
+}
+
+// A foreground page pulls one chunk at a time. Files never become a giant JSON message,
+// and disconnecting the page cancels the authenticated download in the background.
+browser.runtime.onConnect.addListener((port) => {
+  if (
+    port.name !== 'docmatch.export' ||
+    !trustedPage(browser.runtime.id, port.sender ?? {}, (path) => browser.runtime.getURL(path))
+  ) {
+    port.disconnect();
+    return;
+  }
+  const controller = new AbortController();
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+  let remainder = new Uint8Array(0);
+  let epoch: string | undefined;
+  let closed = false;
+  let terminal = false;
+  let work: Promise<unknown> = Promise.resolve();
+  let timer: ReturnType<typeof setTimeout>;
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    clearTimeout(timer);
+    controller.abort();
+    void reader?.cancel().catch(() => undefined);
+    port.disconnect();
+  };
+  const resetTimeout = () => {
+    clearTimeout(timer);
+    timer = setTimeout(close, 30000);
+  };
+  port.onDisconnect.addListener(close);
+  resetTimeout();
+  port.onMessage.addListener((message) => {
+    work = work
+      .then(async () => {
+        await ready;
+        if (closed || terminal) return;
+        resetTimeout();
+        const m = message as { type?: string; request?: unknown } | null;
+        if (m?.type === 'start' && !epoch && validExportRequest(m.request)) {
+          epoch = m.request.sessionEpoch;
+          const response = await apiResponse(m.request, controller.signal);
+          if (!response.body) throw new Failure('invalid_response');
+          reader = response.body.getReader();
+          const format = new URLSearchParams(m.request.path.split('?')[1]).get('format');
+          port.postMessage({
+            type: 'ready',
+            mime:
+              format === 'pdf'
+                ? 'application/pdf'
+                : format === 'xlsx'
+                  ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                  : 'text/csv',
+          });
+        } else if (m?.type === 'next' && reader && epoch) {
+          if ((await state()).epoch !== epoch) throw new Failure('session_changed', 401);
+          if (!remainder.length) {
+            const part = await reader.read();
+            if (part.done) {
+              terminal = true;
+              port.postMessage({ type: 'end' });
+              // Let the receiver close after consuming the final message. Safari can
+              // deliver onDisconnect before a message queued immediately before it.
+              return;
+            }
+            remainder = new Uint8Array(part.value);
+          }
+          const chunk = remainder.slice(0, 32 * 1024);
+          remainder = remainder.subarray(chunk.length);
+          if (!closed) port.postMessage({ type: 'chunk', data: base64url(chunk) });
+        } else throw new Failure('invalid_request');
+      })
+      .catch((error: unknown) => {
+        if (!closed) {
+          terminal = true;
+          controller.abort();
+          void reader?.cancel().catch(() => undefined);
+          port.postMessage({
+            type: 'error',
+            code: error instanceof Failure ? error.code : 'connection_failed',
+            status: error instanceof Failure ? error.status : 0,
+          });
+        }
+      });
+  });
+});
 browser.runtime.onMessage.addListener((message, sender, respond) => {
   if (!trustedPage(browser.runtime.id, sender, (path) => browser.runtime.getURL(path)))
     return false;
@@ -219,10 +407,7 @@ browser.runtime.onMessage.addListener((message, sender, respond) => {
       case 'signOut':
         return signOut();
       case 'status':
-        return serialized(async () => {
-          const s = await state();
-          return { signedIn: !!s.tokens, epoch: s.epoch };
-        });
+        return status();
       case 'api':
         if (!validAPIRequest(m.request)) throw new Failure('invalid_request');
         return api(m.request);

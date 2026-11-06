@@ -1524,6 +1524,19 @@
     "projects_failed": "Não foi possível carregar os projetos.",
     "empty": "Nenhum projeto nesta conta.",
     "document_count": "{count} documentos",
-    "safari_sign_in": "Abra o app docmatch para conectar o Safari."
+    "safari_sign_in": "Abra o app docmatch para conectar o Safari.",
+    "permission_needed": "Para conectar, permita o acesso da extensão à API e ao envio de arquivos da docmatch.",
+    "continue_app": "Continuar no app",
+    "return_after_login": "Confirme a conexão no site e volte à extensão para continuar.",
+    "native_title": "Conectar Safari",
+    "native_intro": "Abra a extensão docmatch no Safari e escolha Entrar.",
+    "native_settings": "Abrir ajustes da extensão no Safari",
+    "native_enable": "Ative a docmatch em Safari → Ajustes → Extensões.",
+    "native_scope": "A conexão respeita as permissões das suas contas. Você aprova o custo antes de conciliar.",
+    "native_confirm": "Confirme a conexão no site da docmatch.",
+    "native_return": "Volte à extensão para continuar.",
+    "native_expired": "O pedido expirou. Entre novamente pela extensão.",
+    "native_failed": "Não foi possível abrir a conexão. Volte à extensão e tente novamente.",
+    "native_cancelled": "Conexão cancelada. Você pode tentar novamente pela extensão."
   }
 }

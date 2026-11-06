@@ -132,9 +132,11 @@ func run() error {
 	projectsSvc.SetEngine(projects.Engine{Config: cfg, Estimates: sys.Estimates, Runs: sys.Runs, Rules: sys.Rules, Uploads: sys.Uploads})
 	handler := api.NewHandler(api.Deps{
 		Config: cfg, Logger: log, Limits: limits.Must(), DB: pool,
-		Mount:        append([]func(*httpx.Router){authSvc.Mount, accountSvc.Mount, billingSvc.Mount, keysSvc.Mount, workspaceSvc.Mount, tenants.Mount, projectsSvc.Mount, teamsSvc.Mount, extensionsSvc.Mount}, sys.Mount()...),
-		Middleware:   []httpx.Middleware{sessions.Middleware, extensionsSvc.Middleware, tenants.Middleware},
-		OriginExempt: func(r *http.Request) bool { return auth.OriginExempt(r) || extensions.OriginExempt(r) },
+		Mount:      append([]func(*httpx.Router){authSvc.Mount, accountSvc.Mount, billingSvc.Mount, keysSvc.Mount, workspaceSvc.Mount, tenants.Mount, projectsSvc.Mount, teamsSvc.Mount, extensionsSvc.Mount}, sys.Mount()...),
+		Middleware: []httpx.Middleware{sessions.Middleware, extensionsSvc.Middleware, tenants.Middleware},
+		OriginExempt: func(r *http.Request) bool {
+			return auth.OriginExempt(r) || extensions.OriginExempt(r) || (cfg.IsDev() && sys.Local.OriginExempt(r))
+		},
 	})
 	srv := httpx.New(httpx.ServerOptions{Addr: cfg.APIListen, Handler: handler, Limits: limits.Must(), Logger: log})
 	if err := srv.Listen(); err != nil {

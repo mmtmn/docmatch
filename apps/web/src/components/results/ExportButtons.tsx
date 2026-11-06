@@ -11,6 +11,7 @@ export interface ExportButtonsProps {
   corrected?: boolean;
   available?: boolean;
   failed?: boolean;
+  createHref?: string;
 }
 
 export function ExportButtons({
@@ -21,6 +22,7 @@ export function ExportButtons({
   corrected = false,
   available = true,
   failed = false,
+  createHref = '/app',
 }: ExportButtonsProps) {
   return (
     <div className={styles.wrap} role="group" aria-label={t('results.export_heading')}>
@@ -36,7 +38,7 @@ export function ExportButtons({
             {t('results.download_corrected')}
           </button>
         ) : (
-          <a className="btn btn--primary" href="/app">
+          <a className="btn btn--primary" href={createHref}>
             {t('results.generate_corrected')}
           </a>
         )}

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDisplayName</key>
+	<string>docmatch</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>$(PRODUCT_BUNDLE_IDENTIFIER).authorization</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>$(DOCMATCH_EXTENSION_SCHEME)</string>
+			</array>
+		</dict>
+	</array>
+	<key>DocmatchAppGroup</key>
+	<string>$(DOCMATCH_APP_GROUP)</string>
+	<key>DocmatchExtensionID</key>
+	<string>$(DOCMATCH_EXTENSION_ID)</string>
+</dict>
+</plist>

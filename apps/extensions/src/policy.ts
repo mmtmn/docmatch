@@ -43,6 +43,7 @@ export function validAPIRequest(value: unknown): value is APIRequest {
     (method === 'GET' && /^\/v1\/uploads\/upl_[0-9A-HJKMNP-TV-Z]{26}$/.test(path!));
   if (
     !permitted ||
+    (path!.startsWith('/v1/projects') && r.orgId === undefined) ||
     (r.orgId !== undefined && (typeof r.orgId !== 'string' || !orgID.test(r.orgId)))
   )
     return false;
@@ -61,6 +62,19 @@ export function validAPIRequest(value: unknown): value is APIRequest {
     return false;
   }
   return true;
+}
+export function validExportRequest(value: unknown): value is APIRequest {
+  if (
+    !validAPIRequest(value) ||
+    value.body !== undefined ||
+    (value.method && value.method !== 'GET')
+  )
+    return false;
+  return (
+    /^\/v1\/projects\/prj_[0-9A-HJKMNP-TV-Z]{26}\/runs\/run_[0-9A-HJKMNP-TV-Z]{26}\/export\?format=(csv|xlsx|pdf)$/.test(
+      value.path,
+    ) && !!value.orgId
+  );
 }
 export function callbackCode(callback: string, expected: string, state: string): string {
   const url = new URL(callback);

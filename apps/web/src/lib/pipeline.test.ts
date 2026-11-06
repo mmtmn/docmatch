@@ -96,6 +96,38 @@ describe('pipeline', () => {
     ).toBe('org_original');
   });
 
+  it('uses an injected project transport and rejects an unregistered storage origin before sending bytes', async () => {
+    const ticket = {
+      id: 'upl_extension',
+      method: 'PUT',
+      url: 'https://storage.invalid/object',
+      headers: {},
+    };
+    const request = vi
+      .fn<typeof import('./api').api>()
+      .mockResolvedValueOnce(ticket)
+      .mockResolvedValueOnce({ id: ticket.id, status: 'ready', file_name: 'a.csv' });
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+    const transport = {
+      request: request as typeof import('./api').api,
+      uploadOrigins: ['https://storage.invalid'],
+    };
+    const destination = { orgId: 'org_extension', projectId: 'prj_extension' };
+    await uploadFile(accepted('a.csv', 'x;y\n1;2\n'), undefined, undefined, destination, transport);
+    expect(request.mock.calls.map((call) => call[0])).toEqual([
+      '/v1/projects/prj_extension/uploads',
+      '/v1/projects/prj_extension/uploads/upl_extension/complete',
+    ]);
+    expect(request.mock.calls.every((call) => call[1]?.orgId === destination.orgId)).toBe(true);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ credentials: 'omit', redirect: 'error' });
+    request.mockResolvedValueOnce({ ...ticket, url: 'https://unregistered.invalid/object' });
+    await expect(
+      uploadFile(accepted('a.csv', 'x;y\n1;2\n'), undefined, undefined, destination, transport),
+    ).rejects.toMatchObject({ code: 'upload_destination_invalid' });
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
   it('uploads through the presigned form without cookies and waits for the scan', async () => {
     fetchMock
       .mockResolvedValueOnce(

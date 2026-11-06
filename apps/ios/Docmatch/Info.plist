@@ -24,6 +24,8 @@
 	<string>$(DOCMATCH_API_BASE_URL)</string>
 	<key>DocmatchAliasLoopback</key>
 	<string>$(DOCMATCH_ALIAS_LOOPBACK)</string>
+	<key>DocmatchAppGroup</key>
+	<string>$(DOCMATCH_APP_GROUP)</string>
 	<key>DocmatchGoogleClientID</key>
 	<string>$(DOCMATCH_GOOGLE_IOS_CLIENT_ID)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
@@ -61,6 +63,16 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>docmatch</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>br.com.docmatch.extension.authorization</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>$(DOCMATCH_EXTENSION_SCHEME)</string>
 			</array>
 		</dict>
 	</array>

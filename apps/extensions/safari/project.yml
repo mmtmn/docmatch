@@ -1,0 +1,72 @@
+name: DocmatchSafari
+options:
+  deploymentTarget:
+    macOS: "14.0"
+  developmentLanguage: pt-BR
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "0.2.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DOCMATCH_EXTENSION_ID: br.com.docmatch.safari.Extension
+    DOCMATCH_APP_GROUP: $(DEVELOPMENT_TEAM).br.com.docmatch.extensions
+    DOCMATCH_EXTENSION_SCHEME: br.com.docmatch.extension
+  configs:
+    Debug:
+      DOCMATCH_EXTENSION_ID: br.com.docmatch.safari.local.Extension
+      DOCMATCH_APP_GROUP: $(DEVELOPMENT_TEAM).br.com.docmatch.extensions.local
+      DOCMATCH_EXTENSION_SCHEME: docmatch-extension-dev
+targets:
+  DocmatchSafari:
+    type: application
+    platform: macOS
+    preBuildScripts:
+      - name: Check Safari release configuration
+        script: |
+          if [ "$CONFIGURATION" = Release ] && [ "$(plutil -extract local raw -o - "$SRCROOT/Web/docmatch-native.json")" != false ]; then
+            echo "error: Generate the production extension resources before archiving."
+            exit 1
+          fi
+        inputFiles: ["$(SRCROOT)/Web/docmatch-native.json"]
+        basedOnDependencyAnalysis: false
+    sources:
+      - MacApp
+      - SharedUI
+      - Sources/DocmatchSafariCore
+      - path: Web/docmatch-native.json
+        buildPhase: resources
+      - path: ../../../packages/locales/pt-BR.json
+        buildPhase: resources
+    dependencies:
+      - target: DocmatchSafariExtension
+        embed: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: br.com.docmatch.safari
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE: MacApp/Info.plist
+        CODE_SIGN_ENTITLEMENTS: MacApp/App.entitlements
+      configs:
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: br.com.docmatch.safari.local
+    scheme:
+      testTargets: []
+  DocmatchSafariExtension:
+    type: app-extension
+    platform: macOS
+    sources:
+      - Extension
+      - Sources/DocmatchSafariCore
+      - path: Web
+        excludes: [assets]
+        buildPhase: resources
+      - path: Web/assets
+        type: folder
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(DOCMATCH_EXTENSION_ID)
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE: Extension/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Extension/App.entitlements
+        SKIP_INSTALL: YES

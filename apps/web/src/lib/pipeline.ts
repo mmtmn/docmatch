@@ -180,8 +180,23 @@ async function sha256Hex(file: File): Promise<string> {
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-async function putObject(ticket: Ticket, file: File, signal?: AbortSignal): Promise<void> {
+async function putObject(
+  ticket: Ticket,
+  file: File,
+  signal?: AbortSignal,
+  allowedOrigins?: readonly string[],
+): Promise<void> {
   // Presigned requests are authorized by their signature, never by cookies.
+  if (allowedOrigins) {
+    const target = new URL(ticket.url);
+    if (
+      !allowedOrigins.includes(target.origin) ||
+      target.username ||
+      target.password ||
+      target.hash
+    )
+      throw new ApiError(0, 'upload_destination_invalid', t('errors.network'));
+  }
   let res: Response;
   try {
     if (ticket.method === 'POST') {
@@ -192,6 +207,7 @@ async function putObject(ticket: Ticket, file: File, signal?: AbortSignal): Prom
         method: 'POST',
         body: form,
         credentials: 'omit',
+        redirect: 'error',
         ...(signal ? { signal } : {}),
       });
     } else {
@@ -200,6 +216,7 @@ async function putObject(ticket: Ticket, file: File, signal?: AbortSignal): Prom
         headers: ticket.headers,
         body: file,
         credentials: 'omit',
+        redirect: 'error',
         ...(signal ? { signal } : {}),
       });
     }
@@ -217,14 +234,16 @@ export async function uploadFile(
   onScanning?: (name: string) => void,
   signal?: AbortSignal,
   destination?: { orgId: string; projectId: string; replacesId?: string },
+  transport?: { request: typeof api; uploadOrigins: readonly string[] },
 ): Promise<UploadView> {
+  const request = transport?.request ?? api;
   const context = { orgId: destination?.orgId ?? selectedAccount()?.orgId ?? null };
   const media = file.family === 'media';
   const sha256 = media ? undefined : await sha256Hex(file.file);
   const prefix = destination
     ? `/v1/projects/${encodeURIComponent(destination.projectId)}/uploads`
     : '/v1/uploads';
-  const ticket = await api<Ticket>(prefix, {
+  const ticket = await request<Ticket>(prefix, {
     ...context,
     body: {
       kind: media ? 'media' : 'document',
@@ -236,9 +255,9 @@ export async function uploadFile(
     },
     ...(signal ? { signal } : {}),
   });
-  await putObject(ticket, file.file, signal);
+  await putObject(ticket, file.file, signal, transport?.uploadOrigins);
   const path = `${prefix}/${encodeURIComponent(ticket.id)}/complete`;
-  let view = await api<UploadView>(path, {
+  let view = await request<UploadView>(path, {
     ...context,
     body: sha256 ? { sha256 } : {},
     ...(signal ? { signal } : {}),
@@ -250,7 +269,7 @@ export async function uploadFile(
   ) {
     onScanning?.(file.name);
     await sleep(SCAN_POLL_MS, signal);
-    view = await api<UploadView>(path, { ...context, body: {}, ...(signal ? { signal } : {}) });
+    view = await request<UploadView>(path, { ...context, body: {}, ...(signal ? { signal } : {}) });
   }
   if (view.status !== 'ready') {
     throw new ApiError(
@@ -312,8 +331,9 @@ export function getRun(
   id: string,
   signal?: AbortSignal,
   destination?: RunDestination,
+  request: typeof api = api,
 ): Promise<RunView> {
-  return api<RunView>(runPath(id, destination), {
+  return request<RunView>(runPath(id, destination), {
     ...(destination ? { orgId: destination.orgId } : {}),
     ...(signal ? { signal } : {}),
   });
@@ -324,16 +344,21 @@ export function approveRun(
   quote: QuoteView,
   key: string,
   destination?: RunDestination,
+  request: typeof api = api,
 ): Promise<RunView> {
-  return api<RunView>(`${runPath(id, destination)}/approve-quote`, {
+  return request<RunView>(`${runPath(id, destination)}/approve-quote`, {
     ...(destination ? { orgId: destination.orgId } : {}),
     body: { quote_id: quote.id, quote_signature: quote.signature },
     idempotencyKey: key,
   });
 }
 
-export function cancelRun(id: string, destination?: RunDestination): Promise<RunView> {
-  return api<RunView>(`${runPath(id, destination)}/cancel`, {
+export function cancelRun(
+  id: string,
+  destination?: RunDestination,
+  request: typeof api = api,
+): Promise<RunView> {
+  return request<RunView>(`${runPath(id, destination)}/cancel`, {
     ...(destination ? { orgId: destination.orgId } : {}),
     method: 'POST',
     idempotent: true,
@@ -345,6 +370,7 @@ export async function listFindings(
   id: string,
   signal?: AbortSignal,
   destination?: RunDestination,
+  request: typeof api = api,
 ): Promise<FindingView[]> {
   const orgId = destination?.orgId ?? selectedAccount()?.orgId ?? null;
   const out: FindingView[] = [];
@@ -352,7 +378,7 @@ export async function listFindings(
   for (let page = 0; page < 50; page++) {
     const q = new URLSearchParams({ limit: '100' });
     if (cursor) q.set('cursor', cursor);
-    const res = await api<{ items: FindingView[]; next_cursor?: string }>(
+    const res = await request<{ items: FindingView[]; next_cursor?: string }>(
       `${runPath(id, destination)}/findings?${q.toString()}`,
       { orgId, ...(signal ? { signal } : {}) },
     );
@@ -369,12 +395,16 @@ export function sendFeedback(
   status: string,
   note?: string,
   destination?: RunDestination,
+  request: typeof api = api,
 ): Promise<unknown> {
-  return api(`${runPath(runId, destination)}/findings/${encodeURIComponent(findingId)}/feedback`, {
-    ...(destination ? { orgId: destination.orgId } : {}),
-    body: { status, ...(note ? { note } : {}) },
-    idempotent: true,
-  });
+  return request(
+    `${runPath(runId, destination)}/findings/${encodeURIComponent(findingId)}/feedback`,
+    {
+      ...(destination ? { orgId: destination.orgId } : {}),
+      body: { status, ...(note ? { note } : {}) },
+      idempotent: true,
+    },
+  );
 }
 
 export function exportUrl(runId: string, format: 'csv' | 'xlsx' | 'pdf'): string | undefined {
@@ -386,8 +416,9 @@ export async function downloadExport(
   runId: string,
   format: 'csv' | 'xlsx' | 'pdf',
   destination?: RunDestination,
+  request: typeof api = api,
 ): Promise<void> {
-  const blob = await api<Blob>(`${runPath(runId, destination)}/export?format=${format}`, {
+  const blob = await request<Blob>(`${runPath(runId, destination)}/export?format=${format}`, {
     ...(destination ? { orgId: destination.orgId } : {}),
     responseType: 'blob',
   });

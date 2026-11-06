@@ -174,6 +174,20 @@ describe('ResultsScreen', () => {
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('Falha ao salvar.');
     expect(within(dialog).getByRole('button', { name: t('results.accept') })).toBeEnabled();
   });
+  it('lets a read-only viewer inspect evidence without changing a finding', async () => {
+    const onDecision = vi.fn();
+    render(<ResultsScreen results={results} canDecide={false} onDecision={onDecision} />);
+    await userEvent.click(
+      screen.getByRole('button', {
+        name: t('results.critical_open', { title: results.findings[0]!.title }),
+      }),
+    );
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText(t('results.file_pending'))).toBeVisible();
+    for (const label of ['results.accept', 'results.edit'] as const)
+      expect(within(dialog).queryByRole('button', { name: t(label) })).toBeNull();
+    expect(onDecision).not.toHaveBeenCalled();
+  });
   it('saves a review note with a clear scope', async () => {
     render(<ResultsScreen results={mockResults} />);
     await expandAll();

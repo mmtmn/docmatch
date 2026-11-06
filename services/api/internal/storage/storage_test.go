@@ -13,7 +13,51 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/mmtmn/docmatch/services/api/internal/httpx"
 )
+
+func TestLocalSignedBrowserUploadOrigin(t *testing.T) {
+	t.Parallel()
+	local, _ := newLocal(t)
+	ticket, err := local.PresignPut(context.Background(), "media/browser", 5, "text/plain", time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := httpx.OriginCheckMiddleware([]string{"https://site.invalid"}, local.OriginExempt)(local)
+	for _, tc := range []struct {
+		name, target, header, value string
+		status                      int
+	}{
+		{"signed write", ticket.URL, "", "", http.StatusOK},
+		{"ambient cookie", ticket.URL, "Cookie", "dm_session=ambient", http.StatusForbidden},
+		{"ambient authorization", ticket.URL, "Authorization", "Bearer unrelated", http.StatusForbidden},
+		{"invalid signature", ticket.URL + "x", "", "", http.StatusForbidden},
+		{"duplicate signature", ticket.URL + "&sig=other", "", "", http.StatusForbidden},
+		{"other route", "http://api.invalid/v1/projects", "", "", http.StatusForbidden},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodPut, tc.target, strings.NewReader("hello"))
+			r.Header.Set("Origin", "chrome-extension://local-test")
+			if tc.header != "" {
+				r.Header.Set(tc.header, tc.value)
+			}
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, r)
+			if w.Code != tc.status {
+				t.Fatalf("got %d, want %d", w.Code, tc.status)
+			}
+		})
+	}
+	var absent *LocalStore
+	if absent.OriginExempt(httptest.NewRequest(http.MethodPut, ticket.URL, nil)) {
+		t.Fatal("absent store allowed write")
+	}
+	local.now = func() time.Time { return time.Now().Add(2 * time.Minute) }
+	if local.OriginExempt(httptest.NewRequest(http.MethodPut, ticket.URL, nil)) {
+		t.Fatal("expired signature allowed write")
+	}
+}
 
 func TestValidateKeyAndKeys(t *testing.T) {
 	t.Parallel()
