@@ -2,7 +2,12 @@ package br.com.docmatch.app.ui
 
 import android.content.Context
 import android.content.Intent
+import kotlinx.coroutines.CancellationException
+import br.com.docmatch.core.ReconciledReceivable
+import br.com.docmatch.core.findingPriority
 import androidx.compose.foundation.clickable
+import androidx.compose.animation.animateContentSize
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -100,7 +105,7 @@ class RunViewModel(private val dm: Docmatch, private val runId: String) : ViewMo
             try {
                 val run = dm.reconciler.follow(runId) { _state.value = RunState.Running(it) }
                 when (run.status) {
-                    RunStatus.COMPLETED -> RunState.Done(run, dm.api.findings(run.id).sortedByDescending { it.amountAtRisk })
+                    RunStatus.COMPLETED -> RunState.Done(run, dm.api.findings(run.id).sortedWith(compareBy<Finding> { findingPriority(it.severity) }.thenByDescending { it.amountAtRisk }.thenBy { it.id }))
                     RunStatus.NEEDS_APPROVAL -> RunState.NeedsApproval(run)
                     else -> RunState.Failed(dm.texts.t("results.live_failed", mapOf("message" to (run.error?.message ?: dm.texts.t("errors.unknown")))))
                 }
@@ -159,11 +164,12 @@ class RunViewModel(private val dm: Docmatch, private val runId: String) : ViewMo
                         Exports.dir(context).apply { mkdirs() }.resolve("docmatch-$runId.$format").apply { writeBytes(bytes) }
                     }
                 val uri = FileProvider.getUriForFile(context, "${context.packageName}.exports", file)
-                val mime = if (format == "csv") "text/csv" else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                val mime = when (format) { "pdf" -> "application/pdf"; "csv" -> "text/csv"; else -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }
                 val send = Intent(Intent.ACTION_SEND).setType(mime).putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 context.startActivity(Intent.createChooser(send, dm.texts.t("mobile.export")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            } catch (e: ApiException) {
-                _notice.value = dm.texts.t("mobile.export_failed", mapOf("message" to e.message))
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                _notice.value = dm.texts.t("mobile.export_failed", mapOf("message" to (e.message ?: dm.texts.t("errors.unknown"))))
             }
         }
     }
@@ -171,7 +177,7 @@ class RunViewModel(private val dm: Docmatch, private val runId: String) : ViewMo
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RunScreen(vm: RunViewModel) {
+fun RunScreen(vm: RunViewModel, onNewRun: () -> Unit) {
     val state by vm.state.collectAsState()
     val notice by vm.notice.collectAsState()
     val attempt by vm.attempt.collectAsState()
@@ -187,8 +193,13 @@ fun RunScreen(vm: RunViewModel) {
         is RunState.Running ->
             Column(Modifier.fillMaxSize().padding(DmSize.space3), verticalArrangement = Arrangement.spacedBy(DmSize.space2)) {
                 Text(t("mobile.run_title"), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
-                LinearProgressIndicator(Modifier.fillMaxWidth())
-                Text(s.step?.let { stepLabel(it) } ?: t("mobile.run_waiting"), modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                Card(Modifier.fillMaxWidth().animateContentSize()) {
+                    Column(Modifier.padding(DmSize.space3), verticalArrangement = Arrangement.spacedBy(DmSize.space2)) {
+                        Text("docmatch", fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(s.step?.let { stepLabel(it) } ?: t("mobile.run_waiting"), fontFamily = FontFamily.Monospace, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                        LinearProgressIndicator(Modifier.fillMaxWidth())
+                    }
+                }
             }
         is RunState.NeedsApproval ->
             Column(Modifier.fillMaxSize().padding(DmSize.space3), verticalArrangement = Arrangement.spacedBy(DmSize.space2)) {
@@ -202,29 +213,68 @@ fun RunScreen(vm: RunViewModel) {
         is RunState.Failed -> ErrorState(s.message, vm::retry)
         is RunState.Done -> {
             val names = s.run.sources.associate { it.id to it.fileName }
+            val document = s.run.summary?.reconciliation
+            val pending = s.findings.filter { it.status == "open" && it.severity != "info" }
+            val critical = s.findings.filter { it.severity == "critical" }
             LazyColumn(contentPadding = PaddingValues(DmSize.space3), verticalArrangement = Arrangement.spacedBy(DmSize.space2)) {
                 item {
-                    Text(t("mobile.run_title"), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
-                    Text(t("mobile.run_findings", mapOf("count" to s.findings.size)))
-                    Text(t("mobile.run_at_risk", mapOf("amount" to Format.money(s.findings.sumOf { it.amountAtRisk }))), fontWeight = FontWeight.SemiBold)
+                    Text(t(if (document != null) "results.document_ready" else "results.report_ready"), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
+                    Text(t(if (document != null) "results.output_description" else "results.report_subtitle"))
+                    if (document != null) {
+                        Button(onClick = { vm.export(context, "xlsx") }, modifier = Modifier.fillMaxWidth()) { Text(t("results.download_corrected")) }
+                        Text(t("results.doc_open") + ": " + Format.money(document.totals.openBalance), fontWeight = FontWeight.SemiBold)
+                    } else {
+                        Text(t("results.legacy_output"))
+                        Button(onClick = onNewRun, modifier = Modifier.fillMaxWidth()) { Text(t("results.generate_corrected")) }
+                    }
+                    OutlinedButton(onClick = { vm.export(context, "pdf") }, modifier = Modifier.fillMaxWidth()) { Text(t("results.download_report")) }
+                    ResultsDisclosure(t("results.other_formats")) {
+                        TextButton(onClick = { vm.export(context, "csv") }) { Text(t(if (document != null) "results.download_data_csv" else "results.download_findings_csv")) }
+                        if (document == null) TextButton(onClick = { vm.export(context, "xlsx") }) { Text(t("results.download_findings_xlsx")) }
+                    }
                     s.run.summary?.sourceWarnings?.takeIf { it.isNotEmpty() }?.let { warnings ->
-                        Text(t("results.source_warnings_title"), fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
+                        Text(t("results.source_warnings_title"), fontWeight = FontWeight.SemiBold)
                         warnings.forEach { Text("• $it", style = MaterialTheme.typography.bodySmall) }
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(DmSize.space2)) {
-                        OutlinedButton(onClick = { vm.export(context, "xlsx") }) { Text(t("results.export_xlsx")) }
-                        OutlinedButton(onClick = { vm.export(context, "csv") }) { Text(t("results.export_csv")) }
-                    }
-                    if (open == null) {
-                        notice?.let { Text(it, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
-                    }
+                    Text(t("mobile.run_findings", mapOf("count" to s.findings.size)))
+                    if (open == null) notice?.let { Text(it, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
                 }
-                if (s.findings.isEmpty()) item { Text(t("results.exceptions_empty")) }
-                items(s.findings, key = { it.id }) { f -> FindingCard(f) { open = f.id } }
+                if (critical.isNotEmpty()) item {
+                    Text(t("results.critical_heading"), fontWeight = FontWeight.SemiBold)
+                    Text(t("results.critical_scope"))
+                    critical.forEach { f -> FindingCard(f) { open = f.id } }
+                }
+                item { ResultsDisclosure(t("results.review_heading") + " · " + pending.size) {
+                    Text(t("results.review_scope"))
+                    if (pending.isEmpty()) Text(t("results.review_empty"))
+                    pending.forEach { f -> FindingCard(f) { open = f.id } }
+                    document?.receivables?.filter { it.proposedAmount > 0 || it.withholdingPending > 0 }?.forEach { DocumentRow(it) }
+                } }
+                if (document != null) item { ResultsDisclosure(t("results.changes_heading")) {
+                    Text(t("results.doc_scope"))
+                    Text(t("results.doc_principal") + ": " + Format.money(document.totals.principalConfirmed))
+                    Text(t("results.doc_duplicate") + ": " + Format.money(document.totals.duplicateExcluded))
+                    document.receivables.filter { it.appliedPrincipal > 0 || it.status == "duplicate" }.forEach { DocumentRow(it) }
+                } }
+                item { ResultsDisclosure(t("results.all_heading")) {
+                    Text(t("results.findings_scope"))
+                    document?.let { d ->
+                        Text(t("results.doc_ledger"), fontWeight = FontWeight.SemiBold)
+                        d.receivables.forEach { DocumentRow(it) }
+                        Text(t("results.doc_bank"), fontWeight = FontWeight.SemiBold)
+                        d.bankEntries.forEach { b ->
+                            Text(b.description + " · " + Format.money(b.amount))
+                            Text(b.sourceName + " · " + b.row, style = MaterialTheme.typography.bodySmall)
+                            if (b.proposed) Text(t("results.doc_review"))
+                            HorizontalDivider()
+                        }
+                    }
+                    s.findings.forEach { f -> FindingCard(f) { open = f.id } }
+                } }
             }
             s.findings.firstOrNull { it.id == open }?.let { current ->
                 ModalBottomSheet(onDismissRequest = { open = null }) {
-                    FindingDetail(current, names, notice, texts.t("results.confidence_label", mapOf("level" to confidenceLabel(current))), onDecide = { d, note -> vm.decide(current, d, note) }) {
+                    FindingDetail(current, document?.receivables?.filter { row -> current.evidence.any { it.sourceId == row.sourceId && it.locator?.row == row.sourceRow } }.orEmpty(), names, notice, texts.t("results.confidence_label", mapOf("level" to confidenceLabel(current))), onDecide = { d, note -> vm.decide(current, d, note) }) {
                         open = null
                     }
                 }
@@ -257,6 +307,7 @@ private fun FindingCard(f: Finding, onOpen: () -> Unit) {
 @Composable
 private fun FindingDetail(
     f: Finding,
+    documentRows: List<ReconciledReceivable>,
     names: Map<String, String>,
     notice: String?,
     confidence: String,
@@ -276,6 +327,9 @@ private fun FindingDetail(
             Text(t("results.explanation"), fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
             Text(f.explanation)
         }
+        Text(t("results.review_scope"), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(t("results.file_effect"), fontWeight = FontWeight.SemiBold)
+        if (documentRows.isEmpty()) Text(t("results.file_effect_unknown")) else documentRows.forEach { DocumentRow(it) }
         Text(t("results.evidence_heading"), fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
         f.evidence.groupBy { it.sourceId }.forEach { (source, items) ->
             Text(names[source] ?: source, style = MaterialTheme.typography.labelLarge)
@@ -302,7 +356,7 @@ private fun FindingDetail(
             }
         } else {
             // Every decision is recorded on the API, so changing it is changing it everywhere.
-            Row(horizontalArrangement = Arrangement.spacedBy(DmSize.space2)) {
+            Column(verticalArrangement = Arrangement.spacedBy(DmSize.space1)) {
                 Button(onClick = { onDecide(Decision.CONFIRMED, null) }, enabled = f.status != Decision.CONFIRMED) { Text(t("results.accept")) }
                 OutlinedButton(onClick = { onDecide(Decision.DISMISSED, null) }, enabled = f.status != Decision.DISMISSED) { Text(t("results.reject")) }
                 OutlinedButton(onClick = { editing = true }) { Text(t("results.edit")) }
@@ -347,3 +401,26 @@ fun statusLabel(status: String): String =
         Decision.RESOLVED -> t("results.status_edited")
         else -> t("results.status_open")
     }
+
+@Composable
+private fun ResultsDisclosure(label: String, content: @Composable () -> Unit) {
+    var expanded by rememberSaveable(label) { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(DmSize.space1)) {
+        OutlinedButton(onClick = { expanded = !expanded }, modifier = Modifier.fillMaxWidth()) { Text((if (expanded) "− " else "+ ") + label) }
+        if (expanded) content()
+    }
+}
+
+@Composable
+private fun DocumentRow(row: ReconciledReceivable) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(DmSize.space2), verticalArrangement = Arrangement.spacedBy(DmSize.space1)) {
+            Text(row.reference + " · " + row.customer, fontWeight = FontWeight.SemiBold)
+            Text(t("results.file_balance_change", mapOf("before" to Format.money(row.originalAmount), "after" to Format.money(row.openAmount))))
+            Text(t("results.doc_source", mapOf("name" to row.sourceName, "row" to row.sourceRow)), style = MaterialTheme.typography.bodySmall)
+            if (row.status == "duplicate") Text(t("results.doc_duplicate_status", mapOf("id" to row.duplicateOf)))
+            if (row.proposedAmount > 0) Text(t("results.file_proposed_change", mapOf("amount" to Format.money(row.proposedAmount))))
+            if (row.withholdingPending > 0) Text(t("results.doc_tax_note", mapOf("amount" to Format.money(row.withholdingPending))))
+        }
+    }
+}

@@ -22,6 +22,7 @@ export interface RulesBoxProps {
   onSelectedRulesChange: (ids: string[]) => void;
   /** Textarea grows from 1 to `maxLines` lines, then scrolls internally. */
   maxLines?: number;
+  maxHeight?: number;
   /** Keyboard-open mode on a phone: only the label and the textarea stay visible. */
   compact?: boolean;
   disabled?: boolean;
@@ -38,6 +39,7 @@ export function RulesBox({
   selectedRules,
   onSelectedRulesChange,
   maxLines = 6,
+  maxHeight = Number.POSITIVE_INFINITY,
   compact = false,
   disabled = false,
 }: RulesBoxProps) {
@@ -45,7 +47,7 @@ export function RulesBox({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const max = textLimits.rules_text;
   const limit = useCharLimit(value, max);
-  useAutosize(textareaRef, value, { minLines: 1, maxLines });
+  useAutosize(textareaRef, value, { minLines: 1, maxLines, maxHeight });
 
   const textareaId = `${id}-rules`;
   const counterId = `${id}-counter`;

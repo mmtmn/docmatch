@@ -7,6 +7,13 @@
 *.p12
 *.jks
 *.keystore
+# Downloaded OAuth clients and local credential bundles
+.secrets/
+client_secret*.json
+credentials.json
+service-account*.json
+*-service-account.json
+*.p8
 terraform.tfvars
 *.auto.tfvars
 !terraform.tfvars.example
@@ -67,3 +74,13 @@ scratch/
 
 # Corpora gerados em tempo de teste (contêm EICAR, bombas de compressão etc.)
 testdata/security-corpus/**/generated/
+
+# Private generated documents and delivery artifacts.
+/output/
+
+# SDK build outputs and operational-terminal exports
+sdks/*/dist/
+sdks/*/target/
+sdks/*/node_modules/
+sdks/**/*.egg-info/
+docmatch-output/

@@ -78,7 +78,7 @@ paths:
       operationId: authGoogleStart
       summary: Inicia o login com Google
       description: Gera `state` e PKCE, guarda em cookie temporário e devolve a URL de autorização.
-      tags: [auth]
+      tags: [ auth ]
       security: []
       requestBody:
         content:
@@ -107,7 +107,7 @@ paths:
         Chamado pelo Google. Troca o `code` por tokens, cria ou localiza o usuário, abre a sessão
         (`Set-Cookie`) e redireciona para `redirect_to`. Em erro, redireciona para a página de
         login com `?error=<code>`.
-      tags: [auth]
+      tags: [ auth ]
       security: []
       parameters:
         - name: code
@@ -128,7 +128,8 @@ paths:
             type: string
       responses:
         "200":
-          description: "Sessão aberta (clientes com `Accept: application/json` recebem a sessão em vez do redirecionamento)."
+          description: "Sessão aberta (clientes com `Accept: application/json` recebem a sessão em vez do
+            redirecionamento)."
           headers:
             Set-Cookie:
               schema:
@@ -149,21 +150,21 @@ paths:
                 type: string
         "400":
           description: "`state` não confere ou o provedor devolveu erro."
-          x-error-codes: [oauth_state_mismatch]
+          x-error-codes: [ oauth_state_mismatch ]
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
           description: E-mail não verificado no provedor ou conta suspensa.
-          x-error-codes: [oauth_email_unverified, account_suspended]
+          x-error-codes: [ oauth_email_unverified, account_suspended ]
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "502":
           description: O provedor não respondeu.
-          x-error-codes: [oauth_provider_error]
+          x-error-codes: [ oauth_provider_error ]
           content:
             application/json:
               schema:
@@ -174,7 +175,7 @@ paths:
       operationId: authAppleStart
       summary: Inicia o login com Apple
       description: Gera `state` e `nonce` e devolve a URL de autorização (modo `form_post`).
-      tags: [auth]
+      tags: [ auth ]
       security: []
       requestBody:
         content:
@@ -201,7 +202,7 @@ paths:
         Recebe o `form_post` da Apple (web) ou o `identity_token` obtido nativamente (iOS).
         Valida o token contra as chaves públicas da Apple, abre a sessão e redireciona (web) ou
         devolve a sessão (nativo).
-      tags: [auth]
+      tags: [ auth ]
       security: []
       requestBody:
         required: true
@@ -230,21 +231,21 @@ paths:
                 type: string
         "400":
           description: "`state` não confere ou token inválido."
-          x-error-codes: [oauth_state_mismatch, validation_failed]
+          x-error-codes: [ oauth_state_mismatch, validation_failed ]
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
           description: Conta suspensa ou e-mail não verificado.
-          x-error-codes: [oauth_email_unverified, account_suspended]
+          x-error-codes: [ oauth_email_unverified, account_suspended ]
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "502":
           description: A Apple não respondeu.
-          x-error-codes: [oauth_provider_error]
+          x-error-codes: [ oauth_provider_error ]
           content:
             application/json:
               schema:
@@ -254,8 +255,9 @@ paths:
     post:
       operationId: authEmailStart
       summary: Envia um código de login por e-mail
-      description: Cria um desafio e envia um código de 6 dígitos (válido por poucos minutos). A resposta é a mesma exista ou não a conta.
-      tags: [auth]
+      description: Cria um desafio e envia um código de 6 dígitos (válido por poucos minutos). A resposta é a mesma
+        exista ou não a conta.
+      tags: [ auth ]
       security: []
       requestBody:
         required: true
@@ -280,7 +282,7 @@ paths:
       operationId: authEmailVerify
       summary: Confirma o código recebido por e-mail
       description: Abre a sessão quando o código confere. Cinco tentativas por desafio.
-      tags: [auth]
+      tags: [ auth ]
       security: []
       requestBody:
         required: true
@@ -301,35 +303,35 @@ paths:
                 $ref: "#/components/schemas/Session"
         "400":
           description: Código inválido.
-          x-error-codes: [email_code_invalid, validation_failed]
+          x-error-codes: [ email_code_invalid, validation_failed ]
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
           description: Conta suspensa ou em processo de exclusão.
-          x-error-codes: [account_suspended, account_deletion_pending]
+          x-error-codes: [ account_suspended, account_deletion_pending ]
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "404":
           description: Desafio não encontrado.
-          x-error-codes: [email_challenge_not_found]
+          x-error-codes: [ email_challenge_not_found ]
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "410":
           description: Código expirado.
-          x-error-codes: [email_code_expired]
+          x-error-codes: [ email_code_expired ]
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "429":
           description: Tentativas esgotadas.
-          x-error-codes: [too_many_attempts, rate_limited]
+          x-error-codes: [ too_many_attempts, rate_limited ]
           headers:
             Retry-After:
               $ref: "#/components/headers/RetryAfter"
@@ -345,7 +347,7 @@ paths:
       description: |
         Quais logins esta instalação oferece agora (um provedor sem chave configurada aparece
         como `false`). O site e os apps mostram só os botões que funcionam.
-      tags: [auth]
+      tags: [ auth ]
       security: []
       responses:
         "200":
@@ -366,7 +368,7 @@ paths:
         audiência precisa ser o client id do servidor ou um de `GOOGLE_OAUTH_NATIVE_CLIENT_IDS`.
         A conta é resolvida como no site (sujeito do Google, depois e-mail verificado), então a
         mesma pessoa cai na mesma conta em qualquer aparelho.
-      tags: [auth]
+      tags: [ auth ]
       security: []
       requestBody:
         required: true
@@ -387,14 +389,14 @@ paths:
                 $ref: "#/components/schemas/Session"
         "400":
           description: Token inválido, expirado ou de outra audiência.
-          x-error-codes: [oauth_state_mismatch, validation_failed]
+          x-error-codes: [ oauth_state_mismatch, validation_failed ]
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
           description: E-mail do Google não verificado, conta suspensa ou em processo de exclusão.
-          x-error-codes: [oauth_email_unverified, account_suspended, account_deletion_pending]
+          x-error-codes: [ oauth_email_unverified, account_suspended, account_deletion_pending ]
           content:
             application/json:
               schema:
@@ -403,7 +405,7 @@ paths:
           $ref: "#/components/responses/TooManyRequests"
         "503":
           description: Login com Google não configurado.
-          x-error-codes: [service_unavailable]
+          x-error-codes: [ service_unavailable ]
           content:
             application/json:
               schema:
@@ -416,7 +418,7 @@ paths:
       description: |
         Existe só com `DM_DEV_LOGIN` ligado, que a API recusa fora de `DM_ENV=dev`. Cria a conta no
         primeiro uso e credita a organização uma vez por dia, para rodar exemplos sem Stripe.
-      tags: [auth]
+      tags: [ auth ]
       security: []
       requestBody:
         required: true
@@ -437,7 +439,7 @@ paths:
                 $ref: "#/components/schemas/Session"
         "400":
           description: E-mail inválido.
-          x-error-codes: [validation_failed]
+          x-error-codes: [ validation_failed ]
           content:
             application/json:
               schema:
@@ -451,7 +453,7 @@ paths:
         Senha opcional, definida em `PUT /me/password`. A resposta a e-mail desconhecido e a senha
         errada é a mesma (`invalid_credentials`). Limite por IP e por e-mail com bloqueio
         exponencial; `totp_code` é reservado para o segundo fator.
-      tags: [auth]
+      tags: [ auth ]
       security: []
       requestBody:
         required: true
@@ -474,14 +476,14 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           description: E-mail ou senha incorretos.
-          x-error-codes: [invalid_credentials]
+          x-error-codes: [ invalid_credentials ]
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
           description: Conta suspensa ou em processo de exclusão.
-          x-error-codes: [account_suspended, account_deletion_pending]
+          x-error-codes: [ account_suspended, account_deletion_pending ]
           content:
             application/json:
               schema:
@@ -494,7 +496,7 @@ paths:
       operationId: authRefresh
       summary: Renova a sessão
       description: Rotaciona o cookie de sessão. Só com sessão em cookie; chaves de API não têm sessão.
-      tags: [auth]
+      tags: [ auth ]
       security:
         - cookieSession: []
       responses:
@@ -516,7 +518,7 @@ paths:
       operationId: authLogout
       summary: Encerra a sessão
       description: Invalida a sessão atual e limpa o cookie.
-      tags: [auth]
+      tags: [ auth ]
       security:
         - cookieSession: []
       responses:
@@ -531,7 +533,7 @@ paths:
       operationId: getMe
       summary: Dados do usuário autenticado
       description: Usuário, organização, plano, créditos e limites efetivos do plano.
-      tags: [account]
+      tags: [ account ]
       responses:
         "200":
           description: Perfil completo.
@@ -545,7 +547,7 @@ paths:
       operationId: updateMe
       summary: Atualiza nome, empresa e notificações
       description: Campos ausentes não mudam. Textos passam por normalização NFC e pelos limites de `limits.yaml`.
-      tags: [account]
+      tags: [ account ]
       requestBody:
         required: true
         content:
@@ -572,7 +574,7 @@ paths:
         Agenda a exclusão da conta e de todos os dados em 7 dias; até lá o login é bloqueado com
         `account_deletion_pending` e o pedido pode ser cancelado pelo suporte. Assinaturas ativas
         são canceladas no Stripe.
-      tags: [account]
+      tags: [ account ]
       security:
         - cookieSession: []
       responses:
@@ -586,7 +588,7 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "409":
           description: Já existe um pedido de exclusão.
-          x-error-codes: [conflict]
+          x-error-codes: [ conflict ]
           content:
             application/json:
               schema:
@@ -599,7 +601,7 @@ paths:
       description: |
         Pede (ou consulta) a exportação de tudo que a conta tem: perfil, execuções, achados, regras
         e ledger. Quando pronta, a resposta traz uma URL assinada válida por 24 horas.
-      tags: [account]
+      tags: [ account ]
       security:
         - cookieSession: []
       responses:
@@ -622,7 +624,7 @@ paths:
         Destino da `download_url` de `GET /me/export`: o `token` é assinado pelo servidor e vale
         até `expires_at`. Não exige sessão; um token inválido, expirado ou de exportação ainda não
         pronta responde `404` sem detalhes.
-      tags: [account]
+      tags: [ account ]
       security: []
       parameters:
         - name: token
@@ -648,7 +650,7 @@ paths:
       description: |
         Cada login (navegador ou instalação do app) é uma sessão presa àquele aparelho, todas na
         mesma conta. A sessão que faz a chamada vem primeiro, com `current: true`.
-      tags: [account]
+      tags: [ account ]
       responses:
         "200":
           description: Sessões ativas.
@@ -664,7 +666,7 @@ paths:
       operationId: revokeDevice
       summary: Encerra a sessão de um aparelho
       description: Encerrar a própria sessão também limpa os cookies desta resposta.
-      tags: [account]
+      tags: [ account ]
       parameters:
         - name: id
           in: path
@@ -688,7 +690,7 @@ paths:
         Quem já tem senha informa `current_password`. Quem entrou por Google, Apple ou e-mail e
         ainda não tem senha precisa de uma sessão recente (`recent_login_required` caso contrário).
         Toda troca encerra as outras sessões do usuário.
-      tags: [account]
+      tags: [ account ]
       security:
         - cookieSession: []
       requestBody:
@@ -704,14 +706,14 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           description: Sem sessão ou senha atual incorreta.
-          x-error-codes: [unauthenticated, session_expired, invalid_credentials]
+          x-error-codes: [ unauthenticated, session_expired, invalid_credentials ]
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
           description: Sessão antiga demais para definir a primeira senha.
-          x-error-codes: [recent_login_required]
+          x-error-codes: [ recent_login_required ]
           content:
             application/json:
               schema:
@@ -729,7 +731,7 @@ paths:
         mídia vai para o Cloudflare R2 com um PUT pré-assinado. O tamanho é validado contra o
         plano antes de emitir o ticket. O arquivo só fica utilizável depois de
         `POST /uploads/{id}/complete` e da verificação de segurança.
-      tags: [uploads]
+      tags: [ uploads ]
       requestBody:
         required: true
         content:
@@ -745,7 +747,7 @@ paths:
                 $ref: "#/components/schemas/UploadTicket"
         "400":
           description: Nome inválido ou campos faltando.
-          x-error-codes: [validation_failed, upload_rejected_name]
+          x-error-codes: [ validation_failed, upload_rejected_name ]
           content:
             application/json:
               schema:
@@ -756,14 +758,14 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "413":
           description: Arquivo maior que o permitido pelo plano.
-          x-error-codes: [file_too_large, upload_rejected_size]
+          x-error-codes: [ file_too_large, upload_rejected_size ]
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "415":
           description: Tipo não suportado.
-          x-error-codes: [upload_rejected_type]
+          x-error-codes: [ upload_rejected_type ]
           content:
             application/json:
               schema:
@@ -781,7 +783,7 @@ paths:
         Confere tamanho e hash, sniffa o tipo pelo conteúdo e põe o arquivo na fila do scanner
         (antivírus, bomba de descompactação, listas de reprodução). Responde `202` enquanto a
         verificação roda; o estado final aparece em `status`.
-      tags: [uploads]
+      tags: [ uploads ]
       parameters:
         - $ref: "#/components/parameters/UploadId"
       requestBody:
@@ -810,14 +812,14 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           description: O objeto ainda não chegou ao storage.
-          x-error-codes: [upload_incomplete]
+          x-error-codes: [ upload_incomplete ]
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "410":
           description: Ticket expirado.
-          x-error-codes: [upload_expired]
+          x-error-codes: [ upload_expired ]
           content:
             application/json:
               schema:
@@ -845,7 +847,7 @@ paths:
         Traz também a duração esperada (`expected_seconds`, fila incluída) e `large`: nenhum
         pedido é recusado pelo tamanho; um pedido grande avisa quanto deve levar, e quem o iniciou
         recebe um e-mail quando ele terminar.
-      tags: [runs]
+      tags: [ runs ]
       requestBody:
         required: true
         content:
@@ -865,28 +867,28 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           description: Faixa não permitida no plano.
-          x-error-codes: [lane_not_allowed, plan_limit_reached]
+          x-error-codes: [ lane_not_allowed, plan_limit_reached ]
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "409":
           description: Algum arquivo ainda não está pronto.
-          x-error-codes: [upload_not_ready]
+          x-error-codes: [ upload_not_ready ]
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "413":
           description: Execução maior que o plano permite.
-          x-error-codes: [run_too_large]
+          x-error-codes: [ run_too_large ]
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "422":
           description: Limites de arquivos, duração ou texto.
-          x-error-codes: [too_many_files, media_too_long, text_too_long]
+          x-error-codes: [ too_many_files, media_too_long, text_too_long ]
           content:
             application/json:
               schema:
@@ -899,7 +901,7 @@ paths:
       operationId: listRuns
       summary: Lista execuções da organização
       description: Mais recentes primeiro. Filtra por estado e por fluxo.
-      tags: [runs]
+      tags: [ runs ]
       parameters:
         - $ref: "#/components/parameters/Cursor"
         - $ref: "#/components/parameters/Limit"
@@ -929,7 +931,7 @@ paths:
         Reserva `cap_credits` no ledger e enfileira a execução. Exige `Idempotency-Key`. Se o
         orçamento tiver `requires_approval`, o cliente já está aprovando ao chamar. Se a execução
         precisar de mais do que o teto, ela para em `needs_approval` e emite um novo orçamento.
-      tags: [runs]
+      tags: [ runs ]
       x-spends-credits: true
       parameters:
         - $ref: "#/components/parameters/IdempotencyKey"
@@ -953,7 +955,7 @@ paths:
                 $ref: "#/components/schemas/Run"
         "400":
           description: Corpo inválido, orçamento adulterado ou header ausente.
-          x-error-codes: [validation_failed, quote_invalid_signature, missing_idempotency_key]
+          x-error-codes: [ validation_failed, quote_invalid_signature, missing_idempotency_key ]
           content:
             application/json:
               schema:
@@ -962,35 +964,35 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "402":
           description: Créditos insuficientes para reservar o teto.
-          x-error-codes: [insufficient_credits, subscription_required]
+          x-error-codes: [ insufficient_credits, subscription_required ]
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "404":
           description: Orçamento não encontrado.
-          x-error-codes: [quote_not_found]
+          x-error-codes: [ quote_not_found ]
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "409":
           description: Orçamento não corresponde ao pedido, chave reutilizada ou arquivo não pronto.
-          x-error-codes: [quote_mismatch, idempotency_key_reused, idempotency_in_progress, upload_not_ready]
+          x-error-codes: [ quote_mismatch, idempotency_key_reused, idempotency_in_progress, upload_not_ready ]
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "410":
           description: Orçamento expirado.
-          x-error-codes: [quote_expired]
+          x-error-codes: [ quote_expired ]
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "429":
           description: Execuções simultâneas do plano esgotadas ou limite de requisições.
-          x-error-codes: [concurrent_runs_exceeded, rate_limited]
+          x-error-codes: [ concurrent_runs_exceeded, rate_limited ]
           headers:
             Retry-After:
               $ref: "#/components/headers/RetryAfter"
@@ -1006,7 +1008,7 @@ paths:
       operationId: getRun
       summary: Consulta uma execução
       description: Estado, progresso, créditos reservados e gastos, resumo quando concluída.
-      tags: [runs]
+      tags: [ runs ]
       parameters:
         - $ref: "#/components/parameters/RunId"
       responses:
@@ -1022,7 +1024,7 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           description: Execução não encontrada.
-          x-error-codes: [run_not_found]
+          x-error-codes: [ run_not_found ]
           content:
             application/json:
               schema:
@@ -1033,7 +1035,7 @@ paths:
       operationId: cancelRun
       summary: Cancela uma execução
       description: Para a execução e devolve os créditos não gastos. Execuções já terminadas não mudam.
-      tags: [runs]
+      tags: [ runs ]
       parameters:
         - $ref: "#/components/parameters/RunId"
       responses:
@@ -1049,14 +1051,14 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           description: Execução não encontrada.
-          x-error-codes: [run_not_found]
+          x-error-codes: [ run_not_found ]
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "409":
           description: A execução já terminou.
-          x-error-codes: [run_already_finished]
+          x-error-codes: [ run_already_finished ]
           content:
             application/json:
               schema:
@@ -1071,7 +1073,7 @@ paths:
         nomes abaixo) e `data` (JSON com o esquema do evento). O servidor envia `: ping` a cada
         15 s; a conexão fecha após `completed`, `failed` ou `needs_approval`. Para retomar, envie
         `Last-Event-ID` com a última sequência recebida.
-      tags: [runs]
+      tags: [ runs ]
       x-sse-events:
         stage_started: "#/components/schemas/RunEventStageStarted"
         progress: "#/components/schemas/RunEventProgress"
@@ -1103,7 +1105,7 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           description: Execução não encontrada.
-          x-error-codes: [run_not_found]
+          x-error-codes: [ run_not_found ]
           content:
             application/json:
               schema:
@@ -1114,7 +1116,7 @@ paths:
       operationId: listFindings
       summary: Lista os achados de uma execução
       description: Ordenados por severidade e valor em risco. Disponível enquanto a execução roda (parcial) e depois.
-      tags: [runs]
+      tags: [ runs ]
       parameters:
         - $ref: "#/components/parameters/RunId"
         - $ref: "#/components/parameters/Cursor"
@@ -1145,7 +1147,7 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           description: Execução não encontrada.
-          x-error-codes: [run_not_found]
+          x-error-codes: [ run_not_found ]
           content:
             application/json:
               schema:
@@ -1156,7 +1158,7 @@ paths:
       operationId: giveFindingFeedback
       summary: Confirma, descarta ou resolve um achado
       description: O feedback alimenta a calibração da confiança e, nos planos com aprendizado, a proposta de regras.
-      tags: [runs]
+      tags: [ runs ]
       parameters:
         - $ref: "#/components/parameters/RunId"
         - $ref: "#/components/parameters/FindingId"
@@ -1181,7 +1183,7 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           description: Execução ou achado não encontrado.
-          x-error-codes: [run_not_found, finding_not_found]
+          x-error-codes: [ run_not_found, finding_not_found ]
           content:
             application/json:
               schema:
@@ -1196,7 +1198,7 @@ paths:
       description: |
         Planilha com achados, casamentos e evidências; CSV só com achados; PDF com o relatório.
         Só para execuções concluídas. O arquivo é gerado sob demanda e cacheado.
-      tags: [runs]
+      tags: [ runs ]
       parameters:
         - $ref: "#/components/parameters/RunId"
         - name: format
@@ -1224,7 +1226,7 @@ paths:
                 $ref: "#/components/schemas/BinaryFile"
         "400":
           description: Formato não suportado.
-          x-error-codes: [export_format_unsupported]
+          x-error-codes: [ export_format_unsupported ]
           content:
             application/json:
               schema:
@@ -1235,14 +1237,14 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           description: Execução não encontrada.
-          x-error-codes: [run_not_found]
+          x-error-codes: [ run_not_found ]
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "409":
           description: A execução ainda não terminou, ou o arquivo ainda está sendo gerado (tente de novo em instantes).
-          x-error-codes: [run_not_completed, export_not_ready]
+          x-error-codes: [ run_not_completed, export_not_ready ]
           headers:
             Retry-After:
               $ref: "#/components/headers/RetryAfter"
@@ -1258,7 +1260,7 @@ paths:
       description: |
         Quando a execução para em `needs_approval` (ferramentas novas, teto atingido), o cliente
         aprova o novo orçamento recebido no evento. Reserva a diferença e retoma do checkpoint.
-      tags: [runs]
+      tags: [ runs ]
       x-spends-credits: true
       parameters:
         - $ref: "#/components/parameters/RunId"
@@ -1278,7 +1280,7 @@ paths:
                 $ref: "#/components/schemas/Run"
         "400":
           description: Orçamento adulterado ou header ausente.
-          x-error-codes: [quote_invalid_signature, missing_idempotency_key, validation_failed]
+          x-error-codes: [ quote_invalid_signature, missing_idempotency_key, validation_failed ]
           content:
             application/json:
               schema:
@@ -1287,28 +1289,28 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "402":
           description: Créditos insuficientes para a diferença.
-          x-error-codes: [insufficient_credits]
+          x-error-codes: [ insufficient_credits ]
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "404":
           description: Execução ou orçamento não encontrado.
-          x-error-codes: [run_not_found, quote_not_found]
+          x-error-codes: [ run_not_found, quote_not_found ]
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "409":
           description: A execução não está aguardando aprovação.
-          x-error-codes: [run_not_awaiting_approval, idempotency_key_reused, quote_mismatch]
+          x-error-codes: [ run_not_awaiting_approval, idempotency_key_reused, quote_mismatch ]
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "410":
           description: Orçamento expirado; a execução foi cancelada e os créditos devolvidos.
-          x-error-codes: [quote_expired]
+          x-error-codes: [ quote_expired ]
           content:
             application/json:
               schema:
@@ -1320,7 +1322,7 @@ paths:
       operationId: listWorkflows
       summary: Lista os fluxos da organização
       description: Ordenados por nome.
-      tags: [workflows]
+      tags: [ workflows ]
       parameters:
         - $ref: "#/components/parameters/Cursor"
         - $ref: "#/components/parameters/Limit"
@@ -1339,7 +1341,7 @@ paths:
       operationId: createWorkflow
       summary: Cria um fluxo
       description: A configuração segue `schemas/workflow-config.json`.
-      tags: [workflows]
+      tags: [ workflows ]
       requestBody:
         required: true
         content:
@@ -1361,7 +1363,7 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           description: Alguma regra referenciada não existe.
-          x-error-codes: [rule_not_found]
+          x-error-codes: [ rule_not_found ]
           content:
             application/json:
               schema:
@@ -1374,7 +1376,7 @@ paths:
       operationId: getWorkflow
       summary: Consulta um fluxo
       description: Configuração completa e contagem de execuções.
-      tags: [workflows]
+      tags: [ workflows ]
       parameters:
         - $ref: "#/components/parameters/WorkflowId"
       responses:
@@ -1390,7 +1392,7 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           description: Fluxo não encontrado.
-          x-error-codes: [workflow_not_found]
+          x-error-codes: [ workflow_not_found ]
           content:
             application/json:
               schema:
@@ -1398,8 +1400,9 @@ paths:
     patch:
       operationId: updateWorkflow
       summary: Altera um fluxo
-      description: Substitui só as seções enviadas (`sources`, `matching`, `rules`, ...). Execuções em andamento não mudam.
-      tags: [workflows]
+      description: Substitui só as seções enviadas (`sources`, `matching`, `rules`, ...). Execuções em andamento não
+        mudam.
+      tags: [ workflows ]
       parameters:
         - $ref: "#/components/parameters/WorkflowId"
       requestBody:
@@ -1423,7 +1426,7 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           description: Fluxo não encontrado.
-          x-error-codes: [workflow_not_found, rule_not_found]
+          x-error-codes: [ workflow_not_found, rule_not_found ]
           content:
             application/json:
               schema:
@@ -1437,7 +1440,7 @@ paths:
       operationId: listRules
       summary: Busca regras
       description: Regras da organização e regras globais, filtradas por texto (`q`) e estado.
-      tags: [rules]
+      tags: [ rules ]
       parameters:
         - name: q
           in: query
@@ -1476,7 +1479,7 @@ paths:
         Salva a regra em linguagem natural e, por padrão, compila para SQL e avalia contra o
         histórico confirmado (gasta créditos de modelo). Nasce `draft` sem compilar ou
         `candidate` compilada.
-      tags: [rules]
+      tags: [ rules ]
       x-spends-credits: true
       parameters:
         - $ref: "#/components/parameters/IdempotencyKey"
@@ -1503,7 +1506,7 @@ paths:
           $ref: "#/components/responses/Conflict"
         "422":
           description: Texto fora do limite ou regra que não compila.
-          x-error-codes: [text_too_long, rule_compile_failed]
+          x-error-codes: [ text_too_long, rule_compile_failed ]
           content:
             application/json:
               schema:
@@ -1513,8 +1516,9 @@ paths:
     post:
       operationId: createRuleVersion
       summary: Cria uma nova versão da regra
-      description: Mantém o `id`, incrementa `version`, recompila e reavalia. A versão anterior continua ativa até a nova ser promovida.
-      tags: [rules]
+      description: Mantém o `id`, incrementa `version`, recompila e reavalia. A versão anterior continua ativa até a
+        nova ser promovida.
+      tags: [ rules ]
       x-spends-credits: true
       parameters:
         - $ref: "#/components/parameters/RuleId"
@@ -1540,14 +1544,14 @@ paths:
           $ref: "#/components/responses/PaymentRequired"
         "403":
           description: Regras globais são só leitura para organizações.
-          x-error-codes: [rule_read_only]
+          x-error-codes: [ rule_read_only ]
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "404":
           description: Regra não encontrada.
-          x-error-codes: [rule_not_found]
+          x-error-codes: [ rule_not_found ]
           content:
             application/json:
               schema:
@@ -1556,7 +1560,7 @@ paths:
           $ref: "#/components/responses/Conflict"
         "422":
           description: Texto fora do limite ou regra que não compila.
-          x-error-codes: [text_too_long, rule_compile_failed]
+          x-error-codes: [ text_too_long, rule_compile_failed ]
           content:
             application/json:
               schema:
@@ -1570,7 +1574,7 @@ paths:
         `candidate` → `verified` exige histórico sem falsos positivos; `verified` → `trusted`
         passa a aplicar a regra automaticamente em toda execução. Só administradores promovem
         regras globais (API admin).
-      tags: [rules]
+      tags: [ rules ]
       parameters:
         - $ref: "#/components/parameters/RuleId"
       requestBody:
@@ -1592,35 +1596,55 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           description: Regra global.
-          x-error-codes: [rule_read_only]
+          x-error-codes: [ rule_read_only ]
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "404":
           description: Regra não encontrada.
-          x-error-codes: [rule_not_found]
+          x-error-codes: [ rule_not_found ]
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "409":
           description: Sem histórico suficiente.
-          x-error-codes: [rule_not_promotable]
+          x-error-codes: [ rule_not_promotable ]
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
 
   # --------------------------------------------------------------- billing
+  /billing/status:
+    get:
+      operationId: getBillingStatus
+      summary: Disponibilidade de compras e assinatura atual
+      description: Informa se o usuário pode comprar, o modo de pagamento, bloqueios e a assinatura da organização.
+      tags: [ billing ]
+      security:
+        - cookieSession: []
+      responses:
+        "200":
+          description: Estado da cobrança da organização e deste usuário.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingStatus"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
   /billing/checkout:
     post:
       operationId: createCheckout
       summary: Inicia a assinatura de um plano
       description: Cria uma sessão de checkout no Stripe e devolve a URL. Planos e preços vêm de `GET /plans`.
-      tags: [billing]
+      tags: [ billing ]
       security:
         - cookieSession: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -1636,7 +1660,7 @@ paths:
                 $ref: "#/components/schemas/CheckoutResponse"
         "400":
           description: Plano desconhecido ou cupom inválido.
-          x-error-codes: [plan_unknown, coupon_invalid, validation_failed]
+          x-error-codes: [ plan_unknown, coupon_invalid, validation_failed ]
           content:
             application/json:
               schema:
@@ -1645,14 +1669,14 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "502":
           description: O Stripe não respondeu.
-          x-error-codes: [checkout_failed]
+          x-error-codes: [ checkout_failed ]
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "503":
           description: Cobrança indisponível ou desativada.
-          x-error-codes: [billing_unavailable, kill_switch_enabled]
+          x-error-codes: [ billing_unavailable, kill_switch_enabled ]
           content:
             application/json:
               schema:
@@ -1663,7 +1687,7 @@ paths:
       operationId: createBillingPortal
       summary: Abre o portal de cobrança
       description: URL do portal do Stripe para trocar cartão, ver faturas ou cancelar.
-      tags: [billing]
+      tags: [ billing ]
       security:
         - cookieSession: []
       responses:
@@ -1677,7 +1701,7 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "402":
           description: Sem assinatura.
-          x-error-codes: [subscription_required]
+          x-error-codes: [ subscription_required ]
           content:
             application/json:
               schema:
@@ -1690,11 +1714,11 @@ paths:
       operationId: createTopup
       summary: Compra créditos avulsos
       description: Cria um checkout de pagamento único. Os créditos entram pelo webhook do Stripe e valem por 12 meses.
-      tags: [billing]
+      tags: [ billing ]
       security:
         - cookieSession: []
       parameters:
-        - $ref: "#/components/parameters/IdempotencyKeyOptional"
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -1710,7 +1734,7 @@ paths:
                 $ref: "#/components/schemas/CheckoutResponse"
         "400":
           description: Valor abaixo do mínimo.
-          x-error-codes: [topup_below_minimum, validation_failed]
+          x-error-codes: [ topup_below_minimum, validation_failed ]
           content:
             application/json:
               schema:
@@ -1719,7 +1743,7 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "402":
           description: Recarga exige assinatura ativa.
-          x-error-codes: [subscription_required, subscription_inactive]
+          x-error-codes: [ subscription_required, subscription_inactive ]
           content:
             application/json:
               schema:
@@ -1732,7 +1756,7 @@ paths:
       operationId: getCredits
       summary: Saldo de créditos
       description: Saldo, reservas em execuções ativas e o que vence quando.
-      tags: [credits]
+      tags: [ credits ]
       responses:
         "200":
           description: Saldo.
@@ -1750,7 +1774,7 @@ paths:
       operationId: listCreditLedger
       summary: Ledger de créditos
       description: Toda movimentação, mais recente primeiro, com o saldo após cada lançamento.
-      tags: [credits]
+      tags: [ credits ]
       parameters:
         - $ref: "#/components/parameters/Cursor"
         - $ref: "#/components/parameters/Limit"
@@ -1776,9 +1800,9 @@ paths:
       summary: Recebe eventos do Stripe
       description: |
         Sem autenticação de usuário: a assinatura `Stripe-Signature` é verificada com
-        `STRIPE_WEBHOOK_SECRET` sobre o corpo bruto. Eventos já processados devolvem 409 e
-        são ignorados (idempotência por `event.id`).
-      tags: [billing]
+        `STRIPE_WEBHOOK_SECRET` sobre o corpo bruto. Eventos já processados devolvem 200 e
+        são ignorados. Créditos também são deduplicados por fatura ou sessão de checkout.
+      tags: [ billing ]
       security: []
       parameters:
         - name: Stripe-Signature
@@ -1797,14 +1821,7 @@ paths:
           description: Evento processado.
         "400":
           description: Assinatura inválida ou corpo ilegível.
-          x-error-codes: [webhook_signature_invalid, invalid_json]
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "409":
-          description: Evento repetido.
-          x-error-codes: [webhook_replayed]
+          x-error-codes: [ webhook_signature_invalid, invalid_json ]
           content:
             application/json:
               schema:
@@ -1815,13 +1832,9 @@ paths:
     post:
       operationId: createCustomization
       summary: Pede uma personalização da interface
-      description: |
-        O pedido em linguagem natural vira um `UiManifest` (schemas/ui-manifest.json) planejado
-        pelo modelo `ui_planner`, validado contra o esquema, a lista de componentes e o contraste
-        AA. Pedidos fora do escopo ou inseguros são recusados com `customization_refused`.
-        Conta no limite mensal do plano e gasta créditos.
-      tags: [customizations]
-      x-spends-credits: true
+      description: |-
+        Propõe preferências para o próprio espaço. Incluído no plano pago ou isenção de QA; sem cobrança adicional. Exemplos exatos funcionam sem LLM. Outros pedidos usam ui_planner. Apenas proprietários e administradores. Idempotency-Key deve ser UUID.
+      tags: [ customizations ]
       parameters:
         - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
@@ -1831,41 +1844,37 @@ paths:
             schema:
               $ref: "#/components/schemas/CustomizationRequest"
       responses:
-        "202":
-          description: Pedido na fila de planejamento.
+        "200":
+          description: Resposta.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Customization"
-        "400":
-          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
-        "402":
-          $ref: "#/components/responses/PaymentRequired"
         "403":
-          description: Limite mensal do plano atingido.
-          x-error-codes: [customizations_limit_reached]
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "409":
-          $ref: "#/components/responses/Conflict"
+          $ref: "#/components/responses/Forbidden"
         "422":
-          description: Pedido recusado ou texto longo demais.
-          x-error-codes: [customization_refused, text_too_long]
+          description: Resposta.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: Resposta.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security:
+        - cookieSession: []
 
   /customizations/{id}:
     get:
       operationId: getCustomization
       summary: Consulta uma personalização
       description: Estado, manifesto proposto e, quando recusada, o motivo.
-      tags: [customizations]
+      tags: [ customizations ]
       parameters:
         - $ref: "#/components/parameters/CustomizationId"
       responses:
@@ -1879,75 +1888,48 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           description: Personalização não encontrada.
-          x-error-codes: [customization_not_found]
+          x-error-codes: [ customization_not_found ]
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+      security:
+        - cookieSession: []
 
   /customizations/{id}/approve:
     post:
       operationId: approveCustomization
       summary: Aplica a personalização proposta
-      description: Só para `proposed`. O manifesto vira o ativo da organização; o anterior fica disponível para `rollback`.
-      tags: [customizations]
+      description: Aplica uma proposta planned cuja base ainda é a versão atual. Repetir a mesma aprovação não cria
+        outra versão.
+      tags: [ customizations ]
       parameters:
         - $ref: "#/components/parameters/CustomizationId"
       responses:
         "200":
-          description: Personalização aplicada.
+          description: Resposta.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Customization"
+                $ref: "#/components/schemas/Workspace"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
           description: Personalização não encontrada.
-          x-error-codes: [customization_not_found]
+          x-error-codes: [ customization_not_found ]
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "409":
           description: Ainda não há proposta para aprovar.
-          x-error-codes: [customization_not_approvable]
+          x-error-codes: [ customization_not_approvable ]
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-
-  /customizations/{id}/rollback:
-    post:
-      operationId: rollbackCustomization
-      summary: Restaura a personalização anterior
-      description: Desfaz uma personalização aplicada, voltando ao manifesto anterior (ou ao padrão).
-      tags: [customizations]
-      parameters:
-        - $ref: "#/components/parameters/CustomizationId"
-      responses:
-        "200":
-          description: Personalização desfeita.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Customization"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          description: Personalização não encontrada.
-          x-error-codes: [customization_not_found]
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "409":
-          description: Nada para restaurar.
-          x-error-codes: [customization_nothing_to_rollback]
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
+      security:
+        - cookieSession: []
 
   # -------------------------------------------------------------- api keys
   /api-keys:
@@ -1955,7 +1937,7 @@ paths:
       operationId: listApiKeys
       summary: Lista as chaves de API
       description: Nunca devolve o segredo; só prefixo, escopos e último uso.
-      tags: [api-keys]
+      tags: [ api-keys ]
       security:
         - cookieSession: []
       responses:
@@ -1973,7 +1955,7 @@ paths:
       description: |
         O segredo completo (`dm_live_<id>_<secret>`) aparece uma única vez na resposta; só o
         HMAC (com DM_APIKEY_PEPPER) fica guardado. Limitado pelo plano.
-      tags: [api-keys]
+      tags: [ api-keys ]
       security:
         - cookieSession: []
       requestBody:
@@ -1995,7 +1977,7 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           description: Limite de chaves ou faixa fora do plano.
-          x-error-codes: [api_keys_limit_reached, lane_not_allowed]
+          x-error-codes: [ api_keys_limit_reached, lane_not_allowed ]
           content:
             application/json:
               schema:
@@ -2008,7 +1990,7 @@ paths:
       operationId: revokeApiKey
       summary: Revoga uma chave de API
       description: Imediato; requisições em andamento com a chave terminam, novas recebem `invalid_api_key`.
-      tags: [api-keys]
+      tags: [ api-keys ]
       security:
         - cookieSession: []
       parameters:
@@ -2029,7 +2011,7 @@ paths:
       operationId: listWebhookEndpoints
       summary: Lista os endpoints de webhook
       description: Endpoints HTTPS da organização que recebem os eventos de saída.
-      tags: [webhooks]
+      tags: [ webhooks ]
       security:
         - cookieSession: []
         - apiKey: []
@@ -2045,8 +2027,9 @@ paths:
     post:
       operationId: createWebhookEndpoint
       summary: Registra um endpoint de webhook
-      description: O segredo de assinatura aparece uma única vez. Só URLs HTTPS; a entrega tem 5 tentativas com backoff exponencial.
-      tags: [webhooks]
+      description: O segredo de assinatura aparece uma única vez. Só URLs HTTPS; a entrega tem 5 tentativas com
+        backoff exponencial.
+      tags: [ webhooks ]
       security:
         - cookieSession: []
         - apiKey: []
@@ -2069,7 +2052,7 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           description: Limite do plano.
-          x-error-codes: [plan_limit_reached]
+          x-error-codes: [ plan_limit_reached ]
           content:
             application/json:
               schema:
@@ -2082,7 +2065,7 @@ paths:
       operationId: deleteWebhookEndpoint
       summary: Remove um endpoint de webhook
       description: Entregas pendentes são descartadas.
-      tags: [webhooks]
+      tags: [ webhooks ]
       security:
         - cookieSession: []
         - apiKey: []
@@ -2103,8 +2086,8 @@ paths:
     get:
       operationId: listPlans
       summary: Planos e preços
-      description: Preços em centavos de dólar; `country` só afeta impostos exibidos e meios de pagamento.
-      tags: [public]
+      description: Preços em centavos de dólar. Cartão em USD; o país é informativo nesta versão.
+      tags: [ public ]
       security: []
       parameters:
         - name: country
@@ -2129,7 +2112,7 @@ paths:
       operationId: healthz
       summary: Processo vivo
       description: Não toca o banco. Usado pelo balanceador.
-      tags: [public]
+      tags: [ public ]
       security: []
       responses:
         "200":
@@ -2142,7 +2125,7 @@ paths:
           $ref: "#/components/responses/TooManyRequests"
         "503":
           description: Em manutenção.
-          x-error-codes: [maintenance]
+          x-error-codes: [ maintenance ]
           content:
             application/json:
               schema:
@@ -2153,7 +2136,7 @@ paths:
       operationId: readyz
       summary: Pronto para receber tráfego
       description: Verifica banco, storage e harness. `503` tira a instância do balanceador.
-      tags: [public]
+      tags: [ public ]
       security: []
       responses:
         "200":
@@ -2166,7 +2149,7 @@ paths:
           $ref: "#/components/responses/TooManyRequests"
         "503":
           description: Alguma dependência indisponível.
-          x-error-codes: [service_unavailable, harness_unavailable, storage_unavailable]
+          x-error-codes: [ service_unavailable, harness_unavailable, storage_unavailable ]
           content:
             application/json:
               schema:
@@ -2177,7 +2160,7 @@ paths:
       operationId: version
       summary: Versão em execução
       description: Versão semântica, commit e data da build.
-      tags: [public]
+      tags: [ public ]
       security: []
       responses:
         "200":
@@ -2190,6 +2173,65 @@ paths:
           $ref: "#/components/responses/TooManyRequests"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
+  /workspace:
+    get:
+      operationId: getWorkspace
+      summary: Lê preferências, permissões e histórico do espaço
+      description: Retorna o manifesto ativo, as operações fixas e as permissões da organização autenticada.
+      tags:
+        - customizations
+      security:
+        - cookieSession: []
+      responses:
+        "200":
+          description: Resposta.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workspace"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /workspace/rollback:
+    post:
+      operationId: rollbackWorkspace
+      summary: Restaura uma versão do espaço
+      description: Cria uma nova versão copiando uma versão anterior da própria organização.
+      tags:
+        - customizations
+      security:
+        - cookieSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - version
+              additionalProperties: false
+              properties:
+                version:
+                  type: integer
+                  minimum: 1
+      responses:
+        "200":
+          description: Resposta.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workspace"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: Resposta.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
 # ================================================================== webhooks
 webhooks:
@@ -2197,8 +2239,9 @@ webhooks:
     post:
       operationId: webhookRunCompleted
       summary: Execução concluída
-      description: Enviado quando uma execução termina com sucesso. Inclui o resumo; os achados vêm por `GET /runs/{id}/findings`.
-      tags: [webhooks]
+      description: Enviado quando uma execução termina com sucesso. Inclui o resumo; os achados vêm por `GET
+        /runs/{id}/findings`.
+      tags: [ webhooks ]
       security: []
       parameters:
         - $ref: "#/components/parameters/DmSignature"
@@ -2219,8 +2262,9 @@ webhooks:
     post:
       operationId: webhookRunFailed
       summary: Execução falhou
-      description: Enviado quando uma execução falha. `error.code` é um código de `errors.yaml`; créditos não gastos já foram devolvidos.
-      tags: [webhooks]
+      description: Enviado quando uma execução falha. `error.code` é um código de `errors.yaml`; créditos não gastos
+        já foram devolvidos.
+      tags: [ webhooks ]
       security: []
       parameters:
         - $ref: "#/components/parameters/DmSignature"
@@ -2241,8 +2285,9 @@ webhooks:
     post:
       operationId: webhookRunNeedsApproval
       summary: Execução aguarda aprovação de orçamento
-      description: Enviado quando a execução para por teto ou ferramentas novas. Aprove com `POST /runs/{id}/approve-quote`.
-      tags: [webhooks]
+      description: Enviado quando a execução para por teto ou ferramentas novas. Aprove com `POST
+        /runs/{id}/approve-quote`.
+      tags: [ webhooks ]
       security: []
       parameters:
         - $ref: "#/components/parameters/DmSignature"
@@ -2264,7 +2309,7 @@ webhooks:
       operationId: webhookCreditsLow
       summary: Créditos abaixo do limiar
       description: Enviado uma vez por ciclo quando o saldo disponível cai abaixo de 10% do plano (ou de 50 créditos).
-      tags: [webhooks]
+      tags: [ webhooks ]
       security: []
       parameters:
         - $ref: "#/components/parameters/DmSignature"
@@ -2301,17 +2346,8 @@ components:
       name: Idempotency-Key
       in: header
       required: true
-      description: Chave única por tentativa (UUID, por exemplo). Obrigatória em operações que gastam créditos; guardada por 24 h.
-      schema:
-        type: string
-        minLength: 1
-        maxLength: 128
-        x-limit: ids.idempotency_key_max
-    IdempotencyKeyOptional:
-      name: Idempotency-Key
-      in: header
-      required: false
-      description: Opcional aqui; evita duas sessões de checkout em caso de repetição.
+      description: Chave única por tentativa (UUID, por exemplo). Obrigatória em operações que gastam créditos;
+        guardada por 24 h.
       schema:
         type: string
         minLength: 1
@@ -2432,7 +2468,7 @@ components:
     BadRequest:
       description: Entrada inválida.
       x-status: 400
-      x-error-codes: [validation_failed, invalid_json, control_characters, missing_idempotency_key]
+      x-error-codes: [ validation_failed, invalid_json, control_characters, missing_idempotency_key ]
       headers:
         X-Request-Id:
           $ref: "#/components/headers/RequestId"
@@ -2454,7 +2490,7 @@ components:
     Unauthorized:
       description: Sem sessão ou chave válida.
       x-status: 401
-      x-error-codes: [unauthenticated, session_expired, invalid_api_key]
+      x-error-codes: [ unauthenticated, session_expired, invalid_api_key ]
       content:
         application/json:
           schema:
@@ -2462,7 +2498,7 @@ components:
     PaymentRequired:
       description: Créditos insuficientes ou assinatura necessária.
       x-status: 402
-      x-error-codes: [insufficient_credits, subscription_required, subscription_inactive]
+      x-error-codes: [ insufficient_credits, subscription_required, subscription_inactive ]
       content:
         application/json:
           schema:
@@ -2470,7 +2506,7 @@ components:
     Forbidden:
       description: Sem permissão.
       x-status: 403
-      x-error-codes: [forbidden, api_key_scope_denied, account_suspended, account_deletion_pending, plan_limit_reached]
+      x-error-codes: [ forbidden, api_key_scope_denied, account_suspended, account_deletion_pending, plan_limit_reached ]
       content:
         application/json:
           schema:
@@ -2478,7 +2514,7 @@ components:
     NotFound:
       description: Não encontrado.
       x-status: 404
-      x-error-codes: [not_found, upload_not_found]
+      x-error-codes: [ not_found, upload_not_found ]
       content:
         application/json:
           schema:
@@ -2486,7 +2522,7 @@ components:
     Conflict:
       description: Conflito com o estado atual ou chave de idempotência reutilizada.
       x-status: 409
-      x-error-codes: [conflict, idempotency_key_reused, idempotency_in_progress]
+      x-error-codes: [ conflict, idempotency_key_reused, idempotency_in_progress ]
       content:
         application/json:
           schema:
@@ -2494,7 +2530,7 @@ components:
     Unprocessable:
       description: Texto fora dos limites.
       x-status: 422
-      x-error-codes: [text_too_long]
+      x-error-codes: [ text_too_long ]
       content:
         application/json:
           schema:
@@ -2502,7 +2538,7 @@ components:
     TooManyRequests:
       description: Limite de requisições.
       x-status: 429
-      x-error-codes: [rate_limited, too_many_attempts]
+      x-error-codes: [ rate_limited, too_many_attempts ]
       headers:
         Retry-After:
           $ref: "#/components/headers/RetryAfter"
@@ -2519,7 +2555,15 @@ components:
     ServiceUnavailable:
       description: Dependência indisponível ou função desativada.
       x-status: 503
-      x-error-codes: [service_unavailable, harness_unavailable, storage_unavailable, model_unavailable, kill_switch_enabled, maintenance]
+      x-error-codes:
+        [
+          service_unavailable,
+          harness_unavailable,
+          storage_unavailable,
+          model_unavailable,
+          kill_switch_enabled,
+          maintenance
+        ]
       headers:
         Retry-After:
           $ref: "#/components/headers/RetryAfter"
@@ -2533,7 +2577,7 @@ components:
     Error:
       type: object
       description: Envelope de erro de toda resposta 4xx/5xx. Os códigos e mensagens vêm de `errors.yaml`.
-      required: [code, message, request_id]
+      required: [ code, message, request_id ]
       properties:
         code:
           type: string
@@ -2547,7 +2591,8 @@ components:
           description: Id da requisição para suporte.
         details:
           type: object
-          description: "Dados estruturados do erro (ex.: `fields` em `validation_failed`, `reason` em `customization_refused`, `retry_after_s` em `rate_limited`)."
+          description: "Dados estruturados do erro (ex.: `fields` em `validation_failed`, `reason` em
+            `customization_refused`, `retry_after_s` em `rate_limited`)."
           additionalProperties: true
       additionalProperties: false
       examples:
@@ -2560,7 +2605,7 @@ components:
     Money:
       type: object
       description: Dinheiro como inteiro na menor unidade da moeda (centavos).
-      required: [amount, currency]
+      required: [ amount, currency ]
       properties:
         amount:
           type: integer
@@ -2619,32 +2664,32 @@ components:
       format: binary
     Severity:
       type: string
-      enum: [info, low, medium, high, critical]
+      enum: [ info, low, medium, high, critical ]
     FindingStatus:
       type: string
-      enum: [open, confirmed, dismissed, resolved]
+      enum: [ open, confirmed, dismissed, resolved ]
     RunStatus:
       type: string
-      enum: [queued, running, needs_approval, completed, failed, cancelled]
+      enum: [ queued, running, needs_approval, completed, failed, cancelled ]
     Lane:
       type: string
-      enum: [app, api_batch, api_standard, api_priority]
+      enum: [ app, api_batch, api_standard, api_priority ]
       description: Faixa de prioridade (multiplicadores em config/pricing.yaml). Chaves de API só usam as faixas do plano.
     LlmMode:
       type: string
-      enum: [openrouter, local, off]
+      enum: [ openrouter, local, off ]
     ExportFormat:
       type: string
-      enum: [xlsx, csv, pdf]
+      enum: [ xlsx, csv, pdf ]
     RuleStatus:
       type: string
-      enum: [draft, candidate, verified, trusted, retired]
+      enum: [ draft, candidate, verified, trusted, retired ]
     RuleScope:
       type: string
-      enum: [tenant, global]
+      enum: [ tenant, global ]
     PlanCode:
       type: string
-      enum: [starter, pro, business]
+      enum: [ starter, pro, business ]
 
     # ------------------------------------------------------------------ auth
     AuthStartRequest:
@@ -2656,12 +2701,12 @@ components:
           description: Caminho relativo no site para onde voltar depois do login (nunca uma URL absoluta).
         platform:
           type: string
-          enum: [web, android, ios]
+          enum: [ web, android, ios ]
           default: web
       additionalProperties: false
     AuthStartResponse:
       type: object
-      required: [authorization_url, state, expires_at]
+      required: [ authorization_url, state, expires_at ]
       properties:
         authorization_url:
           type: string
@@ -2674,7 +2719,7 @@ components:
     AppleCallbackForm:
       type: object
       description: Campos do `form_post` da Apple.
-      required: [code, id_token, state]
+      required: [ code, id_token, state ]
       properties:
         code:
           type: string
@@ -2689,7 +2734,7 @@ components:
     AppleNativeCallback:
       type: object
       description: Token obtido pelo app iOS com AuthenticationServices.
-      required: [identity_token, authorization_code]
+      required: [ identity_token, authorization_code ]
       properties:
         identity_token:
           type: string
@@ -2702,7 +2747,7 @@ components:
       additionalProperties: false
     EmailStartRequest:
       type: object
-      required: [email]
+      required: [ email ]
       properties:
         email:
           type: string
@@ -2712,7 +2757,7 @@ components:
       additionalProperties: false
     EmailStartResponse:
       type: object
-      required: [challenge_id, expires_at, resend_after_s]
+      required: [ challenge_id, expires_at, resend_after_s ]
       properties:
         challenge_id:
           type: string
@@ -2724,18 +2769,19 @@ components:
       additionalProperties: false
     EmailVerifyRequest:
       type: object
-      required: [challenge_id, code]
+      required: [ challenge_id, code ]
       properties:
         challenge_id:
           type: string
         code:
           type: string
           pattern: "^[0-9]{6}$|^[A-Za-z0-9_-]{43}$"
-          description: O código de 6 dígitos digitado pelo usuário ou o token do link mágico recebido no mesmo e-mail (32 bytes em base64url).
+          description: O código de 6 dígitos digitado pelo usuário ou o token do link mágico recebido no mesmo e-mail
+            (32 bytes em base64url).
       additionalProperties: false
     AuthMethods:
       type: object
-      required: [email, google, apple, password, dev]
+      required: [ email, google, apple, password, dev ]
       properties:
         email:
           type: boolean
@@ -2751,7 +2797,7 @@ components:
       additionalProperties: false
     GoogleNativeRequest:
       type: object
-      required: [id_token]
+      required: [ id_token ]
       properties:
         id_token:
           type: string
@@ -2773,14 +2819,14 @@ components:
       additionalProperties: false
     Device:
       type: object
-      required: [id, platform, name, created_at, last_seen_at, current]
+      required: [ id, platform, name, created_at, last_seen_at, current ]
       properties:
         id:
           type: string
           pattern: "^ses_[0-9A-Z]{26}$"
         platform:
           type: string
-          enum: [web, android, ios]
+          enum: [ web, android, ios ]
         name:
           type: string
           description: Nome curto do aparelho (navegador e sistema, ou app e modelo).
@@ -2795,7 +2841,7 @@ components:
       additionalProperties: false
     DeviceList:
       type: object
-      required: [items]
+      required: [ items ]
       properties:
         items:
           type: array
@@ -2804,7 +2850,7 @@ components:
       additionalProperties: false
     PasswordLoginRequest:
       type: object
-      required: [email, password]
+      required: [ email, password ]
       properties:
         email:
           type: string
@@ -2822,7 +2868,7 @@ components:
       additionalProperties: false
     PasswordChangeRequest:
       type: object
-      required: [new_password]
+      required: [ new_password ]
       properties:
         current_password:
           type: string
@@ -2837,7 +2883,7 @@ components:
       additionalProperties: false
     Session:
       type: object
-      required: [user, org, expires_at]
+      required: [ user, org, expires_at ]
       properties:
         user:
           $ref: "#/components/schemas/User"
@@ -2850,7 +2896,7 @@ components:
     # --------------------------------------------------------------- account
     User:
       type: object
-      required: [id, email, display_name, role, locale, created_at]
+      required: [ id, email, display_name, role, locale, created_at ]
       properties:
         id:
           $ref: "#/components/schemas/UserId"
@@ -2863,7 +2909,7 @@ components:
           x-limit: text.display_name
         role:
           type: string
-          enum: [owner, member]
+          enum: [ owner, member ]
         locale:
           type: string
           const: pt-BR
@@ -2872,7 +2918,7 @@ components:
       additionalProperties: false
     Org:
       type: object
-      required: [id, name, plan, plan_status, created_at]
+      required: [ id, name, plan, plan_status, created_at ]
       properties:
         id:
           $ref: "#/components/schemas/OrgId"
@@ -2887,7 +2933,7 @@ components:
           description: Nulo sem assinatura.
         plan_status:
           type: string
-          enum: [none, trialing, active, past_due, cancelled]
+          enum: [ none, trialing, active, past_due, cancelled ]
         created_at:
           $ref: "#/components/schemas/Timestamp"
       additionalProperties: false
@@ -2951,7 +2997,7 @@ components:
       additionalProperties: false
     Me:
       type: object
-      required: [user, org, credits, entitlements]
+      required: [ user, org, credits, entitlements ]
       properties:
         user:
           $ref: "#/components/schemas/User"
@@ -2996,18 +3042,18 @@ components:
       additionalProperties: false
     DeletionScheduled:
       type: object
-      required: [scheduled_for]
+      required: [ scheduled_for ]
       properties:
         scheduled_for:
           $ref: "#/components/schemas/Timestamp"
       additionalProperties: false
     ExportStatus:
       type: object
-      required: [status, requested_at]
+      required: [ status, requested_at ]
       properties:
         status:
           type: string
-          enum: [pending, ready, expired]
+          enum: [ pending, ready, expired ]
         requested_at:
           $ref: "#/components/schemas/Timestamp"
         download_url:
@@ -3021,10 +3067,10 @@ components:
     # --------------------------------------------------------------- uploads
     UploadKind:
       type: string
-      enum: [document, media]
+      enum: [ document, media ]
     UploadRequest:
       type: object
-      required: [kind, file_name, size_bytes, mime]
+      required: [ kind, file_name, size_bytes, mime ]
       properties:
         kind:
           $ref: "#/components/schemas/UploadKind"
@@ -3062,7 +3108,7 @@ components:
     DocumentUploadTicket:
       type: object
       description: POST pré-assinado para o S3 (`multipart/form-data` com `fields` + `file`).
-      required: [id, kind, method, url, fields, expires_at, max_size_bytes]
+      required: [ id, kind, method, url, fields, expires_at, max_size_bytes ]
       properties:
         id:
           $ref: "#/components/schemas/UploadId"
@@ -3087,7 +3133,7 @@ components:
     MediaUploadTicket:
       type: object
       description: PUT pré-assinado para o Cloudflare R2; envie o corpo bruto com os `headers`.
-      required: [id, kind, method, url, headers, expires_at, max_size_bytes]
+      required: [ id, kind, method, url, headers, expires_at, max_size_bytes ]
       properties:
         id:
           $ref: "#/components/schemas/UploadId"
@@ -3120,14 +3166,14 @@ components:
       additionalProperties: false
     UploadStatus:
       type: string
-      enum: [pending, scanning, ready, rejected, expired]
+      enum: [ pending, scanning, ready, rejected, expired ]
     UploadRejectedReason:
       type: string
-      enum: [type, size, malware, bomb, playlist, name, checksum]
+      enum: [ type, size, malware, bomb, playlist, name, checksum ]
       description: Motivo da rejeição; corresponde aos códigos `upload_rejected_*` e `upload_checksum_mismatch`.
     Upload:
       type: object
-      required: [id, kind, file_name, size_bytes, status, created_at, expires_at]
+      required: [ id, kind, file_name, size_bytes, status, created_at, expires_at ]
       properties:
         id:
           $ref: "#/components/schemas/UploadId"
@@ -3165,7 +3211,7 @@ components:
       $ref: "./schemas/workflow-config.json#/$defs/LocatorHints"
     RunSource:
       type: object
-      required: [upload_id]
+      required: [ upload_id ]
       properties:
         upload_id:
           $ref: "#/components/schemas/UploadId"
@@ -3200,7 +3246,7 @@ components:
       additionalProperties: false
     EstimateRequest:
       type: object
-      required: [sources]
+      required: [ sources ]
       properties:
         sources:
           type: array
@@ -3231,17 +3277,18 @@ components:
       allOf:
         - $ref: "#/components/schemas/EstimateRequest"
         - type: object
-          required: [quote_id, quote_signature]
+          required: [ quote_id, quote_signature ]
           properties:
             quote_id:
               $ref: "#/components/schemas/QuoteId"
             quote_signature:
               type: string
               pattern: "^v1=[0-9a-f]{64}$"
-      description: O mesmo pedido da estimativa mais o orçamento aceito. Fontes ou opções diferentes do orçamento devolvem `quote_mismatch`.
+      description: O mesmo pedido da estimativa mais o orçamento aceito. Fontes ou opções diferentes do orçamento
+        devolvem `quote_mismatch`.
     ApproveQuoteRequest:
       type: object
-      required: [quote_id, quote_signature]
+      required: [ quote_id, quote_signature ]
       properties:
         quote_id:
           $ref: "#/components/schemas/QuoteId"
@@ -3253,7 +3300,7 @@ components:
       $ref: "./schemas/quote.json"
     RunCredits:
       type: object
-      required: [reserved, spent, refunded]
+      required: [ reserved, spent, refunded ]
       properties:
         reserved:
           type: integer
@@ -3267,10 +3314,10 @@ components:
       additionalProperties: false
     RunStage:
       type: string
-      enum: [scan, ingest, normalize, match, discover, adjudicate, verify, toolsmith, report]
+      enum: [ scan, ingest, normalize, match, discover, adjudicate, verify, toolsmith, report ]
     RunProgress:
       type: object
-      required: [stage, percent]
+      required: [ stage, percent ]
       properties:
         stage:
           $ref: "#/components/schemas/RunStage"
@@ -3284,7 +3331,16 @@ components:
       additionalProperties: false
     RunSummary:
       type: object
-      required: [findings_total, findings_by_severity, amount_at_risk, currency, matches_total, lines_total, lines_matched]
+      required:
+        [
+          findings_total,
+          findings_by_severity,
+          amount_at_risk,
+          currency,
+          matches_total,
+          lines_total,
+          lines_matched
+        ]
       properties:
         findings_total:
           type: integer
@@ -3331,16 +3387,239 @@ components:
           type: array
           maxItems: 100
           x-limit: ids.source_warnings_per_run
-          description: Em pt-BR, por arquivo, o que não entrou na conciliação (PDF digitalizado, carteira sem títulos em aberto, arquivo não reconhecido).
+          description: Em pt-BR, por arquivo, o que não entrou na conciliação (PDF digitalizado, carteira sem títulos em
+            aberto, arquivo não reconhecido).
           items:
             type: string
             maxLength: 500
             x-limit: text.source_warning
+        reconciliation:
+          $ref: "#/components/schemas/ReconciliationDocument"
+      additionalProperties: false
+    ReconciliationDocument:
+      type: object
+      description: Documento conciliado das fontes enviadas. Valores em centavos; propostas não reduzem o saldo
+        confirmado. Disponível em novas execuções.
+      required:
+        - version
+        - title
+        - currency
+        - period_start
+        - period_end
+        - receivables
+        - bank_entries
+        - totals
+      properties:
+        version:
+          type: integer
+          enum:
+            - 1
+        title:
+          type: string
+        currency:
+          type: string
+          enum:
+            - BRL
+        period_start:
+          type: string
+        period_end:
+          type: string
+        receivables:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconciledReceivable'
+        bank_entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconciledBankEntry'
+        totals:
+          type: object
+          required:
+            - original_amount
+            - duplicate_excluded
+            - received_confirmed
+            - principal_confirmed
+            - open_balance
+            - proposed_amount
+            - projected_open_balance
+            - unapplied_cash
+            - bank_fees
+            - fines_received
+            - withholding_pending
+          properties:
+            original_amount:
+              type: integer
+              format: int64
+              description: Valor em centavos.
+            duplicate_excluded:
+              type: integer
+              format: int64
+              description: Valor em centavos.
+            received_confirmed:
+              type: integer
+              format: int64
+              description: Valor em centavos.
+            principal_confirmed:
+              type: integer
+              format: int64
+              description: Valor em centavos.
+            open_balance:
+              type: integer
+              format: int64
+              description: Valor em centavos.
+            proposed_amount:
+              type: integer
+              format: int64
+              description: Valor em centavos.
+            projected_open_balance:
+              type: integer
+              format: int64
+              description: Valor em centavos.
+            unapplied_cash:
+              type: integer
+              format: int64
+              description: Valor em centavos.
+            bank_fees:
+              type: integer
+              format: int64
+              description: Valor em centavos.
+            fines_received:
+              type: integer
+              format: int64
+              description: Valor em centavos.
+            withholding_pending:
+              type: integer
+              format: int64
+              description: Valor em centavos.
+          additionalProperties: false
+      additionalProperties: false
+    ReconciledReceivable:
+      type: object
+      required:
+        - id
+        - source_id
+        - source_name
+        - reference
+        - customer
+        - tax_id
+        - due_date
+        - paid_on
+        - status
+        - duplicate_of
+        - source_row
+        - original_amount
+        - received_amount
+        - applied_principal
+        - open_amount
+        - proposed_amount
+        - fine_received
+        - withholding_pending
+        - bank_rows
+        - flags
+      properties:
+        id:
+          type: string
+        source_id:
+          type: string
+        source_name:
+          type: string
+        reference:
+          type: string
+        customer:
+          type: string
+        tax_id:
+          type: string
+        due_date:
+          type: string
+        paid_on:
+          type: string
+        status:
+          type: string
+        duplicate_of:
+          type: string
+        source_row:
+          type: integer
+          minimum: 1
+        original_amount:
+          type: integer
+          format: int64
+          description: Valor em centavos.
+        received_amount:
+          type: integer
+          format: int64
+          description: Valor em centavos.
+        applied_principal:
+          type: integer
+          format: int64
+          description: Valor em centavos.
+        open_amount:
+          type: integer
+          format: int64
+          description: Valor em centavos.
+        proposed_amount:
+          type: integer
+          format: int64
+          description: Valor em centavos.
+        fine_received:
+          type: integer
+          format: int64
+          description: Valor em centavos.
+        withholding_pending:
+          type: integer
+          format: int64
+          description: Valor em centavos.
+        bank_rows:
+          type: array
+          items:
+            type: integer
+        flags:
+          type: array
+          items:
+            type: string
+      additionalProperties: false
+    ReconciledBankEntry:
+      type: object
+      required:
+        - date
+        - description
+        - kind
+        - rule
+        - source_id
+        - source_name
+        - row
+        - amount
+        - proposed
+        - matched_ids
+      properties:
+        date:
+          type: string
+        description:
+          type: string
+        kind:
+          type: string
+        rule:
+          type: string
+        source_id:
+          type: string
+        source_name:
+          type: string
+        row:
+          type: integer
+        amount:
+          type: integer
+          format: int64
+          description: Valor em centavos.
+        proposed:
+          type: boolean
+        matched_ids:
+          type: array
+          items:
+            type: string
       additionalProperties: false
     RunError:
       type: object
       description: Falha de uma execução (código de `errors.yaml`).
-      required: [code, message, retryable]
+      required: [ code, message, retryable ]
       properties:
         code:
           type: string
@@ -3355,7 +3634,7 @@ components:
       additionalProperties: false
     Run:
       type: object
-      required: [id, status, lane, sources, credits, created_at, expires_at]
+      required: [ id, status, lane, sources, credits, created_at, expires_at ]
       properties:
         id:
           $ref: "#/components/schemas/RunId"
@@ -3396,14 +3675,14 @@ components:
       additionalProperties: false
     RunList:
       type: object
-      required: [items, next_cursor]
+      required: [ items, next_cursor ]
       properties:
         items:
           type: array
           items:
             $ref: "#/components/schemas/Run"
         next_cursor:
-          type: ["string", "null"]
+          type: [ "string", "null" ]
       additionalProperties: false
     Finding:
       $ref: "./schemas/finding.json"
@@ -3411,25 +3690,25 @@ components:
       $ref: "./schemas/finding.json#/$defs/Evidence"
     FindingList:
       type: object
-      required: [items, next_cursor]
+      required: [ items, next_cursor ]
       properties:
         items:
           type: array
           items:
             $ref: "#/components/schemas/Finding"
         next_cursor:
-          type: ["string", "null"]
+          type: [ "string", "null" ]
       additionalProperties: false
     FindingFeedbackRequest:
       type: object
-      required: [status]
+      required: [ status ]
       properties:
         status:
           type: string
-          enum: [confirmed, dismissed, resolved]
+          enum: [ confirmed, dismissed, resolved ]
         reason:
           type: string
-          enum: [false_positive, already_known, wrong_amount, duplicate, other]
+          enum: [ false_positive, already_known, wrong_amount, duplicate, other ]
         note:
           type: string
           maxLength: 500
@@ -3438,7 +3717,7 @@ components:
     Match:
       type: object
       description: Casamento entre linhas de fontes diferentes (ou grupo um-para-muitos).
-      required: [id, run_id, kind, left, right, confidence, created_at]
+      required: [ id, run_id, kind, left, right, confidence, created_at ]
       properties:
         id:
           $ref: "#/components/schemas/MatchId"
@@ -3446,7 +3725,7 @@ components:
           $ref: "#/components/schemas/RunId"
         kind:
           type: string
-          enum: [exact, tolerance, sum, fuzzy, rule, model]
+          enum: [ exact, tolerance, sum, fuzzy, rule, model ]
         left:
           type: array
           minItems: 1
@@ -3490,14 +3769,14 @@ components:
         event: finding
         data: {"finding": {...}}
         ```
-      required: [id, event, data]
+      required: [ id, event, data ]
       properties:
         id:
           type: integer
           minimum: 1
         event:
           type: string
-          enum: [stage_started, progress, token_usage, finding, match, needs_approval, completed, failed]
+          enum: [ stage_started, progress, token_usage, finding, match, needs_approval, completed, failed ]
         data:
           oneOf:
             - $ref: "#/components/schemas/RunEventStageStarted"
@@ -3511,7 +3790,7 @@ components:
       additionalProperties: false
     RunEventStageStarted:
       type: object
-      required: [stage]
+      required: [ stage ]
       properties:
         stage:
           $ref: "#/components/schemas/RunStage"
@@ -3523,7 +3802,7 @@ components:
       additionalProperties: false
     RunEventProgress:
       type: object
-      required: [stage, done, total]
+      required: [ stage, done, total ]
       properties:
         stage:
           $ref: "#/components/schemas/RunStage"
@@ -3541,7 +3820,7 @@ components:
       additionalProperties: false
     RunEventTokenUsage:
       type: object
-      required: [role, model, prompt_tokens, completion_tokens, credits, credits_spent_total]
+      required: [ role, model, prompt_tokens, completion_tokens, credits, credits_spent_total ]
       properties:
         role:
           type: string
@@ -3568,21 +3847,21 @@ components:
       additionalProperties: false
     RunEventFinding:
       type: object
-      required: [finding]
+      required: [ finding ]
       properties:
         finding:
           $ref: "#/components/schemas/Finding"
       additionalProperties: false
     RunEventMatch:
       type: object
-      required: [match]
+      required: [ match ]
       properties:
         match:
           $ref: "#/components/schemas/Match"
       additionalProperties: false
     RunEventNeedsApproval:
       type: object
-      required: [quote, reasons, credits_spent_so_far]
+      required: [ quote, reasons, credits_spent_so_far ]
       properties:
         quote:
           $ref: "#/components/schemas/Quote"
@@ -3590,7 +3869,7 @@ components:
           type: array
           items:
             type: string
-            enum: [new_tools, over_default_budget, media_heavy, web_search, escalation_model]
+            enum: [ new_tools, over_default_budget, media_heavy, web_search, escalation_model ]
         message:
           type: string
         credits_spent_so_far:
@@ -3599,7 +3878,7 @@ components:
       additionalProperties: false
     RunEventCompleted:
       type: object
-      required: [summary, credits_spent, credits_refunded]
+      required: [ summary, credits_spent, credits_refunded ]
       properties:
         summary:
           $ref: "#/components/schemas/RunSummary"
@@ -3612,7 +3891,7 @@ components:
       additionalProperties: false
     RunEventFailed:
       type: object
-      required: [error, credits_spent]
+      required: [ error, credits_spent ]
       properties:
         error:
           $ref: "#/components/schemas/RunError"
@@ -3646,7 +3925,7 @@ components:
       additionalProperties: false
     Workflow:
       type: object
-      required: [id, org_id, config, runs_count, created_at, updated_at]
+      required: [ id, org_id, config, runs_count, created_at, updated_at ]
       properties:
         id:
           $ref: "#/components/schemas/WorkflowId"
@@ -3664,14 +3943,14 @@ components:
       additionalProperties: false
     WorkflowList:
       type: object
-      required: [items, next_cursor]
+      required: [ items, next_cursor ]
       properties:
         items:
           type: array
           items:
             $ref: "#/components/schemas/Workflow"
         next_cursor:
-          type: ["string", "null"]
+          type: [ "string", "null" ]
       additionalProperties: false
 
     # ----------------------------------------------------------------- rules
@@ -3679,18 +3958,18 @@ components:
       $ref: "./schemas/rule.json"
     RuleList:
       type: object
-      required: [items, next_cursor]
+      required: [ items, next_cursor ]
       properties:
         items:
           type: array
           items:
             $ref: "#/components/schemas/Rule"
         next_cursor:
-          type: ["string", "null"]
+          type: [ "string", "null" ]
       additionalProperties: false
     RuleCreateRequest:
       type: object
-      required: [title, body]
+      required: [ title, body ]
       properties:
         title:
           type: string
@@ -3711,7 +3990,7 @@ components:
       additionalProperties: false
     RuleVersionRequest:
       type: object
-      required: [body]
+      required: [ body ]
       properties:
         title:
           type: string
@@ -3726,17 +4005,65 @@ components:
       additionalProperties: false
     RulePromoteRequest:
       type: object
-      required: [to]
+      required: [ to ]
       properties:
         to:
           type: string
-          enum: [verified, trusted]
+          enum: [ verified, trusted ]
       additionalProperties: false
 
     # --------------------------------------------------------------- billing
+    BillingStatus:
+      type: object
+      required:
+        [
+          enabled,
+          test_mode,
+          can_manage,
+          has_customer,
+          blocked,
+          minimum_topup_credits,
+          maximum_topup_credits,
+          token_brl,
+          subscription
+        ]
+      properties:
+        enabled:
+          type: boolean
+        test_mode:
+          type: boolean
+        can_manage:
+          type: boolean
+        has_customer:
+          type: boolean
+        blocked:
+          type: boolean
+        minimum_topup_credits:
+          type: integer
+        maximum_topup_credits:
+          type: integer
+        token_brl:
+          type: number
+        subscription:
+          type: [ object, "null" ]
+          required: [ plan, status, current_period_end, cancel_at ]
+          properties:
+            plan:
+              $ref: "#/components/schemas/PlanCode"
+            status:
+              type: string
+              enum: [ active, trialing, past_due, canceled, unpaid, incomplete, incomplete_expired, paused ]
+            current_period_end:
+              type: [ string, "null" ]
+              format: date-time
+            cancel_at:
+              type: [ string, "null" ]
+              format: date-time
+          additionalProperties: false
+      additionalProperties: false
     CheckoutRequest:
       type: object
-      required: [plan]
+      required: [ plan ]
       properties:
         plan:
           $ref: "#/components/schemas/PlanCode"
@@ -3754,7 +4081,7 @@ components:
       additionalProperties: false
     CheckoutResponse:
       type: object
-      required: [checkout_url, session_id, expires_at]
+      required: [ checkout_url, session_id, expires_at ]
       properties:
         checkout_url:
           type: string
@@ -3766,7 +4093,7 @@ components:
       additionalProperties: false
     PortalResponse:
       type: object
-      required: [portal_url]
+      required: [ portal_url ]
       properties:
         portal_url:
           type: string
@@ -3774,7 +4101,7 @@ components:
       additionalProperties: false
     TopupRequest:
       type: object
-      required: [credits]
+      required: [ credits ]
       properties:
         credits:
           type: integer
@@ -3789,8 +4116,13 @@ components:
       additionalProperties: false
     CreditSummary:
       type: object
-      required: [balance, reserved, available, plan_credits, topup_credits]
+      required: [ balance, reserved, available, plan_credits, topup_credits ]
       properties:
+        token_exempt:
+          type: boolean
+          readOnly: true
+          default: false
+          description: Conta de teste autorizada pelo operador; execuções não debitam tokens.
         balance:
           type: integer
           minimum: 0
@@ -3817,13 +4149,13 @@ components:
       additionalProperties: false
     LedgerEntry:
       type: object
-      required: [id, kind, credits, balance_after, description, created_at]
+      required: [ id, kind, credits, balance_after, description, created_at ]
       properties:
         id:
           $ref: "#/components/schemas/LedgerEntryId"
         kind:
           type: string
-          enum: [plan_grant, topup, reserve, spend, release, refund, expire, adjustment, bounty]
+          enum: [ plan_grant, topup, reserve, spend, release, refund, expire, adjustment, bounty ]
         credits:
           type: integer
           description: Positivo entra, negativo sai.
@@ -3842,19 +4174,20 @@ components:
       additionalProperties: false
     LedgerList:
       type: object
-      required: [items, next_cursor]
+      required: [ items, next_cursor ]
       properties:
         items:
           type: array
           items:
             $ref: "#/components/schemas/LedgerEntry"
         next_cursor:
-          type: ["string", "null"]
+          type: [ "string", "null" ]
       additionalProperties: false
     StripeEvent:
       type: object
-      description: Evento do Stripe (`checkout.session.completed`, `invoice.paid`, `customer.subscription.updated`, ...). Processado a partir do corpo bruto.
-      required: [id, type, data]
+      description: Evento do Stripe (`checkout.session.completed`, `invoice.paid`, `customer.subscription.updated`,
+        ...). Processado a partir do corpo bruto.
+      required: [ id, type, data ]
       properties:
         id:
           type: string
@@ -3870,26 +4203,32 @@ components:
       $ref: "./schemas/ui-manifest.json"
     CustomizationRequest:
       type: object
-      required: [request]
+      required:
+        - request
+      additionalProperties: false
       properties:
         request:
           type: string
-          minLength: 1
+          minLength: 3
           maxLength: 2000
           x-limit: text.ui_customization_request
-          description: "Pedido em linguagem natural (ex.: `mostre só achados acima de R$ 500 agrupados por fornecedor`)."
-        workflow_id:
-          $ref: "#/components/schemas/WorkflowId"
-        base_id:
-          $ref: "#/components/schemas/CustomizationId"
-          description: "Personalização sobre a qual aplicar o pedido (padrão: a ativa)."
-      additionalProperties: false
     CustomizationStatus:
       type: string
-      enum: [queued, planning, proposed, approved, applied, rejected, rolled_back, refused]
+      enum:
+        - pending
+        - planned
+        - applied
+        - rejected
+        - failed
     Customization:
       type: object
-      required: [id, status, request, credits_spent, created_at, updated_at]
+      required:
+        - id
+        - status
+        - request
+        - base_version
+        - credits
+        - created_at
       properties:
         id:
           $ref: "#/components/schemas/CustomizationId"
@@ -3897,34 +4236,18 @@ components:
           $ref: "#/components/schemas/CustomizationStatus"
         request:
           type: string
-        workflow_id:
-          oneOf:
-            - $ref: "#/components/schemas/WorkflowId"
-            - type: "null"
-        manifest:
-          $ref: "#/components/schemas/UiManifest"
-        previous_id:
-          oneOf:
-            - $ref: "#/components/schemas/CustomizationId"
-            - type: "null"
-        refused_reason:
-          type: object
-          required: [reason, message]
-          properties:
-            reason:
-              type: string
-              enum: [unsafe, out_of_scope, component_not_allowed, contrast_failed, budget]
-            message:
-              type: string
-          additionalProperties: false
-        credits_spent:
+        base_version:
           type: integer
-          minimum: 0
+        manifest:
+          $ref: "#/components/schemas/WorkspaceManifest"
+        reason:
+          type: string
+        credits:
+          type: integer
+          const: 0
         created_at:
-          $ref: "#/components/schemas/Timestamp"
-        updated_at:
-          $ref: "#/components/schemas/Timestamp"
-      additionalProperties: false
+          type: string
+          format: date-time
 
     # -------------------------------------------------------------- api keys
     ApiKeyScope:
@@ -3941,7 +4264,7 @@ components:
         - webhooks:write
     ApiKey:
       type: object
-      required: [id, label, prefix, scopes, lane, created_at]
+      required: [ id, label, prefix, scopes, lane, created_at ]
       properties:
         id:
           $ref: "#/components/schemas/ApiKeyId"
@@ -3972,7 +4295,7 @@ components:
       additionalProperties: false
     ApiKeyCreateRequest:
       type: object
-      required: [label, scopes]
+      required: [ label, scopes ]
       properties:
         label:
           type: string
@@ -3992,32 +4315,59 @@ components:
           description: Padrão `api_batch`; as demais dependem do plano.
       additionalProperties: false
     ApiKeyCreated:
-      allOf:
-        - $ref: "#/components/schemas/ApiKey"
-        - type: object
-          required: [key]
-          properties:
-            key:
-              type: string
-              pattern: "^dm_live_[0-9A-HJKMNP-TV-Z]{26}_[A-Za-z0-9_-]{32,64}$"
-              description: Segredo completo, mostrado uma única vez.
+      type: object
+      required: [ id, label, prefix, scopes, lane, created_at, key ]
+      properties:
+        id:
+          $ref: "#/components/schemas/ApiKey/properties/id"
+        label:
+          $ref: "#/components/schemas/ApiKey/properties/label"
+        prefix:
+          $ref: "#/components/schemas/ApiKey/properties/prefix"
+        scopes:
+          $ref: "#/components/schemas/ApiKey/properties/scopes"
+        lane:
+          $ref: "#/components/schemas/ApiKey/properties/lane"
+        created_at:
+          $ref: "#/components/schemas/ApiKey/properties/created_at"
+        last_used_at:
+          $ref: "#/components/schemas/ApiKey/properties/last_used_at"
+        key:
+          type: string
+          pattern: "^dm_live_[0-9A-HJKMNP-TV-Z]{26}_[A-Za-z0-9_-]{32,64}$"
+          description: Segredo completo, mostrado uma única vez.
+      additionalProperties: false
     ApiKeyList:
       type: object
-      required: [items]
+      required: [ items, access ]
       properties:
         items:
           type: array
           items:
             $ref: "#/components/schemas/ApiKey"
+        access:
+          type: object
+          required: [ can_create, eligible, limit, lanes, scopes ]
+          properties:
+            can_create: { type: boolean }
+            eligible: { type: boolean }
+            limit: { type: integer }
+            lanes:
+              type: array
+              items: { $ref: "#/components/schemas/Lane" }
+            scopes:
+              type: array
+              items: { $ref: "#/components/schemas/ApiKeyScope" }
+          additionalProperties: false
       additionalProperties: false
 
     # -------------------------------------------------------------- webhooks
     WebhookEventType:
       type: string
-      enum: [run.completed, run.failed, run.needs_approval, credits.low]
+      enum: [ run.completed, run.failed, run.needs_approval, credits.low ]
     WebhookEndpoint:
       type: object
-      required: [id, url, events, status, created_at]
+      required: [ id, url, events, status, created_at ]
       properties:
         id:
           $ref: "#/components/schemas/WebhookEndpointId"
@@ -4033,14 +4383,14 @@ components:
             $ref: "#/components/schemas/WebhookEventType"
         status:
           type: string
-          enum: [active, disabled]
+          enum: [ active, disabled ]
           description: Desativado automaticamente após 7 dias de falhas consecutivas.
         created_at:
           $ref: "#/components/schemas/Timestamp"
       additionalProperties: false
     WebhookEndpointCreateRequest:
       type: object
-      required: [url, events]
+      required: [ url, events ]
       properties:
         url:
           type: string
@@ -4057,14 +4407,14 @@ components:
       allOf:
         - $ref: "#/components/schemas/WebhookEndpoint"
         - type: object
-          required: [secret]
+          required: [ secret ]
           properties:
             secret:
               type: string
               description: Segredo de assinatura (`whsec_dm_...`), mostrado uma única vez.
     WebhookEndpointList:
       type: object
-      required: [items]
+      required: [ items ]
       properties:
         items:
           type: array
@@ -4074,7 +4424,7 @@ components:
     WebhookEnvelope:
       type: object
       description: Envelope comum a todo evento de saída.
-      required: [id, type, created_at, org_id]
+      required: [ id, type, created_at, org_id ]
       properties:
         id:
           $ref: "#/components/schemas/EventId"
@@ -4088,13 +4438,13 @@ components:
       allOf:
         - $ref: "#/components/schemas/WebhookEnvelope"
         - type: object
-          required: [data]
+          required: [ data ]
           properties:
             type:
               const: run.completed
             data:
               type: object
-              required: [run]
+              required: [ run ]
               properties:
                 run:
                   $ref: "#/components/schemas/Run"
@@ -4103,13 +4453,13 @@ components:
       allOf:
         - $ref: "#/components/schemas/WebhookEnvelope"
         - type: object
-          required: [data]
+          required: [ data ]
           properties:
             type:
               const: run.failed
             data:
               type: object
-              required: [run, error]
+              required: [ run, error ]
               properties:
                 run:
                   $ref: "#/components/schemas/Run"
@@ -4120,13 +4470,13 @@ components:
       allOf:
         - $ref: "#/components/schemas/WebhookEnvelope"
         - type: object
-          required: [data]
+          required: [ data ]
           properties:
             type:
               const: run.needs_approval
             data:
               type: object
-              required: [run, quote]
+              required: [ run, quote ]
               properties:
                 run:
                   $ref: "#/components/schemas/Run"
@@ -4137,13 +4487,13 @@ components:
       allOf:
         - $ref: "#/components/schemas/WebhookEnvelope"
         - type: object
-          required: [data]
+          required: [ data ]
           properties:
             type:
               const: credits.low
             data:
               type: object
-              required: [credits, threshold]
+              required: [ credits, threshold ]
               properties:
                 credits:
                   $ref: "#/components/schemas/CreditSummary"
@@ -4155,7 +4505,7 @@ components:
     # ---------------------------------------------------------------- public
     Plan:
       type: object
-      required: [code, name, price, interval, credits, entitlements, available]
+      required: [ code, name, price, interval, credits, entitlements, available ]
       properties:
         code:
           $ref: "#/components/schemas/PlanCode"
@@ -4165,7 +4515,7 @@ components:
           $ref: "#/components/schemas/Money"
         interval:
           type: string
-          enum: [month]
+          enum: [ month ]
         credits:
           type: integer
           minimum: 0
@@ -4180,7 +4530,7 @@ components:
       additionalProperties: false
     PlansResponse:
       type: object
-      required: [country, plans]
+      required: [ country, plans ]
       properties:
         country:
           type: string
@@ -4192,7 +4542,7 @@ components:
       additionalProperties: false
     Health:
       type: object
-      required: [status]
+      required: [ status ]
       properties:
         status:
           type: string
@@ -4200,29 +4550,29 @@ components:
       additionalProperties: false
     Readiness:
       type: object
-      required: [status, checks]
+      required: [ status, checks ]
       properties:
         status:
           type: string
-          enum: [ok, degraded, unavailable]
+          enum: [ ok, degraded, unavailable ]
         checks:
           type: object
-          required: [database, storage, harness]
+          required: [ database, storage, harness ]
           properties:
             database:
               type: string
-              enum: [ok, failed]
+              enum: [ ok, failed ]
             storage:
               type: string
-              enum: [ok, failed]
+              enum: [ ok, failed ]
             harness:
               type: string
-              enum: [ok, degraded, failed]
+              enum: [ ok, degraded, failed ]
           additionalProperties: false
       additionalProperties: false
     Version:
       type: object
-      required: [version, commit, built_at]
+      required: [ version, commit, built_at ]
       properties:
         version:
           type: string
@@ -4232,3 +4582,95 @@ components:
         built_at:
           $ref: "#/components/schemas/Timestamp"
       additionalProperties: false
+    WorkspaceManifest:
+      type: object
+      additionalProperties: false
+      required:
+        - version
+        - mode
+        - density
+        - findings_label
+        - group_by
+        - sort_by
+        - export_format
+      properties:
+        version:
+          type: integer
+          const: 1
+        mode:
+          type: string
+          enum:
+            - system
+            - light
+            - dark
+        density:
+          type: string
+          enum:
+            - comfortable
+            - compact
+        findings_label:
+          type: string
+          description: Texto puro, de 1 a 40 caracteres; sem HTML, URLs ou controles.
+        group_by:
+          type: string
+          enum:
+            - none
+            - severity
+            - kind
+        sort_by:
+          type: string
+          enum:
+            - severity
+            - amount_at_risk
+            - confidence
+        export_format:
+          type: string
+          enum:
+            - xlsx
+            - csv
+            - pdf
+    Workspace:
+      type: object
+      required:
+        - version
+        - manifest
+        - access
+        - history
+        - endpoints
+      properties:
+        version:
+          type: integer
+        manifest:
+          $ref: "#/components/schemas/WorkspaceManifest"
+        access:
+          type: object
+          properties:
+            eligible:
+              type: boolean
+            can_request:
+              type: boolean
+            limit:
+              type: integer
+            used:
+              type: integer
+        history:
+          type: array
+          items:
+            type: object
+            properties:
+              version:
+                type: integer
+              created_at:
+                type: string
+                format: date-time
+        endpoints:
+          type: array
+          items:
+            type: object
+            properties:
+              operation:
+                type: string
+              method:
+                type: string
+              path:
+                type: string

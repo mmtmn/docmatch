@@ -102,6 +102,31 @@ type AuditLogDefault struct {
 	CreatedAt  time.Time
 }
 
+type BillingAccount struct {
+	OrgID            uuid.UUID
+	Livemode         bool
+	StripeCustomerID string
+	Blocked          bool
+	CreatedAt        time.Time
+}
+
+type BillingOrder struct {
+	ID              uuid.UUID
+	OrgID           uuid.UUID
+	Livemode        bool
+	IdempotencyKey  string
+	Kind            string
+	PlanCode        string
+	Credits         int64
+	AmountCents     int64
+	PriceID         string
+	StripeSessionID *string
+	CheckoutUrl     *string
+	ExpiresAt       *time.Time
+	PaidAt          *time.Time
+	CreatedAt       time.Time
+}
+
 type BlogPost struct {
 	ID          uuid.UUID
 	TopicID     *uuid.UUID
@@ -173,11 +198,13 @@ type BurstPool struct {
 }
 
 type CreditAccount struct {
-	OrgID     uuid.UUID
-	Balance   int64
-	Held      int64
-	LedgerSeq int64
-	UpdatedAt time.Time
+	OrgID          uuid.UUID
+	Balance        int64
+	Held           int64
+	LedgerSeq      int64
+	UpdatedAt      time.Time
+	BillingBlocked bool
+	TokenExempt    bool
 }
 
 type CreditGrant struct {
@@ -204,6 +231,7 @@ type CreditHold struct {
 	Reference     *string
 	CreatedAt     time.Time
 	ClosedAt      *time.Time
+	Sponsored     bool
 }
 
 type CreditLedger struct {
@@ -622,6 +650,7 @@ type Subscription struct {
 	CanceledAt           *time.Time
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
+	Livemode             bool
 }
 
 type TenantKey struct {

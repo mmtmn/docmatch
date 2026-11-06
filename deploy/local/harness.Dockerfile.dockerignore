@@ -2,5 +2,6 @@
 *
 !packages/contracts/harness.proto
 !packages/contracts/gen/limits.rs
+!config/models.yaml
 !services/harness
 services/harness/target

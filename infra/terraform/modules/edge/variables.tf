@@ -124,7 +124,7 @@ variable "dmarc_rua_email" {
 }
 
 variable "extra_records" {
-  description = "Additional DNS records (DKIM, verifications, delegations) as {name, type, ttl, records}. name is relative to the zone; empty name is the apex."
+  description = "Additional DNS records (DKIM, verifications, delegations) as {name, type, ttl, records}. name is relative to the zone; empty name is the apex. Apex TXT values share the SPF record set and its 3600-second TTL."
   type = list(object({
     name    = string
     type    = string

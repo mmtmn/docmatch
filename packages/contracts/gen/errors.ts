@@ -27,6 +27,7 @@ export interface ErrorSpec {
 
 /** Error catalog (errors.yaml, version 1), keyed by stable snake_case code. */
 export const ERRORS = {
+  disposable_email: { status: 422, category: 'auth', message: 'Use um e-mail permanente. Endereços temporários não são aceitos para criar uma conta.', retryable: false },
   unauthenticated: { status: 401, category: 'auth', message: 'Faça login para continuar.', retryable: false },
   session_expired: { status: 401, category: 'auth', message: 'Sua sessão expirou. Entre de novo.', retryable: false },
   invalid_api_key: { status: 401, category: 'auth', message: 'Chave de API inválida ou revogada.', retryable: false },

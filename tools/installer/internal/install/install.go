@@ -70,22 +70,23 @@ const (
 
 // Options are the choices of an installation.
 type Options struct {
-	Mode       string
-	Dir        string
-	Project    string
-	Ports      ports.Set
-	LLMMode    string
-	LocalLLM   string
-	OpenRouter string
-	Registry   string // "" or LocalRegistry: never pull
-	Tag        string
-	SourceDir  string // repository root ("" when none was found)
-	CloneDir   string // Desenvolver without a checkout: where to clone it
-	RepoURL    string // where to clone the code from when the registry lacks the images
-	RepoRef    string // branch or tag to clone ("" = the default branch)
-	Build      string
-	Demo       bool
-	Info       platform.Info
+	Mode        string
+	Dir         string
+	Project     string
+	Ports       ports.Set
+	LLMMode     string
+	LocalLLM    string
+	ReviewModel string
+	OpenRouter  string
+	Registry    string // "" or LocalRegistry: never pull
+	Tag         string
+	SourceDir   string // repository root ("" when none was found)
+	CloneDir    string // Desenvolver without a checkout: where to clone it
+	RepoURL     string // where to clone the code from when the registry lacks the images
+	RepoRef     string // branch or tag to clone ("" = the default branch)
+	Build       string
+	Demo        bool
+	Info        platform.Info
 }
 
 // Resolved adjusts the options to their mode: a Desenvolver installation without a checkout
@@ -250,6 +251,7 @@ func New(opts Options, st *state.State) *Installer {
 	prev := st.SourceDir
 	st.Mode, st.Project, st.Ports = opts.Mode, opts.Project, opts.Ports.Clone()
 	st.LLMMode, st.LocalLLM = opts.LLMMode, opts.LocalLLM
+	st.ReviewModel = opts.ReviewModel
 	st.Registry, st.Tag, st.SourceDir = opts.Registry, opts.Tag, opts.SourceDir
 	return &Installer{Opts: opts, State: st, prevSource: prev}
 }
@@ -320,7 +322,7 @@ func (in *Installer) prepare(ctx context.Context, r *flow.Reporter) (flow.Result
 	generated, err := envfile.Write(in.EnvFile(), envfile.Settings{
 		Ports: in.Opts.Ports, Registry: in.registryForCompose(), Tag: in.Opts.Tag,
 		SourceDir: in.Opts.SourceDir, Revision: in.Revision,
-		LLMMode: in.Opts.LLMMode, LocalLLM: in.Opts.LocalLLM, OpenRouter: in.Opts.OpenRouter,
+		LLMMode: in.Opts.LLMMode, LocalLLM: in.Opts.LocalLLM, OpenRouter: in.Opts.OpenRouter, ReviewModel: in.Opts.ReviewModel,
 	})
 	if err != nil {
 		return flow.Result{}, err
@@ -491,7 +493,7 @@ func (in *Installer) clone(ctx context.Context, r *flow.Reporter) error {
 	_, err := envfile.Write(in.EnvFile(), envfile.Settings{
 		Ports: in.Opts.Ports, Registry: in.registryForCompose(), Tag: in.Opts.Tag,
 		SourceDir: dest, Revision: in.Revision,
-		LLMMode: in.Opts.LLMMode, LocalLLM: in.Opts.LocalLLM, OpenRouter: in.Opts.OpenRouter,
+		LLMMode: in.Opts.LLMMode, LocalLLM: in.Opts.LocalLLM, OpenRouter: in.Opts.OpenRouter, ReviewModel: in.Opts.ReviewModel,
 	})
 	return err
 }
@@ -639,7 +641,43 @@ func DevEnv(environ []string, goToolchain string) []string {
 // Desenvolver mode runs with (the installation, docmatch up, down and uninstall).
 func (in *Installer) DevEnviron(ctx context.Context) []string {
 	local, _ := toolchain.System{}.Output(ctx, "", "go", "env", "GOVERSION")
-	return DevEnv(os.Environ(), toolchain.GoToolchainFor(firstLine(local), toolchain.ReadRequirements(in.Opts.SourceDir)))
+	env := DevEnv(os.Environ(), toolchain.GoToolchainFor(firstLine(local), toolchain.ReadRequirements(in.Opts.SourceDir)))
+	return ModelEnv(env, in.Opts)
+}
+
+// ModelEnv carries the wizard's provider choices into make local. Keys stay in the
+// child environment, never in command arguments or state.json.
+func ModelEnv(environ []string, opts Options) []string {
+	values := map[string]string{"DM_LOCAL_LLM_MODE": opts.LLMMode}
+	if opts.LLMMode == envfile.LLMLocal {
+		values["DM_LOCAL_LLM_BASE_URL"] = opts.LocalLLM
+		values["DM_MODEL_EXTRACTION_LOCAL"] = opts.ReviewModel
+		values["DM_LOCAL_LLM_REASONING_EFFORT"] = "none"
+		for _, item := range environ {
+			if value, ok := strings.CutPrefix(item, "DM_LOCAL_LLM_REASONING_EFFORT="); ok {
+				values["DM_LOCAL_LLM_REASONING_EFFORT"] = value
+			}
+		}
+	}
+	if opts.LLMMode == envfile.LLMOpenRouter {
+		if opts.OpenRouter != "" {
+			values["OPENROUTER_API_KEY"] = opts.OpenRouter
+		}
+		if opts.ReviewModel != "" {
+			values["DM_MODEL_EXTRACTION_PRIMARY"] = opts.ReviewModel
+		}
+	}
+	out := make([]string, 0, len(environ)+len(values))
+	for _, item := range environ {
+		key, _, _ := strings.Cut(item, "=")
+		if _, replaced := values[key]; !replaced {
+			out = append(out, item)
+		}
+	}
+	for key, value := range values {
+		out = append(out, key+"="+value)
+	}
+	return out
 }
 
 func (in *Installer) devEnv(ctx context.Context) []string { return in.DevEnviron(ctx) }

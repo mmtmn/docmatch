@@ -5,19 +5,21 @@ function parseBrl(text: string): number {
   return Number.parseFloat(text.replace(/[^\d,-]/g, '').replace(',', '.'));
 }
 
-test('divergências vêm primeiro, ordenadas por valor em risco', async ({ page }) => {
+test('dados completos ficam recolhidos e os achados são ordenados por risco', async ({ page }) => {
   await page.goto('/resultados');
+  await expect(page.getByTestId('finding-row')).toHaveCount(0);
+  await page.getByText(m.results.all_heading, { exact: true }).click();
   const rows = page.getByTestId('finding-row');
   await expect(rows).toHaveCount(5);
   const amounts = await rows.locator('td:nth-child(2)').allTextContents();
   const values = amounts.map(parseBrl);
   expect(values).toEqual([...values].sort((a, b) => b - a));
-  await expect(page.getByRole('button', { name: m.results.clean_show })).toBeVisible();
-  await expect(page.locator('#limpas-lista')).toHaveCount(0);
+  await expect(page.getByText(m.results.clean_summary.replace('{count}', '18'))).toBeVisible();
 });
 
 test('a gaveta mostra a evidência lado a lado e registra a decisão', async ({ page }) => {
   await page.goto('/resultados');
+  await page.getByText(m.results.all_heading, { exact: true }).click();
   const opener = page.getByTestId('finding-row').first().getByRole('button');
   await opener.click();
   const dialog = page.getByRole('dialog');
@@ -35,6 +37,7 @@ test('a gaveta mostra a evidência lado a lado e registra a decisão', async ({ 
 
 test('evidência em áudio abre um player posicionado no trecho citado', async ({ page }) => {
   await page.goto('/resultados');
+  await page.getByText(m.results.all_heading, { exact: true }).click();
   const row = page.getByTestId('finding-row').filter({ hasText: 'Acordo verbal' });
   await row.getByRole('button').click();
   const media = page.getByTestId('evidence-media');
@@ -49,8 +52,9 @@ test('evidência em áudio abre um player posicionado no trecho citado', async (
 
 test('exportar CSV baixa um arquivo', async ({ page }) => {
   await page.goto('/resultados');
+  await page.getByText(m.results.other_formats, { exact: true }).click();
   const downloadPromise = page.waitForEvent('download');
-  await page.getByRole('button', { name: m.results.export_csv }).click();
+  await page.getByRole('button', { name: m.results.download_findings_csv }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe('docmatch-demo.csv');
 });

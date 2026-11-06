@@ -91,6 +91,7 @@ const (
 
 // Errors returned by the service.
 var (
+	ErrDisposableEmail     = errors.New("auth: disposable email")
 	ErrProviderUnavailable = errors.New("auth: provider not configured")
 	ErrEmailUnavailable    = errors.New("auth: e-mail sender not configured")
 	ErrStateMismatch       = errors.New("auth: oauth state mismatch")

@@ -4,12 +4,18 @@ import SwiftUI
 /// One run: followed while this screen is open, an approval when it parks, the findings by amount
 /// at risk with their evidence and decisions, and the report to share.
 struct RunView: View {
+    private let dm: Docmatch
+    @State private var reviewOpen = false
+    @State private var changesOpen = false
+    @State private var allOpen = false
     @State private var model: RunModel
     @State private var open: String?
     @State private var share: ShareItem?
     @Environment(\.texts) private var texts
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(dm: Docmatch, runId: String) {
+        self.dm = dm
         _model = State(initialValue: RunModel(dm: dm, runId: runId))
     }
 
@@ -29,8 +35,13 @@ struct RunView: View {
             LoadingView(label: texts.t("results.live_loading"))
         case .running(let step):
             VStack(spacing: DmSize.space2) {
-                ProgressView()
-                Text(step.map { Labels.step(texts, $0) } ?? texts.t("mobile.run_waiting"))
+                VStack(alignment: .leading, spacing: DmSize.space2) {
+                    Text("docmatch").font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary)
+                    Text(step.map { Labels.step(texts, $0) } ?? texts.t("mobile.run_waiting"))
+                        .font(.system(.body, design: .monospaced))
+                        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: step.map { Labels.step(texts, $0) })
+                    ProgressView()
+                }.padding(DmSize.space3).background(.regularMaterial, in: RoundedRectangle(cornerRadius: DmSize.radiusMd))
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .accessibilityElement(children: .combine)
@@ -66,38 +77,76 @@ struct RunView: View {
 
     private func results(_ run: Run, _ findings: [Finding]) -> some View {
         let names = Dictionary(run.sources.map { ($0.id, $0.fileName) }, uniquingKeysWith: { a, _ in a })
+        let document = run.summary?.reconciliation
+        let pending = findings.filter { $0.status == "open" && $0.severity != "info" }
+        let critical = findings.filter { $0.severity == "critical" }
         return List {
             Section {
-                Text(texts.t("mobile.run_findings", ["count": findings.count]))
-                Text(texts.t("mobile.run_at_risk", ["amount": Format.money(findings.reduce(0) { $0 + $1.amountAtRisk })]))
-                    .bold()
-                if let warnings = run.summary?.sourceWarnings, !warnings.isEmpty {
-                    Text(texts.t("results.source_warnings_title"))
-                        .bold()
-                        .foregroundStyle(Color(DmColors.statusDanger))
-                    ForEach(warnings, id: \.self) { warning in
-                        Text("• " + warning).font(.caption)
+                Text(texts.t(document == nil ? "results.report_ready" : "results.document_ready")).font(.title2.bold())
+                Text(texts.t(document == nil ? "results.report_subtitle" : "results.output_description"))
+                if let document {
+                    Button(texts.t("results.download_corrected")) { export("xlsx") }.buttonStyle(.borderedProminent)
+                    Text(texts.t("results.doc_open") + ": " + Format.money(document.totals.openBalance)).bold()
+                } else {
+                    Text(texts.t("results.legacy_output"))
+                    NavigationLink(texts.t("results.generate_corrected")) {
+                        ReprocessView(dm: dm)
                     }
                 }
-                HStack {
-                    Button(texts.t("results.export_xlsx")) { export("xlsx") }
-                    Button(texts.t("results.export_csv")) { export("csv") }
+                Button(texts.t("results.download_report")) { export("pdf") }.buttonStyle(.bordered)
+                DisclosureGroup(texts.t("results.other_formats")) {
+                    Button(texts.t(document == nil ? "results.download_findings_csv" : "results.download_data_csv")) { export("csv") }
+                    if document == nil { Button(texts.t("results.download_findings_xlsx")) { export("xlsx") } }
                 }
-                .buttonStyle(.bordered)
-                if open == nil, let notice = model.notice {
-                    Text(notice)
+                if let warnings = run.summary?.sourceWarnings, !warnings.isEmpty {
+                    Text(texts.t("results.source_warnings_title")).bold()
+                    ForEach(warnings, id: \.self) { Text("• " + $0).font(.caption) }
+                }
+                if open == nil, let notice = model.notice { Text(notice) }
+            }
+            if !critical.isEmpty {
+                Section(texts.t("results.critical_heading")) {
+                    Text(texts.t("results.critical_scope"))
+                    findingRows(critical)
                 }
             }
-            if findings.isEmpty {
-                Text(texts.t("results.exceptions_empty"))
-            }
-            ForEach(findings) { finding in
-                Button {
-                    open = finding.id
-                } label: {
-                    FindingRow(finding: finding)
+            Section {
+                DisclosureGroup(texts.t("results.review_heading") + " · " + String(pending.count), isExpanded: $reviewOpen) {
+                    if reviewOpen {
+                        Text(texts.t("results.review_scope"))
+                        if pending.isEmpty { Text(texts.t("results.review_empty")) }
+                        findingRows(pending)
+                        if let document { ForEach(document.receivables.filter { $0.proposedAmount > 0 || $0.withholdingPending > 0 }, id: \.id) { DocumentRow(row: $0) } }
+                    }
                 }
-                .accessibilityIdentifier("finding-row")
+                if let document {
+                    DisclosureGroup(texts.t("results.changes_heading"), isExpanded: $changesOpen) {
+                        if changesOpen {
+                            Text(texts.t("results.doc_scope"))
+                            Text(texts.t("results.doc_principal") + ": " + Format.money(document.totals.principalConfirmed))
+                            Text(texts.t("results.doc_duplicate") + ": " + Format.money(document.totals.duplicateExcluded))
+                            ForEach(document.receivables.filter { $0.appliedPrincipal > 0 || $0.status == "duplicate" }, id: \.id) { DocumentRow(row: $0) }
+                        }
+                    }
+                }
+                DisclosureGroup(texts.t("results.all_heading"), isExpanded: $allOpen) {
+                    if allOpen {
+                        Text(texts.t("results.findings_scope"))
+                        if let document {
+                            Text(texts.t("results.doc_ledger")).bold()
+                            ForEach(document.receivables, id: \.id) { DocumentRow(row: $0) }
+                            Text(texts.t("results.doc_bank")).bold()
+                            ForEach(Array(document.bankEntries.enumerated()), id: \.offset) { _, entry in
+                                VStack(alignment: .leading) {
+                                    Text(entry.description + " · " + Format.money(entry.amount))
+                                    Text(entry.sourceName + " · " + String(entry.row)).font(.caption)
+                                    if entry.proposed { Text(texts.t("results.doc_review")) }
+                                }
+                            }
+                        }
+                        findingRows(findings)
+                    }
+                }
             }
         }
         .sheet(
@@ -105,7 +154,13 @@ struct RunView: View {
                 get: { findings.first { $0.id == open } },
                 set: { open = $0?.id })
         ) { finding in
-            FindingDetailView(finding: finding, names: names, model: model)
+            FindingDetailView(finding: finding, documentRows: document?.receivables.filter { row in finding.evidence.contains { $0.sourceId == row.sourceId && $0.locator?.row == row.sourceRow } } ?? [], names: names, model: model)
+        }
+    }
+
+    private func findingRows(_ findings: [Finding]) -> some View {
+        ForEach(findings) { finding in
+            Button { open = finding.id } label: { FindingRow(finding: finding) }.accessibilityIdentifier("finding-row")
         }
     }
 
@@ -139,6 +194,7 @@ private struct FindingRow: View {
 
 private struct FindingDetailView: View {
     let finding: Finding
+    let documentRows: [ReconciledReceivable]
     let names: [String: String]
     let model: RunModel
     @State private var editing = false
@@ -169,6 +225,10 @@ private struct FindingDetailView: View {
                         }
                         Divider()
                     }
+                    Text(texts.t("results.review_scope")).foregroundStyle(.secondary)
+                    Text(texts.t("results.file_effect")).bold()
+                    if documentRows.isEmpty { Text(texts.t("results.file_effect_unknown")) }
+                    else { ForEach(documentRows, id: \.id) { DocumentRow(row: $0) } }
                     decisions
                     if let notice = model.notice {
                         Text(notice)
@@ -211,7 +271,7 @@ private struct FindingDetailView: View {
             }
         } else {
             // Every decision is recorded on the API, so changing it changes it everywhere.
-            HStack {
+            VStack(alignment: .leading) {
                 Button(texts.t("results.accept")) { Task { await model.decide(finding, Decision.confirmed) } }
                     .buttonStyle(.borderedProminent)
                     .disabled(finding.status == Decision.confirmed)
@@ -247,4 +307,30 @@ private struct EvidenceRow: View {
 private struct EvidenceGroup: Identifiable {
     let id: String
     let items: [Evidence]
+}
+
+private struct DocumentRow: View {
+    let row: ReconciledReceivable
+    @Environment(\.texts) private var texts
+    var body: some View {
+        VStack(alignment: .leading, spacing: DmSize.space1) {
+            Text(row.reference + " · " + row.customer).bold()
+            Text(texts.t("results.file_balance_change", ["before": Format.money(row.originalAmount), "after": Format.money(row.openAmount)]))
+            Text(texts.t("results.doc_source", ["name": row.sourceName, "row": row.sourceRow])).font(.caption)
+            if row.status == "duplicate" { Text(texts.t("results.doc_duplicate_status", ["id": row.duplicateOf])) }
+            if row.proposedAmount > 0 { Text(texts.t("results.file_proposed_change", ["amount": Format.money(row.proposedAmount)])) }
+            if row.withholdingPending > 0 { Text(texts.t("results.doc_tax_note", ["amount": Format.money(row.withholdingPending)])) }
+        }
+    }
+}
+
+private struct ReprocessView: View {
+    let dm: Docmatch
+    @State private var model: NewRunModel
+    @State private var runID: String?
+    init(dm: Docmatch) { self.dm = dm; _model = State(initialValue: NewRunModel(dm: dm)) }
+    var body: some View {
+        NewRunView(model: model) { runID = $0 }
+            .navigationDestination(item: $runID) { RunView(dm: dm, runId: $0) }
+    }
 }

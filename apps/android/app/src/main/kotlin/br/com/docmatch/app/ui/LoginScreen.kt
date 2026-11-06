@@ -29,6 +29,8 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.input.KeyboardType
 import br.com.docmatch.app.BuildConfig
 import br.com.docmatch.app.auth.GoogleSignIn
@@ -45,11 +47,14 @@ fun LoginScreen(state: SessionState.SignedOut, session: SessionViewModel, server
     val scope = rememberCoroutineScope()
     var email by rememberSaveable { mutableStateOf(state.email) }
     var code by rememberSaveable(state.challengeId) { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var showPassword by remember { mutableStateOf(false) }
+    var useCode by rememberSaveable { mutableStateOf(false) }
     var localError by remember { mutableStateOf<String?>(null) }
     val m = state.methods
     val google = m.google && BuildConfig.GOOGLE_SERVER_CLIENT_ID.isNotEmpty()
     // What this app can offer: Apple is web-only on Android, Google needs this build's client id.
-    val usable = m.email || m.dev || google
+    val usable = m.email || m.password || m.dev || google
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(DmSize.space3),
@@ -85,7 +90,15 @@ fun LoginScreen(state: SessionState.SignedOut, session: SessionViewModel, server
             Text(t("auth.or"), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
-        if (m.email) {
+        if (m.password && !useCode) {
+            OutlinedTextField(value = email, onValueChange = { email = it.take(Limits.Text.EMAIL) }, label = { Text(t("auth.email_label")) }, singleLine = true, enabled = !state.busy, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email), modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = password, onValueChange = { password = it.take(Limits.Text.PASSWORD_MAX) }, label = { Text(t("auth.password_label")) }, singleLine = true, enabled = !state.busy, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(), trailingIcon = { TextButton(onClick = { showPassword = !showPassword }) { Text(t(if (showPassword) "auth.hide_password" else "auth.show_password")) } }, modifier = Modifier.fillMaxWidth())
+            Button(onClick = { session.passwordLogin(email, password); password = "" }, enabled = !state.busy && EMAIL.matches(email.trim()) && password.isNotEmpty(), modifier = Modifier.fillMaxWidth()) { Text(t(if (state.busy) "auth.signing_in" else "nav.login")) }
+        }
+        if (m.email && m.password) {
+            TextButton(onClick = { useCode = !useCode; session.changeEmail(); password = "" }) { Text(t(if (useCode) "auth.use_password" else "auth.send_code")) }
+        }
+        if (m.email && (!m.password || useCode)) {
             if (state.challengeId == null) {
                 OutlinedTextField(
                     value = email,

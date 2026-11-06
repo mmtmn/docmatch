@@ -1,19 +1,42 @@
 # docmatch
 
-**Concilie qualquer documento.** Solte extratos, planilhas, notas, e-mails, áudios ou vídeos; a docmatch encontra cada divergência e mostra a prova.
+**Transforme documentos em resultados.** Cruze informações, encontre inconsistências com evidências e baixe dados organizados. Use pelo app ou integre ao seu fluxo pela API.
 
-A docmatch é um motor de conciliação para qualquer tipo de dado. Ela coloca cada afirmação de cada fonte em um único grafo de evidências, verifica o que concorda e o que se contradiz, e constrói novas ferramentas quando encontra um formato ou uma relação que nunca viu. Finanças são o primeiro domínio, não um caso especial: o mesmo motor concilia folha de pagamento com arquivos bancários, e-mails com contratos, notas de voz com pedidos ou replays de jogos com estatísticas.
+A implementação atual concilia títulos a receber, extratos e caixas de entrada de contas a
+pagar. O motor calcula os fatos e mantém as evidências; Ollama ou OpenRouter acrescentam análise
+e sugestões de próximos passos para revisão. O repositório também contém módulos de descoberta
+de regras, ferramentas e mídia, cuja integração completa ao servidor continua no roadmap.
 
-> **Caso Vantara (amostra de conciliação financeira): 100%** — 18/18 linhas bancárias, 17/17 títulos, 23/23 achados e 11/11 totais, com dez execuções idênticas, sem modelo de linguagem (`dm eval golden`). Os dados do caso são privados e nunca entram neste repositório; o gêmeo sintético público em `testdata/golden/vantara-twin` reproduz as mesmas armadilhas e o mesmo placar.
+> **Caso Vantara: 100% nos itens pontuados** — 18/18 linhas bancárias, 17/17 títulos,
+> 23/23 achados e 11/11 totais. Dez execuções reais com Ollama e dez com OpenRouter preservaram
+> esses resultados e suas evidências, sem respostas de cache. A nota avalia os fatos financeiros;
+> as sugestões de IA são apresentadas para revisão. Os dados e o gabarito privados ficam fora do
+> Git; o gêmeo público em `testdata/golden/vantara-twin` reproduz as mesmas armadilhas.
 
 Em produção em [docmatch.com.br](https://docmatch.com.br): site estático no CloudFront, API, worker e harness numa instância Graviton endurecida (Lynis 91) atrás dele.
 
+## Veja funcionando
+
+[Site](docs/demos/website.mp4) · [Terminal](docs/demos/terminal.mp4) · [Android](docs/demos/android.mp4)
+
+![Envio, processamento e documento corrigido no site](docs/demos/website.gif)
+
+Gravações reais do gêmeo público, com **100% nos itens do gabarito**. Veja os
+[GIFs, relatórios e comandos de reprodução](docs/demos/README.md).
+
+Assinantes e a organização de QA podem usar **Deixe este espaço do seu jeito** para propor,
+pré-visualizar, aplicar e reverter preferências da interface web. As mudanças são isoladas
+por organização; [escopo e limites](docs/personalizacao.md). O terminal também permite
+selecionar vários arquivos ou colar caminhos arrastados, aprovar a execução e baixar os dados:
+`docmatch workspace`. Os [SDKs npm, Go, Python e Rust](sdks/README.md) já funcionam a partir
+deste checkout. O cadastro verifica [domínios de e-mail temporário](docs/seguranca/emails-temporarios.md).
+
 ## Como funciona
 
-1. **Código primeiro, modelo depois.** Chaves, tolerâncias e somas explicam a maior parte das linhas sem gastar um token. Modelos de linguagem só veem o resíduo.
-2. **Regras como hipóteses executáveis.** Inspirado nas abordagens vencedoras do ARC-AGI-3: cada regra proposta é compilada para SQL, verificada contra o histórico confirmado e mantida só se explica dinheiro sem falsos positivos.
-3. **Verificação cruzada.** Um modelo de outra família reconfere cada achado contra as linhas citadas; o código recalcula cada número. Achado sem evidência é descartado.
-4. **Biblioteca de ferramentas que cresce.** Formato novo? A docmatch procura uma ferramenta construída antes, testa em amostra e só então escreve uma nova, em sandbox, com testes e revisão.
+1. **Cálculo determinístico.** Chaves, tolerâncias e somas produzem os casamentos, valores e achados.
+2. **Análise com evidências.** O modelo interpreta cada achado e sugere uma ação para conferência. As respostas seguem um schema com referências restritas às evidências daquele achado.
+3. **Fatos preservados.** O modelo não altera valores, casamentos, gravidade ou evidências. A revisão fica identificada como sugestão, com o modelo e o consumo registrados.
+4. **Próximas integrações.** Descoberta de regras executáveis, verificação por outro modelo e ferramentas geradas têm módulos próprios, mas ainda não fazem parte desse fluxo do servidor.
 
 ## Arquitetura
 
@@ -29,7 +52,13 @@ clientes (web · Android · iOS · SDKs)
               OpenRouter ou modelo local · Stripe · Resend · Google/Apple
 ```
 
-Detalhes em [docs/arquitetura.md](docs/arquitetura.md).
+Detalhes em [docs/arquitetura.md](docs/arquitetura.md) e no guia de [estruturas de dados, algoritmos e padrões](docs/estruturas-algoritmos-padroes.md).
+
+Planos mensais: **Essencial R$ 100**, **Plus R$ 500** e **Max R$ 1.000**, com 2.000, 10.000 e
+20.000 tokens, respectivamente. Todos incluem API: 1, 5 ou 20 chaves por organização.
+Crie e revogue chaves em **Minha conta → Acesso à API**. Consulte o [guia da API](docs/api.md)
+e a [operação de cobrança](docs/runbooks/stripe-billing.md). A conta Stripe precisa estar
+aprovada para aceitar pagamentos reais; a API verifica essa disponibilidade.
 
 ## Começando
 
@@ -56,7 +85,71 @@ emulador contra o `make local`: login local, gêmeo da Vantara e a mesma conta v
 aparelho. No Mac, `make -C apps/ios app` compila o app iOS para o simulador. Ver
 [apps/android](apps/android/README.md) e [apps/ios](apps/ios/README.md).
 
-Com `DM_LLM_MODE=local` o harness usa qualquer endpoint compatível com a API da OpenAI (Ollama, llama.cpp, vLLM). Com `openrouter` usa a sua chave da OpenRouter. Com `off` roda só a parte determinística.
+O fluxo web/mobile executa a conciliação determinística e, quando um provedor está habilitado,
+faz uma análise por IA dos achados, com interpretações e próximos passos vinculados às evidências.
+Valores, casamentos e classificações continuam calculados pelo motor; as sugestões da IA aparecem
+como sugestões para revisão. A execução emite o consumo real de tokens e falha explicitamente
+se o provedor não responder ou se a resposta trouxer referências inválidas. Até 24 achados são
+analisados por execução; acima disso, o relatório avisa quais ficaram só com a análise do motor.
+
+`make local` mantém o modelo desligado por padrão. Para usar o Ollama instalado nesta máquina:
+
+```bash
+ollama list
+DM_LOCAL_LLM_MODE=local \
+DM_MODEL_EXTRACTION_LOCAL=qwen3.5:0.8b \
+DM_LOCAL_LLM_REASONING_EFFORT=none make local
+```
+
+Troque o nome pelo modelo instalado. Para usar a chave `OPENROUTER_API_KEY` do `.env`:
+
+```bash
+DM_LOCAL_LLM_MODE=openrouter make local
+```
+
+As variáveis exportadas no comando têm precedência sobre o `.env`. O site e o Android herdam o
+provedor do servidor. O modelo remoto vem de `config/models.yaml`; para substituí-lo, exporte
+`DM_MODEL_EXTRACTION_PRIMARY`. Chaves ficam no ambiente ou em arquivos ignorados pelo Git.
+
+O instalador animado também oferece provedor e nome do modelo em **Experimentar** (Docker) e
+**Desenvolver** (toolchains locais):
+
+```bash
+make -C tools/installer build
+tools/installer/bin/docmatch --mode desenvolver --llm local --model qwen3.5:0.8b
+```
+
+Para verificar um pacote local contra um gabarito sem colocar esses arquivos no repositório:
+
+```bash
+tools/dev/verify-model.sh local "$DM_DATA_PACK" "$DM_EXPECTED_PATH"
+tools/dev/verify-model.sh openrouter "$DM_DATA_PACK" "$DM_EXPECTED_PATH"
+# DM_MODEL_TEST_RUNS=10 repete a etapa com o provedor real dez vezes, sem cache.
+```
+
+O gabarito é usado somente pelo avaliador; nunca é enviado ao modelo. A pontuação confere linhas,
+títulos, valores, evidências e totais. O texto das sugestões da IA não faz parte dessa nota.
+
+Para testar inferência real pelo cliente Rust com um modelo já instalado no Ollama:
+
+```bash
+ollama list
+DM_LLM_MODE=local \
+DM_LOCAL_LLM_BASE_URL=http://localhost:11434/v1 \
+DM_LOCAL_LLM_REASONING_EFFORT=none \
+DM_MODEL_EXTRACTION_LOCAL=qwen3.5:0.8b \
+DM_LLM_CACHE_MODE=off \
+cargo run --manifest-path services/harness/Cargo.toml -p dm-llm --example local_smoke
+```
+
+Troque o nome pelo modelo instalado que deseja testar. O teste extrai campos de uma nota fictícia,
+confere os valores e exige inferência real, sem resposta de cache nem chave de provedor.
+`DM_LOCAL_LLM_REASONING_EFFORT=none` desativa thinking nos modelos Ollama compatíveis, evitando
+que o orçamento curto termine antes da resposta JSON. Deixe essa variável vazia em servidores
+que não aceitam o campo. Veja a [compatibilidade OpenAI do Ollama](https://docs.ollama.com/api/openai-compatibility).
+
+Se o Chromium do Playwright não estiver instalado, é possível usar o Chrome já disponível:
+`DM_E2E_CHANNEL=chrome make e2e-local`.
 
 ## Mapa do repositório
 

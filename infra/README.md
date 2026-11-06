@@ -45,7 +45,7 @@ CloudFront com `node --test`, `render-env.sh` com `systemd-run`), e nunca toca a
         veredictos: scanner grava verdicts/<chave>.json → evento S3 → SQS → worker (+ DLQs)
         EventBridge: assinaturas a cada 6 h
         SSM Parameter Store /docmatch/<env>/* · CloudTrail · Budgets · alarmes · Route 53 + DNSSEC
-        Cloudflare R2: bucket de mídia (módulo validado; token chega depois)
+        Cloudflare R2: bucket privado de mídia, CORS e ciclo de vida
 ```
 
 Dois ambientes: `prod` (`docmatch.com.br`) e `dev` (`dev.docmatch.com.br`, zona própria delegada
@@ -233,6 +233,14 @@ reinício às 04:00 (America/Sao_Paulo) quando necessário.
 - SSH, chaves de acesso de longa duração, usuários IAM além do grupo de operadores.
 - Credenciais do R2 (criadas no painel da Cloudflare e gravadas no SSM) e o token do provedor
   Cloudflare: com `cloudflare_account_id` vazio o módulo `r2` não é instanciado.
+
+Ao preencher `cloudflare_account_id`, o Terraform também grava `R2_ACCOUNT_ID` e
+`DM_R2_ENDPOINT` no SSM e inclui os hosts do R2 na lista de saída e na CSP do CloudFront.
+O output `upload_origins` alimenta `DM_UPLOAD_ORIGINS` no build do site, para que sua CSP
+também permita os uploads. Depois de aplicar a configuração, preencha `R2_ACCESS_KEY_ID` e
+`R2_SECRET_ACCESS_KEY` como `SecureString`, recarregue os serviços e publique o site. Os
+valores das credenciais nunca passam pelo Terraform. O bucket usa retenção de 30 dias e
+aborta uploads multipart incompletos após um dia; a aplicação pode apagar mídia antes.
 
 ## Decisões que merecem explicação
 

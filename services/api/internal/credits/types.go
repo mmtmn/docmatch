@@ -26,10 +26,12 @@ import (
 
 // Account is the per-organization balance.
 type Account struct {
-	OrgID     uuid.UUID
-	Balance   int64
-	Held      int64
-	UpdatedAt time.Time
+	BillingBlocked bool
+	TokenExempt    bool
+	OrgID          uuid.UUID
+	Balance        int64
+	Held           int64
+	UpdatedAt      time.Time
 }
 
 // Available is what a new hold may reserve.
@@ -83,6 +85,7 @@ const (
 
 // Hold is a reservation against the balance for a run.
 type Hold struct {
+	Sponsored     bool
 	ID            uuid.UUID
 	OrgID         uuid.UUID
 	Amount        int64

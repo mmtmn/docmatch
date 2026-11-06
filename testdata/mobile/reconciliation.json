@@ -1,0 +1,45 @@
+{
+  "id": "run_fixture",
+  "status": "completed",
+  "summary": {
+    "reconciliation": {
+      "version": 1,
+      "title": "Exemplo",
+      "currency": "BRL",
+      "period_start": "2026-07-01",
+      "period_end": "2026-07-31",
+      "receivables": [
+        {
+          "id": "r1",
+          "source_id": "upl_fixture",
+          "source_name": "example.csv",
+          "source_row": 2,
+          "reference": "REF-1",
+          "customer": "Exemplo",
+          "original_amount": 10000,
+          "received_amount": 4000,
+          "applied_principal": 4000,
+          "open_amount": 6000,
+          "proposed_amount": 2000,
+          "withholding_pending": 0,
+          "status": "partial",
+          "duplicate_of": ""
+        }
+      ],
+      "bank_entries": [],
+      "totals": {
+        "original_amount": 10000,
+        "duplicate_excluded": 0,
+        "received_confirmed": 4000,
+        "principal_confirmed": 4000,
+        "open_balance": 6000,
+        "proposed_amount": 2000,
+        "projected_open_balance": 4000,
+        "unapplied_cash": 0,
+        "bank_fees": 0,
+        "fines_received": 0,
+        "withholding_pending": 0
+      }
+    }
+  }
+}

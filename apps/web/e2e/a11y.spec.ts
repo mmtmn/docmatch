@@ -24,6 +24,7 @@ for (const path of pages) {
 
 test('axe: zero violações com a gaveta do achado aberta', async ({ page }) => {
   await page.goto('/resultados');
+  await page.getByText(m.results.all_heading, { exact: true }).click();
   await page.getByTestId('finding-row').first().getByRole('button').click();
   await expect(page.getByRole('dialog')).toBeVisible();
   await expectNoViolations(page);

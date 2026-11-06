@@ -1,33 +1,68 @@
 .dialog {
-  width: min(28rem, calc(100vw - 2 * var(--gutter)));
-  padding: var(--space-5);
+  position: relative;
+  width: min(27rem, calc(100vw - 2 * var(--gutter)));
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  padding: clamp(1.5rem, 4vw, 2.5rem);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-2);
+  border-radius: var(--radius-3);
   background: var(--color-bg);
   color: var(--color-fg);
   box-shadow: var(--shadow-2);
+  animation: arrive 220ms var(--ease) both;
+}
+
+.inline {
+  width: 100%;
+  max-width: 27rem;
+  max-height: none;
+  margin-inline: auto;
+  overflow: visible;
 }
 
 .dialog::backdrop {
   background: var(--color-backdrop);
+  backdrop-filter: blur(5px);
+}
+
+.mark {
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  margin: 0 auto var(--space-5);
+  border-radius: var(--radius-2);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.mark svg {
+  width: 2rem;
+  height: 2rem;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-3);
+  text-align: center;
 }
 
 .title {
   margin: 0;
-  font-size: var(--fs-lg);
+  font-size: var(--fs-xl);
+  letter-spacing: -0.025em;
 }
 
 .close {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
   min-width: var(--tap);
   min-height: var(--tap);
   border: 0;
+  border-radius: var(--radius-1);
   background: transparent;
   color: var(--color-muted);
   font-size: var(--fs-xl);
@@ -35,63 +70,136 @@
 }
 
 .text {
-  margin: var(--space-2) 0 var(--space-3);
+  margin: var(--space-3) 0 var(--space-6);
   color: var(--color-muted);
   font-size: var(--fs-sm);
+  line-height: 1.65;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.methods,
+.form,
+.unavailable {
+  display: grid;
+  gap: var(--space-3);
 }
 
 .form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+  text-align: left;
+}
+
+.form label {
+  font-size: var(--fs-sm);
+  font-weight: 600;
 }
 
 .form input {
-  min-height: var(--tap);
-  padding: 0 var(--space-3);
+  width: 100%;
+  min-width: 0;
+  min-height: 3rem;
+  margin-top: calc(-1 * var(--space-1));
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-1);
-  background: var(--color-surface);
+  border-radius: var(--radius-2);
+  background: var(--color-bg);
   color: var(--color-fg);
-  font-size: var(--fs-base);
+  font-size: 1rem;
 }
 
-.primary,
-.google {
-  min-height: var(--tap);
-  border-radius: var(--radius-1);
-  font-size: var(--fs-base);
+.form details {
+  color: var(--color-muted);
+  font-size: var(--fs-xs);
+}
+
+.form details label {
+  display: block;
+  margin-block: var(--space-3) var(--space-2);
+}
+
+.form summary {
+  padding-block: var(--space-2);
   cursor: pointer;
 }
 
+.primary,
+.google,
+.secondary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 3rem;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: border-color var(--duration) var(--ease);
+}
+
 .primary {
-  border: 0;
+  border-color: transparent;
   background: var(--color-accent);
   color: var(--color-accent-fg);
 }
 
+.primary:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+}
+
 .google {
-  width: 100%;
-  border: 1px solid var(--color-border-strong);
+  background: var(--color-bg);
+  color: var(--color-fg);
+}
+
+.secondary {
   background: var(--color-surface);
   color: var(--color-fg);
 }
 
+.google:hover:not(:disabled),
+.secondary:hover:not(:disabled),
+.close:hover {
+  background: var(--color-surface-2);
+  border-color: var(--color-border-strong);
+}
+
+.providerIcon {
+  flex: 0 0 1.25rem;
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
 .primary:disabled,
-.google:disabled {
+.google:disabled,
+.secondary:disabled {
   opacity: 0.6;
-  cursor: not-allowed;
+  cursor: wait;
 }
 
 .or {
-  margin: var(--space-3) 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-1) 0;
   color: var(--color-muted);
   font-size: var(--fs-xs);
-  text-align: center;
+}
+
+.or::before,
+.or::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--color-border);
 }
 
 .link {
-  align-self: flex-start;
+  justify-self: center;
+  min-height: var(--tap);
   border: 0;
   background: transparent;
   color: var(--color-accent);
@@ -100,8 +208,82 @@
   cursor: pointer;
 }
 
-.error {
-  margin: var(--space-3) 0 0;
-  color: var(--color-danger);
+.error,
+.notice {
+  margin: var(--space-3) 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-2);
   font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+.error {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+
+.notice {
+  background: var(--color-success-soft);
+  color: var(--color-success);
+}
+
+.loading,
+.unavailable {
+  padding-block: var(--space-3);
+  color: var(--color-muted);
+  font-size: var(--fs-sm);
+  text-align: center;
+}
+
+.legal {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-border);
+  color: var(--color-muted);
+  font-size: var(--fs-xs);
+}
+
+.legal a {
+  color: inherit;
+}
+
+@keyframes arrive {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog {
+    animation: none;
+  }
+}
+.passwordField {
+  position: relative;
+}
+
+.passwordField input {
+  padding-right: 6.5rem;
+}
+
+.passwordToggle {
+  position: absolute;
+  inset-block: 0;
+  right: var(--space-2);
+  min-width: var(--tap);
+  border: 0;
+  background: transparent;
+  color: var(--color-accent);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  cursor: pointer;
 }

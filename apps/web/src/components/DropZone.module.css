@@ -1,4 +1,5 @@
 .zone {
+  container-type: size;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -185,4 +186,20 @@
 
 .zone[data-compact='true'] .addMore {
   display: none;
+}
+
+/* A long rules entry borrows this space; keep the file picker usable. */
+@container (max-height: 150px) {
+  .promptIcon,
+  .promptHint,
+  .promptAccepted {
+    display: none;
+  }
+  .prompt {
+    padding: 0.5rem;
+    gap: 0.25rem;
+  }
+  .promptTitle {
+    font-size: var(--fs-sm);
+  }
 }

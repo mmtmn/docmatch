@@ -98,6 +98,13 @@ const (
 	VarStripeSecretKey      = "STRIPE_SECRET_KEY"
 	VarStripeWebhookSecret  = "STRIPE_WEBHOOK_SECRET"
 	VarStripePublishableKey = "STRIPE_PUBLISHABLE_KEY"
+	VarStripePriceStarter   = "DM_STRIPE_PRICE_STARTER"
+	VarStripePricePro       = "DM_STRIPE_PRICE_PRO"
+	VarStripePriceBusiness  = "DM_STRIPE_PRICE_BUSINESS"
+	VarStripePriceTopup     = "DM_STRIPE_PRICE_TOPUP"
+	VarStripePortalConfig   = "DM_STRIPE_PORTAL_CONFIGURATION_ID"
+	VarStripePaymentConfig  = "DM_STRIPE_PAYMENT_METHOD_CONFIGURATION_ID"
+	VarStripeTestEmails     = "DM_STRIPE_TEST_EMAILS"
 	VarTargetMargin         = "DM_TARGET_MARGIN"
 	VarIncomeTaxRate        = "DM_INCOME_TAX_RATE"
 	VarPaymentRate          = "DM_PAYMENT_RATE"
@@ -257,6 +264,10 @@ type Billing struct {
 	StripeSecretKey      Secret
 	StripeWebhookSecret  Secret
 	StripePublishableKey string
+	StripePrices         map[string]string
+	StripePortalConfig   string
+	StripePaymentConfig  string
+	StripeTestEmails     []string
 	// Rates override config/pricing.yaml when set (nil means "use the file").
 	TargetMargin  *float64
 	IncomeTaxRate *float64
@@ -369,6 +380,15 @@ func LoadFrom(lookup Lookup) (*Config, error) {
 	cfg.Billing.StripeSecretKey = r.secret(VarStripeSecretKey, false)
 	cfg.Billing.StripeWebhookSecret = r.secret(VarStripeWebhookSecret, false)
 	cfg.Billing.StripePublishableKey = r.optional(VarStripePublishableKey, "")
+	cfg.Billing.StripePrices = map[string]string{
+		"starter":  r.optional(VarStripePriceStarter, ""),
+		"pro":      r.optional(VarStripePricePro, ""),
+		"business": r.optional(VarStripePriceBusiness, ""),
+		"topup":    r.optional(VarStripePriceTopup, ""),
+	}
+	cfg.Billing.StripePortalConfig = r.optional(VarStripePortalConfig, "")
+	cfg.Billing.StripePaymentConfig = r.optional(VarStripePaymentConfig, "")
+	cfg.Billing.StripeTestEmails = r.emailList(VarStripeTestEmails)
 	cfg.Billing.TargetMargin = r.rate(VarTargetMargin)
 	cfg.Billing.IncomeTaxRate = r.rate(VarIncomeTaxRate)
 	cfg.Billing.PaymentRate = r.rate(VarPaymentRate)
@@ -640,6 +660,28 @@ func (r *reader) list(name string) []string {
 }
 
 // clientIDs reads a comma-separated list of OAuth client ids.
+// emailList accepts plain verified-account addresses, not identifiers or display names.
+func (r *reader) emailList(name string) []string {
+	value, ok := r.get(name)
+	if !ok {
+		return nil
+	}
+	var out []string
+	for _, item := range strings.Split(value, ",") {
+		item = strings.ToLower(strings.TrimSpace(item))
+		if item == "" || slices.Contains(out, item) {
+			continue
+		}
+		address, err := mail.ParseAddress(item)
+		if err != nil || address.Address != item || address.Name != "" {
+			r.problem(name, "use endereços de e-mail simples separados por vírgula")
+			return nil
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
 func (r *reader) clientIDs(name string) []string {
 	v, ok := r.get(name)
 	if !ok {
@@ -881,6 +923,8 @@ func KnownVars() []string {
 		VarGoogleClientID, VarGoogleClientSecret, VarAppleTeamID, VarAppleClientID, VarAppleKeyID, VarApplePrivateKey, VarSessionSecret,
 		VarGoogleNativeClientIDs, VarAppleNativeClientIDs, VarDevLogin,
 		VarStripeSecretKey, VarStripeWebhookSecret, VarStripePublishableKey,
+		VarStripePriceStarter, VarStripePricePro, VarStripePriceBusiness, VarStripePriceTopup,
+		VarStripePortalConfig, VarStripePaymentConfig, VarStripeTestEmails,
 		VarTargetMargin, VarIncomeTaxRate, VarPaymentRate, VarInfraRate, VarOpenRouterFee, VarPricingFile, VarThroughputFile,
 		VarResendAPIKey, VarEmailFrom, VarSecurityContact, VarSMTPAddr,
 		VarQuoteHMACKey, VarAPIKeyPepper, VarWebhookSigningKey,

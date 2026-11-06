@@ -1,0 +1,15 @@
+[package]
+name = "docmatch"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Cliente oficial assíncrono da API docmatch"
+[dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls"] }
+tokio = { version = "1", features = ["time", "macros", "rt-multi-thread"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+hmac = "0.12"
+uuid = { version = "1", features = ["v4"] }
+httpdate = "1"

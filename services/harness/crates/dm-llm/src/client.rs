@@ -211,6 +211,7 @@ pub struct HttpLlmClient {
     meter: Mutex<Meter>,
     app_referer: Option<String>,
     app_title: Option<String>,
+    local_reasoning_effort: Option<String>,
 }
 
 struct ChatOutcome {
@@ -293,6 +294,7 @@ impl HttpLlmClient {
             meter: Mutex::new(Meter::default()),
             app_referer: None,
             app_title: None,
+            local_reasoning_effort: None,
         })
     }
 
@@ -306,6 +308,17 @@ impl HttpLlmClient {
     pub fn with_app_headers(mut self, referer: Option<String>, title: Option<String>) -> Self {
         self.app_referer = referer.filter(|r| !r.trim().is_empty());
         self.app_title = title.filter(|t| !t.trim().is_empty());
+        self
+    }
+
+    /// Optional thinking control for local servers. Ollama accepts `none` to disable
+    /// thinking; leave unset for servers/models that do not support this field.
+    pub fn with_local_reasoning_effort(mut self, effort: Option<String>) -> Self {
+        if self.mode == LlmMode::Local {
+            self.local_reasoning_effort = effort
+                .map(|v| v.trim().to_string())
+                .filter(|v| !v.is_empty());
+        }
         self
     }
 
@@ -328,7 +341,7 @@ impl HttpLlmClient {
         &self,
         model: &str,
         req: &CompletionRequest,
-        temperature: f64,
+        temperature: Option<f64>,
         max_tokens: u32,
         response_format: Option<&Value>,
     ) -> Value {
@@ -338,11 +351,16 @@ impl HttpLlmClient {
                 {"role": "system", "content": req.system},
                 {"role": "user", "content": req.user}
             ],
-            "temperature": temperature,
             "max_tokens": max_tokens,
         });
+        if let Some(temperature) = temperature {
+            body["temperature"] = json!(temperature);
+        }
         if let Some(rf) = response_format {
             body["response_format"] = rf.clone();
+        }
+        if let Some(effort) = &self.local_reasoning_effort {
+            body["reasoning_effort"] = json!(effort);
         }
         if self.mode == LlmMode::OpenRouter {
             let prefs = &self.models.defaults.provider_preferences;
@@ -397,9 +415,15 @@ impl HttpLlmClient {
         schema_fingerprint: Option<&str>,
     ) -> Result<ChatOutcome, LlmError> {
         let resolved = self.models.model_for(&req.role, self.mode)?;
-        let temperature = req.temperature.unwrap_or(resolved.temperature);
+        let temperature = (self.mode == LlmMode::Local || resolved.temperature_supported)
+            .then_some(req.temperature.unwrap_or(resolved.temperature));
         let max_tokens = req.max_output_tokens.unwrap_or(resolved.max_output_tokens);
-        let prompt_fingerprint = serde_json::to_string(&json!({"system": req.system, "user": req.user, "temperature": temperature, "max_tokens": max_tokens})).map_err(|e| LlmError::BadStructured(e.to_string()))?;
+        let mut prompt = json!({"system": req.system, "user": req.user, "temperature": temperature, "max_tokens": max_tokens});
+        if let Some(effort) = &self.local_reasoning_effort {
+            prompt["reasoning_effort"] = json!(effort);
+        }
+        let prompt_fingerprint =
+            serde_json::to_string(&prompt).map_err(|e| LlmError::BadStructured(e.to_string()))?;
         let mut candidates = vec![resolved.model.clone()];
         if let Some(f) = &resolved.fallback {
             candidates.push(f.clone());
@@ -590,7 +614,7 @@ fn required_env(name: &str) -> Result<String, LlmError> {
 
 /// Builds the client described by the environment (`DM_LLM_MODE`, `OPENROUTER_API_KEY`,
 /// `DM_OPENROUTER_BASE_URL`, `DM_LOCAL_LLM_BASE_URL`, `DM_MODELS_FILE`, `DM_LLM_CACHE_DIR`,
-/// `DM_LLM_CACHE_MODE`, `DM_PUBLIC_BASE_URL`).
+/// `DM_LLM_CACHE_MODE`, `DM_PUBLIC_BASE_URL`, `DM_LOCAL_LLM_REASONING_EFFORT`).
 pub fn build_client_from_env() -> Result<Box<dyn LlmClient>, LlmError> {
     let mode = LlmMode::from_env()?;
     let cache = ResponseCache::from_env()?;
@@ -614,12 +638,9 @@ pub fn build_client_from_env() -> Result<Box<dyn LlmClient>, LlmError> {
         LlmMode::Local => {
             let base = required_env("DM_LOCAL_LLM_BASE_URL")?;
             let models = load_models_config()?;
-            Ok(Box::new(HttpLlmClient::local(
-                base,
-                models,
-                cache,
-                RetryPolicy::default(),
-            )?))
+            let client = HttpLlmClient::local(base, models, cache, RetryPolicy::default())?
+                .with_local_reasoning_effort(std::env::var("DM_LOCAL_LLM_REASONING_EFFORT").ok());
+            Ok(Box::new(client))
         }
     }
 }

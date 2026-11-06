@@ -19,11 +19,14 @@ import (
 	"github.com/mmtmn/docmatch/services/api/internal/account"
 	"github.com/mmtmn/docmatch/services/api/internal/account/accountpg"
 	"github.com/mmtmn/docmatch/services/api/internal/api"
+	"github.com/mmtmn/docmatch/services/api/internal/apikeys"
 	"github.com/mmtmn/docmatch/services/api/internal/audit"
 	"github.com/mmtmn/docmatch/services/api/internal/auth"
+	"github.com/mmtmn/docmatch/services/api/internal/billing"
 	"github.com/mmtmn/docmatch/services/api/internal/config"
 	"github.com/mmtmn/docmatch/services/api/internal/credits"
 	"github.com/mmtmn/docmatch/services/api/internal/crypto"
+	"github.com/mmtmn/docmatch/services/api/internal/customizations"
 	"github.com/mmtmn/docmatch/services/api/internal/db"
 	"github.com/mmtmn/docmatch/services/api/internal/db/pgstore"
 	"github.com/mmtmn/docmatch/services/api/internal/email"
@@ -81,9 +84,15 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	catalog, err := account.LoadEntitlements(cfg.Billing.PricingFile)
+	if err != nil {
+		return err
+	}
+	keysSvc := apikeys.New(cfg, catalog, pool)
+	workspaceSvc := customizations.New(cfg, catalog, pool)
 	// Pipeline route groups (uploads, estimates, runs, workflows, rules),
 	// identified by the session the middleware above authenticated.
-	sys, err := wire.New(ctx, wire.Options{Config: cfg, Logger: log, Pool: pool, Auth: sessionResolver(pool)})
+	sys, err := wire.New(ctx, wire.Options{Config: cfg, Logger: log, Pool: pool, Auth: keysSvc.Resolve(sessionResolver(pool))})
 	if err != nil {
 		return err
 	}
@@ -103,9 +112,10 @@ func run() error {
 		}
 	}()
 
+	billingSvc := billing.New(cfg, sys.Pricing, catalog, pool)
 	handler := api.NewHandler(api.Deps{
 		Config: cfg, Logger: log, Limits: limits.Must(), DB: pool,
-		Mount:        append([]func(*httpx.Router){authSvc.Mount, accountSvc.Mount}, sys.Mount()...),
+		Mount:        append([]func(*httpx.Router){authSvc.Mount, accountSvc.Mount, billingSvc.Mount, keysSvc.Mount, workspaceSvc.Mount}, sys.Mount()...),
 		Middleware:   []httpx.Middleware{sessions.Middleware},
 		OriginExempt: auth.OriginExempt,
 	})

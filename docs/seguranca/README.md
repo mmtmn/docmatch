@@ -43,3 +43,5 @@ teste. O PR que remove ou relaxa um controle também, com o motivo e a ADR, se h
    com valor padrão.
 6. **Tudo que é controle tem um comando que o prova**, listado em
    [testes-de-aceitacao.md](testes-de-aceitacao.md).
+
+- [E-mails temporários](emails-temporarios.md): lista offline, cadastro e limites da proteção.

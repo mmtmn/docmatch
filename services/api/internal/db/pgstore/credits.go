@@ -52,7 +52,7 @@ func strVal(p *string) string {
 }
 
 func toAccount(a sqlc.CreditAccount) credits.Account {
-	return credits.Account{OrgID: a.OrgID, Balance: a.Balance, Held: a.Held, UpdatedAt: a.UpdatedAt}
+	return credits.Account{OrgID: a.OrgID, Balance: a.Balance, Held: a.Held, UpdatedAt: a.UpdatedAt, BillingBlocked: a.BillingBlocked, TokenExempt: a.TokenExempt}
 }
 
 func toGrant(g sqlc.CreditGrant) credits.Grant {
@@ -65,7 +65,7 @@ func toGrant(g sqlc.CreditGrant) credits.Grant {
 
 func toHold(h sqlc.CreditHold) credits.Hold {
 	return credits.Hold{
-		ID: h.ID, OrgID: h.OrgID, Amount: h.Amount, Status: credits.HoldStatus(h.Status), SettledAmount: h.SettledAmount,
+		ID: h.ID, OrgID: h.OrgID, Amount: h.Amount, Sponsored: h.Sponsored, Status: credits.HoldStatus(h.Status), SettledAmount: h.SettledAmount,
 		RunID: h.RunID, QuoteID: h.QuoteID, Reference: strVal(h.Reference), CreatedAt: h.CreatedAt, ClosedAt: h.ClosedAt,
 	}
 }
@@ -163,7 +163,7 @@ func (t *creditTx) MarkGrantExpired(ctx context.Context, grantID uuid.UUID, rema
 
 func (t *creditTx) InsertHold(ctx context.Context, h credits.Hold) (credits.Hold, error) {
 	row, err := t.q.InsertCreditHold(ctx, sqlc.InsertCreditHoldParams{
-		OrgID: h.OrgID, Amount: h.Amount, RunID: h.RunID, QuoteID: h.QuoteID, Reference: strPtr(h.Reference),
+		OrgID: h.OrgID, Amount: h.Amount, Sponsored: h.Sponsored, RunID: h.RunID, QuoteID: h.QuoteID, Reference: strPtr(h.Reference),
 	})
 	if err != nil {
 		return credits.Hold{}, err

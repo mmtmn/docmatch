@@ -4,6 +4,7 @@ package pgstore_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/google/uuid"
@@ -74,5 +75,62 @@ func TestCreditStoreDatabaseConstraints(t *testing.T) {
 	})
 	if err != nil || balance != 5 || held != 0 {
 		t.Fatalf("somas do razão: %d %d %v", balance, held, err)
+	}
+}
+
+// Sponsorship never creates spendable balance and is isolated to its organization.
+func TestSponsoredCredits(t *testing.T) {
+	d := testdb.Get(t)
+	ctx := context.Background()
+	org, other := newOrg(t, d), newOrg(t, d)
+	svc := credits.New(pgstore.NewCreditStore(d.App))
+	if _, err := d.Admin.Exec(ctx, "INSERT INTO credit_accounts (org_id, token_exempt) VALUES ($1, true)", org); err != nil {
+		t.Fatal(err)
+	}
+	hold, err := svc.Reserve(ctx, org, credits.ReserveParams{Amount: 100})
+	if err != nil || hold.Amount != 0 || !hold.Sponsored {
+		t.Fatalf("sponsored reserve: %+v %v", hold, err)
+	}
+	second, err := svc.Reserve(ctx, org, credits.ReserveParams{Amount: 50})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Revocation affects only new reservations, not the already sponsored hold.
+	if _, err := d.Admin.Exec(ctx, "UPDATE credit_accounts SET token_exempt = false WHERE org_id = $1", org); err != nil {
+		t.Fatal(err)
+	}
+	settled, err := svc.Settle(ctx, org, hold.ID, 75)
+	if err != nil || settled.Debited != 0 || settled.Released != 0 {
+		t.Fatalf("sponsored settle: %+v %v", settled, err)
+	}
+	if _, err := svc.Release(ctx, org, second.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Settle(ctx, org, hold.ID, 75); !errors.Is(err, credits.ErrHoldClosed) {
+		t.Fatalf("replay: %v", err)
+	}
+	for _, id := range []uuid.UUID{org, other} {
+		_, err := svc.Reserve(ctx, id, credits.ReserveParams{Amount: 1})
+		var insufficient *credits.InsufficientError
+		if !errors.As(err, &insufficient) {
+			t.Fatalf("ordinary reservation: %v", err)
+		}
+	}
+	if _, err := svc.Release(ctx, other, hold.ID); !errors.Is(err, credits.ErrHoldNotFound) {
+		t.Fatalf("cross tenant hold: %v", err)
+	}
+	if _, err := d.Admin.Exec(ctx, "UPDATE credit_accounts SET token_exempt = true, billing_blocked = true WHERE org_id = $1", org); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Reserve(ctx, org, credits.ReserveParams{Amount: 1}); err == nil {
+		t.Fatal("blocked sponsorship must not bypass billing block")
+	}
+	acct, err := svc.Balance(ctx, org)
+	if err != nil || acct.Balance != 0 || acct.Held != 0 {
+		t.Fatalf("balance: %+v %v", acct, err)
+	}
+	var balance, held int64
+	if err := d.Admin.QueryRow(ctx, "SELECT coalesce(sum(amount), 0), coalesce(sum(held_delta), 0) FROM credit_ledger WHERE org_id = $1", org).Scan(&balance, &held); err != nil || balance != 0 || held != 0 {
+		t.Fatalf("ledger: %d %d %v", balance, held, err)
 	}
 }

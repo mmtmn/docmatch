@@ -16,6 +16,7 @@ import (
 	"github.com/mmtmn/docmatch/services/api/internal/apierr"
 	"github.com/mmtmn/docmatch/services/api/internal/audit"
 	"github.com/mmtmn/docmatch/services/api/internal/crypto"
+	"github.com/mmtmn/docmatch/services/api/internal/emailpolicy"
 	"github.com/mmtmn/docmatch/services/api/internal/httpx"
 	"github.com/mmtmn/docmatch/services/api/internal/logx"
 	"github.com/mmtmn/docmatch/services/api/internal/publicid"
@@ -206,6 +207,9 @@ func (s *Service) resolveUser(ctx context.Context, r *http.Request, id Identity)
 
 // signup creates the user with a personal organization and its data key.
 func (s *Service) signup(ctx context.Context, r *http.Request, id Identity) (account.User, bool, error) {
+	if emailpolicy.Disposable(id.Email) {
+		return account.User{}, false, ErrDisposableEmail
+	}
 	now := s.d.Now()
 	orgID, err := uuid.NewV7()
 	if err != nil {

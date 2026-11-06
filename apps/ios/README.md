@@ -104,3 +104,25 @@ Store Connect: `APP_STORE_CONNECT_KEY_PATH`, `APP_STORE_CONNECT_KEY_ID` e
   proteção de arquivo completa, e somem quando a sessão acaba.
 - Manifesto de privacidade sem rastreamento. Os dados coletados (e-mail e documentos) servem só ao
   funcionamento do app.
+
+## Paridade com os resultados do site
+
+A tela começa pelo download dos dados corrigidos em Excel e pelo relatório em PDF. CSV fica
+em outros formatos. Pendências, alterações e dados completos aparecem em seções recolhidas;
+alertas críticos continuam visíveis. Os valores vêm de `summary.reconciliation`, incluindo
+saldo confirmado e sugestões pendentes separados. Resultados antigos sem snapshot oferecem
+relatórios de achados e um caminho para reenviar os arquivos, sem prometer dados corrigidos.
+
+Revisar, descartar ou anotar um achado registra uma decisão; não aplica pagamentos nem muda
+o snapshot. A prioridade usa gravidade antes de valor. Senha tem mostrar/ocultar; códigos
+por e-mail só aparecem ao escolher esse método, quando habilitado no servidor. Nenhuma
+senha ou chave de provedor é embutida no app. A paleta compartilhada tem cores suaves e pares
+verificados; o progresso mostra a etapa real, sem percentual fictício.
+
+O app usa a API configurada e o modelo escolhido **no servidor** (Ollama ou OpenRouter).
+Não carrega o modelo no telefone. Planos e chaves de integração ficam na página web de conta;
+veja [API](../../docs/api.md) e [estruturas, algoritmos e padrões](../../docs/estruturas-algoritmos-padroes.md).
+
+Testes em Linux verificam DocmatchKit, incluindo o decode do resultado, sessões e pedidos de
+login/exportação. Eles **não compilam SwiftUI**. Antes de distribuir, execute `make app` em
+macOS ou o workflow `ios` sobre a revisão exata; um IPA exige Xcode, assinatura e time Apple.

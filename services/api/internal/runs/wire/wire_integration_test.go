@@ -73,7 +73,8 @@ func TestPipelineOnPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(cleanup)
-	stop, err := harnesstest.Serve(sock, harnesstest.NewServer(harnesstest.MustLoadGolden(), harnesstest.Options{}))
+	fake := harnesstest.NewServer(harnesstest.MustLoadGolden(), harnesstest.Options{})
+	stop, err := harnesstest.Serve(sock, fake)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,6 +189,37 @@ func TestPipelineOnPostgres(t *testing.T) {
 	acct, err := sys.Credits.Balance(ctx, org)
 	if err != nil || acct.Held != 0 || acct.Balance >= 5000 {
 		t.Fatalf("tokens não liquidados: %+v %v", acct, err)
+	}
+
+	// Private sponsorship keeps the quoted execution budget, but settles no tokens.
+	if _, err := d.Admin.Exec(ctx, "UPDATE credit_accounts SET token_exempt = true WHERE org_id = $1", org); err != nil {
+		t.Fatal(err)
+	}
+	sponsoredQuote, err := sys.Estimates.Estimate(ctx, me, req, func(u uploads.Upload) string { return "local://t/" + u.StorageKey })
+	if err != nil {
+		t.Fatal(err)
+	}
+	sponsoredRun, err := sys.Runs.Create(ctx, me, runs.CreateRequest{Request: req, QuoteID: sponsoredQuote.ID, QuoteSignature: sponsoredQuote.Signature})
+	if err != nil || sponsoredRun.CreditsHeld != 0 {
+		t.Fatalf("sponsored create: %+v %v", sponsoredRun, err)
+	}
+	if err := sys.Runs.Execute(ctx, org, sponsoredRun.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	sponsoredDone, err := sys.Runs.Get(ctx, org, sponsoredRun.ID)
+	if err != nil || sponsoredDone.Status != runs.StatusCompleted || sponsoredDone.CreditsSettled != 0 {
+		t.Fatalf("sponsored completion: %+v %v", sponsoredDone, err)
+	}
+	requests := fake.Runs()
+	if budget := requests[len(requests)-1].GetOptions().GetCreditBudget(); budget != uint64(sponsoredQuote.CapCredits) {
+		t.Fatalf("sponsored budget: %d", budget)
+	}
+	after, err := sys.Credits.Balance(ctx, org)
+	if err != nil || after.Balance != acct.Balance || after.Held != 0 {
+		t.Fatalf("sponsored balance: %+v %v", after, err)
+	}
+	if _, err := d.Admin.Exec(ctx, "UPDATE credit_accounts SET token_exempt = false WHERE org_id = $1", org); err != nil {
+		t.Fatal(err)
 	}
 
 	// Feedback (idempotent), then learning proposes rules through the harness.

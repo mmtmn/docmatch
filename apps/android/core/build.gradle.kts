@@ -24,6 +24,7 @@ sourceSets {
     test {
         // The tests read the shared pt-BR texts straight from packages/locales.
         resources.srcDir(rootProject.file("../../packages/locales"))
+        resources.srcDir(rootProject.file("../../testdata/mobile"))
     }
 }
 

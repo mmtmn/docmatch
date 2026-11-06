@@ -27,6 +27,7 @@ ensure_env() {
     cp .env.example .env
     log ".env criado a partir do .env.example"
   fi
+  chmod 600 .env
   local name value
   for name in DM_SESSION_SECRET DM_QUOTE_HMAC_KEY DM_APIKEY_PEPPER DM_WEBHOOK_SIGNING_KEY; do
     if grep -qE "^${name}=[[:space:]]*(#.*)?$" .env; then
@@ -83,10 +84,14 @@ up() {
   for c in go cargo pnpm openssl curl; do command -v "$c" >/dev/null 2>&1 || die "comando necessário: $c"; done
   mkdir -p "$logs" "$pids" "$bin" "$state/media"
   ensure_env
-  eval "$(tools/dev/env.sh .env)"
+  eval "$(tools/dev/env.sh .env --defaults)"
 
-  # Local overrides: dev, local storage, no model, the harness socket under .cache/local.
+  # Provider use is explicit: DM_LOCAL_LLM_MODE=local|openrouter (off by default).
   export DM_ENV=dev DM_DEV_LOGIN=1 DM_LLM_MODE="${DM_LOCAL_LLM_MODE:-off}"
+  case "$DM_LLM_MODE" in
+    off|local|openrouter) ;;
+    *) die "DM_LOCAL_LLM_MODE deve ser off, local ou openrouter" ;;
+  esac
   export DM_S3_UPLOADS_BUCKET="" DM_S3_ENDPOINT="" AWS_ACCESS_KEY_ID="" AWS_SECRET_ACCESS_KEY=""
   export DM_MEDIA_LOCAL_DIR="$state/media" DM_HARNESS_SOCKET="$state/harness.sock" DM_LLM_CACHE_DIR="$state/llm"
   export DM_PRICING_FILE="$root/config/pricing.yaml" DM_MODELS_FILE="$root/config/models.yaml" DM_THROUGHPUT_FILE="$root/config/throughput.yaml"
@@ -125,7 +130,7 @@ up() {
 
   cat <<EOF
 
-docmatch local no ar, sem chave e sem login:
+docmatch local no ar (modelo: ${DM_LLM_MODE}):
   site     ${DM_PUBLIC_BASE_URL}/app    (entra sozinho com o login local)
   API      ${DM_API_BASE_URL}/v1/version
   Mailpit  http://127.0.0.1:${DM_DEV_MAILPIT_PORT:-8025}   (códigos do login por e-mail)

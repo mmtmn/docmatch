@@ -53,6 +53,8 @@ export default defineConfig([
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrors: 'none' },
       ],
       'no-console': ['error', { allow: ['warn', 'error'] }],
+      // Product confirmations and errors must use styled, accessible UI.
+      'no-alert': 'error',
       // BOM / NBSP only ever appear as escapes inside strings, templates and regexes.
       'no-irregular-whitespace': [
         'error',

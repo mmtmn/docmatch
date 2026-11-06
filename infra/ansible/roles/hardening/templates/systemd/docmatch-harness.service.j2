@@ -12,6 +12,7 @@ User={{ hardening_app_user }}
 Group={{ hardening_app_group }}
 EnvironmentFile={{ hardening_env_file }}
 Environment=DM_HARNESS_SOCKET={{ hardening_harness_socket }} DM_LLM_CACHE_DIR={{ hardening_app_home }}/cache/llm
+Environment=DM_MODELS_FILE={{ hardening_app_config_dir }}/models.yaml
 Environment=RUST_LOG=info RUST_BACKTRACE=0
 Environment=DM_MEDIA_LOCAL_DIR={{ hardening_media_dir }}
 WorkingDirectory={{ hardening_app_home }}

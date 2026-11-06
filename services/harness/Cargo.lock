@@ -1207,6 +1207,10 @@ dependencies = [
 name = "dm-server"
 version = "0.1.0"
 dependencies = [
+ "dm-core",
+ "dm-eval",
+ "dm-guard",
+ "dm-llm",
  "dm-recon",
  "hex",
  "hyper-util",
@@ -1214,6 +1218,9 @@ dependencies = [
  "prost-build",
  "prost-types",
  "protoc-bin-vendored",
+ "schemars",
+ "serde",
+ "serde_json",
  "sha2",
  "tempfile",
  "thiserror",
@@ -1223,6 +1230,7 @@ dependencies = [
  "tonic-prost",
  "tonic-prost-build",
  "tower",
+ "wiremock",
 ]
 
 [[package]]

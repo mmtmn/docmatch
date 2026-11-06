@@ -98,7 +98,9 @@ func (s *Service) Execute(ctx context.Context, orgID, runID uuid.UUID, lastAttem
 	req := &pb.RunRequest{
 		RunId: r.PublicID(), TenantId: apix.Encode(apix.PrefixOrg, orgID),
 		Sources: append(estimate.BuildSources(r.Inputs.Request.Sources, loaded.Docs, s.d.URI), estimate.BuildSources(r.Inputs.Request.MediaSources, loaded.Media, s.d.URI)...),
-		Options: estimate.BuildOptions(p, r.Inputs.Request, v, r.CreditsHeld, &deadline, workflowID),
+		// A sponsored hold reserves zero tokens, but execution still obeys the
+		// verified quote's finite budget and the plan's normal resource limits.
+		Options: estimate.BuildOptions(p, r.Inputs.Request, v, quoteRec.Cap, &deadline, workflowID),
 		Quote:   QuoteToProto(quoteRec.Quote), Rules: pbRules, Resume: resume && sameHarness(timing, place),
 	}
 	moved := timing.Placement != place.Name() || timing.Reason != place.Reason

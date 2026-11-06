@@ -59,7 +59,7 @@ type installFlags struct {
 	mode                               string
 	portWeb, portAPI, portPG, portMail int
 	portList                           string
-	llm, ollama, openRouterKey         string
+	llm, ollama, openRouterKey, model  string
 	registry, tag, source              string
 	build, noBuild, noDemo, noBrowser  bool
 	verbose                            bool
@@ -82,6 +82,7 @@ func (f *installFlags) register(fs *flag.FlagSet) {
 	fs.StringVar(&f.portList, "ports", "", "")
 	fs.StringVar(&f.llm, "llm", "", "")
 	fs.StringVar(&f.ollama, "ollama-url", "", "")
+	fs.StringVar(&f.model, "model", "", "")
 	fs.StringVar(&f.openRouterKey, "openrouter-key", "", "")
 	fs.StringVar(&f.registry, "registry", "", "")
 	fs.StringVar(&f.tag, "tag", "", "")
@@ -228,6 +229,18 @@ func resolveOptions(ctx context.Context, w world, f installFlags, b Build) (reso
 		return resolved{}, fmt.Errorf("%w: --llm %s (off, local ou openrouter)", errUsage, f.llm)
 	}
 	o.LocalLLM = first(f.ollama, stateField(st, func(s *state.State) string { return s.LocalLLM }))
+	o.ReviewModel = first(f.model, stateField(st, func(s *state.State) string {
+		if s.LLMMode == o.LLMMode {
+			return s.ReviewModel
+		}
+		return ""
+	}))
+	if strings.ContainsAny(o.ReviewModel, "\r\n") {
+		return resolved{}, fmt.Errorf("%w: --model precisa ter uma única linha", errUsage)
+	}
+	if o.ReviewModel == "" && o.LLMMode == envfile.LLMLocal {
+		o.ReviewModel = first(w.env.Get("DM_MODEL_EXTRACTION_LOCAL"), "qwen3.5:0.8b")
+	}
 	if o.LLMMode == envfile.LLMLocal && o.LocalLLM == "" {
 		o.LocalLLM = "http://localhost:11434/v1"
 	}
@@ -263,6 +276,11 @@ func resolveOptions(ctx context.Context, w world, f installFlags, b Build) (reso
 	}
 
 	remote := install.Remote(ctx, o.SourceDir)
+	if o.Mode == state.ModeDev && o.OpenRouter == "" && o.SourceDir != "" {
+		if values, err := envfile.Read(filepath.Join(o.SourceDir, ".env")); err == nil {
+			o.OpenRouter = values["OPENROUTER_API_KEY"]
+		}
+	}
 	o.Registry = first(f.registry, w.env.Get("DOCMATCH_REGISTRY"), stateField(st, func(s *state.State) string { return s.Registry }), b.Registry, install.RegistryFromRemote(remote), install.LocalRegistry)
 	o.RepoURL = first(w.env.Get("DOCMATCH_REPO"), b.RepoURL, install.CloneURL(remote))
 	o.RepoRef = w.env.Get("DOCMATCH_REF")

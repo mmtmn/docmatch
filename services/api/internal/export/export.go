@@ -1,8 +1,5 @@
-// Package export renders run results as CSV and XLSX. Every cell goes
-// through SafeCell, which neutralizes spreadsheet formula injection: a
-// value a model or a document produced can never start with =, +, -, @ or
-// a control character when it reaches the spreadsheet. PDF is produced by
-// the harness report, not here.
+// Package export renders reconciled documents as CSV, XLSX and searchable PDF.
+// Untrusted spreadsheet text is neutralized; only application-authored formulas execute.
 package export
 
 import (
@@ -24,6 +21,7 @@ const (
 const (
 	ContentTypeXLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 	ContentTypeCSV  = "text/csv; charset=utf-8"
+	ContentTypePDF  = "application/pdf"
 )
 
 // Table is one sheet: a header and rows of strings.
@@ -31,6 +29,24 @@ type Table struct {
 	Name   string
 	Header []string
 	Rows   [][]string
+	Types  []CellType
+	Widths []float64
+	// Formulas are authored by the application, never copied from source documents.
+	Formulas map[string]Formula
+}
+
+type CellType uint8
+
+const (
+	Text CellType = iota
+	Currency
+	Integer
+	Date
+)
+
+type Formula struct {
+	Expression string
+	Value      string
 }
 
 // SafeCell neutralizes a value for spreadsheets. Values that would be

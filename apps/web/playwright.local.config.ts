@@ -13,6 +13,7 @@ export default defineConfig({
   expect: { timeout: 60_000 },
   use: {
     baseURL,
+    ...(process.env['DM_E2E_CHANNEL'] ? { channel: process.env['DM_E2E_CHANNEL'] } : {}),
     locale: 'pt-BR',
     timezoneId: 'America/Sao_Paulo',
     trace: 'retain-on-failure',

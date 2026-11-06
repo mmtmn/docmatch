@@ -2516,6 +2516,9 @@ type RunSummary struct {
 	// not read, a scanned PDF without text, a CNAB layout read only with the common fields, a
 	// file that did not take part in the run. Empty when every file was used as read.
 	SourceWarnings []string `protobuf:"bytes,11,rep,name=source_warnings,json=sourceWarnings,proto3" json:"source_warnings,omitempty"`
+	// Reconciled output document. Monetary values are integer centavos; proposed links are
+	// kept separate from confirmed receipts. Original files are never modified.
+	Reconciliation *structpb.Struct `protobuf:"bytes,12,opt,name=reconciliation,proto3" json:"reconciliation,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -2623,6 +2626,13 @@ func (x *RunSummary) GetProposedRuleIds() []string {
 func (x *RunSummary) GetSourceWarnings() []string {
 	if x != nil {
 		return x.SourceWarnings
+	}
+	return nil
+}
+
+func (x *RunSummary) GetReconciliation() *structpb.Struct {
+	if x != nil {
+		return x.Reconciliation
 	}
 	return nil
 }
@@ -4295,7 +4305,7 @@ const file_harness_proto_rawDesc = "" +
 	"\tCompleted\x129\n" +
 	"\asummary\x18\x01 \x01(\v2\x1f.docmatch.harness.v1.RunSummaryR\asummary\x12#\n" +
 	"\rcredits_spent\x18\x02 \x01(\x04R\fcreditsSpent\x12)\n" +
-	"\x10credits_refunded\x18\x03 \x01(\x04R\x0fcreditsRefunded\"\xae\x04\n" +
+	"\x10credits_refunded\x18\x03 \x01(\x04R\x0fcreditsRefunded\"\xef\x04\n" +
 	"\n" +
 	"RunSummary\x12%\n" +
 	"\x0efindings_total\x18\x01 \x01(\rR\rfindingsTotal\x12i\n" +
@@ -4311,7 +4321,8 @@ const file_harness_proto_rawDesc = "" +
 	"newToolIds\x12*\n" +
 	"\x11proposed_rule_ids\x18\n" +
 	" \x03(\tR\x0fproposedRuleIds\x12'\n" +
-	"\x0fsource_warnings\x18\v \x03(\tR\x0esourceWarnings\x1aE\n" +
+	"\x0fsource_warnings\x18\v \x03(\tR\x0esourceWarnings\x12?\n" +
+	"\x0ereconciliation\x18\f \x01(\v2\x17.google.protobuf.StructR\x0ereconciliation\x1aE\n" +
 	"\x17FindingsBySeverityEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xac\x01\n" +
@@ -4706,62 +4717,63 @@ var file_harness_proto_depIdxs = []int32{
 	3,  // 36: docmatch.harness.v1.NeedsApproval.reasons:type_name -> docmatch.harness.v1.ApprovalReason
 	32, // 37: docmatch.harness.v1.Completed.summary:type_name -> docmatch.harness.v1.RunSummary
 	51, // 38: docmatch.harness.v1.RunSummary.findings_by_severity:type_name -> docmatch.harness.v1.RunSummary.FindingsBySeverityEntry
-	53, // 39: docmatch.harness.v1.Failed.details:type_name -> google.protobuf.Struct
-	7,  // 40: docmatch.harness.v1.Finding.kind:type_name -> docmatch.harness.v1.FindingKind
-	8,  // 41: docmatch.harness.v1.Finding.severity:type_name -> docmatch.harness.v1.Severity
-	9,  // 42: docmatch.harness.v1.Finding.confidence_label:type_name -> docmatch.harness.v1.ConfidenceLabel
-	35, // 43: docmatch.harness.v1.Finding.evidence:type_name -> docmatch.harness.v1.Evidence
-	10, // 44: docmatch.harness.v1.Finding.status:type_name -> docmatch.harness.v1.FindingStatus
-	53, // 45: docmatch.harness.v1.Finding.details:type_name -> google.protobuf.Struct
-	52, // 46: docmatch.harness.v1.Finding.created_at:type_name -> google.protobuf.Timestamp
-	36, // 47: docmatch.harness.v1.Evidence.locator:type_name -> docmatch.harness.v1.Locator
-	53, // 48: docmatch.harness.v1.Evidence.values:type_name -> google.protobuf.Struct
-	37, // 49: docmatch.harness.v1.Locator.row:type_name -> docmatch.harness.v1.RowLocator
-	38, // 50: docmatch.harness.v1.Locator.page_box:type_name -> docmatch.harness.v1.PageBoxLocator
-	39, // 51: docmatch.harness.v1.Locator.byte_range:type_name -> docmatch.harness.v1.ByteRangeLocator
-	40, // 52: docmatch.harness.v1.Locator.time_range:type_name -> docmatch.harness.v1.TimeRangeLocator
-	11, // 53: docmatch.harness.v1.TimeRangeLocator.track:type_name -> docmatch.harness.v1.Track
-	12, // 54: docmatch.harness.v1.Match.kind:type_name -> docmatch.harness.v1.MatchKind
-	35, // 55: docmatch.harness.v1.Match.left:type_name -> docmatch.harness.v1.Evidence
-	35, // 56: docmatch.harness.v1.Match.right:type_name -> docmatch.harness.v1.Evidence
-	52, // 57: docmatch.harness.v1.Match.created_at:type_name -> google.protobuf.Timestamp
-	13, // 58: docmatch.harness.v1.Rule.scope:type_name -> docmatch.harness.v1.RuleScope
-	14, // 59: docmatch.harness.v1.Rule.status:type_name -> docmatch.harness.v1.RuleStatus
-	43, // 60: docmatch.harness.v1.Rule.compiled:type_name -> docmatch.harness.v1.CompiledRule
-	44, // 61: docmatch.harness.v1.Rule.stats:type_name -> docmatch.harness.v1.RuleStats
-	45, // 62: docmatch.harness.v1.Rule.provenance:type_name -> docmatch.harness.v1.RuleProvenance
-	52, // 63: docmatch.harness.v1.Rule.created_at:type_name -> google.protobuf.Timestamp
-	52, // 64: docmatch.harness.v1.Rule.updated_at:type_name -> google.protobuf.Timestamp
-	53, // 65: docmatch.harness.v1.CompiledRule.parameters:type_name -> google.protobuf.Struct
-	52, // 66: docmatch.harness.v1.CompiledRule.compiled_at:type_name -> google.protobuf.Timestamp
-	52, // 67: docmatch.harness.v1.RuleStats.last_evaluated_at:type_name -> google.protobuf.Timestamp
-	15, // 68: docmatch.harness.v1.RuleProvenance.origin:type_name -> docmatch.harness.v1.RuleOrigin
-	52, // 69: docmatch.harness.v1.RuleProvenance.proposed_at:type_name -> google.protobuf.Timestamp
-	52, // 70: docmatch.harness.v1.RuleProvenance.accepted_at:type_name -> google.protobuf.Timestamp
-	34, // 71: docmatch.harness.v1.ProposeRulesRequest.confirmed_findings:type_name -> docmatch.harness.v1.Finding
-	34, // 72: docmatch.harness.v1.ProposeRulesRequest.dismissed_findings:type_name -> docmatch.harness.v1.Finding
-	41, // 73: docmatch.harness.v1.ProposeRulesRequest.confirmed_matches:type_name -> docmatch.harness.v1.Match
-	1,  // 74: docmatch.harness.v1.ProposeRulesRequest.llm_mode:type_name -> docmatch.harness.v1.LlmMode
-	42, // 75: docmatch.harness.v1.ProposeRulesResponse.rules:type_name -> docmatch.harness.v1.Rule
-	29, // 76: docmatch.harness.v1.ProposeRulesResponse.usage:type_name -> docmatch.harness.v1.TokenUsage
-	16, // 77: docmatch.harness.v1.HealthResponse.status:type_name -> docmatch.harness.v1.ServingStatus
-	1,  // 78: docmatch.harness.v1.HealthResponse.llm_mode:type_name -> docmatch.harness.v1.LlmMode
-	52, // 79: docmatch.harness.v1.HealthResponse.started_at:type_name -> google.protobuf.Timestamp
-	19, // 80: docmatch.harness.v1.Harness.Estimate:input_type -> docmatch.harness.v1.EstimateRequest
-	24, // 81: docmatch.harness.v1.Harness.Run:input_type -> docmatch.harness.v1.RunRequest
-	25, // 82: docmatch.harness.v1.Harness.Replay:input_type -> docmatch.harness.v1.ReplayRequest
-	46, // 83: docmatch.harness.v1.Harness.ProposeRules:input_type -> docmatch.harness.v1.ProposeRulesRequest
-	48, // 84: docmatch.harness.v1.Harness.Health:input_type -> docmatch.harness.v1.HealthRequest
-	23, // 85: docmatch.harness.v1.Harness.Estimate:output_type -> docmatch.harness.v1.Quote
-	26, // 86: docmatch.harness.v1.Harness.Run:output_type -> docmatch.harness.v1.RunEvent
-	26, // 87: docmatch.harness.v1.Harness.Replay:output_type -> docmatch.harness.v1.RunEvent
-	47, // 88: docmatch.harness.v1.Harness.ProposeRules:output_type -> docmatch.harness.v1.ProposeRulesResponse
-	49, // 89: docmatch.harness.v1.Harness.Health:output_type -> docmatch.harness.v1.HealthResponse
-	85, // [85:90] is the sub-list for method output_type
-	80, // [80:85] is the sub-list for method input_type
-	80, // [80:80] is the sub-list for extension type_name
-	80, // [80:80] is the sub-list for extension extendee
-	0,  // [0:80] is the sub-list for field type_name
+	53, // 39: docmatch.harness.v1.RunSummary.reconciliation:type_name -> google.protobuf.Struct
+	53, // 40: docmatch.harness.v1.Failed.details:type_name -> google.protobuf.Struct
+	7,  // 41: docmatch.harness.v1.Finding.kind:type_name -> docmatch.harness.v1.FindingKind
+	8,  // 42: docmatch.harness.v1.Finding.severity:type_name -> docmatch.harness.v1.Severity
+	9,  // 43: docmatch.harness.v1.Finding.confidence_label:type_name -> docmatch.harness.v1.ConfidenceLabel
+	35, // 44: docmatch.harness.v1.Finding.evidence:type_name -> docmatch.harness.v1.Evidence
+	10, // 45: docmatch.harness.v1.Finding.status:type_name -> docmatch.harness.v1.FindingStatus
+	53, // 46: docmatch.harness.v1.Finding.details:type_name -> google.protobuf.Struct
+	52, // 47: docmatch.harness.v1.Finding.created_at:type_name -> google.protobuf.Timestamp
+	36, // 48: docmatch.harness.v1.Evidence.locator:type_name -> docmatch.harness.v1.Locator
+	53, // 49: docmatch.harness.v1.Evidence.values:type_name -> google.protobuf.Struct
+	37, // 50: docmatch.harness.v1.Locator.row:type_name -> docmatch.harness.v1.RowLocator
+	38, // 51: docmatch.harness.v1.Locator.page_box:type_name -> docmatch.harness.v1.PageBoxLocator
+	39, // 52: docmatch.harness.v1.Locator.byte_range:type_name -> docmatch.harness.v1.ByteRangeLocator
+	40, // 53: docmatch.harness.v1.Locator.time_range:type_name -> docmatch.harness.v1.TimeRangeLocator
+	11, // 54: docmatch.harness.v1.TimeRangeLocator.track:type_name -> docmatch.harness.v1.Track
+	12, // 55: docmatch.harness.v1.Match.kind:type_name -> docmatch.harness.v1.MatchKind
+	35, // 56: docmatch.harness.v1.Match.left:type_name -> docmatch.harness.v1.Evidence
+	35, // 57: docmatch.harness.v1.Match.right:type_name -> docmatch.harness.v1.Evidence
+	52, // 58: docmatch.harness.v1.Match.created_at:type_name -> google.protobuf.Timestamp
+	13, // 59: docmatch.harness.v1.Rule.scope:type_name -> docmatch.harness.v1.RuleScope
+	14, // 60: docmatch.harness.v1.Rule.status:type_name -> docmatch.harness.v1.RuleStatus
+	43, // 61: docmatch.harness.v1.Rule.compiled:type_name -> docmatch.harness.v1.CompiledRule
+	44, // 62: docmatch.harness.v1.Rule.stats:type_name -> docmatch.harness.v1.RuleStats
+	45, // 63: docmatch.harness.v1.Rule.provenance:type_name -> docmatch.harness.v1.RuleProvenance
+	52, // 64: docmatch.harness.v1.Rule.created_at:type_name -> google.protobuf.Timestamp
+	52, // 65: docmatch.harness.v1.Rule.updated_at:type_name -> google.protobuf.Timestamp
+	53, // 66: docmatch.harness.v1.CompiledRule.parameters:type_name -> google.protobuf.Struct
+	52, // 67: docmatch.harness.v1.CompiledRule.compiled_at:type_name -> google.protobuf.Timestamp
+	52, // 68: docmatch.harness.v1.RuleStats.last_evaluated_at:type_name -> google.protobuf.Timestamp
+	15, // 69: docmatch.harness.v1.RuleProvenance.origin:type_name -> docmatch.harness.v1.RuleOrigin
+	52, // 70: docmatch.harness.v1.RuleProvenance.proposed_at:type_name -> google.protobuf.Timestamp
+	52, // 71: docmatch.harness.v1.RuleProvenance.accepted_at:type_name -> google.protobuf.Timestamp
+	34, // 72: docmatch.harness.v1.ProposeRulesRequest.confirmed_findings:type_name -> docmatch.harness.v1.Finding
+	34, // 73: docmatch.harness.v1.ProposeRulesRequest.dismissed_findings:type_name -> docmatch.harness.v1.Finding
+	41, // 74: docmatch.harness.v1.ProposeRulesRequest.confirmed_matches:type_name -> docmatch.harness.v1.Match
+	1,  // 75: docmatch.harness.v1.ProposeRulesRequest.llm_mode:type_name -> docmatch.harness.v1.LlmMode
+	42, // 76: docmatch.harness.v1.ProposeRulesResponse.rules:type_name -> docmatch.harness.v1.Rule
+	29, // 77: docmatch.harness.v1.ProposeRulesResponse.usage:type_name -> docmatch.harness.v1.TokenUsage
+	16, // 78: docmatch.harness.v1.HealthResponse.status:type_name -> docmatch.harness.v1.ServingStatus
+	1,  // 79: docmatch.harness.v1.HealthResponse.llm_mode:type_name -> docmatch.harness.v1.LlmMode
+	52, // 80: docmatch.harness.v1.HealthResponse.started_at:type_name -> google.protobuf.Timestamp
+	19, // 81: docmatch.harness.v1.Harness.Estimate:input_type -> docmatch.harness.v1.EstimateRequest
+	24, // 82: docmatch.harness.v1.Harness.Run:input_type -> docmatch.harness.v1.RunRequest
+	25, // 83: docmatch.harness.v1.Harness.Replay:input_type -> docmatch.harness.v1.ReplayRequest
+	46, // 84: docmatch.harness.v1.Harness.ProposeRules:input_type -> docmatch.harness.v1.ProposeRulesRequest
+	48, // 85: docmatch.harness.v1.Harness.Health:input_type -> docmatch.harness.v1.HealthRequest
+	23, // 86: docmatch.harness.v1.Harness.Estimate:output_type -> docmatch.harness.v1.Quote
+	26, // 87: docmatch.harness.v1.Harness.Run:output_type -> docmatch.harness.v1.RunEvent
+	26, // 88: docmatch.harness.v1.Harness.Replay:output_type -> docmatch.harness.v1.RunEvent
+	47, // 89: docmatch.harness.v1.Harness.ProposeRules:output_type -> docmatch.harness.v1.ProposeRulesResponse
+	49, // 90: docmatch.harness.v1.Harness.Health:output_type -> docmatch.harness.v1.HealthResponse
+	86, // [86:91] is the sub-list for method output_type
+	81, // [81:86] is the sub-list for method input_type
+	81, // [81:81] is the sub-list for extension type_name
+	81, // [81:81] is the sub-list for extension extendee
+	0,  // [0:81] is the sub-list for field type_name
 }
 
 func init() { file_harness_proto_init() }

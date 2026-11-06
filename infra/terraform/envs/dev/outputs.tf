@@ -93,6 +93,11 @@ output "uploads_origin" {
   value       = module.storage.uploads_origin
 }
 
+output "upload_origins" {
+  description = "S3 and R2 origins allowed by the site's CSP (DM_UPLOAD_ORIGINS, space separated)."
+  value       = join(" ", local.upload_origins)
+}
+
 output "packer_instance_profile_name" {
   description = "Instance profile for the Packer build (empty when this environment does not create it)."
   value       = module.compute.packer_instance_profile_name

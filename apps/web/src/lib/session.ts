@@ -1,15 +1,21 @@
 // Session helpers over the auth routes. Nothing is stored in the browser: the API sets the
 // HttpOnly cookies and /v1/me says who is signed in.
+import { t } from './i18n';
 import { api, ApiError } from './api';
 
 export interface Me {
   user: { id: string; email: string; display_name: string };
   org: { id: string; name: string };
-  credits?: { balance: number; reserved: number; available: number };
+  credits?: { balance: number; reserved: number; available: number; token_exempt?: boolean };
 }
 
 /** Where the web app goes after signing in. */
 export const APP_PATH = '/app';
+export const SESSION_CHANGED_EVENT = 'docmatch:session-changed';
+
+function sessionChanged(): void {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(SESSION_CHANGED_EVENT));
+}
 
 /** The signed-in user, or null. */
 export async function currentUser(signal?: AbortSignal): Promise<Me | null> {
@@ -32,8 +38,10 @@ export function startEmailLogin(email: string): Promise<EmailChallenge> {
 }
 
 /** Signs in with the typed code. */
-export function verifyEmailLogin(challengeId: string, code: string): Promise<Me> {
-  return api<Me>('/v1/auth/email/verify', { body: { challenge_id: challengeId, code } });
+export async function verifyEmailLogin(challengeId: string, code: string): Promise<Me> {
+  const me = await api<Me>('/v1/auth/email/verify', { body: { challenge_id: challengeId, code } });
+  sessionChanged();
+  return me;
 }
 
 /** Starts the Google flow and leaves the page; `redirectTo` is a site-relative path. */
@@ -44,8 +52,9 @@ export async function startGoogleLogin(redirectTo: string): Promise<void> {
   window.location.assign(res.authorization_url);
 }
 
-export function logout(): Promise<void> {
-  return api<void>('/v1/auth/logout', { method: 'POST' });
+export async function logout(): Promise<void> {
+  await api<void>('/v1/auth/logout', { method: 'POST', noRefresh: true });
+  sessionChanged();
 }
 
 /** Which sign-ins this deployment offers (GET /v1/auth/methods). */
@@ -77,8 +86,10 @@ export async function authMethods(signal?: AbortSignal): Promise<AuthMethods> {
 }
 
 /** Local sign-in (development API only): creates the account on first use. */
-export function devLogin(email?: string): Promise<Me> {
-  return api<Me>('/v1/auth/dev/login', { body: email ? { email } : {} });
+export async function devLogin(email?: string): Promise<Me> {
+  const me = await api<Me>('/v1/auth/dev/login', { body: email ? { email } : {} });
+  sessionChanged();
+  return me;
 }
 
 /** Signs in with the development login when the API offers it; null otherwise. */
@@ -119,6 +130,22 @@ export async function listDevices(signal?: AbortSignal): Promise<Device[]> {
 }
 
 /** Signs one device out (this one too: the API then clears the cookies). */
-export function revokeDevice(id: string): Promise<void> {
-  return api<void>(`/v1/me/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' });
+export async function revokeDevice(id: string): Promise<void> {
+  await api<void>(`/v1/me/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  sessionChanged();
+}
+
+/** Uses the existing server password flow; credentials are never persisted in the browser. */
+export async function passwordLogin(
+  email: string,
+  password: string,
+  totpCode?: string,
+): Promise<Me> {
+  await api('/v1/auth/password/login', {
+    body: { email, password, ...(totpCode ? { totp_code: totpCode } : {}) },
+  });
+  const me = await currentUser();
+  if (!me) throw new Error(t('auth.session_failed'));
+  sessionChanged();
+  return me;
 }

@@ -1,6 +1,6 @@
 # docmatch harness (services/harness, dm-server) as a static musl binary on Alpine. Like
 # `make -C services/harness release`, the binary is linked by the rust-lld that ships with Rust (no
-# C cross toolchain: dm-server has no C dependencies). Built natively for the machine's
+# cross toolchain: musl-tools compiles the TLS library's native code). Built natively for the machine's
 # architecture; the cargo registry and target dir live in BuildKit cache mounts, so a rebuild only
 # compiles what changed. Built from the repository root (context ../..).
 #
@@ -14,6 +14,7 @@ ENV CARGO_TERM_COLOR=never \
     CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=rust-lld \
     CARGO_PROFILE_RELEASE_STRIP=symbols
 RUN rustup target add "$(uname -m)-unknown-linux-musl"
+RUN apt-get update && apt-get install -y --no-install-recommends musl-tools && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 COPY packages/contracts/harness.proto packages/contracts/
 COPY packages/contracts/gen/limits.rs packages/contracts/gen/
@@ -36,8 +37,10 @@ LABEL org.opencontainers.image.title="docmatch-harness" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.revision="${REVISION}"
 RUN addgroup -S -g 10001 docmatch && adduser -S -D -H -u 10001 -G docmatch docmatch && \
-    mkdir -p /data/media /run/docmatch && chown docmatch:docmatch /data/media /run/docmatch
+    mkdir -p /data/media /run/docmatch /etc/docmatch && chmod 0755 /etc/docmatch && \
+    chown docmatch:docmatch /data/media /run/docmatch
 COPY --from=build /out/dm-server /usr/local/bin/dm-server
+COPY --chmod=0644 config/models.yaml /etc/docmatch/models.yaml
 USER 10001:10001
-ENV DM_HARNESS_SOCKET=/run/docmatch/harness.sock DM_MEDIA_LOCAL_DIR=/data/media
+ENV DM_HARNESS_SOCKET=/run/docmatch/harness.sock DM_MEDIA_LOCAL_DIR=/data/media DM_MODELS_FILE=/etc/docmatch/models.yaml
 CMD ["dm-server"]

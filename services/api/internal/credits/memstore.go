@@ -239,7 +239,7 @@ func (t *memTx) InsertHold(_ context.Context, h Hold) (Hold, error) {
 	if err := t.check(h.OrgID); err != nil {
 		return Hold{}, err
 	}
-	if h.Amount <= 0 {
+	if (!h.Sponsored && h.Amount <= 0) || (h.Sponsored && h.Amount != 0) {
 		return Hold{}, errors.New("credits: hold check constraint violated")
 	}
 	h.ID = uuid.New()

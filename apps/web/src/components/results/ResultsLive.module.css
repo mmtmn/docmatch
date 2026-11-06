@@ -1,0 +1,18 @@
+.processing {
+  display: flex;
+  height: clamp(24rem, 65vh, 36rem);
+  animation: arrive 350ms ease-out;
+}
+@keyframes arrive {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .processing {
+    animation: none;
+  }
+}

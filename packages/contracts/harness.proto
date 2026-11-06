@@ -324,6 +324,9 @@ message RunSummary {
   // not read, a scanned PDF without text, a CNAB layout read only with the common fields, a
   // file that did not take part in the run. Empty when every file was used as read.
   repeated string source_warnings = 11;
+  // Reconciled output document. Monetary values are integer centavos; proposed links are
+  // kept separate from confirmed receipts. Original files are never modified.
+  google.protobuf.Struct reconciliation = 12;
 }
 
 message Failed {

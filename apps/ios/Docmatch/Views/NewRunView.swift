@@ -5,12 +5,14 @@ import UniformTypeIdentifiers
 /// A new reconciliation: the files from the system picker, the rules and options of the site's
 /// form, the estimate to confirm, and the run.
 struct NewRunView: View {
+    var tokenExempt = false
     let model: NewRunModel
     let onStarted: (String) -> Void
     @State private var picking = false
     @Environment(\.texts) private var texts
 
-    init(model: NewRunModel, onStarted: @escaping (String) -> Void) {
+    init(model: NewRunModel, tokenExempt: Bool = false, onStarted: @escaping (String) -> Void) {
+        self.tokenExempt = tokenExempt
         self.model = model
         self.onStarted = onStarted
     }
@@ -100,7 +102,7 @@ struct NewRunView: View {
         } message: {
             if case .confirm(let prepared) = model.phase {
                 // After a failed start the same estimate is offered again, with the reason.
-                Text(Format.confirmRun(texts, prepared.quote) + (model.error.map { "\n\n" + $0 } ?? ""))
+                Text((tokenExempt ? texts.t("app.confirm_exempt") : Format.confirmRun(texts, prepared.quote)) + "\n\n" + texts.t("app.confirm_scope") + (model.error.map { "\n\n" + $0 } ?? ""))
             }
         }
         .onChange(of: model.started) { _, runId in

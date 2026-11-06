@@ -46,6 +46,17 @@ func opts() install.Options {
 	}
 }
 
+func TestDevelopmentChoicesIncludeModelAndProvider(t *testing.T) {
+	o := opts()
+	o.Mode, o.SourceDir = state.ModeDev, "/source"
+	m := newChoices(NewTheme(false, false, false), o, nil, func(int) bool { return true }, "linux")
+	m.v.llm, m.v.localURL, m.v.model = "local", "http://localhost:11434/v1", "installed:model"
+	got := m.apply(o)
+	if got.LLMMode != "local" || got.ReviewModel != "installed:model" || got.LocalLLM != "http://localhost:11434/v1" {
+		t.Fatal("development choices lost the selected provider or model")
+	}
+}
+
 func fakeChecks(results ...preflight.Result) func(install.Options) []preflight.Check {
 	names := []string{"Sistema", "Espaço em disco", "Docker", "Docker rodando", "Porta 4321 (site)"}
 	return func(install.Options) []preflight.Check {

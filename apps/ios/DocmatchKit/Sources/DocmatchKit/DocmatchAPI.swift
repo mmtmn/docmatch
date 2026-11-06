@@ -104,6 +104,11 @@ public final class DocmatchAPI: Sendable {
         try await http.call("POST", "/v1/auth/google/native", body: ["id_token": .string(idToken)], as: SessionInfo.self)
     }
 
+    @discardableResult
+    public func passwordLogin(email: String, password: String) async throws -> SessionInfo {
+        try await http.call("POST", "/v1/auth/password/login", body: ["email": .string(email), "password": .string(password)], as: SessionInfo.self)
+    }
+
     /// Local sign-in (development API only).
     @discardableResult
     public func devLogin(email: String? = nil) async throws -> SessionInfo {

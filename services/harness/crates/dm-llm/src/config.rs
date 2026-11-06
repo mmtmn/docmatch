@@ -78,6 +78,9 @@ impl Default for Defaults {
 pub struct RoleConfig {
     /// OpenRouter model id.
     pub primary: String,
+    /// False for providers that reject temperature (many reasoning models).
+    #[serde(default)]
+    pub temperature_supported: Option<bool>,
     /// Fallback model id (a different family).
     #[serde(default)]
     pub fallback: Option<String>,
@@ -132,6 +135,8 @@ pub struct ResolvedModel {
     pub max_output_tokens: u32,
     /// Temperature.
     pub temperature: f64,
+    /// Whether the remote request may include temperature.
+    pub temperature_supported: bool,
     /// Ask for JSON-schema output.
     pub structured_output: bool,
     /// Reasoning model.
@@ -216,6 +221,7 @@ impl ModelsConfig {
             timeout: Duration::from_secs(timeout_s.max(1)),
             max_output_tokens,
             temperature: self.defaults.temperature,
+            temperature_supported: cfg.temperature_supported.unwrap_or(true),
             structured_output: cfg.structured_output.unwrap_or(false),
             reasoning: cfg.reasoning.unwrap_or(false),
         })

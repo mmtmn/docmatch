@@ -23,26 +23,13 @@ async fn main() -> ExitCode {
         eprintln!("dm-server: argumento desconhecido: {a} (uso: dm-server [--socket CAMINHO])");
         return ExitCode::from(2);
     }
-    let cfg = match ServerConfig::from_env() {
+    let cfg = match ServerConfig::from_env_with_socket(socket_arg) {
         Ok(cfg) => cfg,
-        Err(_) if socket_arg.is_some() => ServerConfig {
-            socket: std::path::PathBuf::new(),
-            local_root: std::env::var("DM_MEDIA_LOCAL_DIR")
-                .ok()
-                .filter(|s| !s.trim().is_empty())
-                .map(Into::into),
-            workdir: std::env::temp_dir().join("docmatch-harness"),
-            engine: dm_recon::EngineConfig::default(),
-        },
         Err(e) => {
             eprintln!("dm-server: {e}. Consulte .env.example na raiz do repositório.");
             return ExitCode::from(2);
         }
     };
-    let mut cfg = cfg;
-    if let Some(s) = socket_arg {
-        cfg.socket = s.into();
-    }
     if cfg.local_root.is_none() {
         eprintln!("dm-server: DM_MEDIA_LOCAL_DIR vazio; fontes local:// serão recusadas");
     }

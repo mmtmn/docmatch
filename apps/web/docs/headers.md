@@ -20,7 +20,7 @@ Astro: ele carrega só as diretivas que não funcionam em `<meta>` e que valem p
 
 | Onde      | Diretivas                                                                                                                                                                                                                                                                                                                                       |
 | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `<meta>`  | `default-src 'self'; base-uri 'self'; object-src 'none'; frame-src 'none'; img-src 'self' data: blob:; font-src 'self'; manifest-src 'self'; worker-src 'self' blob:; connect-src 'self' <API>; media-src 'self' blob: <MÍDIA>; form-action 'self' <API>; upgrade-insecure-requests; script-src 'self' 'sha256-…'; style-src 'self' 'sha256-…'` |
+| `<meta>`  | `default-src 'self'; base-uri 'self'; object-src 'none'; frame-src 'self'; img-src 'self' data: blob:; font-src 'self'; manifest-src 'self'; worker-src 'self' blob:; connect-src 'self' <API>; media-src 'self' blob: <MÍDIA>; form-action 'self' <API>; upgrade-insecure-requests; script-src 'self' 'sha256-…'; style-src 'self' 'sha256-…'` |
 | Cabeçalho | `frame-ancestors 'none'; report-to csp` (e, opcionalmente, `require-trusted-types-for 'script'` quando o React suportar)                                                                                                                                                                                                                        |
 
 `<API>` vem de `PUBLIC_DM_API_BASE_URL` e `<MÍDIA>` de `PUBLIC_DM_MEDIA_BASE_URL` (origem do
@@ -87,3 +87,8 @@ produção. Quem mudar a função muda o script (e `tools/serve-dist.test.mjs`) 
   cabeçalho evita reparse).
 - A API responde com `Access-Control-Allow-Origin` para a origem do site (formulário de contato e,
   depois, uploads e orçamentos).
+
+A prévia de personalização usa `srcdoc` com conteúdo escapado e
+`sandbox="allow-same-origin"`, **sem** `allow-scripts`. A origem é necessária para o CSS local
+sob `Cross-Origin-Resource-Policy: same-origin`; scripts, formulários e navegação continuam
+bloqueados. A CSP da prévia tem `default-src 'none'` e permite somente o stylesheet local.

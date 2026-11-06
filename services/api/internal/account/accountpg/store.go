@@ -297,6 +297,7 @@ func (s *Store) Credits(ctx context.Context, orgID uuid.UUID) (account.CreditSum
 		}
 		if err == nil {
 			out.Balance, out.Reserved = acc.Balance, acc.Held
+			out.TokenExempt = acc.TokenExempt
 		}
 		out.Available = out.Balance - out.Reserved
 		rows, err := q.AuthSumOpenGrantsByKind(ctx, orgID)

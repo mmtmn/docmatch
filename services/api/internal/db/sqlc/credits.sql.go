@@ -74,7 +74,7 @@ func (q *Queries) AppendCreditLedger(ctx context.Context, arg AppendCreditLedger
 const closeCreditHold = `-- name: CloseCreditHold :one
 UPDATE credit_holds SET status = $3, settled_amount = $4, closed_at = now()
 WHERE org_id = $1 AND id = $2 AND status = 'held'
-RETURNING id, org_id, amount, status, settled_amount, run_id, quote_id, reference, created_at, closed_at
+RETURNING id, org_id, amount, status, settled_amount, run_id, quote_id, reference, created_at, closed_at, sponsored
 `
 
 type CloseCreditHoldParams struct {
@@ -103,6 +103,7 @@ func (q *Queries) CloseCreditHold(ctx context.Context, arg CloseCreditHoldParams
 		&i.Reference,
 		&i.CreatedAt,
 		&i.ClosedAt,
+		&i.Sponsored,
 	)
 	return i, err
 }
@@ -110,7 +111,7 @@ func (q *Queries) CloseCreditHold(ctx context.Context, arg CloseCreditHoldParams
 const ensureCreditAccount = `-- name: EnsureCreditAccount :one
 INSERT INTO credit_accounts (org_id) VALUES ($1)
 ON CONFLICT (org_id) DO UPDATE SET org_id = EXCLUDED.org_id
-RETURNING org_id, balance, held, ledger_seq, updated_at
+RETURNING org_id, balance, held, ledger_seq, updated_at, billing_blocked, token_exempt
 `
 
 func (q *Queries) EnsureCreditAccount(ctx context.Context, orgID uuid.UUID) (CreditAccount, error) {
@@ -122,13 +123,15 @@ func (q *Queries) EnsureCreditAccount(ctx context.Context, orgID uuid.UUID) (Cre
 		&i.Held,
 		&i.LedgerSeq,
 		&i.UpdatedAt,
+		&i.BillingBlocked,
+		&i.TokenExempt,
 	)
 	return i, err
 }
 
 const getCreditAccount = `-- name: GetCreditAccount :one
 
-SELECT org_id, balance, held, ledger_seq, updated_at FROM credit_accounts WHERE org_id = $1
+SELECT org_id, balance, held, ledger_seq, updated_at, billing_blocked, token_exempt FROM credit_accounts WHERE org_id = $1
 `
 
 // Tokens docmatch. Toda consulta roda dentro de WithOrgTx (app.org_id);
@@ -142,12 +145,14 @@ func (q *Queries) GetCreditAccount(ctx context.Context, orgID uuid.UUID) (Credit
 		&i.Held,
 		&i.LedgerSeq,
 		&i.UpdatedAt,
+		&i.BillingBlocked,
+		&i.TokenExempt,
 	)
 	return i, err
 }
 
 const getCreditAccountForUpdate = `-- name: GetCreditAccountForUpdate :one
-SELECT org_id, balance, held, ledger_seq, updated_at FROM credit_accounts WHERE org_id = $1 FOR UPDATE
+SELECT org_id, balance, held, ledger_seq, updated_at, billing_blocked, token_exempt FROM credit_accounts WHERE org_id = $1 FOR UPDATE
 `
 
 func (q *Queries) GetCreditAccountForUpdate(ctx context.Context, orgID uuid.UUID) (CreditAccount, error) {
@@ -159,6 +164,8 @@ func (q *Queries) GetCreditAccountForUpdate(ctx context.Context, orgID uuid.UUID
 		&i.Held,
 		&i.LedgerSeq,
 		&i.UpdatedAt,
+		&i.BillingBlocked,
+		&i.TokenExempt,
 	)
 	return i, err
 }
@@ -191,7 +198,7 @@ func (q *Queries) GetCreditGrantByIdempotencyKey(ctx context.Context, arg GetCre
 }
 
 const getCreditHold = `-- name: GetCreditHold :one
-SELECT id, org_id, amount, status, settled_amount, run_id, quote_id, reference, created_at, closed_at FROM credit_holds WHERE org_id = $1 AND id = $2
+SELECT id, org_id, amount, status, settled_amount, run_id, quote_id, reference, created_at, closed_at, sponsored FROM credit_holds WHERE org_id = $1 AND id = $2
 `
 
 type GetCreditHoldParams struct {
@@ -213,12 +220,13 @@ func (q *Queries) GetCreditHold(ctx context.Context, arg GetCreditHoldParams) (C
 		&i.Reference,
 		&i.CreatedAt,
 		&i.ClosedAt,
+		&i.Sponsored,
 	)
 	return i, err
 }
 
 const getCreditHoldForUpdate = `-- name: GetCreditHoldForUpdate :one
-SELECT id, org_id, amount, status, settled_amount, run_id, quote_id, reference, created_at, closed_at FROM credit_holds WHERE org_id = $1 AND id = $2 FOR UPDATE
+SELECT id, org_id, amount, status, settled_amount, run_id, quote_id, reference, created_at, closed_at, sponsored FROM credit_holds WHERE org_id = $1 AND id = $2 FOR UPDATE
 `
 
 type GetCreditHoldForUpdateParams struct {
@@ -240,6 +248,7 @@ func (q *Queries) GetCreditHoldForUpdate(ctx context.Context, arg GetCreditHoldF
 		&i.Reference,
 		&i.CreatedAt,
 		&i.ClosedAt,
+		&i.Sponsored,
 	)
 	return i, err
 }
@@ -285,9 +294,9 @@ func (q *Queries) InsertCreditGrant(ctx context.Context, arg InsertCreditGrantPa
 }
 
 const insertCreditHold = `-- name: InsertCreditHold :one
-INSERT INTO credit_holds (org_id, amount, run_id, quote_id, reference)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, org_id, amount, status, settled_amount, run_id, quote_id, reference, created_at, closed_at
+INSERT INTO credit_holds (org_id, amount, run_id, quote_id, reference, sponsored)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, org_id, amount, status, settled_amount, run_id, quote_id, reference, created_at, closed_at, sponsored
 `
 
 type InsertCreditHoldParams struct {
@@ -296,6 +305,7 @@ type InsertCreditHoldParams struct {
 	RunID     *uuid.UUID
 	QuoteID   *uuid.UUID
 	Reference *string
+	Sponsored bool
 }
 
 func (q *Queries) InsertCreditHold(ctx context.Context, arg InsertCreditHoldParams) (CreditHold, error) {
@@ -305,6 +315,7 @@ func (q *Queries) InsertCreditHold(ctx context.Context, arg InsertCreditHoldPara
 		arg.RunID,
 		arg.QuoteID,
 		arg.Reference,
+		arg.Sponsored,
 	)
 	var i CreditHold
 	err := row.Scan(
@@ -318,6 +329,7 @@ func (q *Queries) InsertCreditHold(ctx context.Context, arg InsertCreditHoldPara
 		&i.Reference,
 		&i.CreatedAt,
 		&i.ClosedAt,
+		&i.Sponsored,
 	)
 	return i, err
 }
@@ -494,7 +506,7 @@ func (q *Queries) ListOpenCreditGrantsForUpdate(ctx context.Context, orgID uuid.
 }
 
 const listOpenCreditHolds = `-- name: ListOpenCreditHolds :many
-SELECT id, org_id, amount, status, settled_amount, run_id, quote_id, reference, created_at, closed_at FROM credit_holds WHERE org_id = $1 AND status = 'held' ORDER BY created_at
+SELECT id, org_id, amount, status, settled_amount, run_id, quote_id, reference, created_at, closed_at, sponsored FROM credit_holds WHERE org_id = $1 AND status = 'held' ORDER BY created_at
 `
 
 func (q *Queries) ListOpenCreditHolds(ctx context.Context, orgID uuid.UUID) ([]CreditHold, error) {
@@ -517,6 +529,7 @@ func (q *Queries) ListOpenCreditHolds(ctx context.Context, orgID uuid.UUID) ([]C
 			&i.Reference,
 			&i.CreatedAt,
 			&i.ClosedAt,
+			&i.Sponsored,
 		); err != nil {
 			return nil, err
 		}
@@ -589,7 +602,7 @@ func (q *Queries) SumCreditLedger(ctx context.Context, orgID uuid.UUID) (SumCred
 const updateCreditAccount = `-- name: UpdateCreditAccount :one
 UPDATE credit_accounts SET balance = $2, held = $3, updated_at = now()
 WHERE org_id = $1
-RETURNING org_id, balance, held, ledger_seq, updated_at
+RETURNING org_id, balance, held, ledger_seq, updated_at, billing_blocked, token_exempt
 `
 
 type UpdateCreditAccountParams struct {
@@ -607,6 +620,8 @@ func (q *Queries) UpdateCreditAccount(ctx context.Context, arg UpdateCreditAccou
 		&i.Held,
 		&i.LedgerSeq,
 		&i.UpdatedAt,
+		&i.BillingBlocked,
+		&i.TokenExempt,
 	)
 	return i, err
 }

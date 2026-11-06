@@ -1,3 +1,4 @@
+import { trapDialogFocus } from '../../lib/dialog';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useCharLimit } from '../../hooks/useCharLimit';
 import { formatCurrency } from '../../lib/format';
@@ -7,6 +8,7 @@ import { CharCounter } from '../CharCounter';
 import { CloseIcon } from '../icons';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { EvidencePanel } from './EvidencePanel';
+import { DocumentRowEffect } from './ReconciledDocument';
 import type { Finding, FindingStatus, MatchType } from './types';
 import styles from './FindingDrawer.module.css';
 
@@ -24,138 +26,175 @@ export const STATUS_LABEL: Record<FindingStatus, MessageKey> = {
   edited: 'results.status_edited',
 };
 
+const PRIORITY_LABEL: Record<string, MessageKey> = {
+  critical: 'results.priority_critical',
+  high: 'results.priority_high',
+  medium: 'results.priority_medium',
+  low: 'results.priority_low',
+  info: 'results.priority_info',
+};
+
 export interface FindingDrawerProps {
   finding: Finding;
   onClose: () => void;
-  onDecision: (id: string, status: FindingStatus, note?: string) => void;
+  onDecision: (id: string, status: FindingStatus, note?: string) => Promise<void> | void;
+  allowUndo?: boolean;
 }
-
-const FOCUSABLE =
-  'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
  * Side panel with the evidence side by side and the accept / reject / edit controls.
  * Modal: Esc closes, Tab cycles inside, focus returns to the opener (handled by the parent).
  * The parent renders it with `key={finding.id}` so each finding starts from fresh state.
  */
-export function FindingDrawer({ finding, onClose, onDecision }: FindingDrawerProps) {
+export function FindingDrawer({
+  finding,
+  onClose,
+  onDecision,
+  allowUndo = true,
+}: FindingDrawerProps) {
   const id = useId();
-  const panelRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDialogElement>(null);
   const [editing, setEditing] = useState(false);
   const [note, setNote] = useState(finding.note ?? '');
   const [saved, setSaved] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const noteLimit = useCharLimit(note, textLimits.finding_feedback_note);
 
-  // Move focus into the dialog on open.
+  const dismiss = () => {
+    // Release the native modal's inert background before the parent restores focus.
+    panelRef.current?.close?.();
+    onClose();
+  };
+
   useEffect(() => {
-    panelRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+    const panel = panelRef.current;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    if (panel && !panel.open) {
+      if (typeof panel.showModal === 'function') panel.showModal();
+      else panel.setAttribute('open', '');
+    }
+    return () => {
+      panel?.close?.();
+      document.body.style.overflow = previousOverflow;
+    };
   }, []);
 
-  // Esc closes; Tab cycles inside the panel.
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        onClose();
-        return;
-      }
-      if (event.key !== 'Tab' || !panelRef.current) return;
-      const items = Array.from(panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE));
-      if (items.length === 0) return;
-      const first = items[0]!;
-      const last = items[items.length - 1]!;
-      const inside = panelRef.current.contains(document.activeElement);
-      if (event.shiftKey && (document.activeElement === first || !inside)) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && (document.activeElement === last || !inside)) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  const decide = (status: FindingStatus, withNote?: string): void => {
-    onDecision(finding.id, status, withNote);
-    setSaved(t('results.feedback_saved'));
-    setEditing(false);
+  const decide = async (status: FindingStatus, withNote?: string): Promise<void> => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    setSaved(null);
+    try {
+      await onDecision(finding.id, status, withNote);
+      setSaved(t('results.feedback_saved'));
+      setEditing(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('errors.unknown'));
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
-    <div className={styles.backdrop}>
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={`${id}-title`}
-        className={styles.panel}
-      >
-        <header className={styles.header}>
-          <div className={styles.headerText}>
-            <p className={styles.kicker}>
-              {t(MATCH_TYPE_LABEL[finding.matchType])} · {t(STATUS_LABEL[finding.status])}
-            </p>
-            <h2 id={`${id}-title`} className={styles.title}>
-              {finding.title}
-            </h2>
-          </div>
-          <button
-            type="button"
-            className={styles.close}
-            aria-label={t('results.drawer_close')}
-            onClick={onClose}
-          >
-            <CloseIcon size={20} />
-          </button>
-        </header>
+    <dialog
+      onKeyDown={trapDialogFocus}
+      ref={panelRef}
+      aria-modal="true"
+      aria-labelledby={`${id}-title`}
+      className={styles.panel}
+      onCancel={(event) => {
+        event.preventDefault();
+        dismiss();
+      }}
+    >
+      <header className={styles.header}>
+        <div className={styles.headerText}>
+          <p className={styles.kicker}>
+            {finding.severity && PRIORITY_LABEL[finding.severity]
+              ? `${t('results.col_priority')}: ${t(PRIORITY_LABEL[finding.severity]!)}`
+              : t(MATCH_TYPE_LABEL[finding.matchType])}{' '}
+            · {t(STATUS_LABEL[finding.status])}
+          </p>
+          <h2 id={`${id}-title`} className={styles.title}>
+            {finding.title}
+          </h2>
+        </div>
+        <button
+          type="button"
+          className={styles.close}
+          aria-label={t('results.drawer_close')}
+          onClick={dismiss}
+        >
+          <CloseIcon size={20} />
+        </button>
+      </header>
 
-        <dl className={styles.facts}>
+      <dl className={styles.facts}>
+        <div>
+          <dt>{t('results.amount_at_risk')}</dt>
+          <dd className={styles.amount}>
+            {formatCurrency(finding.amountAtRisk, finding.currency)}
+          </dd>
+        </div>
+        <div>
+          <dt>{t('results.col_confidence')}</dt>
+          <dd>
+            <ConfidenceBadge level={finding.confidence} />
+          </dd>
+        </div>
+        {finding.rule && (
           <div>
-            <dt>{t('results.amount_at_risk')}</dt>
-            <dd className={styles.amount}>
-              {formatCurrency(finding.amountAtRisk, finding.currency)}
-            </dd>
+            <dt>{t('results.rule_applied')}</dt>
+            <dd>{finding.rule}</dd>
           </div>
-          <div>
-            <dt>{t('results.col_confidence')}</dt>
-            <dd>
-              <ConfidenceBadge level={finding.confidence} />
-            </dd>
-          </div>
-          {finding.rule && (
-            <div>
-              <dt>{t('results.rule_applied')}</dt>
-              <dd>{finding.rule}</dd>
-            </div>
-          )}
-        </dl>
+        )}
+      </dl>
 
-        <section className={styles.section} aria-labelledby={`${id}-explanation`}>
-          <h3 id={`${id}-explanation`} className={styles.sectionTitle}>
-            {t('results.explanation')}
-          </h3>
-          <p>{finding.explanation}</p>
-          <p className="small muted">{t('results.verified_by')}</p>
-        </section>
+      <section className={styles.section} aria-labelledby={`${id}-file-effect`}>
+        <h3 id={`${id}-file-effect`} className={styles.sectionTitle}>
+          {t('results.file_effect')}
+        </h3>
+        {finding.documentRows?.length ? (
+          finding.documentRows.map((row) => (
+            <DocumentRowEffect
+              key={`${row.source_id}:${row.id}`}
+              row={row}
+              currency={finding.currency}
+            />
+          ))
+        ) : (
+          <p className="small muted">{t('results.file_effect_unknown')}</p>
+        )}
+      </section>
+      <section className={styles.section} aria-labelledby={`${id}-explanation`}>
+        <h3 id={`${id}-explanation`} className={styles.sectionTitle}>
+          {t('results.explanation')}
+        </h3>
+        <p>{finding.explanation}</p>
+        <p className="small muted">{t('results.confidence_scope')}</p>
+      </section>
 
-        <section className={styles.section} aria-labelledby={`${id}-evidence`}>
-          <h3 id={`${id}-evidence`} className={styles.sectionTitle}>
-            {t('results.evidence_heading')}
-          </h3>
-          <div className={styles.sideBySide} aria-label={t('results.evidence_side_by_side')}>
-            <EvidencePanel evidence={finding.left} currency={finding.currency} />
-            <EvidencePanel evidence={finding.right} currency={finding.currency} />
-          </div>
-        </section>
+      <section className={styles.section} aria-labelledby={`${id}-evidence`}>
+        <h3 id={`${id}-evidence`} className={styles.sectionTitle}>
+          {t('results.evidence_heading')}
+        </h3>
+        <div className={styles.sideBySide} aria-label={t('results.evidence_side_by_side')}>
+          <EvidencePanel evidence={finding.left} currency={finding.currency} />
+          <EvidencePanel evidence={finding.right} currency={finding.currency} />
+        </div>
+      </section>
 
-        <footer className={styles.footer}>
+      <footer className={styles.footer}>
+        <p className={styles.reviewScope}>{t('results.review_scope')}</p>
+        <fieldset disabled={busy} className={styles.decisionFields}>
           {editing ? (
             <form
               className={styles.editForm}
               onSubmit={(event) => {
                 event.preventDefault();
-                decide('edited', note.trim());
+                void decide('edited', note.trim());
               }}
             >
               <label className="field__label" htmlFor={`${id}-note`}>
@@ -199,24 +238,29 @@ export function FindingDrawer({ finding, onClose, onDecision }: FindingDrawerPro
                     {t('results.edit')}
                   </button>
                 </>
-              ) : (
+              ) : allowUndo ? (
                 <button type="button" className="btn btn--ghost" onClick={() => decide('open', '')}>
                   {t('results.undo')}
+                </button>
+              ) : (
+                <button type="button" className="btn btn--ghost" onClick={() => setEditing(true)}>
+                  {t('results.edit')}
                 </button>
               )}
             </div>
           )}
-          <p className={styles.saved} role="status" aria-live="polite">
-            {saved ?? ''}
+        </fieldset>
+        {error && <p role="alert">{error}</p>}
+        <p className={styles.saved} role="status" aria-live="polite">
+          {saved ?? ''}
+        </p>
+        {finding.note && !editing && (
+          <p className={styles.note}>
+            <span className="muted">{t('results.edit_label')}: </span>
+            {finding.note}
           </p>
-          {finding.note && !editing && (
-            <p className={styles.note}>
-              <span className="muted">{t('results.edit_label')}: </span>
-              {finding.note}
-            </p>
-          )}
-        </footer>
-      </div>
-    </div>
+        )}
+      </footer>
+    </dialog>
   );
 }

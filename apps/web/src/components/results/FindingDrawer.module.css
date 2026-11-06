@@ -1,21 +1,24 @@
-.backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  display: flex;
-  justify-content: flex-end;
-  background: var(--color-backdrop);
-}
-
 .panel {
   display: flex;
   flex-direction: column;
   width: min(60rem, 100%);
-  height: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
+  max-width: 100%;
+  margin: 0 0 0 auto;
+  padding: 0;
+  border: 0;
+  border-left: 1px solid var(--color-border);
+  color: var(--color-fg);
   overflow: auto;
   overscroll-behavior: contain;
   background: var(--color-bg);
   box-shadow: var(--shadow-2);
+}
+
+/* Do not override the browser's closed-dialog state with the flex layout. */
+.panel:not([open]) {
+  display: none;
 }
 
 .header {
@@ -137,4 +140,21 @@
 .note {
   margin: var(--space-2) 0 0;
   font-size: var(--fs-sm);
+}
+
+.decisionFields {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.panel::backdrop {
+  background: var(--color-backdrop);
+  backdrop-filter: blur(3px);
+}
+.reviewScope {
+  padding-block: var(--space-3);
+  font-size: var(--fs-sm);
+  color: var(--color-muted);
 }

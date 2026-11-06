@@ -17,14 +17,21 @@ import (
 // AuditStore is the pgx implementation of audit.Store.
 type AuditStore struct {
 	pool *pgxpool.Pool
+	tx   pgx.Tx
 }
 
 // NewAuditStore wraps the pool.
 func NewAuditStore(pool *pgxpool.Pool) *AuditStore { return &AuditStore{pool: pool} }
 
+// NewAuditStoreTx binds the audit append to an existing tenant transaction.
+func NewAuditStoreTx(tx pgx.Tx) *AuditStore { return &AuditStore{tx: tx} }
+
 // chainTx runs fn in the right tenant scope: the organization's transaction
 // for org chains, system mode for the system chain.
 func (s *AuditStore) chainTx(ctx context.Context, orgID *uuid.UUID, fn db.TxFunc) error {
+	if s.tx != nil {
+		return fn(ctx, s.tx)
+	}
 	if orgID == nil {
 		return db.WithSystemTx(ctx, s.pool, fn)
 	}

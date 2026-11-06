@@ -1,14 +1,16 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const session = vi.hoisted(() => ({
   APP_PATH: '/app',
+  SESSION_CHANGED_EVENT: 'docmatch:session-changed',
   authMethods: vi.fn(),
   currentUser: vi.fn(),
   devLogin: vi.fn(),
   listDevices: vi.fn(),
   logout: vi.fn(),
+  passwordLogin: vi.fn(),
   revokeDevice: vi.fn(),
   signInLocally: vi.fn(),
   startAppleLogin: vi.fn(),
@@ -20,7 +22,7 @@ const session = vi.hoisted(() => ({
 vi.mock('../../lib/session', () => session);
 
 const { AccountPage } = await import('./AccountPage');
-const { noticeFor } = await import('./LoginPage');
+const { LoginPage, noticeFor } = await import('./LoginPage');
 const { MagicLink } = await import('./MagicLink');
 
 const me = {
@@ -119,6 +121,63 @@ describe('AccountPage', () => {
       await screen.findByText('Você saiu. Entre de novo para ver sua conta.'),
     ).toBeInTheDocument();
   });
+
+  it('keeps the account visible and offers retry if logout fails', async () => {
+    session.currentUser.mockResolvedValue(me);
+    session.listDevices.mockResolvedValue(devices);
+    session.logout.mockRejectedValueOnce(new Error('Falha de conexão.'));
+    render(<AccountPage />);
+    await userEvent
+      .setup()
+      .click(await screen.findByRole('button', { name: 'Sair deste aparelho' }));
+    expect(await screen.findByText('Falha de conexão.')).toBeInTheDocument();
+    expect(screen.getByText('ana@example.com')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sair deste aparelho' })).toBeEnabled();
+    expect(screen.queryByText('Você saiu. Entre de novo para ver sua conta.')).toBeNull();
+  });
+
+  it('does not restore a signed-out account when an older device refresh finishes', async () => {
+    let finish!: (value: typeof devices) => void;
+    session.currentUser.mockResolvedValue(me);
+    session.listDevices.mockResolvedValueOnce(devices).mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    session.revokeDevice.mockResolvedValue(undefined);
+    session.logout.mockResolvedValue(undefined);
+    render(<AccountPage />);
+    const user = userEvent.setup();
+    await user.click(
+      await screen.findByRole('button', { name: 'Encerrar a sessão de App iOS · iPhone' }),
+    );
+    await waitFor(() => expect(session.listDevices).toHaveBeenCalledTimes(2));
+    await user.click(screen.getByRole('button', { name: 'Sair deste aparelho' }));
+    await screen.findByText('Você saiu. Entre de novo para ver sua conta.');
+    await act(async () => {
+      finish(devices);
+      await Promise.resolve();
+    });
+    expect(screen.queryByText('ana@example.com')).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Entrar na docmatch' })).toBeInTheDocument();
+  });
+
+  it('can sign out, sign back in with a password, and sign out again', async () => {
+    session.currentUser.mockResolvedValue(me);
+    session.listDevices.mockResolvedValue(devices);
+    session.logout.mockResolvedValue(undefined);
+    session.passwordLogin.mockResolvedValue(me);
+    render(<AccountPage />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: 'Sair deste aparelho' }));
+    await user.click(await screen.findByRole('button', { name: 'Entrar com e-mail e senha' }));
+    await user.type(screen.getByLabelText('E-mail'), me.user.email);
+    await user.type(screen.getByLabelText('Senha'), 'fixture-password');
+    await user.click(screen.getByRole('button', { name: 'Entrar' }));
+    await user.click(await screen.findByRole('button', { name: 'Sair deste aparelho' }));
+    expect(session.logout).toHaveBeenCalledTimes(2);
+    expect(await screen.findByRole('heading', { name: 'Entrar na docmatch' })).toBeInTheDocument();
+  });
 });
 
 describe('LoginPage notices', () => {
@@ -126,6 +185,37 @@ describe('LoginPage notices', () => {
     expect(noticeFor(null)).toBeNull();
     expect(noticeFor('oauth_state_mismatch')).toMatch(/expirou/);
     expect(noticeFor('algo_novo')).toBe('Não foi possível entrar. Tente de novo.');
+  });
+});
+
+describe('LoginPage navigation', () => {
+  const location = window.location;
+  afterEach(() => {
+    Object.defineProperty(window, 'location', { configurable: true, value: location });
+  });
+
+  it('opens the account for an existing session instead of bouncing back to the app', async () => {
+    const replace = vi.fn();
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...location, search: '', replace },
+    });
+    session.currentUser.mockResolvedValue(me);
+    render(<LoginPage />);
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/conta'));
+    expect(replace).not.toHaveBeenCalledWith('/app');
+  });
+
+  it('keeps the form available for a signed-out visitor', async () => {
+    const replace = vi.fn();
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...location, search: '', replace },
+    });
+    session.currentUser.mockResolvedValue(null);
+    render(<LoginPage />);
+    expect(await screen.findByRole('heading', { name: 'Entrar na docmatch' })).toBeInTheDocument();
+    expect(replace).not.toHaveBeenCalled();
   });
 });
 

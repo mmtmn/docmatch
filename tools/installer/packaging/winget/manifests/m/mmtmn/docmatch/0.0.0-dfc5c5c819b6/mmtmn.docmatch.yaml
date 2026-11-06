@@ -1,0 +1,6 @@
+# Manifesto do winget (versão) do docmatch 0.0.0-dfc5c5c819b6, gerado pelo tools/installer/release.sh.
+PackageIdentifier: mmtmn.docmatch
+PackageVersion: 0.0.0-dfc5c5c819b6
+DefaultLocale: pt-BR
+ManifestType: version
+ManifestVersion: 1.6.0

@@ -51,70 +51,70 @@ public enum DmColors {
     public static let brandSubtle = DmColor(light: .init(red: 0.8588, green: 0.9176, blue: 0.9961), dark: .init(red: 0.1176, green: 0.2275, blue: 0.5412))
     /// 1E3A8A / DBEAFE
     public static let brandOnSubtle = DmColor(light: .init(red: 0.1176, green: 0.2275, blue: 0.5412), dark: .init(red: 0.8588, green: 0.9176, blue: 0.9961))
-    /// 1D4ED8 / 60A5FA
-    public static let statusInfo = DmColor(light: .init(red: 0.1137, green: 0.3059, blue: 0.8471), dark: .init(red: 0.3765, green: 0.6471, blue: 0.9804))
-    /// FFFFFF / 0B1220
-    public static let statusOnInfo = DmColor(light: .init(red: 1, green: 1, blue: 1), dark: .init(red: 0.0431, green: 0.0706, blue: 0.1255))
-    /// DBEAFE / 1E3A8A
-    public static let statusInfoSoft = DmColor(light: .init(red: 0.8588, green: 0.9176, blue: 0.9961), dark: .init(red: 0.1176, green: 0.2275, blue: 0.5412))
-    /// 1E3A8A / DBEAFE
-    public static let statusOnInfoSoft = DmColor(light: .init(red: 0.1176, green: 0.2275, blue: 0.5412), dark: .init(red: 0.8588, green: 0.9176, blue: 0.9961))
-    /// 15803D / 4ADE80
-    public static let statusSuccess = DmColor(light: .init(red: 0.0824, green: 0.502, blue: 0.2392), dark: .init(red: 0.2902, green: 0.8706, blue: 0.502))
-    /// FFFFFF / 052E16
-    public static let statusOnSuccess = DmColor(light: .init(red: 1, green: 1, blue: 1), dark: .init(red: 0.0196, green: 0.1804, blue: 0.0863))
-    /// DCFCE7 / 14532D
-    public static let statusSuccessSoft = DmColor(light: .init(red: 0.8627, green: 0.9882, blue: 0.9059), dark: .init(red: 0.0784, green: 0.3255, blue: 0.1765))
-    /// 14532D / DCFCE7
-    public static let statusOnSuccessSoft = DmColor(light: .init(red: 0.0784, green: 0.3255, blue: 0.1765), dark: .init(red: 0.8627, green: 0.9882, blue: 0.9059))
-    /// B45309 / FBBF24
-    public static let statusWarning = DmColor(light: .init(red: 0.7059, green: 0.3255, blue: 0.0353), dark: .init(red: 0.9843, green: 0.749, blue: 0.1412))
-    /// FFFFFF / 451A03
-    public static let statusOnWarning = DmColor(light: .init(red: 1, green: 1, blue: 1), dark: .init(red: 0.2706, green: 0.102, blue: 0.0118))
-    /// FEF3C7 / 78350F
-    public static let statusWarningSoft = DmColor(light: .init(red: 0.9961, green: 0.9529, blue: 0.7804), dark: .init(red: 0.4706, green: 0.2078, blue: 0.0588))
-    /// 78350F / FEF3C7
-    public static let statusOnWarningSoft = DmColor(light: .init(red: 0.4706, green: 0.2078, blue: 0.0588), dark: .init(red: 0.9961, green: 0.9529, blue: 0.7804))
-    /// B91C1C / F87171
-    public static let statusDanger = DmColor(light: .init(red: 0.7255, green: 0.1098, blue: 0.1098), dark: .init(red: 0.9725, green: 0.4431, blue: 0.4431))
-    /// FFFFFF / 450A0A
-    public static let statusOnDanger = DmColor(light: .init(red: 1, green: 1, blue: 1), dark: .init(red: 0.2706, green: 0.0392, blue: 0.0392))
-    /// FEE2E2 / 7F1D1D
-    public static let statusDangerSoft = DmColor(light: .init(red: 0.9961, green: 0.8863, blue: 0.8863), dark: .init(red: 0.498, green: 0.1137, blue: 0.1137))
-    /// 7F1D1D / FEE2E2
-    public static let statusOnDangerSoft = DmColor(light: .init(red: 0.498, green: 0.1137, blue: 0.1137), dark: .init(red: 0.9961, green: 0.8863, blue: 0.8863))
-    /// 1D4ED8 / 93C5FD
-    public static let severityInfo = DmColor(light: .init(red: 0.1137, green: 0.3059, blue: 0.8471), dark: .init(red: 0.5765, green: 0.7725, blue: 0.9922))
+    /// 35588D / 8AB4FF
+    public static let statusInfo = DmColor(light: .init(red: 0.2078, green: 0.3451, blue: 0.5529), dark: .init(red: 0.5412, green: 0.7059, blue: 1))
+    /// FFFFFF / 0F1216
+    public static let statusOnInfo = DmColor(light: .init(red: 1, green: 1, blue: 1), dark: .init(red: 0.0588, green: 0.0706, blue: 0.0863))
+    /// EEF2F7 / 1B2A4A
+    public static let statusInfoSoft = DmColor(light: .init(red: 0.9333, green: 0.949, blue: 0.9686), dark: .init(red: 0.1059, green: 0.1647, blue: 0.2902))
+    /// 35588D / 8AB4FF
+    public static let statusOnInfoSoft = DmColor(light: .init(red: 0.2078, green: 0.3451, blue: 0.5529), dark: .init(red: 0.5412, green: 0.7059, blue: 1))
+    /// 256548 / 99C3A9
+    public static let statusSuccess = DmColor(light: .init(red: 0.1451, green: 0.3961, blue: 0.2824), dark: .init(red: 0.6, green: 0.7647, blue: 0.6627))
+    /// FFFFFF / 0F1216
+    public static let statusOnSuccess = DmColor(light: .init(red: 1, green: 1, blue: 1), dark: .init(red: 0.0588, green: 0.0706, blue: 0.0863))
+    /// EEF4F0 / 202B25
+    public static let statusSuccessSoft = DmColor(light: .init(red: 0.9333, green: 0.9569, blue: 0.9412), dark: .init(red: 0.1255, green: 0.1686, blue: 0.1451))
+    /// 256548 / 99C3A9
+    public static let statusOnSuccessSoft = DmColor(light: .init(red: 0.1451, green: 0.3961, blue: 0.2824), dark: .init(red: 0.6, green: 0.7647, blue: 0.6627))
+    /// 825919 / D0B282
+    public static let statusWarning = DmColor(light: .init(red: 0.5098, green: 0.349, blue: 0.098), dark: .init(red: 0.8157, green: 0.698, blue: 0.5098))
+    /// FFFFFF / 0F1216
+    public static let statusOnWarning = DmColor(light: .init(red: 1, green: 1, blue: 1), dark: .init(red: 0.0588, green: 0.0706, blue: 0.0863))
+    /// F7F2E8 / 302B22
+    public static let statusWarningSoft = DmColor(light: .init(red: 0.9686, green: 0.949, blue: 0.9098), dark: .init(red: 0.1882, green: 0.1686, blue: 0.1333))
+    /// 825919 / D0B282
+    public static let statusOnWarningSoft = DmColor(light: .init(red: 0.5098, green: 0.349, blue: 0.098), dark: .init(red: 0.8157, green: 0.698, blue: 0.5098))
+    /// 9D352F / D8A09B
+    public static let statusDanger = DmColor(light: .init(red: 0.6157, green: 0.2078, blue: 0.1843), dark: .init(red: 0.8471, green: 0.6275, blue: 0.6078))
+    /// FFFFFF / 0F1216
+    public static let statusOnDanger = DmColor(light: .init(red: 1, green: 1, blue: 1), dark: .init(red: 0.0588, green: 0.0706, blue: 0.0863))
+    /// F8EFEE / 322526
+    public static let statusDangerSoft = DmColor(light: .init(red: 0.9725, green: 0.9373, blue: 0.9333), dark: .init(red: 0.1961, green: 0.1451, blue: 0.149))
+    /// 9D352F / D8A09B
+    public static let statusOnDangerSoft = DmColor(light: .init(red: 0.6157, green: 0.2078, blue: 0.1843), dark: .init(red: 0.8471, green: 0.6275, blue: 0.6078))
+    /// 35588D / 8AB4FF
+    public static let severityInfo = DmColor(light: .init(red: 0.2078, green: 0.3451, blue: 0.5529), dark: .init(red: 0.5412, green: 0.7059, blue: 1))
     /// FFFFFF / 0B1220
     public static let severityOnInfo = DmColor(light: .init(red: 1, green: 1, blue: 1), dark: .init(red: 0.0431, green: 0.0706, blue: 0.1255))
-    /// 0F766E / 5EEAD4
-    public static let severityLow = DmColor(light: .init(red: 0.0588, green: 0.4627, blue: 0.4314), dark: .init(red: 0.3686, green: 0.9176, blue: 0.8314))
+    /// 35588D / 8AB4FF
+    public static let severityLow = DmColor(light: .init(red: 0.2078, green: 0.3451, blue: 0.5529), dark: .init(red: 0.5412, green: 0.7059, blue: 1))
     /// FFFFFF / 0B1220
     public static let severityOnLow = DmColor(light: .init(red: 1, green: 1, blue: 1), dark: .init(red: 0.0431, green: 0.0706, blue: 0.1255))
-    /// B45309 / FCD34D
-    public static let severityMedium = DmColor(light: .init(red: 0.7059, green: 0.3255, blue: 0.0353), dark: .init(red: 0.9882, green: 0.8275, blue: 0.302))
+    /// 825919 / D0B282
+    public static let severityMedium = DmColor(light: .init(red: 0.5098, green: 0.349, blue: 0.098), dark: .init(red: 0.8157, green: 0.698, blue: 0.5098))
     /// FFFFFF / 0B1220
     public static let severityOnMedium = DmColor(light: .init(red: 1, green: 1, blue: 1), dark: .init(red: 0.0431, green: 0.0706, blue: 0.1255))
-    /// C2410C / FDBA74
-    public static let severityHigh = DmColor(light: .init(red: 0.7608, green: 0.2549, blue: 0.0471), dark: .init(red: 0.9922, green: 0.7294, blue: 0.4549))
+    /// 9D352F / D8A09B
+    public static let severityHigh = DmColor(light: .init(red: 0.6157, green: 0.2078, blue: 0.1843), dark: .init(red: 0.8471, green: 0.6275, blue: 0.6078))
     /// FFFFFF / 0B1220
     public static let severityOnHigh = DmColor(light: .init(red: 1, green: 1, blue: 1), dark: .init(red: 0.0431, green: 0.0706, blue: 0.1255))
-    /// B91C1C / FCA5A5
-    public static let severityCritical = DmColor(light: .init(red: 0.7255, green: 0.1098, blue: 0.1098), dark: .init(red: 0.9882, green: 0.6471, blue: 0.6471))
+    /// 9D352F / D8A09B
+    public static let severityCritical = DmColor(light: .init(red: 0.6157, green: 0.2078, blue: 0.1843), dark: .init(red: 0.8471, green: 0.6275, blue: 0.6078))
     /// FFFFFF / 0B1220
     public static let severityOnCritical = DmColor(light: .init(red: 1, green: 1, blue: 1), dark: .init(red: 0.0431, green: 0.0706, blue: 0.1255))
-    /// 15803D / 4ADE80
-    public static let confidenceConfirmed = DmColor(light: .init(red: 0.0824, green: 0.502, blue: 0.2392), dark: .init(red: 0.2902, green: 0.8706, blue: 0.502))
-    /// FFFFFF / 0B1220
-    public static let confidenceOnConfirmed = DmColor(light: .init(red: 1, green: 1, blue: 1), dark: .init(red: 0.0431, green: 0.0706, blue: 0.1255))
-    /// B45309 / FCD34D
-    public static let confidenceProbable = DmColor(light: .init(red: 0.7059, green: 0.3255, blue: 0.0353), dark: .init(red: 0.9882, green: 0.8275, blue: 0.302))
-    /// FFFFFF / 0B1220
-    public static let confidenceOnProbable = DmColor(light: .init(red: 1, green: 1, blue: 1), dark: .init(red: 0.0431, green: 0.0706, blue: 0.1255))
-    /// 6D28D9 / C4B5FD
-    public static let confidenceNeedsYou = DmColor(light: .init(red: 0.4275, green: 0.1569, blue: 0.851), dark: .init(red: 0.7686, green: 0.7098, blue: 0.9922))
-    /// FFFFFF / 0B1220
-    public static let confidenceOnNeedsYou = DmColor(light: .init(red: 1, green: 1, blue: 1), dark: .init(red: 0.0431, green: 0.0706, blue: 0.1255))
+    /// 4B5563 / C3CCD9
+    public static let confidenceConfirmed = DmColor(light: .init(red: 0.2941, green: 0.3333, blue: 0.3882), dark: .init(red: 0.7647, green: 0.8, blue: 0.851))
+    /// FFFFFF / 0F1216
+    public static let confidenceOnConfirmed = DmColor(light: .init(red: 1, green: 1, blue: 1), dark: .init(red: 0.0588, green: 0.0706, blue: 0.0863))
+    /// 4B5563 / C3CCD9
+    public static let confidenceProbable = DmColor(light: .init(red: 0.2941, green: 0.3333, blue: 0.3882), dark: .init(red: 0.7647, green: 0.8, blue: 0.851))
+    /// FFFFFF / 0F1216
+    public static let confidenceOnProbable = DmColor(light: .init(red: 1, green: 1, blue: 1), dark: .init(red: 0.0588, green: 0.0706, blue: 0.0863))
+    /// 4B5563 / C3CCD9
+    public static let confidenceNeedsYou = DmColor(light: .init(red: 0.2941, green: 0.3333, blue: 0.3882), dark: .init(red: 0.7647, green: 0.8, blue: 0.851))
+    /// FFFFFF / 0F1216
+    public static let confidenceOnNeedsYou = DmColor(light: .init(red: 1, green: 1, blue: 1), dark: .init(red: 0.0588, green: 0.0706, blue: 0.0863))
 }
 
 /// Radii and the 8-point spacing scale of tokens.json, in points.

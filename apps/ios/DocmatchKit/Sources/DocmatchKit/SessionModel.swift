@@ -77,6 +77,13 @@ public final class SessionModel {
         state = .signedOut(current)
     }
 
+    public func passwordLogin(email: String, password: String) async {
+        await signingIn(email: email) {
+            try await self.dm.api.passwordLogin(email: email.trimmingCharacters(in: .whitespacesAndNewlines), password: password)
+            return .signedIn
+        }
+    }
+
     public func devLogin() async {
         await signingIn {
             try await self.dm.api.devLogin()

@@ -1,0 +1,6 @@
+.link {
+  min-height: 2.5rem;
+  padding-block: 0;
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}

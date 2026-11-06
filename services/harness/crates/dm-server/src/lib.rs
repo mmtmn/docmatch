@@ -5,6 +5,8 @@
 #![forbid(unsafe_code)]
 
 pub mod convert;
+pub mod document;
+pub mod model;
 pub mod service;
 pub mod sources;
 
