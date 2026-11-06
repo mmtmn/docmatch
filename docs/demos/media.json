@@ -16,11 +16,15 @@
     "scorecard_seconds": 4
   },
   "android": {
-    "run_id": "run_01M6QZG8TKEQBTF1ZSNZHGRKHY",
+    "run_id": "run_01M6RRBZ9DE728S2RWXV5CZXMZ",
     "score": "android-score.json",
-    "mp4_sha256": "ea6c3ccc2a8bdce2563460feac1a59f7fe6f7cdf28946c93e7342cc3291ded65",
-    "gif_sha256": "8b23515136603e2a12a5483fba4d7e5bc12e5f8546652ee09d12a38e7504581c",
-    "gif_speed": 3,
-    "scorecard_seconds": 4
+    "mp4_sha256": "080e43b44446377667bfd762817ebd43a65de9c5395aa5f12f56c8f155eeb4db",
+    "gif_sha256": "44b3fdc1799466d532bd7683c9f01bbd51e2e88b11c08a82482a3ffbf060ec74",
+    "gif_speed": 1,
+    "scorecard_seconds": 5,
+    "duration_seconds": 50.187,
+    "processing_wait_original_seconds": 35.029,
+    "processing_wait_shown_seconds": 8,
+    "processing_wait_label": "Espera de processamento abreviada"
   }
 }
