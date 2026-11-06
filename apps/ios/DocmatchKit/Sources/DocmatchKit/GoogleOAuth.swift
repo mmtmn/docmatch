@@ -57,15 +57,32 @@ public struct GoogleOAuth: Sendable {
         case cancelled
         case refused(String)
         case stateMismatch
+        case invalidCallback
         case noToken
     }
 
     /// The authorization code of the callback, after checking it answers this attempt.
     public func code(from callback: URL, for attempt: Attempt) throws -> String {
-        let items = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        guard var parts = URLComponents(url: callback, resolvingAgainstBaseURL: false), parts.fragment == nil else {
+            throw Failure.invalidCallback
+        }
+        let items = parts.queryItems ?? []
+        parts.query = nil
+        guard parts.url?.absoluteString == redirectURI else { throw Failure.invalidCallback }
         func item(_ name: String) -> String? { items.first { $0.name == name }?.value }
-        if let error = item("error") { throw error == "access_denied" ? Failure.cancelled : Failure.refused(error) }
-        guard item("state") == attempt.state else { throw Failure.stateMismatch }
+        // Validate state even on denials. Ambiguous parameters must never select a first value.
+        guard items.filter({ $0.name == "state" }).count == 1, item("state") == attempt.state else {
+            throw Failure.stateMismatch
+        }
+        let codes = items.filter { $0.name == "code" }
+        let errors = items.filter { $0.name == "error" }
+        guard codes.count <= 1, errors.count <= 1, codes.isEmpty || errors.isEmpty else {
+            throw Failure.invalidCallback
+        }
+        if !errors.isEmpty {
+            guard let error = item("error"), !error.isEmpty else { throw Failure.invalidCallback }
+            throw error == "access_denied" ? Failure.cancelled : Failure.refused(error)
+        }
         guard let code = item("code"), !code.isEmpty else { throw Failure.refused("no_code") }
         return code
     }

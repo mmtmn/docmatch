@@ -30,7 +30,9 @@ targets:
     dependencies:
       - package: DocmatchKit
     # A shared scheme, so `xcodebuild -scheme Docmatch` (make app, the ios workflow) finds it.
-    scheme: {}
+    scheme:
+      testTargets:
+        - DocmatchUITests
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: br.com.docmatch
@@ -49,3 +51,15 @@ targets:
         Release:
           DOCMATCH_API_BASE_URL: ""
           DOCMATCH_ALIAS_LOOPBACK: "NO"
+  DocmatchUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: DocmatchUITests
+    dependencies:
+      - target: Docmatch
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: br.com.docmatch.uitests
+        TEST_TARGET_NAME: Docmatch

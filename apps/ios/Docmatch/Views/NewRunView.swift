@@ -109,6 +109,7 @@ struct NewRunView: View {
                 }
             }
             Button(texts.t("form.submit")) { Task { await model.confirm() } }.buttonStyle(DmButtonStyle())
+                .accessibilityIdentifier("confirm-run")
             Button(texts.t("common.cancel")) { model.cancel() }.buttonStyle(DmButtonStyle(.secondary))
         }
         .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)

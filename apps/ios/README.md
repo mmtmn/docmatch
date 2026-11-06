@@ -141,4 +141,33 @@ A animação de processamento informa a etapa real e respeita Reduzir Movimento.
 rótulos de acessibilidade, campos de senha com olho e botões de pelo menos 44 pt preservam o uso nativo.
 
 Veja os [clientes Google de debug](../../docs/runbooks/google-sign-in.md#clientes-nativos-de-debug).
+
+### Testar Google no Debug com a API de produção
+
+O botão exige tanto o client iOS configurado quanto `google: true` em `/v1/auth/methods`.
+O Debug usa `http://localhost:8080` por padrão: se a API local estiver sem
+`GOOGLE_OAUTH_CLIENT_ID` e `GOOGLE_OAUTH_CLIENT_SECRET`, o botão fica oculto mesmo com
+o client iOS correto. Para usar a API de produção com o client debug já configurado,
+execute na raiz do repositório:
+
+```sh
+DOCMATCH_API_BASE_URL=https://docmatch.com.br make -C apps/ios app
+```
+
+Esse comando compila para o simulador; instale e abra o app gerado, ou execute pelo Xcode
+com `DOCMATCH_API_BASE_URL=https://docmatch.com.br` nos Build Settings do alvo Docmatch
+em Debug. Preserve `br.com.docmatch.debug` e o client iOS existente; não use Release.
+O app passa a usar contas e dados reais de produção. Não é necessário copiar o segredo
+Web para o app nem alterar o `.env` local. A audiência debug já foi instalada na API de
+produção, conforme o runbook.
+
+Verifique o botão, a abertura da tela Google, o retorno após consentimento, a conta
+autenticada e a saída; teste também cancelar e tentar novamente. Chegar à tela Google
+valida apenas o início do fluxo, não a troca do código nem a sessão na API.
+
+### Demonstração do app
+
+[Prévia iOS (GIF)](../../docs/demos/ios.gif) · [Vídeo iOS (MP4)](../../docs/demos/ios.mp4) ·
+[Como gravar novamente](../../docs/demos/README.md#gravar-o-ios-no-mac).
+
 No Linux, os testes Swift montam apenas fontes e fixtures, sem rede e sem acesso ao `.env`.

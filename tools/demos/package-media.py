@@ -8,7 +8,7 @@ from PIL import Image,ImageDraw,ImageFont
 root=Path(__file__).resolve().parents[2];scratch=root/'scratch/master-plan-demo';dest=root/'docs/demos'
 def run(args):subprocess.run(['ffmpeg','-hide_banner','-loglevel','error','-y',*args],check=True)
 def font(size):return ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',size)
-manifest={}
+manifest=json.loads((dest/'media.json').read_text()) if (dest/'media.json').exists() else {}
 for name in ['website','terminal','android']:
  report=json.loads((dest/f'{name}-score.json').read_text());result=dest/'results'/f'{name}.json'
  assert report['passed'] and report['score_percent']==100

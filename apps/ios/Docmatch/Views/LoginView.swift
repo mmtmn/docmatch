@@ -163,6 +163,8 @@ struct LoginView: View {
     /// Google's installed-app flow (PKCE) in the system's web sheet; its ID token, issued to the
     /// iOS client id, goes to the API like Android's.
     private func signInWithGoogle(_ google: GoogleOAuth) async {
+        localError = nil
+        session.failed(nil)
         let attempt = google.begin()
         do {
             let callback = try await webAuthenticationSession.authenticate(

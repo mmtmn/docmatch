@@ -114,6 +114,9 @@ struct DmUploadTarget: View {
             .background(Color(DmColors.bgSurface), in: RoundedRectangle(cornerRadius: 16))
             .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color(DmColors.borderStrong), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])))
         }.buttonStyle(.plain)
+            .accessibilityLabel(texts.t("mobile.pick_files"))
+            .accessibilityHint(texts.t("mobile.pick_hint"))
+            .accessibilityIdentifier("pick-files")
     }
 }
 
@@ -159,7 +162,7 @@ extension View {
         navigationTitle("").navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(Color(DmColors.bgCanvas), for: .navigationBar).toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { DmBrand() }
+                ToolbarItem(placement: .topBarLeading) { DmBrand().fixedSize() }
                 ToolbarItem(placement: .topBarTrailing) { Text(title).font(.caption).foregroundStyle(Color(DmColors.textMuted)) }
             }
     }

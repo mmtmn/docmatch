@@ -1,7 +1,7 @@
 # Demonstrações verificadas
 
 Estas são gravações de execuções reais: arquivos enviados, estimativa aprovada, processamento
-com OpenRouter, resultados e exportação. Os vídeos usam exclusivamente o **gêmeo público
+com OpenRouter e revisão de resultados. Os vídeos usam exclusivamente o **gêmeo público
 sintético Vantara**, com as mesmas categorias de erro do caso privado. Nenhum documento privado,
 segredo ou gabarito é enviado ao modelo ou incorporado ao vídeo.
 
@@ -14,6 +14,7 @@ acurácia para qualquer documento. As sugestões de IA continuam sujeitas à rev
 | Site | [GIF](website.gif) | [MP4](website.mp4) | [Relatório](website-score.json), [resposta real](results/website.json) |
 | Terminal | [GIF](terminal.gif) | [MP4](terminal.mp4) | [Relatório](terminal-score.json), [resposta real](results/terminal.json) |
 | APK Android | [GIF](android.gif) | [MP4](android.mp4) | [Relatório](android-score.json), [resposta real](results/android.json) |
+| App iOS | [GIF](ios.gif) | [MP4](ios.mp4) | [Relatório](ios-score.json), [resposta real](results/ios.json) |
 
 ### Site
 
@@ -27,7 +28,17 @@ acurácia para qualquer documento. As sugestões de IA continuam sujeitas à rev
 
 ![APK Android: envio, processamento e revisão](android.gif)
 
-O cartão ao fim de cada gravação é um **relatório externo da comparação com o gabarito**,
+### iOS
+
+![App iOS: interface atual e fluxo com os documentos públicos](ios.gif)
+
+[Vídeo iOS em velocidade normal](ios.mp4). Capturado no simulador com a API local real e
+os quatro arquivos públicos de Vantara. Não inclui credenciais nem login em uma conta Google.
+O relatório iOS também passou todos os itens; o vídeo não recebe um cartão de nota sobreposto.
+O [guia do app](../../apps/ios/README.md#testar-google-no-debug-com-a-api-de-produção)
+explica como testar o Google com o client iOS de debug e a API de produção.
+
+O cartão ao fim das gravações de site, terminal e Android é um **relatório externo da comparação com o gabarito**,
 acrescentado após verificar o hash da resposta. Ele não simula uma tela do produto.
 Os hashes de vídeos e GIFs ficam em [media.json](media.json).
 
@@ -36,7 +47,7 @@ Os hashes de vídeos e GIFs ficam em [media.json](media.json).
 Instale PyYAML em um ambiente Python e rode, da raiz:
 
 ```sh
-for client in website terminal android; do
+for client in website terminal android ios; do
   python tools/demos/verify_results.py \
     --expected testdata/golden/vantara-twin/expected.yaml \
     --result "docs/demos/results/$client.json" \
@@ -78,6 +89,25 @@ A configuração privada e os brutos das gravações ficam em `scratch/`, fora d
 
 O terminal é capturado por PTY; os frames são renderizados dos caracteres ANSI recebidos.
 A animação e o progresso vêm do aplicativo. Não são uma sequência de telas desenhadas.
+
+### Gravar o iOS no Mac
+
+Use um simulador isolado, iniciado e com nome começando por `docmatch `; abra Arquivos uma
+vez para inicializar o armazenamento local. A API local precisa estar ativa, com login de
+desenvolvimento. O gravador usa o seletor nativo e recusa arquivos diferentes do gêmeo público.
+
+```sh
+python3 tools/demos/record-ios.py --simulator UUID_DO_SIMULADOR --api http://localhost:18080
+python3 tools/demos/package-ios.py --source scratch/ios-demo/ios-raw.mp4 --start INICIO --duration DURACAO
+```
+
+Substitua `INICIO` e `DURACAO` pelos segundos do trecho revisado, excluindo a abertura do runner
+e o encerramento do teste. O MP4 mantém a velocidade normal; o GIF usa 3×. O empacotador usa
+`FFMPEG` ou `imageio_ffmpeg` e atualiza somente a entrada iOS de `media.json`, sem acrescentar
+cartão. Para registrar a verificação, capture a resposta e os achados da execução filmada,
+rode `verify_results.py` e passe também `--report docs/demos/ios-score.json
+--result docs/demos/results/ios.json`; o empacotador confere os hashes e o ID antes de marcar
+o benchmark como verificado. Os brutos e logs ficam em `scratch/`, fora do Git.
 
 ## Outras verificações desta entrega
 
