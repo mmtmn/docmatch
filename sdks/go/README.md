@@ -1,10 +1,11 @@
 # SDK Go
 
-Go 1.23+, biblioteca padrão, `context.Context` em todas as operações. Depois da publicação
-da primeira tag, instale com `go get github.com/mmtmn/docmatch/sdks/go@v0.1.0`.
+Go 1.23+, biblioteca padrão, `context.Context` em todas as operações. A versão **v0.1.0**
+está publicada no repositório privado do GitHub. Com autenticação Git e acesso ao repositório,
+instale com `GOPRIVATE=github.com/mmtmn/docmatch go get github.com/mmtmn/docmatch/sdks/go@v0.1.0`.
 Confira o [estado da publicação](../README.md). Para usar este checkout, no projeto consumidor use
 `go mod edit -replace github.com/mmtmn/docmatch/sdks/go=/caminho/docmatch/sdks/go` e adicione
-`github.com/mmtmn/docmatch/sdks/go v0.0.0` às dependências enquanto o módulo não está publicado.
+`github.com/mmtmn/docmatch/sdks/go v0.0.0` às dependências durante o desenvolvimento local.
 
 ```go
 client, err := docmatch.New(os.Getenv("DM_API_BASE_URL"), os.Getenv("DOCMATCH_API_KEY"))

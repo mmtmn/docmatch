@@ -8,7 +8,7 @@ Actions. O [estado atual](../../sdks/README.md) distingue um pacote preparado de
 | --- | --- | --- | --- |
 | Python | PyPI | `docmatch==0.1.0` | PyPI, e-mail verificado e 2FA |
 | Rust | crates.io | `docmatch` `0.1.0` | GitHub conectado ao crates.io, e-mail verificado |
-| Go | GitHub e proxy Go | `github.com/mmtmn/docmatch/sdks/go@v0.1.0` | Permissão de push no GitHub existente |
+| Go | GitHub privado | `github.com/mmtmn/docmatch/sdks/go@v0.1.0` | Permissão de push no GitHub existente; acesso de leitura para instalar |
 
 O npm `docmatch` é o terminal. Estes são clientes da API, destinados a programas que usam
 uma chave criada na conta docmatch. A primeira versão é inicial, com os
@@ -34,9 +34,10 @@ no servidor nem muda a cobrança.
 5. Entre nas contas pelo navegador. Cole os tokens somente nos prompts locais das ferramentas,
    nunca em arquivos rastreados pelo Git, no chat ou como argumentos da linha de comando.
 
-Nomes consultados em 6 de novembro de 2026: PyPI e crates.io retornaram 404 para `docmatch`.
-Isso não reserva o nome: a aceitação definitiva ocorre no upload. Se o nome estiver ocupado,
-confira o proprietário e ajuste a preparação antes de tentar publicar.
+Python e Rust `docmatch` **0.1.0** foram publicados em 6 de novembro de 2026 e verificados
+por instalações novas dos registros. A tag Go **`sdks/go/v0.1.0`** também foi publicada e
+verificada por download autenticado do GitHub. Para outra release, aumente a versão:
+não repita o upload de `0.1.0` nem mova a tag existente.
 
 ## Python: PyPI
 
@@ -150,23 +151,33 @@ Da raiz do repo, em `main` atualizado e limpo:
 make -C sdks/go ci
 git tag -a sdks/go/v0.1.0 -m "docmatch Go SDK v0.1.0"
 git push origin refs/tags/sdks/go/v0.1.0
-GOPROXY=https://proxy.golang.org go list -m github.com/mmtmn/docmatch/sdks/go@v0.1.0
 ```
 
-O pre-push do repo roda a CI local. A última linha solicita que o proxy busque a versão;
-o índice público pode levar algum tempo para atualizar. Para conferir como consumidor:
+O pre-push do repo roda a CI local. O repositório permanece **privado**: a tag requer
+autenticação GitHub e não está disponível no proxy público nem no pkg.go.dev. Use um helper
+de credenciais Git já configurado ou SSH com acesso ao repositório. Para conferir como consumidor:
 
 ```sh
 mkdir /tmp/docmatch-go-check
 cd /tmp/docmatch-go-check
 go mod init example.com/docmatch-go-check
-go get github.com/mmtmn/docmatch/sdks/go@v0.1.0
+GOPRIVATE=github.com/mmtmn/docmatch GOPROXY=direct \
+  go get github.com/mmtmn/docmatch/sdks/go@v0.1.0
 go list github.com/mmtmn/docmatch/sdks/go
 ```
 
-Confira [pkg.go.dev](https://pkg.go.dev/github.com/mmtmn/docmatch/sdks/go) e atualize o estado
-em `sdks/README.md`. Nunca mova uma tag já publicada: os proxies e checksums preservam o
-conteúdo original.
+Se o GitHub já funciona por SSH, mas não por HTTPS, aplique a conversão somente ao comando:
+
+```sh
+GOPRIVATE=github.com/mmtmn/docmatch GOPROXY=direct \
+  GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=url.ssh://git@github.com/.insteadOf \
+  GIT_CONFIG_VALUE_0=https://github.com/ \
+  go get github.com/mmtmn/docmatch/sdks/go@v0.1.0
+```
+
+Não há token Go separado e os comandos acima não gravam credenciais. Atualize o estado em
+`sdks/README.md` após validar a instalação. Nunca mova uma tag já publicada: consumidores
+podem ter preservado o conteúdo e os checksums originais.
 
 Fontes: [publicar um módulo](https://go.dev/doc/modules/publishing) e
 [tags de módulos em subpastas](https://go.dev/ref/mod#vcs-version).
@@ -183,3 +194,6 @@ com problema, use **yank** no PyPI/crates.io; no Go, publique uma nova versão c
 | Data | Operação | Resultado |
 | --- | --- | --- |
 | 2026-11-06 | Preparação inicial de Python/Rust/Go 0.1.0 | Metadados, listas de arquivos, comandos e guia preparados; nenhum upload/tag de release efetuado. |
+| 2026-11-06 | Publicação Python 0.1.0 | Wheel e sdist no PyPI; SHA-256 conferidos, instalação em venv novo e 4 testes aprovados. |
+| 2026-11-06 | Publicação Rust 0.1.0 | Crate no crates.io após verificação do e-mail; dependência baixada e compilada em projeto consumidor novo. |
+| 2026-11-06 | Publicação Go v0.1.0 | Tag `sdks/go/v0.1.0` no commit `64e5375d8fba7b6ff2ed99222d8fbdc5269bc340`; download autenticado do GitHub privado e testes com detector de corridas aprovados. |
