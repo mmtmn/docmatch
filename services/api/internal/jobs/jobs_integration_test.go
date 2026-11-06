@@ -73,7 +73,8 @@ func TestWorkerRunsJobsOnPostgres(t *testing.T) {
 
 	seen := map[string]bool{}
 	deadline := time.After(90 * time.Second)
-	for len(seen) < 3 {
+	// Other periodic jobs may finish first; wait for these effects, not any three events.
+	for !seen[jobs.KindHeartbeat] || !seen[jobs.KindPartitionMaintenance] || !seen[jobs.KindExpireGrants] {
 		select {
 		case ev := <-completed:
 			if ev.Kind == river.EventKindJobFailed {

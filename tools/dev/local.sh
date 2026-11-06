@@ -85,6 +85,7 @@ up() {
   mkdir -p "$logs" "$pids" "$bin" "$state/media"
   ensure_env
   eval "$(tools/dev/env.sh .env --defaults)"
+  node tools/dev/check-local.mjs || die "configuração local recusada; ajuste .env sem usar o banco de produção"
 
   # Provider use is explicit: DM_LOCAL_LLM_MODE=local|openrouter (off by default).
   export DM_ENV=dev DM_DEV_LOGIN=1 DM_LLM_MODE="${DM_LOCAL_LLM_MODE:-off}"

@@ -20,6 +20,7 @@ subsystems=(
   apps/android
   apps/ios
   tools/installer
+  tools/terminal
 )
 
 declare -a names statuses times
@@ -75,6 +76,11 @@ for s in "${subsystems[@]}"; do
     names+=("$s"); statuses+=("pulado (sem mudanças)"); times+=("0s")
   fi
 done
+
+if [[ "$target" == "ci-full" ]]; then
+  run_step "security" bash tools/ci/security.sh
+  run_step "local-flow-load" bash tools/ci/release-local.sh
+fi
 
 echo
 echo "## make $target — resumo ($(( $(date +%s) - start_all ))s)"

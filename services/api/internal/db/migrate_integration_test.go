@@ -107,7 +107,9 @@ func TestMigratorRejectsBrokenScript(t *testing.T) {
 		t.Fatal(err)
 	}
 	ms := append([]migrations.Migration{}, migrations.MustLoad()...)
-	ms = append(ms, migrations.Migration{Version: len(ms) + 1, Name: "quebrada", Up: "CREATE TABLE will_rollback (id int); SELECT * FROM tabela_inexistente;", Down: "DROP TABLE will_rollback;", Checksum: strings.Repeat("a", 64)})
+	// Version numbers need not be contiguous: never collide with an applied migration.
+	nextVersion := ms[len(ms)-1].Version + 1
+	ms = append(ms, migrations.Migration{Version: nextVersion, Name: "quebrada", Up: "CREATE TABLE will_rollback (id int); SELECT * FROM tabela_inexistente;", Down: "DROP TABLE will_rollback;", Checksum: strings.Repeat("a", 64)})
 	if _, err := m.Up(ctx, ms); err == nil || !strings.Contains(err.Error(), "quebrada") {
 		t.Fatalf("script quebrado deveria falhar com o nome: %v", err)
 	}
@@ -116,7 +118,7 @@ func TestMigratorRejectsBrokenScript(t *testing.T) {
 		t.Fatalf("transação da migração quebrada deveria ter sido revertida (exists=%v, %v)", exists, err)
 	}
 	var recorded int
-	if err := d.Admin.QueryRow(ctx, "SELECT count(*) FROM schema_migrations WHERE version = $1", len(ms)).Scan(&recorded); err != nil || recorded != 0 {
+	if err := d.Admin.QueryRow(ctx, "SELECT count(*) FROM schema_migrations WHERE version = $1", nextVersion).Scan(&recorded); err != nil || recorded != 0 {
 		t.Fatalf("migração quebrada não pode ficar registrada: %d (%v)", recorded, err)
 	}
 }

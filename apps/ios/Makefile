@@ -35,7 +35,7 @@ test: ## testes do DocmatchKit (API, sessão, pré-checagem, fluxo, modelos das 
 ci: lint test ## tokens + testes do DocmatchKit (o que o pre-push roda)
 
 ci-full: ci ## ci + o app inteiro, no Mac
-	@if [[ "$$(uname)" == Darwin ]]; then $(MAKE) app; else echo "app: só no Mac (workflow ios no GitHub)"; fi
+	@if [[ "$$(uname)" == Darwin ]]; then $(MAKE) app; else echo "app: NÃO VALIDADO neste host; rode make -C apps/ios app num Mac com Xcode"; fi
 
 app: ## no Mac: gera o projeto e compila o app para o simulador, sem assinatura
 	xcodegen generate --quiet

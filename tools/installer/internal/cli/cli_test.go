@@ -158,6 +158,11 @@ func TestCommands(t *testing.T) {
 		t.Fatalf("subcomando depois de flags: %d %q", code, out)
 	}
 	out.Reset()
+	// A directory named like a command must not hijack command dispatch.
+	if code := run(context.Background(), w, []string{"--dir", "help", "status"}, Build{}); code != exitFailed || !strings.Contains(errb.String(), "nenhuma instalação") || out.Len() != 0 {
+		t.Fatalf("flag value interpreted as command: %d %q %q", code, out, errb)
+	}
+	errb.Reset()
 	if code := run(context.Background(), w, []string{"--help"}, Build{}); code != 0 || !strings.Contains(out.String(), "uso: docmatch") {
 		t.Fatalf("%d %q", code, out)
 	}

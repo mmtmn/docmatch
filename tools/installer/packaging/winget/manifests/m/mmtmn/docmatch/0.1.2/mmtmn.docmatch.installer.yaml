@@ -1,0 +1,17 @@
+# Manifesto do winget (instalador) do docmatch 0.1.2, gerado pelo tools/installer/release.sh a
+# partir do SHA256SUMS.txt da versão. O .exe é o mesmo do install.ps1, na cópia fixa da versão.
+PackageIdentifier: mmtmn.docmatch
+PackageVersion: 0.1.2
+InstallerType: portable
+Commands:
+  - docmatch
+ReleaseDate: 2026-11-06
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://docmatch.com.br/install/v0.1.2/docmatch-windows-amd64.exe
+    InstallerSha256: DBC50D0A8EB505DCFBB5401B110A97A5E15BB8B2F3ACF77BD4E211B9A8061D87
+  - Architecture: arm64
+    InstallerUrl: https://docmatch.com.br/install/v0.1.2/docmatch-windows-arm64.exe
+    InstallerSha256: EFBF4D5545EF168F1A526A6250304A63BEF0987A878EDD386DC73D8E9AB64B25
+ManifestType: installer
+ManifestVersion: 1.6.0

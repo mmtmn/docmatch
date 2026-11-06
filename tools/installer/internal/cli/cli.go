@@ -69,17 +69,38 @@ func Main(args []string, b Build) int {
 }
 
 var commands = map[string]bool{
+	"config":    true,
 	"workspace": true, "install": true, "up": true, "down": true, "status": true, "logs": true, "doctor": true, "demo": true,
 	"update": true, "uninstall": true, "version": true, "help": true,
 }
 
 func run(ctx context.Context, w world, args []string, b Build) int {
-	// The subcommand may follow global flags ("--plain version", as install.sh runs it without a
-	// terminal): it is the first known command among the arguments, and a bare word in first
-	// position that is not one is a typo.
+	// The subcommand may follow flags, but a flag value named "help", "up", etc. is data.
+	leading := newFlagSet("command")
+	var installOptions installFlags
+	installOptions.register(leading)
+	for _, name := range []string{"api", "output", "to", "tail"} {
+		leading.String(name, "", "")
+	}
+	for _, name := range []string{"force", "check", "volumes", "f", "follow", "h", "help", "version"} {
+		leading.Bool(name, false, "")
+	}
 	cmd := ""
-	for i, a := range args {
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if a == "--" {
+			break
+		}
 		if strings.HasPrefix(a, "-") {
+			name, _, inline := strings.Cut(strings.TrimLeft(a, "-"), "=")
+			f := leading.Lookup(name)
+			if f == nil {
+				break // the command's parser will report an unknown flag
+			}
+			boolean, ok := f.Value.(interface{ IsBoolFlag() bool })
+			if !inline && (!ok || !boolean.IsBoolFlag()) {
+				i++
+			}
 			continue
 		}
 		if commands[a] {
@@ -107,7 +128,15 @@ func run(ctx context.Context, w world, args []string, b Build) int {
 	var code int
 	var err error
 	switch cmd {
-	case "", "install":
+	case "":
+		if len(args) == 0 && w.isTTY {
+			code, err = runHome(ctx, w, b)
+		} else {
+			code, err = runInstall(ctx, w, args, b)
+		}
+	case "config":
+		code, err = runConnection(ctx, w, args)
+	case "install":
 		code, err = runInstall(ctx, w, args, b)
 	case "up":
 		code, err = runUp(ctx, w, args, b)

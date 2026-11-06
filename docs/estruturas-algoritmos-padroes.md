@@ -70,10 +70,10 @@ sinal suficiente.
 ### Construção do documento e análise por modelo
 
 [dm-server/document.rs](../services/harness/crates/dm-server/src/document.rs) percorre títulos
-e alocações para produzir o snapshot. Hoje há varreduras de linhas por título: com `T` títulos
-e `A` alocações, esse trecho pode chegar a `O(T × A)`. Para crescer, agrupe alocações por índice
-de título uma vez e preserve os mesmos totais, ordenação e golden tests; não suponha que o
-código já faça essa otimização.
+e alocações para produzir o snapshot. Um índice de vetores agrupa as alocações por título uma única vez,
+preservando a ordem das linhas bancárias. Com `T` títulos, `L` linhas e `A` alocações, a
+construção e leitura desse índice custam `O(T + L + A)`, com memória adicional `O(T + A)`.
+Os mesmos totais, propostas e evidências permanecem cobertos pelos golden tests.
 
 [dm-server/model.rs](../services/harness/crates/dm-server/src/model.rs) acrescenta interpretação
 e próximo passo, com referências restritas à evidência do achado. O modelo não redefine valores,

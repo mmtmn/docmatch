@@ -17,6 +17,21 @@ func runWorkspace(ctx context.Context, w world, args []string, b Build) (int, er
 	if err != nil {
 		return exitUsage, err
 	}
+	profile, err := loadConnection(w.installDir(""))
+	if err != nil {
+		return exitFailed, err
+	}
+	key := w.env.Get("DOCMATCH_API_KEY")
+	// A saved key is bound to its origin; --api or an environment override must not leak it.
+	if api == "" {
+		api = w.env.Get("DM_API_BASE_URL")
+	}
+	if api == "" {
+		api = profile.API
+	}
+	if api == profile.API && key == "" {
+		key = profile.Key
+	}
 	if api == "" {
 		if r, err := loadInstalled(ctx, w, c, b); err == nil {
 			api = r.opts.URLs().API
@@ -29,7 +44,7 @@ func runWorkspace(ctx context.Context, w world, args []string, b Build) (int, er
 		dir = w.cwd
 	}
 	prefs := w.prefs(c)
-	err = workspace.Run(ctx, workspace.Options{API: api, Key: w.env.Get("DOCMATCH_API_KEY"), Dir: dir, Output: output, Files: files, Plain: prefs.plain, Yes: c.y, NoAnimation: !prefs.animate, In: w.stdin, Out: w.stdout})
+	err = workspace.Run(ctx, workspace.Options{API: api, Key: key, Dir: dir, Output: output, Files: files, Plain: prefs.plain, Yes: c.y, NoAnimation: !prefs.animate, In: w.stdin, Out: w.stdout})
 	if err != nil {
 		return exitFailed, err
 	}

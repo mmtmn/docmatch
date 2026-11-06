@@ -13,3 +13,9 @@ packages:
 onlyBuiltDependencies:
   - esbuild
   - sharp
+
+# Patched transitive tooling dependencies; see docs/auditoria-local.md.
+overrides:
+  'basic-ftp@<=6.2.0': 6.2.1
+  'glob@>=9 <=14.0.1': 14.0.2
+  'minimatch@>=7 <11.0.1': 11.0.1

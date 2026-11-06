@@ -1,0 +1,6 @@
+.PHONY: ci ci-full test
+test:
+	go test -race ./...
+ci: test
+	go vet ./...
+ci-full: ci

@@ -80,6 +80,10 @@ if [[ $dry_run -eq 0 && ! "$base" =~ ^https:// ]]; then
 fi
 
 out="${out:-$here/dist/$version}"
+# The build changes directory to the Go module; resolve a relative --out before that.
+mkdir -p "$out"
+out="$(cd "$out" && pwd -P)"
+case "$root/" in "$out/"*) die "a saída não pode ser o repositório nem um diretório ancestral: $out" ;; esac
 rm -rf "$out"
 mkdir -p "$out"
 
@@ -193,7 +197,8 @@ run aws cloudfront create-invalidation --distribution-id "$distribution_id" --pa
 
 # A real release keeps the package-manager files of the latest version in the repository.
 if [[ $dry_run -eq 0 ]]; then
-  rm -rf "$here/packaging/homebrew" "$here/packaging/winget"
+  # Keep earlier winget versions recoverable; only the latest Homebrew formula is replaced.
+  mkdir -p "$here/packaging"
   cp -R "$packaging/homebrew" "$packaging/winget" "$here/packaging/"
   log "Homebrew e winget copiados para tools/installer/packaging/ (faça o commit)"
 fi

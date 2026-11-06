@@ -53,12 +53,13 @@ for (const viewport of viewports) {
       expect(doc.scrollHeight).toBeLessThanOrEqual(doc.clientHeight);
 
       const ta = await textareaMetrics(textarea);
-      if (lines >= 40) {
-        expect(ta.scrollHeight).toBeGreaterThan(ta.clientHeight);
+      // Rules now grow into the drop area up to the viewport budget (not a fixed six lines).
+      // Small screens may scroll the textarea even with six lines; the page must stay fixed.
+      expect(ta.height).toBeLessThanOrEqual(Math.min(viewport.height * 0.28, 256) + 1);
+      if (ta.scrollHeight > ta.clientHeight + 1) {
         expect(ta.overflowY).toBe('auto');
-        expect(ta.height).toBeLessThanOrEqual(ta.lineHeight * 6 + 24);
       } else {
-        expect(ta.scrollHeight).toBeLessThanOrEqual(ta.clientHeight + 1);
+        expect(ta.overflowY).toBe('hidden');
       }
 
       const button = page.getByRole('button', { name: m.form.submit });
@@ -71,6 +72,29 @@ for (const viewport of viewports) {
       expect(box.height).toBeGreaterThanOrEqual(44);
     });
   }
+
+  test(`/app em ${viewport.width}×${viewport.height}: regras crescem para cima e reduzem a área de arquivos`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport);
+    await page.goto('/app');
+    const textarea = await fillRules(page, 1);
+    const drop = page.locator('[data-drop-area]');
+    const beforeRules = (await textarea.boundingBox())!;
+    const beforeDrop = (await drop.boundingBox())!;
+    await fillRules(page, 40);
+    await expect
+      .poll(async () => (await textarea.boundingBox())!.height)
+      .toBeGreaterThan(beforeRules.height);
+    const afterRules = (await textarea.boundingBox())!;
+    const afterDrop = (await drop.boundingBox())!;
+    expect(afterRules.y).toBeLessThan(beforeRules.y);
+    expect(afterDrop.height).toBeLessThan(beforeDrop.height);
+    expect(afterDrop.height).toBeGreaterThanOrEqual(44);
+    expect(
+      Math.abs(afterRules.y + afterRules.height - beforeRules.y - beforeRules.height),
+    ).toBeLessThanOrEqual(1);
+  });
 
   test(`/ em ${viewport.width}×${viewport.height}: o herói cabe na primeira tela e a rolagem começa depois`, async ({
     page,

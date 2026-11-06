@@ -160,7 +160,11 @@ func installed(t *testing.T, st state.State) string {
 	if err := st.Save(dir); err != nil {
 		t.Fatal(err)
 	}
-	return dir
+	canonical, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return canonical
 }
 
 func TestUninstallTry(t *testing.T) {
