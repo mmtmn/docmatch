@@ -1,5 +1,6 @@
 package br.com.docmatch.app.ui
 
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
@@ -40,8 +41,8 @@ fun DocmatchRoot(dm: Docmatch) {
             // Whenever the session ends (here or from another device) its exports go too.
             val session: SessionViewModel = viewModel { SessionViewModel(dm) { Exports.clear(app) } }
             when (val s = session.state.collectAsState().value) {
-                SessionState.Loading -> Scaffold { p -> androidx.compose.foundation.layout.Box(Modifier.padding(p)) { Loading(t("mobile.loading")) } }
-                is SessionState.SignedOut -> Scaffold(topBar = { DmHeader() }) { p -> androidx.compose.foundation.layout.Box(Modifier.padding(p)) { LoginScreen(s, session, dm.baseUrl) } }
+                SessionState.Loading -> Scaffold { p -> androidx.compose.foundation.layout.Box(Modifier.padding(p).consumeWindowInsets(p)) { Loading(t("mobile.loading")) } }
+                is SessionState.SignedOut -> Scaffold(topBar = { DmHeader() }) { p -> androidx.compose.foundation.layout.Box(Modifier.padding(p).consumeWindowInsets(p)) { LoginScreen(s, session, dm.baseUrl) } }
                 is SessionState.SignedIn -> SignedIn(dm, s.me.credits?.tokenExempt == true) { notice -> session.signedOut(notice) }
             }
         }
@@ -81,7 +82,7 @@ private fun SignedIn(dm: Docmatch, tokenExempt: Boolean, onSignedOut: (String?) 
             }
         },
     ) { padding ->
-        NavHost(nav, startDestination = "new", modifier = Modifier.padding(padding)) {
+        NavHost(nav, startDestination = "new", modifier = Modifier.padding(padding).consumeWindowInsets(padding)) {
             composable("new") {
                 val vm: NewRunViewModel = viewModel { NewRunViewModel(dm) }
                 NewRunScreen(vm, tokenExempt) { runId -> nav.navigate("run/$runId") }

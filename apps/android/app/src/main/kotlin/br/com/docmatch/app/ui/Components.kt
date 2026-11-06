@@ -56,7 +56,8 @@ fun DmBrand(modifier: Modifier = Modifier) {
 
 @Composable
 fun DmHeader(title: String? = null, onBack: (() -> Unit)? = null) {
-    Column {
+    // A custom app bar owns its status-bar/cutout insets, like Material's TopAppBar.
+    Column(Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))) {
         Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             if (onBack != null) IconButton(onClick = onBack) { Icon(DmIcons.Back, t("mobile.back")) }
             DmBrand(Modifier.weight(1f))

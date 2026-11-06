@@ -62,7 +62,8 @@ struct LoginView: View {
             }
             if let google {
                 Button {
-                    Task { providerBusy = true; defer { providerBusy = false }; await signInWithGoogle(google) }
+                    providerBusy = true
+                    Task { defer { providerBusy = false }; await signInWithGoogle(google) }
                 } label: {
                     HStack(spacing: 12) {
                         Image("GoogleMark").resizable().frame(width: 20, height: 20).accessibilityHidden(true)
