@@ -3,6 +3,7 @@
 // surface as ApiError with the server's pt-BR message.
 import { apiUrl } from './env';
 import { t } from './i18n';
+import { selectedAccount } from './accountContext';
 
 export class ApiError extends Error {
   readonly status: number;
@@ -27,8 +28,10 @@ export class ApiError extends Error {
 }
 
 export interface RequestOptions {
+  /** Frozen destination for this operation. null is an identity-only request. */
+  orgId?: string | null;
   method?: string;
-  responseType?: 'blob';
+  responseType?: 'blob' | 'stream';
   body?: unknown;
   signal?: AbortSignal;
   /** Adds an Idempotency-Key, required by the endpoints that spend tokens. */
@@ -60,7 +63,10 @@ function newKey(): string {
 async function send<T>(path: string, opts: RequestOptions): Promise<T> {
   const url = apiUrl(path);
   if (!url) throw new ApiError(0, 'api_unconfigured', t('results.live_unconfigured'));
-  const headers: Record<string, string> = { Accept: 'application/json' };
+  const headers: Record<string, string> = {
+    Accept: opts.responseType === 'stream' ? 'text/event-stream' : 'application/json',
+  };
+  if (opts.orgId && !path.startsWith('/v1/auth/')) headers['X-Docmatch-Org'] = opts.orgId;
   let body: string | undefined;
   if (opts.body !== undefined) {
     headers['Content-Type'] = 'application/json';
@@ -84,6 +90,7 @@ async function send<T>(path: string, opts: RequestOptions): Promise<T> {
   }
   if (res.status === 204) return undefined as T;
   if (res.ok && opts.responseType === 'blob') return (await res.blob()) as T;
+  if (res.ok && opts.responseType === 'stream') return res.body as T;
   const text = await res.text();
   let data: unknown;
   if (text) {
@@ -110,6 +117,11 @@ async function send<T>(path: string, opts: RequestOptions): Promise<T> {
 let refreshing: Promise<unknown> | null = null;
 
 export async function api<T>(path: string, opts: RequestOptions = {}): Promise<T> {
+  // Capture once: a later account switch must not redirect a retry or refresh.
+  opts = {
+    ...opts,
+    orgId: opts.orgId === undefined ? (selectedAccount()?.orgId ?? null) : opts.orgId,
+  };
   if (opts.idempotent && !opts.idempotencyKey) opts = { ...opts, idempotencyKey: newKey() };
   try {
     return await send<T>(path, opts);

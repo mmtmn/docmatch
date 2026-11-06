@@ -6,6 +6,7 @@ vi.mock('./env', () => ({
 }));
 
 const { api, ApiError } = await import('./api');
+const { selectAccount, clearAccountSelection } = await import('./accountContext');
 
 function json(status: number, body: unknown): Response {
   return new Response(body === undefined ? null : JSON.stringify(body), {
@@ -17,6 +18,7 @@ function json(status: number, body: unknown): Response {
 describe('api', () => {
   const fetchMock = vi.fn<typeof fetch>();
   beforeEach(() => {
+    clearAccountSelection();
     fetchMock.mockReset();
     vi.stubGlobal('fetch', fetchMock);
   });
@@ -29,6 +31,31 @@ describe('api', () => {
     expect(url).toBe('https://api.invalid/v1/me');
     expect(init?.credentials).toBe('include');
     expect(init?.method).toBe('GET');
+  });
+
+  it('keeps an in-flight request in its original account across refresh and account switching', async () => {
+    selectAccount('usr_00000000000000000000000001', 'org_00000000000000000000000001');
+    fetchMock
+      .mockImplementationOnce(() => {
+        selectAccount('usr_00000000000000000000000001', 'org_00000000000000000000000002');
+        return Promise.resolve(json(401, { code: 'session_expired', message: 'Sessão expirada.' }));
+      })
+      .mockResolvedValueOnce(json(200, {}))
+      .mockResolvedValueOnce(json(200, { ok: true }));
+    await api('/v1/projects', { body: { name: 'Novembro' } });
+    const headers = fetchMock.mock.calls.map((call) => call[1]?.headers as Record<string, string>);
+    expect(headers[0]?.['X-Docmatch-Org']).toBe('org_00000000000000000000000001');
+    expect(headers[1]?.['X-Docmatch-Org']).toBeUndefined();
+    expect(headers[2]?.['X-Docmatch-Org']).toBe('org_00000000000000000000000001');
+  });
+
+  it('can discover personal memberships without sending a revoked account destination', async () => {
+    selectAccount('usr_00000000000000000000000001', 'org_00000000000000000000000001');
+    fetchMock.mockResolvedValueOnce(json(200, { items: [] }));
+    await api('/v1/me/organizations', { orgId: null });
+    expect(
+      (fetchMock.mock.calls[0]?.[1]?.headers as Record<string, string>)['X-Docmatch-Org'],
+    ).toBeUndefined();
   });
 
   it('posts bodies with an idempotency key when asked', async () => {

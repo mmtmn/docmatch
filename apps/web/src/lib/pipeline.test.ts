@@ -6,7 +6,8 @@ vi.mock('./env', () => ({
   apiBaseUrl: 'https://api.invalid',
 }));
 
-const { confirmText, createRun, listFindings, uploadFile } = await import('./pipeline');
+const { confirmText, createRun, listFindings, uploadFile, watchRun } = await import('./pipeline');
+const { selectAccount, clearAccountSelection } = await import('./accountContext');
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -28,8 +29,71 @@ describe('pipeline', () => {
     vi.useFakeTimers();
   });
   afterEach(() => {
+    clearAccountSelection();
     vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+
+  it('reads SSE across split CRLF and UTF-8 chunks in the original account', async () => {
+    let source!: ReadableStreamDefaultController<Uint8Array>;
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        source = controller;
+      },
+    });
+    fetchMock.mockResolvedValueOnce(
+      new Response(stream, { headers: { 'Content-Type': 'text/event-stream' } }),
+    );
+    selectAccount('user', 'org_original');
+    const events = vi.fn();
+    const close = watchRun('run_1', events);
+    selectAccount('user', 'org_other');
+    const message = new TextEncoder().encode(
+      'event: progress\r\ndata: {"message":"Conciliação"}\r\n\r\n',
+    );
+    // Every byte in its own chunk exercises both line-ending and multibyte boundaries.
+    for (const byte of message) source.enqueue(new Uint8Array([byte]));
+    await vi.waitFor(() =>
+      expect(events).toHaveBeenCalledWith({ event: 'progress', data: { message: 'Conciliação' } }),
+    );
+    expect(
+      (fetchMock.mock.calls[0]?.[1]?.headers as Record<string, string>)['X-Docmatch-Org'],
+    ).toBe('org_original');
+    expect((fetchMock.mock.calls[0]?.[1]?.headers as Record<string, string>)['Accept']).toBe(
+      'text/event-stream',
+    );
+    close();
+    source.enqueue(new TextEncoder().encode('event: completed\ndata: {}\n\n'));
+    source.close();
+    await Promise.resolve();
+    expect(events).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps project upload completion in its original destination after account selection changes', async () => {
+    fetchMock
+      .mockImplementationOnce(async () => {
+        await Promise.resolve();
+        selectAccount('user', 'org_other');
+        return json(201, {
+          id: 'upl_project',
+          method: 'PUT',
+          url: 'https://store.invalid/object',
+          headers: {},
+        });
+      })
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(json(200, { id: 'upl_project', file_name: 'a.csv', status: 'ready' }));
+    await uploadFile(accepted('a.csv', 'x;y\n1;2\n'), undefined, undefined, {
+      orgId: 'org_original',
+      projectId: 'prj_1',
+    });
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.invalid/v1/projects/prj_1/uploads');
+    expect(fetchMock.mock.calls[2]?.[0]).toBe(
+      'https://api.invalid/v1/projects/prj_1/uploads/upl_project/complete',
+    );
+    expect(
+      (fetchMock.mock.calls[2]?.[1]?.headers as Record<string, string>)['X-Docmatch-Org'],
+    ).toBe('org_original');
   });
 
   it('uploads through the presigned form without cookies and waits for the scan', async () => {

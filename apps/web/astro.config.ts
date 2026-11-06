@@ -44,7 +44,8 @@ export default defineConfig({
     react(),
     sitemap({
       // Results, sign-in and account pages are per user and must not be indexed.
-      filter: (page) => !/\/(resultados|login|conta)(\/|\.html|$)/.test(page),
+      filter: (page) =>
+        !/\/(app|atividade|equipe|convite|resultados|login|conta)(\/|\.html|$)/.test(page),
     }),
   ],
   security: {

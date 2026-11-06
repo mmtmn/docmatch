@@ -1,0 +1,11 @@
+---
+import { InvitationPage } from '../components/account/InvitationPage';
+import Base from '../layouts/Base.astro';
+import { t } from '../lib/i18n';
+---
+
+<Base title={t('teams.invitation_title')} noindex>
+  <main id="conteudo" class="container">
+    <InvitationPage client:only="react" />
+  </main>
+</Base>

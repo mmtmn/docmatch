@@ -18,6 +18,7 @@ import { AuthDialog } from '../AuthDialog';
 import { BillingPanel } from './BillingPanel';
 import { ApiKeysPanel } from './ApiKeysPanel';
 import styles from './AccountPage.module.css';
+import { ACCOUNT_CHANGED_EVENT } from '../../lib/accountContext';
 
 type State =
   | { kind: 'loading' }
@@ -64,9 +65,12 @@ export function AccountPage() {
       }
     };
     window.addEventListener('pageshow', restore);
+    const accountChanged = () => refresh();
+    window.addEventListener(ACCOUNT_CHANGED_EVENT, accountChanged);
     return () => {
       lifecycle.current++;
       window.removeEventListener('pageshow', restore);
+      window.removeEventListener(ACCOUNT_CHANGED_EVENT, accountChanged);
     };
   }, [refresh]);
 
@@ -155,9 +159,18 @@ export function AccountPage() {
           </dl>
         </section>
 
-        <BillingPanel onRefresh={() => refresh()} />
-        <ApiKeysPanel />
-        <WorkspacePanel />
+        <p>
+          <a href="/app">{t('projects.title')}</a> · <a href="/equipe">{t('teams.title')}</a>
+        </p>
+        {(me.user.membership_role === 'owner' ||
+          me.user.membership_role === 'admin' ||
+          (!me.user.membership_role && me.user.role === 'owner')) && (
+          <>
+            <BillingPanel onRefresh={() => refresh()} />
+            <ApiKeysPanel />
+            <WorkspacePanel />
+          </>
+        )}
 
         <section className={styles.card} aria-labelledby="conta-aparelhos">
           <h2 id="conta-aparelhos">{t('account.devices')}</h2>
