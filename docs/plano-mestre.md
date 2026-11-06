@@ -275,6 +275,9 @@ Object Lock, nada acessível sem passar pelo CloudFront.
 
 ## 9. Como este plano é mantido
 
+A próxima etapa está detalhada no [plano de projetos, equipes, extensões e documentação](plano-projetos-equipes.md),
+com decisões de produto, sequência de implementação e critérios de aceitação para todos os clientes.
+
 - O portão de cada fase é um checklist aqui; o PR que fecha um item marca a caixa.
 - Um item de portão só pode ser removido por ADR.
 - Mudança de fórmula, de papéis de modelo ou de estágio de infra atualiza este arquivo no mesmo PR
