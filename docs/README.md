@@ -16,6 +16,7 @@ enrolação. Identificadores de código e comentários em código ficam em ingl�
 | [SDKs](../sdks/README.md) | Clientes npm, Go, Python e Rust. |
 | [api.md](api.md) | Chaves de todos os planos, permissões e fluxo de integração. |
 | [plano-mestre.md](plano-mestre.md) | O plano condensado: fases e portões (sem datas), o que cada subsistema faz, a fórmula de preço com exemplo, a tabela de papéis de modelo, os estágios de infraestrutura. |
+| [Projetos, equipes, extensões e livro](plano-projetos-equipes.md) | Próxima etapa: experiência de uso, permissões, entregas, pesquisa e publicação em todos os clientes. |
 | [decisoes/](decisoes/README.md) | Registros de decisão de arquitetura (ADR-0001 a ADR-0012): contexto, decisão, consequências. |
 | [seguranca/](seguranca/README.md) | Perfil NIST CSF 2.0, checklist ASVS 5.0, OWASP LLM Top 10, modelo de ameaças e testes de aceitação com comandos. |
 | [escala.md](escala.md) | Trabalhadores sob demanda: execuções pesadas em instâncias Spot que só existem enquanto há trabalho, roteamento, protocolo, tetos que nunca recusam, prazos e custos. |
