@@ -155,10 +155,10 @@ public final class Transport: Sendable {
     /// run of one accepted estimate); `idempotent` asks for a fresh key, kept across the refresh.
     public func call<T: Decodable & Sendable>(
         _ method: String, _ path: String, body: [String: JSONValue]? = nil, as type: T.Type, idempotent: Bool = false,
-        query: [(String, String)] = [], idempotencyKey: String? = nil
+        query: [(String, String)] = [], idempotencyKey: String? = nil, organizationID: String? = nil
     ) async throws -> T {
         let key = idempotencyKey ?? (idempotent ? UUID().uuidString.lowercased() : nil)
-        let data = try await authed(path) { try await self.send(method, path, body: body, key: key, query: query) }
+        let data = try await authed(path) { try await self.send(method, path, body: body, key: key, query: query, organizationID: organizationID) }
         do {
             return try JSONDecoder().decode(T.self, from: data)
         } catch {
@@ -167,14 +167,14 @@ public final class Transport: Sendable {
     }
 
     /// A call whose answer is not read (204s, feedback).
-    public func call(_ method: String, _ path: String, body: [String: JSONValue]? = nil, idempotent: Bool = false) async throws {
+    public func call(_ method: String, _ path: String, body: [String: JSONValue]? = nil, idempotent: Bool = false, query: [(String, String)] = [], organizationID: String? = nil) async throws {
         let key = idempotent ? UUID().uuidString.lowercased() : nil
-        _ = try await authed(path) { try await self.send(method, path, body: body, key: key, query: []) }
+        _ = try await authed(path) { try await self.send(method, path, body: body, key: key, query: query, organizationID: organizationID) }
     }
 
     /// Raw bytes of a GET (exports).
-    public func bytes(_ path: String, query: [(String, String)]) async throws -> Data {
-        try await authed(path) { try await self.send("GET", path, body: nil, key: nil, query: query, accept: "*/*") }
+    public func bytes(_ path: String, query: [(String, String)], organizationID: String? = nil) async throws -> Data {
+        try await authed(path) { try await self.send("GET", path, body: nil, key: nil, query: query, accept: "*/*", organizationID: organizationID) }
     }
 
     /// A request to a presigned URL: never any cookie (the signature is the credential). With a
@@ -280,7 +280,7 @@ public final class Transport: Sendable {
 
     private func send(
         _ method: String, _ path: String, body: [String: JSONValue]?, key: String?, query: [(String, String)],
-        accept: String = "application/json"
+        accept: String = "application/json", organizationID: String? = nil
     ) async throws -> Data {
         let target = url(path, query)
         var req = URLRequest(url: target)
@@ -295,6 +295,7 @@ public final class Transport: Sendable {
         } else if ["POST", "PUT", "PATCH"].contains(method) {
             req.httpBody = Data()
         }
+        if let organizationID { req.setValue(organizationID, forHTTPHeaderField: "X-Docmatch-Org") }
         if let key { req.setValue(key, forHTTPHeaderField: "Idempotency-Key") }
         if let cookie = cookies.header(for: target) { req.setValue(cookie, forHTTPHeaderField: "Cookie") }
         let (data, response) = try await execute(api, req)

@@ -58,10 +58,16 @@ public struct LocalFile: Sendable, Equatable, Identifiable {
 }
 
 public final class DocmatchAPI: Sendable {
-    let http: Transport
+    let http: AccountTransport
     private static let maxPages = 50
 
-    public init(http: Transport) { self.http = http }
+    public init(http: Transport, organizationID: String? = nil, projectID: String? = nil) {
+        self.http = AccountTransport(raw: http, organizationID: organizationID, projectID: projectID)
+    }
+    public var organizationID: String? { http.organizationID }
+    public var projectID: String? { http.projectID }
+    public func inAccount(_ id: String) -> DocmatchAPI { DocmatchAPI(http: http.raw, organizationID: id) }
+    public func inProject(_ id: String) -> DocmatchAPI { DocmatchAPI(http: http.raw, organizationID: organizationID, projectID: id) }
 
     // MARK: - account and sign-in
 
@@ -152,12 +158,13 @@ public final class DocmatchAPI: Sendable {
     // MARK: - uploads
 
     /// A document (with its SHA-256) or media (audio, video: a PUT, no hash) upload ticket.
-    public func createUpload(_ file: LocalFile, sha256: String?) async throws -> UploadTicket {
+    public func createUpload(_ file: LocalFile, sha256: String?, replacesID: String? = nil) async throws -> UploadTicket {
         var body: [String: JSONValue] = [
             "kind": .string(file.kind.media ? "media" : "document"), "file_name": .string(file.name), "size_bytes": .int(file.size),
             "mime": .string(file.mime),
         ]
         if let sha256 { body["sha256"] = .string(sha256) }
+        if let replacesID { body["replaces_id"] = .string(replacesID) }
         return try await http.call("POST", "/v1/uploads", body: body, as: UploadTicket.self)
     }
 

@@ -31,6 +31,16 @@ public final class Docmatch: Sendable {
         }
     }
 
+    private init(source: Docmatch, api: DocmatchAPI) {
+        texts = source.texts
+        cookies = source.cookies
+        transport = source.transport
+        self.api = api
+        reconciler = Reconciler(api: api, texts: texts)
+    }
+    public func inAccount(_ id: String) -> Docmatch { Docmatch(source: self, api: api.inAccount(id)) }
+    public func inProject(_ id: String) -> Docmatch { Docmatch(source: self, api: api.inProject(id)) }
+
     /// The User-Agent the API turns into "App iOS · <model>" in every device list.
     public static func iosUserAgent(version: String, model: String, system: String) -> String {
         "docmatch-ios/\(ascii(version)) (\(ascii(model)); iOS \(ascii(system)))"
