@@ -671,7 +671,9 @@
     "yes": "Sim",
     "no": "Não",
     "optional": "opcional",
-    "app_title": "Nova conciliação"
+    "app_title": "Nova conciliação",
+    "expanded": "Expandido",
+    "collapsed": "Recolhido"
   },
   "mobile": {
     "tab_new": "Conciliar",
@@ -1132,6 +1134,26 @@
       "key_help": "Deixe vazio somente para o login de desenvolvimento local. A chave fica privada nesta máquina.",
       "invalid_key": "A chave não pode conter quebras de linha.",
       "saved": "Conexão salva. Abra os documentos pelo menu principal."
+    },
+    "projects": {
+      "key_account": "Conta vinculada à chave API",
+      "choose_one": "Use --saved-project ou --new-project, apenas um deles.",
+      "key_bound": "A chave de API já pertence a uma conta. Use a chave dessa conta, sem --account.",
+      "account": "Escolha a conta",
+      "account_missing": "Você não tem acesso a essa conta.",
+      "required": "Use --saved-project ID para continuar, --new-project \"Nome\" para criar ou --list-projects para listar.",
+      "new": "Novo projeto",
+      "more": "Mais projetos",
+      "first": "Primeira página",
+      "title": "Seus projetos",
+      "name": "Nome do projeto",
+      "name_required": "Dê um nome ao projeto.",
+      "expired": "O resultado expirou. Abra o projeto no site para justificar e aprovar um novo processamento.",
+      "uploaded": "Arquivos salvos no projeto. Nenhuma conciliação foi iniciada.",
+      "no_quote": "Não foi possível preparar a conciliação. Confira o projeto antes de tentar de novo.",
+      "resume": "Para retomar: docmatch workspace --saved-project {id}",
+      "approval_required": "Nenhuma execução começou. Confira o limite e execute novamente com --yes para aprová-lo.",
+      "reused": "Abrindo a conciliação existente, sem nova cobrança."
     }
   },
   "billing": {
@@ -1396,7 +1418,15 @@
     "sharing_save": "Salvar acesso",
     "sharing_confirm": "Aplicar estas permissões ao projeto? Pessoas removidas deixam de ter acesso, exceto responsáveis e quem criou o projeto.",
     "rule_verify": "Verificar regra",
-    "rule_verify_confirm": "Confirmar a revisão de “{title}”? A verificação exige ao menos uma avaliação sem falso positivo registrado."
+    "rule_verify_confirm": "Confirmar a revisão de “{title}”? A verificação exige ao menos uma avaliação sem falso positivo registrado.",
+    "selected_account": "Conta selecionada",
+    "leave_unsaved": "Há alterações ainda não salvas. Sair pode descartar essas alterações.",
+    "discard_and_continue": "Sair mesmo assim",
+    "stay": "Continuar neste projeto",
+    "show_files": "Ver arquivos ({count})",
+    "hide_files": "Recolher arquivos",
+    "files_ready": "{ready} de {total} arquivos prontos",
+    "files_attention": "Há arquivos que precisam de atenção. Abra a lista para conferir."
   },
   "teams": {
     "title": "Equipe",
@@ -1469,6 +1499,7 @@
     "accept_invitation": "Aceitar convite e entrar na equipe",
     "decline_invitation": "Recusar convite",
     "open_team": "Abrir equipe",
-    "declined_message": "Convite recusado. Nenhum acesso foi adicionado."
+    "declined_message": "Convite recusado. Nenhum acesso foi adicionado.",
+    "open_installed_app": "Abrir no app instalado"
   }
 }

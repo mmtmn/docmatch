@@ -237,6 +237,10 @@ public final class DocmatchAPI: Sendable {
         try await http.call("GET", "/v1/runs/\(Self.segment(id))", as: Run.self)
     }
 
+    public func cancelRun(_ id: String) async throws -> Run {
+        try await http.call("POST", "/v1/runs/\(Self.segment(id))/cancel", as: Run.self, idempotent: true)
+    }
+
     public func runs(cursor: String? = nil, limit: Int = 30) async throws -> RunList {
         var query = [("limit", String(limit))]
         if let cursor { query.append(("cursor", cursor)) }

@@ -56,3 +56,17 @@ fun ErrorState(message: String, onRetry: () -> Unit) {
         }
     }
 }
+
+/** Check permissions again after the app returns from the background. */
+@androidx.compose.runtime.Composable
+internal fun OnResume(action: () -> Unit) {
+    val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    val current = androidx.compose.runtime.rememberUpdatedState(action)
+    androidx.compose.runtime.DisposableEffect(owner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) current.value()
+        }
+        owner.lifecycle.addObserver(observer)
+        onDispose { owner.lifecycle.removeObserver(observer) }
+    }
+}

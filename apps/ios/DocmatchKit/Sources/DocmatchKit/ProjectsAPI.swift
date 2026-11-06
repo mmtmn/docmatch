@@ -53,3 +53,16 @@ extension DocmatchAPI {
     public func invitation(token: String) async throws -> InvitationPreview { try await http.raw.call("POST", "/v1/invitations/preview", body: ["token": .string(token)], as: InvitationPreview.self) }
     public func respondToInvitation(token: String, accept: Bool) async throws -> InvitationResponse { try await http.raw.call("POST", "/v1/invitations/respond", body: ["token": .string(token), "accept": .bool(accept)], as: InvitationResponse.self) }
 }
+
+extension DocmatchAPI {
+    public func projectRules(_ id: String, cursor: String? = nil) async throws -> ProjectRuleList {
+        try await http.call("GET", "/v1/projects/\(Self.segment(id))/rules", as: ProjectRuleList.self, query: cursor.map { [("cursor", $0)] } ?? [])
+    }
+    public func saveProjectRule(_ id: String, rule: String? = nil, title: String, body: String, idempotencyKey: String) async throws -> ProjectRule {
+        let path = "/v1/projects/\(Self.segment(id))/rules" + (rule.map { "/\(Self.segment($0))/versions" } ?? "")
+        return try await http.call("POST", path, body: ["title": .string(title), "body": .string(body)], as: ProjectRule.self, idempotencyKey: idempotencyKey)
+    }
+    public func promoteProjectRule(_ id: String, rule: String, to: String, idempotencyKey: String) async throws -> ProjectRule {
+        try await http.call("POST", "/v1/projects/\(Self.segment(id))/rules/\(Self.segment(rule))/promote", body: ["to": .string(to)], as: ProjectRule.self, idempotencyKey: idempotencyKey)
+    }
+}

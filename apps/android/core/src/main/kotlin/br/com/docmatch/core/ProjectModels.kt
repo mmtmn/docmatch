@@ -180,3 +180,6 @@ data class InvitationResponse(
     val accepted: Boolean,
 )
 
+@Serializable data class ProjectRuleProvenance(val origin: String)
+@Serializable data class ProjectRule(val id: String,val title: String,val body: String,val version: Int,val status: String,val provenance: ProjectRuleProvenance)
+@Serializable data class ProjectRuleList(val items: List<ProjectRule>,@SerialName("next_cursor") val nextCursor: String? = null)

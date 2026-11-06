@@ -262,3 +262,18 @@ extension ProjectSettings {
         self.rulesText = rulesText; self.useRules = useRules; self.ruleIds = ruleIds; self.llmMode = llmMode; self.webSearch = webSearch
     }
 }
+
+public struct ProjectRule: Decodable, Sendable, Equatable, Identifiable {
+    public struct Provenance: Decodable, Sendable, Equatable { public let origin: String }
+    public let id: String
+    public let title: String
+    public let body: String
+    public let version: Int
+    public let status: String
+    public let provenance: Provenance
+}
+public struct ProjectRuleList: Decodable, Sendable, Equatable {
+    public let items: [ProjectRule]
+    public let nextCursor: String?
+    private enum CodingKeys: String, CodingKey { case items; case nextCursor = "next_cursor" }
+}

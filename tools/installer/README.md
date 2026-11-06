@@ -341,11 +341,14 @@ uma API remota, forneça `DOCMATCH_API_KEY` pelo ambiente. Sem chave, o login au
   visíveis; `d` limpa a seleção.
 - Tab abre o campo onde você cola ou arrasta vários caminhos, com aspas quando houver espaços.
   Enter adiciona os arquivos. Nenhum texto é executado como comando de shell.
-- `r` envia os arquivos e pede uma estimativa. `s` aprova o limite; `n` volta.
+- Escolha um projeto salvo ou dê um nome a um novo projeto. A conta e o projeto ficam visíveis.
+- `r` envia os arquivos e pede uma estimativa; sem arquivos novos, verifica o projeto salvo.
+  `s` aprova o limite; `n` volta. Um resultado igual já concluído abre sem nova cobrança.
 - O indicador animado acompanha etapas reais. Ao concluir, `x` baixa XLSX corrigido, `c` CSV
-  e `p` PDF. Setas percorrem os achados; `n` inicia outra execução.
+  e `p` PDF. Setas percorrem os achados; `n` volta aos arquivos do mesmo projeto.
 - `--no-animation`, `NO_COLOR` e `--plain` continuam disponíveis. Sem TTY, informe os arquivos
-  e `--yes` para autorizar explicitamente o limite da estimativa. Resultados ficam em
+  com `--new-project "Nome"` ou `--saved-project ID` e `--yes` para autorizar explicitamente
+  o limite da estimativa. `--list-projects` lista os IDs; `--upload-only` somente salva arquivos. Resultados ficam em
   `docmatch-output` ou em `--output PASTA`, com permissões privadas.
 
 O seletor cobre CSV, TXT, PDF, XLSX e JSON, até 40 arquivos e 50 MB por arquivo antes dos

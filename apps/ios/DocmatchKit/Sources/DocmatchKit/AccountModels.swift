@@ -14,19 +14,22 @@ public enum HistoryState: Sendable, Equatable {
 public final class HistoryModel {
     public private(set) var state: HistoryState = .loading
     @ObservationIgnored private let dm: Docmatch
+    @ObservationIgnored private let projects: Bool
 
-    public init(dm: Docmatch) { self.dm = dm }
+    public init(dm: Docmatch, projects: Bool = false) { self.dm = dm; self.projects = projects }
 
     /// Reloads the first page (every time the tab is shown); what is on screen stays meanwhile.
     public func refresh() async {
         if case .ready = state {} else { state = .loading }
         do {
-            let page = try await dm.api.runs()
+            let page = try await projects ? dm.api.activity() : dm.api.runs()
             state = .ready(page.items, next: page.nextCursor, notice: nil)
         } catch {
             if error is CancellationError || Task.isCancelled { return }
             let message = (error as? ApiError)?.message ?? dm.texts.t("errors.unknown")
-            if case .ready(let runs, let next, _) = state {
+            if let apiError = error as? ApiError, [401,403].contains(apiError.status) {
+                state = .failed(message)
+            } else if case .ready(let runs, let next, _) = state {
                 state = .ready(runs, next: next, notice: message)
             } else {
                 state = .failed(message)
@@ -37,7 +40,7 @@ public final class HistoryModel {
     public func more() async {
         guard case .ready(let runs, let next?, _) = state else { return }
         do {
-            let page = try await dm.api.runs(cursor: next)
+            let page = try await projects ? dm.api.activity(cursor: next) : dm.api.runs(cursor: next)
             // Offset pages shift when a run starts meanwhile: never show one twice.
             state = .ready(runs + page.items.filter { r in !runs.contains { $0.id == r.id } }, next: page.nextCursor, notice: nil)
         } catch {
@@ -118,6 +121,11 @@ public final class AccountModel {
 
 /// The labels every screen shares, from the same keys Android and the site use.
 public enum Labels {
+    public static func accountRole(_ texts: Texts, _ role: String) -> String {
+        let key = ["owner": "owner", "admin": "admin", "uploader": "upload_only", "reconciler": "full_access", "viewer": "viewer"][role] ?? "legacy_member"
+        return texts.t("teams." + key)
+    }
+
     public static func step(_ texts: Texts, _ step: Step) -> String {
         switch step {
         case .uploading(let done, let total): return texts.t("app.uploading", ["done": done, "total": total])

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Organization } from '../../lib/accounts';
 import { formatBytes } from '../../lib/format';
 import { t, type MessageKey } from '../../lib/i18n';
@@ -71,6 +71,7 @@ export function ProjectEditor({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const [history, setHistory] = useState(false);
+  const [filesExpanded, setFilesExpanded] = useState(false);
   const [confirm, setConfirm] = useState<{ message: string; action: () => Promise<void> } | null>(
     null,
   );
@@ -382,146 +383,180 @@ export function ProjectEditor({
             {activeDocuments.length === 0 && (
               <p className={styles.empty}>{t('projects.no_documents')}</p>
             )}
-            <ul className={styles.documents}>
-              {project.documents
-                .filter((doc) => history || !doc.removed_at)
-                .map((doc) => (
-                  <li key={doc.id} className={doc.removed_at ? styles.removed : undefined}>
-                    <div>
-                      <strong>{doc.file_name}</strong>
-                      <small>
-                        {formatBytes(doc.size_bytes)} ·{' '}
-                        {doc.removed_at
-                          ? t('projects.document_removed')
-                          : t(documentLabels[doc.status])}
-                        {doc.replaces_id ? ` · ${t('projects.new_version')}` : ''}
-                        {doc.pending_replacement_id
-                          ? ` · ${t('projects.replacement_pending')}`
-                          : ''}
-                      </small>
-                      {doc.expires_at && (
+            {project.documents.length > 0 && (
+              <div className={styles.fileSummary}>
+                <p role="status">
+                  {t('projects.files_ready', {
+                    ready: activeDocuments.filter((doc) => doc.status === 'ready').length,
+                    total: activeDocuments.length,
+                  })}
+                </p>
+                {project.documents.some(
+                  (doc) =>
+                    !doc.removed_at &&
+                    (['rejected', 'expired', 'deleted'].includes(doc.status) ||
+                      doc.pending_replacement_id),
+                ) && <p className={styles.error}>{t('projects.files_attention')}</p>}
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  aria-expanded={filesExpanded}
+                  aria-controls="project-files"
+                  onClick={() => setFilesExpanded(!filesExpanded)}
+                >
+                  {filesExpanded
+                    ? t('projects.hide_files')
+                    : t('projects.show_files', { count: activeDocuments.length })}
+                </button>
+              </div>
+            )}
+            <div id="project-files" hidden={!filesExpanded}>
+              <ul className={styles.documents}>
+                {project.documents
+                  .filter((doc) => history || !doc.removed_at)
+                  .map((doc) => (
+                    <li key={doc.id} className={doc.removed_at ? styles.removed : undefined}>
+                      <div>
+                        <strong>{doc.file_name}</strong>
                         <small>
-                          {t('projects.expires', { date: projectDate(doc.expires_at) })}
+                          {formatBytes(doc.size_bytes)} ·{' '}
+                          {doc.removed_at
+                            ? t('projects.document_removed')
+                            : t(documentLabels[doc.status])}
+                          {doc.replaces_id ? ` · ${t('projects.new_version')}` : ''}
+                          {doc.pending_replacement_id
+                            ? ` · ${t('projects.replacement_pending')}`
+                            : ''}
                         </small>
-                      )}
-                    </div>
-                    {editable && !doc.removed_at && (
-                      <div className={styles.actions}>
-                        <button
-                          type="button"
-                          className="btn btn--ghost"
-                          disabled={locked}
-                          onClick={() => {
-                            if (doc.pending_replacement_id) {
-                              const previous = project.documents.find(
-                                (item) => item.id === doc.pending_replacement_id,
-                              );
-                              if (previous)
-                                void perform(async () => {
-                                  const current = await saved.save();
-                                  saved.replace(
-                                    await client.replaceDocument(current, previous, doc),
-                                  );
-                                });
-                            } else {
-                              replacementTarget.current = doc;
-                              picker.current?.click();
-                            }
-                          }}
-                        >
-                          {t(
-                            doc.pending_replacement_id
-                              ? 'projects.replacement_apply'
-                              : 'projects.replace_document',
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn--ghost"
-                          disabled={locked}
-                          onClick={() =>
-                            ask(
-                              t('projects.remove_document_confirm', { name: doc.file_name }),
-                              async () => {
-                                const current = await saved.save();
-                                await client.removeDocument(current, doc);
-                                await refresh();
-                              },
-                            )
-                          }
-                        >
-                          {t('projects.remove_document')}
-                        </button>
+                        {doc.expires_at && (
+                          <small>
+                            {t('projects.expires', { date: projectDate(doc.expires_at) })}
+                          </small>
+                        )}
                       </div>
-                    )}
-                  </li>
-                ))}
-            </ul>
-            {project.documents.some((doc) => doc.removed_at) && (
-              <label className={styles.filter}>
-                <input
-                  type="checkbox"
-                  checked={history}
-                  onChange={(event) => setHistory(event.target.checked)}
-                />
-                {t('projects.show_versions')}
-              </label>
-            )}
+                      {editable && !doc.removed_at && (
+                        <div className={styles.actions}>
+                          <button
+                            type="button"
+                            className="btn btn--ghost"
+                            disabled={locked}
+                            onClick={() => {
+                              if (doc.pending_replacement_id) {
+                                const previous = project.documents.find(
+                                  (item) => item.id === doc.pending_replacement_id,
+                                );
+                                if (previous)
+                                  void perform(async () => {
+                                    const current = await saved.save();
+                                    saved.replace(
+                                      await client.replaceDocument(current, previous, doc),
+                                    );
+                                  });
+                              } else {
+                                replacementTarget.current = doc;
+                                picker.current?.click();
+                              }
+                            }}
+                          >
+                            {t(
+                              doc.pending_replacement_id
+                                ? 'projects.replacement_apply'
+                                : 'projects.replace_document',
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn--ghost"
+                            disabled={locked}
+                            onClick={() =>
+                              ask(
+                                t('projects.remove_document_confirm', { name: doc.file_name }),
+                                async () => {
+                                  const current = await saved.save();
+                                  await client.removeDocument(current, doc);
+                                  await refresh();
+                                },
+                              )
+                            }
+                          >
+                            {t('projects.remove_document')}
+                          </button>
+                        </div>
+                      )}
+                    </li>
+                  ))}
+              </ul>
+              {project.documents.some((doc) => doc.removed_at) && (
+                <label className={styles.filter}>
+                  <input
+                    type="checkbox"
+                    checked={history}
+                    onChange={(event) => setHistory(event.target.checked)}
+                  />
+                  {t('projects.show_versions')}
+                </label>
+              )}
+            </div>
             <p className={styles.muted}>{t('projects.retention')}</p>
-            {project.capabilities.reconcile && (
-              <fieldset disabled={locked || !editable} className={styles.settings}>
-                <legend>{t('projects.settings')}</legend>
-                <label htmlFor="project-rules">{t('projects.rules')}</label>
-                <textarea
-                  id="project-rules"
-                  rows={4}
-                  value={settings.rules_text ?? ''}
-                  maxLength={textLimits.rules_text}
-                  placeholder={t('projects.rules_example')}
-                  onChange={(event) => {
-                    const next = { ...settings, rules_text: event.target.value };
-                    setSettings(next);
-                    saved.change({ settings: next });
-                  }}
-                />
-                <label className={styles.filter}>
-                  <input
-                    type="checkbox"
-                    checked={settings.use_rules}
-                    onChange={(event) => {
-                      const next = { ...settings, use_rules: event.target.checked };
-                      setSettings(next);
-                      saved.change({ settings: next });
-                    }}
-                  />
-                  {t('projects.use_rules')}
-                </label>
-                <label className={styles.filter}>
-                  <input
-                    type="checkbox"
-                    checked={settings.web_search}
-                    onChange={(event) => {
-                      const next = { ...settings, web_search: event.target.checked };
-                      setSettings(next);
-                      saved.change({ settings: next });
-                    }}
-                  />
-                  {t('projects.web_search')}
-                </label>
-              </fieldset>
-            )}
             {project.capabilities.read_results && (
-              <ProjectRules
-                projectId={project.id}
-                client={client}
-                selected={settings.rule_ids ?? []}
-                disabled={locked || !editable}
-                onChange={(ids) => {
-                  const next = { ...settings, rule_ids: ids };
-                  setSettings(next);
-                  saved.change({ settings: next });
-                }}
-              />
+              <details className={styles.manage}>
+                <summary>{t('projects.settings')}</summary>
+                {project.capabilities.reconcile && (
+                  <fieldset disabled={locked || !editable} className={styles.settings}>
+                    <legend>{t('projects.settings')}</legend>
+                    <label htmlFor="project-rules">{t('projects.rules')}</label>
+                    <textarea
+                      id="project-rules"
+                      rows={4}
+                      value={settings.rules_text ?? ''}
+                      maxLength={textLimits.rules_text}
+                      placeholder={t('projects.rules_example')}
+                      onChange={(event) => {
+                        const next = { ...settings, rules_text: event.target.value };
+                        setSettings(next);
+                        saved.change({ settings: next });
+                      }}
+                    />
+                    <label className={styles.filter}>
+                      <input
+                        type="checkbox"
+                        checked={settings.use_rules}
+                        onChange={(event) => {
+                          const next = { ...settings, use_rules: event.target.checked };
+                          setSettings(next);
+                          saved.change({ settings: next });
+                        }}
+                      />
+                      {t('projects.use_rules')}
+                    </label>
+                    <label className={styles.filter}>
+                      <input
+                        type="checkbox"
+                        checked={settings.web_search}
+                        onChange={(event) => {
+                          const next = { ...settings, web_search: event.target.checked };
+                          setSettings(next);
+                          saved.change({ settings: next });
+                        }}
+                      />
+                      {t('projects.web_search')}
+                    </label>
+                  </fieldset>
+                )}
+                {project.capabilities.read_results && (
+                  <ProjectRules
+                    projectId={project.id}
+                    client={client}
+                    selected={settings.rule_ids ?? []}
+                    disabled={locked || !editable}
+                    onChange={(ids) => {
+                      const next = { ...settings, rule_ids: ids };
+                      setSettings(next);
+                      saved.change({ settings: next });
+                    }}
+                  />
+                )}
+              </details>
             )}
             {expired && (
               <div className={styles.notice}>
@@ -537,11 +572,8 @@ export function ProjectEditor({
               </div>
             )}
             {editable && (
-              <div className={styles.analysis}>
-                <div>
-                  <strong>{t('projects.ready_to_reconcile')}</strong>
-                  <p>{t('projects.no_duplicate_cost')}</p>
-                </div>
+              <ProjectActionBar>
+                <p>{t('projects.no_duplicate_cost')}</p>
                 <button
                   type="button"
                   className="btn btn--primary"
@@ -552,7 +584,7 @@ export function ProjectEditor({
                 >
                   {t('projects.reconcile')}
                 </button>
-              </div>
+              </ProjectActionBar>
             )}
           </>
         )}
@@ -662,5 +694,46 @@ export function ProjectEditor({
         />
       )}
     </>
+  );
+}
+
+/** Reserve the actual bar height, including text zoom, so the last page control stays reachable. */
+function ProjectActionBar({ children }: { children: ReactNode }) {
+  const bar = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const node = bar.current;
+    if (!node) return;
+    const body = document.body;
+    const root = document.documentElement;
+    const padding = body.style.paddingBottom;
+    const scrolling = root.style.scrollPaddingBottom;
+    const initial = getComputedStyle(body).paddingBottom;
+    const resize = () => {
+      const height = node.getBoundingClientRect().height;
+      body.style.paddingBottom = `calc(${initial} + ${height}px)`;
+      root.style.scrollPaddingBottom = `${height + 16}px`;
+    };
+    const viewport = window.visualViewport;
+    const keyboard = () => {
+      node.style.bottom = `${viewport ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop) : 0}px`;
+    };
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(resize);
+    observer?.observe(node);
+    viewport?.addEventListener('resize', keyboard);
+    viewport?.addEventListener('scroll', keyboard);
+    resize();
+    keyboard();
+    return () => {
+      observer?.disconnect();
+      viewport?.removeEventListener('resize', keyboard);
+      viewport?.removeEventListener('scroll', keyboard);
+      body.style.paddingBottom = padding;
+      root.style.scrollPaddingBottom = scrolling;
+    };
+  }, []);
+  return (
+    <div ref={bar} className={styles.actionBar} role="region" aria-label={t('projects.reconcile')}>
+      <div>{children}</div>
+    </div>
   );
 }

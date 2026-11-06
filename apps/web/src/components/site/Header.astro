@@ -66,8 +66,9 @@ const links = [
 
   .header__inner {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: var(--space-4);
+    gap: var(--space-2) var(--space-4);
     min-height: 3.25rem;
   }
 
@@ -94,7 +95,7 @@ const links = [
 
   .header__account {
     flex: 1;
-    min-width: 0;
+    min-width: min(7rem, 100%);
   }
 
   .header__list {

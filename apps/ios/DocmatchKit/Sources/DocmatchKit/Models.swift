@@ -320,6 +320,7 @@ public struct RunError: Decodable, Sendable, Equatable {
 
 public struct Run: Decodable, Sendable, Equatable, Identifiable {
     public let id: String
+    public let projectId: String?
     public let status: String
     public let sources: [Upload]
     public let progress: RunProgress?
@@ -333,6 +334,7 @@ public struct Run: Decodable, Sendable, Equatable, Identifiable {
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
+        projectId = try c.decodeIfPresent(String.self, forKey: .projectId)
         status = try c.decode(String.self, forKey: .status)
         sources = try c.value(.sources, [])
         progress = try c.decodeIfPresent(RunProgress.self, forKey: .progress)
@@ -345,6 +347,7 @@ public struct Run: Decodable, Sendable, Equatable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case id, status, sources, progress, summary, error
+        case projectId = "project_id"
         case pendingQuote = "pending_quote"
         case createdAt = "created_at"
         case finishedAt = "finished_at"

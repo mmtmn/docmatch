@@ -29,6 +29,7 @@ import br.com.docmatch.core.Docmatch
 import br.com.docmatch.core.Format
 import br.com.docmatch.core.Run
 import br.com.docmatch.core.RunStatus
+import br.com.docmatch.core.activity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -42,7 +43,7 @@ sealed interface HistoryState {
 }
 
 /** Every run of the account, whichever device started it. */
-class HistoryViewModel(private val dm: Docmatch) : ViewModel() {
+class HistoryViewModel(private val dm: Docmatch, private val projects: Boolean = false) : ViewModel() {
     private val _state = MutableStateFlow<HistoryState>(HistoryState.Loading)
     val state: StateFlow<HistoryState> = _state
 
@@ -51,9 +52,9 @@ class HistoryViewModel(private val dm: Docmatch) : ViewModel() {
         if (_state.value !is HistoryState.Ready) _state.value = HistoryState.Loading
         _state.value =
             try {
-                dm.api.runs().let { HistoryState.Ready(it.items, it.nextCursor) }
+                (if (projects) dm.api.activity() else dm.api.runs()).let { HistoryState.Ready(it.items, it.nextCursor) }
             } catch (e: ApiException) {
-                (_state.value as? HistoryState.Ready)?.copy(notice = e.message) ?: HistoryState.Failed(e.message)
+                if (e.status in listOf(401,403)) HistoryState.Failed(e.message) else (_state.value as? HistoryState.Ready)?.copy(notice = e.message) ?: HistoryState.Failed(e.message)
             }
     }
 
@@ -67,7 +68,7 @@ class HistoryViewModel(private val dm: Docmatch) : ViewModel() {
         viewModelScope.launch {
             _state.value =
                 try {
-                    val page = dm.api.runs(cursor)
+                    val page = if (projects) dm.api.activity(cursor) else dm.api.runs(cursor)
                     // Offset pages shift when a run starts meanwhile: never show one twice.
                     ready.copy(runs = (ready.runs + page.items).distinctBy { it.id }, next = page.nextCursor, notice = null)
                 } catch (_: ApiException) {
@@ -78,7 +79,7 @@ class HistoryViewModel(private val dm: Docmatch) : ViewModel() {
 }
 
 @Composable
-fun HistoryScreen(vm: HistoryViewModel, onOpen: (String) -> Unit) {
+fun HistoryScreen(vm: HistoryViewModel, onOpen: (Run) -> Unit) {
     val state by vm.state.collectAsState()
     // Every time the tab is shown: runs started on the site or another device appear.
     LaunchedEffect(Unit) { vm.refresh() }
@@ -90,7 +91,7 @@ fun HistoryScreen(vm: HistoryViewModel, onOpen: (String) -> Unit) {
                 item { DmHeading(t("mobile.tab_history"), t("mobile.history_text")) }
                 if (s.runs.isEmpty()) item { DmEmptyState(DmIcons.Folder, t("mobile.tab_history"), t("mobile.history_empty")) }
                 items(s.runs, key = { it.id }) { run ->
-                    DmCard(Modifier.fillMaxWidth().clickable { onOpen(run.id) }) {
+                    DmCard(Modifier.fillMaxWidth().clickable { onOpen(run) }) {
                         Column(Modifier.padding(DmSize.space2), verticalArrangement = Arrangement.spacedBy(DmSize.space1)) {
                             Text(runStatus(run.status), fontWeight = FontWeight.SemiBold)
                             Text(t("mobile.history_item", mapOf("date" to Format.dateTime(run.createdAt), "count" to run.sources.size)))

@@ -18,6 +18,24 @@ O app diz o que o site diz:
 - a pré-checagem de arquivos é a do site, com os mesmos vetores em `testdata/precheck/cases.json`;
 - as cores vêm de `packages/design-tokens/tokens.json`, via `tools/mobile/tokens.mjs`.
 
+## Projetos e equipes
+
+A entrada passa a **Projetos · Atividade · Conta**. Crie um projeto, envie os documentos e
+volte depois: nome, opções e arquivos confirmados ficam na conta. O app informa quando ainda
+há alterações sem salvar e pede confirmação antes de descartá-las. Uma nova versão de arquivo
+preserva a anterior no histórico.
+
+O seletor no topo separa a conta pessoal das empresas. Cada envio e aprovação mantém a conta
+e o projeto escolhidos. Se nada mudou desde uma conciliação concluída, o botão abre o resultado
+existente, sem reservar créditos novamente. Arquivos e resultados continuam sujeitos à retenção.
+
+Em **Conta → Equipe**, o responsável pode convidar por e-mail, escolher a permissão e acompanhar
+o aceite. Não há cobrança adicional por assento nesta etapa. Quem só adiciona documentos não
+vê resultados nem aprova gastos. Projetos privados precisam ser compartilhados explicitamente.
+Abrir um convite mostra a empresa e a permissão; só **Aceitar convite** acrescenta o acesso.
+O link `docmatch://convite#token=…` abre esse fluxo no app instalado; o link do e-mail continua
+funcionando no navegador. O token não é gravado nos logs.
+
 ## Estrutura
 
 | Pasta | O que tem |
@@ -65,9 +83,15 @@ API ouvindo na rede). O build de debug troca o loopback dos links de envio pelo 
 ```bash
 make test      # testes do DocmatchKit: no Mac direto, no Linux no contêiner swift:6.1-noble
 make ci        # tokens + testes (o que o pre-push roda)
+make e2e-local # API local já iniciada; cria, renomeia e reabre um projeto no simulador
 make app       # no Mac: xcodegen + xcodebuild para o simulador, sem assinatura
 make release   # no Mac: arquivo de release (ENV=prod), com a origem lida dos outputs do Terraform
 ```
+
+O teste de retomada usa assinatura ad hoc no simulador, para testar a sessão real no Keychain.
+Um build sem assinatura compila, mas não comprova a persistência da sessão. Use
+`LOCAL_API_URL=http://localhost:18080` para outra porta e `TEST_SIMULATOR='platform=iOS Simulator,id=…'`
+para escolher o aparelho de teste. Veja a [orientação da Apple sobre acesso ao Keychain](https://developer.apple.com/documentation/security/sharing-access-to-keychain-items-among-a-collection-of-apps).
 
 Os workflows do GitHub são exclusivamente manuais. A validação acontece localmente: `make ci`
 para o núcleo e `make app` num Mac com Xcode para compilar as telas. Nenhum push inicia CI pago.
@@ -171,3 +195,11 @@ valida apenas o início do fluxo, não a troca do código nem a sessão na API.
 [Como gravar novamente](../../docs/demos/README.md#gravar-o-ios-no-mac).
 
 No Linux, os testes Swift montam apenas fontes e fixtures, sem rede e sem acesso ao `.env`.
+
+No projeto, a ação de conciliar fica fixa acima das abas. A lista de arquivos e as opções
+avançadas abrem somente quando solicitadas; o resumo continua mostrando arquivos prontos
+ou que precisam de atenção. O teclado e a área segura do aparelho preservam o botão.
+
+Para conferir uploads, resultados, exportação e repetição sem nova cobrança no cliente Swift:
+`DOCMATCH_LOCAL_API=http://localhost:18080 swift test --package-path DocmatchKit --filter LiveProjectsTests`.
+O teste exige a API local já iniciada e usa somente os dados públicos do repositório.

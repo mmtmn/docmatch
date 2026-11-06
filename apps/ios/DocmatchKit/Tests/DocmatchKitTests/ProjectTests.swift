@@ -61,3 +61,19 @@ final class ProjectTests: XCTestCase {
         XCTAssertEqual(server.take().url?.path, "/v1/projects/prj_test/runs/run_1/findings")
     }
 }
+
+@MainActor final class ProjectResultAccessTests: XCTestCase {
+    func testFinishedResultsAreClearedWhenProjectAccessIsRemoved() async throws {
+        let server = FakeServer(), dm = try newClient(server).inAccount("org_company").inProject("prj_test")
+        let model = RunModel(dm: dm, runId: "run_test")
+        server.enqueue(200, #"{"id":"run_test","status":"completed","project_id":"prj_test"}"#)
+        server.enqueue(200, #"{"items":[]}"#)
+        await model.follow()
+        guard case .done = model.state else { return XCTFail("Expected completed result") }
+        for _ in 0..<2 { _ = server.take() }
+        server.enqueue(403, #"{"code":"forbidden","message":"Acesso removido."}"#)
+        await model.validateAccess()
+        XCTAssertEqual(model.state, .failed("Acesso removido."))
+        XCTAssertEqual(server.take().url?.path, "/v1/projects/prj_test/runs/run_test")
+    }
+}

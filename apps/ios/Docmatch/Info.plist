@@ -32,8 +32,7 @@
 	<true/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
-		<!-- Plain HTTP only to the local network (make local on the Mac, or the Mac's address on the
-		     LAN); every other host is HTTPS, and a release build refuses a non-HTTPS API (AppConfig). -->
+		<!-- HTTP is allowed only on the local network for development. Release requires HTTPS. -->
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
@@ -53,6 +52,17 @@
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>br.com.docmatch.invitation</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>docmatch</string>
+			</array>
+		</dict>
 	</array>
 </dict>
 </plist>

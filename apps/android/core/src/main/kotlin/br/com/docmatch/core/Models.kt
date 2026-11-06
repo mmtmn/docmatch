@@ -160,6 +160,7 @@ data class Run(
     @SerialName("pending_quote") val pendingQuote: Quote? = null,
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("finished_at") val finishedAt: String? = null,
+    @SerialName("project_id") val projectId: String? = null,
 )
 
 @Serializable

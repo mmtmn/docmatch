@@ -4,10 +4,10 @@ import SwiftUI
 /// Every run of the account, whichever device started it; reloaded every time the tab is shown.
 struct HistoryView: View {
     let model: HistoryModel
-    let onOpen: (String) -> Void
+    let onOpen: (Run) -> Void
     @Environment(\.texts) private var texts
 
-    init(model: HistoryModel, onOpen: @escaping (String) -> Void) {
+    init(model: HistoryModel, onOpen: @escaping (Run) -> Void) {
         self.model = model
         self.onOpen = onOpen
     }
@@ -30,7 +30,7 @@ struct HistoryView: View {
                         }.frame(maxWidth: .infinity).padding(.vertical, 32)
                     }
                     ForEach(runs) { run in
-                        Button { onOpen(run.id) } label: {
+                        Button { onOpen(run) } label: {
                             DmCard {
                                 HStack {
                                     Text(Labels.runStatus(texts, run.status)).font(.headline)

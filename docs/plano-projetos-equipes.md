@@ -52,6 +52,11 @@ O menu lista as contas, a permissão em cada uma e os convites pendentes. Dentro
 dispositivos ficam em **Meu perfil**. No celular, o mesmo seletor abre uma folha de opções;
 a navegação principal passa a **Projetos · Atividade · Conta**, com **Novo projeto** visível.
 
+No projeto, manter a ação **Conciliar ou ver resultado** fixa no rodapé, acima das abas nos
+apps. Arquivos começam recolhidos, com contagem de prontos e aviso de problemas; a pessoa
+pode expandir a lista e rolar sem perder a ação. As opções de conciliação também começam
+recolhidas. Reservar espaço para o botão, teclado e área segura, inclusive com texto ampliado.
+
 Mostrar a conta também na confirmação de custo e no upload. Cada aba, requisição e envio
 mantém seu destino: mudar uma aba para B não pode fazer outra gastar ou enviar arquivos em B.
 

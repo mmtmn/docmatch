@@ -114,6 +114,12 @@ export function InvitationPage() {
               <p>{t('teams.personal_separate')}</p>
               {valid ? (
                 <>
+                  <a
+                    className="btn btn--ghost"
+                    href={`docmatch://convite#token=${encodeURIComponent(token)}`}
+                  >
+                    {t('teams.open_installed_app')}
+                  </a>
                   {preview.status === 'pending' && (
                     <p className={styles.muted}>
                       {t('teams.expires', { date: projectDate(preview.expires_at) })}

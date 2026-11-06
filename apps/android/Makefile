@@ -13,7 +13,7 @@ GPU ?= swiftshader_indirect
 # Keep Gradle's generic Pixel AVD separate from the developer's running emulator.
 TEST_ANDROID_HOME ?= $(ROOT)/.cache/android-test
 
-.PHONY: help setup sdk-check tokens lint test build ci ci-full e2e-local release clean
+.PHONY: help setup sdk-check tokens lint test ui-test build ci ci-full e2e-local release clean
 
 help: ## lista os alvos
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -38,7 +38,10 @@ lint: sdk-check ## Android lint do app (avisos viram erro onde importa: abortOnE
 build: sdk-check ## APK de debug, APK dos testes instrumentados e o release minificado (R8)
 	$(GRADLE) :app:assembleDebug :app:assembleDebugAndroidTest :app:assembleRelease -Pdocmatch.apiBaseUrl=https://api.docmatch.invalid
 
-ci: tokens test lint build ## tokens + testes + lint + builds (o que o pre-push roda)
+ui-test: sdk-check ## modelos de tela: troca de conta, retomada e conflitos
+	$(GRADLE) :app:testDebugUnitTest
+
+ci: tokens test ui-test lint build ## tokens + testes + lint + builds (o que o pre-push roda)
 
 ci-full: ci e2e-local ## ci + o fluxo inteiro num emulador contra o make local
 

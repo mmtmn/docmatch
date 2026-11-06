@@ -10,6 +10,10 @@ final class DemoTests: XCTestCase {
         app.launch()
         let local = app.buttons["Entrar sem conta (ambiente local)"]
         if local.waitForExistence(timeout: 8) { local.tap() }
+        let projectName = app.textFields["Nome do projeto"]
+        XCTAssertTrue(projectName.waitForExistence(timeout: 30), app.debugDescription)
+        projectName.tap(); projectName.typeText("Fechamento Vantara")
+        app.buttons["Criar projeto"].tap()
         let picker = app.buttons["pick-files"]
         XCTAssertTrue(picker.waitForExistence(timeout: 30), app.debugDescription)
         print("DEMO_VISIBLE \(Date().timeIntervalSince1970)")
@@ -37,7 +41,9 @@ final class DemoTests: XCTestCase {
         sleep(2)
         let submit = app.buttons["submit-run"]
         XCTAssertTrue(submit.waitForExistence(timeout: 10))
-        XCTAssertTrue(submit.isEnabled, app.debugDescription)
+        for _ in 0..<8 where !submit.isHittable { app.swipeUp() }
+        expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: submit)
+        waitForExpectations(timeout: 90)
         submit.tap()
         let confirm = app.staticTexts["Confirmar a conciliação"]
         XCTAssertTrue(confirm.waitForExistence(timeout: 90), app.debugDescription)

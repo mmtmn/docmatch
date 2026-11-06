@@ -5,10 +5,12 @@ import SwiftUI
 /// which can be signed out from here; reloaded every time the tab is shown.
 struct AccountView: View {
     let model: AccountModel
+    let canManage: Bool
+    let session: SessionModel?
     @State private var confirmingDeletion = false
     @Environment(\.texts) private var texts
 
-    init(model: AccountModel) { self.model = model }
+    init(model: AccountModel, canManage: Bool = true, session: SessionModel? = nil) { self.model = model; self.canManage = canManage; self.session = session }
 
     var body: some View {
         // The ZStack owns the task (on a Group it would run for each state that appears).
@@ -27,10 +29,13 @@ struct AccountView: View {
                         Text(texts.t("account.profile")).font(.headline).accessibilityAddTraits(.isHeader)
                         if !me.user.displayName.isEmpty { profileValue(texts.t("account.name_label"), me.user.displayName) }
                         profileValue(texts.t("account.email_label"), me.user.email)
-                        if let credits = me.credits {
+                        if canManage, let credits = me.credits {
                             profileValue(texts.t("account.credits"), credits.tokenExempt ? texts.t("account.token_exempt") : texts.t("account.credits_available", ["available": credits.available]))
                         }
                         Button(texts.t("account.sign_out")) { Task { await model.signOut() } }.buttonStyle(DmButtonStyle(.secondary))
+                    }
+                    if let session, session.currentAccount != nil {
+                        NavigationLink { TeamView(session: session) } label: { Label(texts.t("teams.title"), systemImage: "person.2") }
                     }
                     DmHeading(title: texts.t("account.devices"), subtitle: texts.t("account.devices_text"))
                     ForEach(devices) { device in
@@ -47,7 +52,7 @@ struct AccountView: View {
                                 .accessibilityLabel(texts.t("account.revoke_label", ["name": device.name]))
                         }.accessibilityIdentifier("device-row")
                     }
-                    Button(texts.t("mobile.delete_account"), role: .destructive) { confirmingDeletion = true }.buttonStyle(DmButtonStyle(.destructive))
+                    if canManage { Button(texts.t("mobile.delete_account"), role: .destructive) { confirmingDeletion = true }.buttonStyle(DmButtonStyle(.destructive)) }
                 }
             }
         }

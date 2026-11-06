@@ -49,7 +49,7 @@ export function ProjectsApp() {
   if (error) return <p role="alert">{error}</p>;
   if (!context) return <p role="status">{t('mobile.loading')}</p>;
   return (
-    <section className={styles.page}>
+    <section className={`${styles.page} ${projectId ? styles.detailPage : ''}`}>
       <nav className={styles.navigation} aria-label={t('projects.navigation')}>
         <a href="/app" aria-current={!projectId ? 'page' : undefined}>
           {t('projects.title')}
