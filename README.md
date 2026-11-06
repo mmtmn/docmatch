@@ -9,7 +9,7 @@ Use o [site](https://docmatch.com.br), os apps [Android](apps/android/README.md)
 ## Terminal
 
 ```sh
-npm install -g --allow-remote=root https://docmatch.com.br/install/docmatch.tgz
+npm install -g docmatch
 docmatch
 ```
 
