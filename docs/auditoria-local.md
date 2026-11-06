@@ -22,6 +22,32 @@ processamento → exportação XLSX → saída. O teste está em `tools/terminal
 e faz parte do portão local completo. A instalação npm também foi verificada com prefixo
 e cache vazios, exercitando download e integridade.
 
+A versão 0.1.2 está disponível pelo tarball HTTPS indicado no README e foi instalada no
+host. A publicação no registry npm ainda depende de autenticação do mantenedor; não se
+deve substituir o comando por `npm install -g docmatch` antes dessa publicação.
+
+## Verificação a partir de um clone novo
+
+Depois do merge da entrega inicial, o checkout anterior foi arquivado para recuperação e
+`main` foi clonado novamente do GitHub. O `.env` foi salvo também em `~/.env`; os cinco
+arquivos privados de ambiente foram preservados com permissões `0600` e hashes conferidos.
+Nenhum código, `node_modules` ou build do checkout antigo foi copiado para o clone novo.
+Ferramentas e caches globais do host foram reutilizados: este teste não representa uma
+instalação em um sistema operacional vazio.
+
+`make setup` concluiu, e `make local` aplicou as migrações e iniciou com um volume PostgreSQL
+novo, isolado dos dados anteriores. As correções de CSP e isolamento do build encontradas
+nessa validação estão descritas abaixo. Com essas correções, o `make ci-full` final passou
+em todas as 18 etapas locais, em 368 s. O build SwiftUI continua sujeito ao limite de
+plataforma descrito na tabela.
+
+Na carga final: oito de oito execuções concluídas, zero falhas, p95 de 5,72 s, oito recusas
+de acesso entre organizações e 100% do gabarito público em todos os resultados. As cinco
+mutações foram rejeitadas. O fluxo integrado passou nos três navegadores e o terminal
+concluiu configuração, processamento e exportação em PTY real. O scan dos 40 commits
+alcançáveis no clone novo não encontrou segredos; a comparação adicional de 14 valores
+privados de configuração com todos os arquivos versionados também não encontrou ocorrências.
+
 ## Testes executados
 
 | Camada | Evidência local |
