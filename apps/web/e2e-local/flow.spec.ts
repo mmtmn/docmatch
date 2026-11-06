@@ -31,6 +31,7 @@ test('reconciles the twin with no key and no sign-in step', async ({ page }) => 
     throw new Error(`Unexpected browser dialog: ${dialog.type()}`);
   });
   await page.goto('/app');
+  await expect(page.locator('astro-island[client="load"][ssr]')).toHaveCount(0);
   await page.locator('input[type="file"]').setInputFiles(inputs.map((name) => join(twin, name)));
   await page.getByRole('button', { name: m.form.submit }).click();
 

@@ -6,6 +6,8 @@
 path:docs/
 path:.*\.md$
 path:testdata/
+# Casos fixos de origem para a política CSP: verificam que hosts remotos não ganham a exceção local.
+path:^apps/web/vite/csp\.test\.ts$
 # Cópia literal do gêmeo da Vantara (testdata/golden/vantara-twin) embarcada no instalador; o
 # `make -C tools/installer sync-check` garante que é idêntica à original.
 path:tools/installer/internal/assets/twin/

@@ -124,9 +124,10 @@ up() {
   wait_for "a API" curl -fsS "http://127.0.0.1:${api_port}/v1/version"
 
   log "site para ${DM_PUBLIC_BASE_URL} (API em ${DM_API_BASE_URL})"
+  # Keep the running local app independent from production/E2E builds in apps/web/dist.
   DM_PUBLIC_BASE_URL="$DM_PUBLIC_BASE_URL" PUBLIC_DM_API_BASE_URL="$DM_API_BASE_URL" PUBLIC_DM_FEATURE_RESULTS=false \
-    pnpm --dir apps/web exec astro build >"$logs/web-build.log" 2>&1 || die "build do site falhou (veja $logs/web-build.log)"
-  start web node apps/web/tools/serve-dist.mjs --host 127.0.0.1 --port "$web_port"
+    pnpm --dir apps/web exec astro build --outDir "$state/web" >"$logs/web-build.log" 2>&1 || die "build do site falhou (veja $logs/web-build.log)"
+  start web node apps/web/tools/serve-dist.mjs --dir "$state/web" --host 127.0.0.1 --port "$web_port"
   wait_for "o site" curl -fsS "http://127.0.0.1:${web_port}/"
 
   cat <<EOF

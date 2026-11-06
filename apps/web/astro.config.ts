@@ -3,6 +3,7 @@ import sitemap from '@astrojs/sitemap';
 import { defineConfig, envField } from 'astro/config';
 import { limitsPlugin } from './vite/limits';
 import { pricingPlugin } from './vite/pricing';
+import { transportDirectives } from './vite/csp';
 
 // Everything environment-specific comes from variables (see .env.example): the site origin, the
 // API origin (CSP connect-src / form-action) and the media origin (CSP media-src).
@@ -65,7 +66,7 @@ export default defineConfig({
         `connect-src ${sources("'self'", apiOrigin, ...uploadOrigins)}`,
         `media-src ${sources("'self'", 'blob:', mediaOrigin)}`,
         `form-action ${sources("'self'", apiOrigin)}`,
-        'upgrade-insecure-requests',
+        ...transportDirectives(site),
       ],
       scriptDirective: { resources: ["'self'"] },
       styleDirective: { resources: ["'self'"] },

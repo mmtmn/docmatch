@@ -19,7 +19,7 @@ done
 # Audit the SDK with a patched pip in an isolated environment.
 python3 -m venv .cache/audit-venv
 .cache/audit-venv/bin/python -m pip install --quiet --upgrade 'pip>=26.2,<27'
-.cache/audit-venv/bin/python -m pip install --quiet -e sdks/python pip-audit
+.cache/audit-venv/bin/python -m pip install --quiet -e sdks/python -r tools/ci/requirements.txt
 .cache/audit-venv/bin/pip-audit
 # Full Git history, redacted. Uncommitted changes are also checked by the commit hook.
-gitleaks git --redact --no-banner
+gitleaks git --log-opts=--all --redact --no-banner

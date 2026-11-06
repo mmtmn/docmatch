@@ -29,7 +29,7 @@ e cache vazios, exercitando download e integridade.
 | API Go | Unitários, `-race`, integração com PostgreSQL real, RLS, autenticação, créditos, cobrança, filas e pipeline com o processador Rust; 772 casos na suíte de integração, incluindo os unitários. Cobertura global de integração: 85,4%, acima do piso de 85%. |
 | Fuzz Go | IDs públicos e tokens assinados, dez segundos cada, quatro workers; milhões de entradas exercitadas, sem falha. |
 | Processador Rust | 369 testes de release aprovados, incluindo golden tests, propriedades com 2.000 casos, entrada malformada, limites de recursos e gRPC; um caso dependente de ambiente é opcional. |
-| Web | 254 unitários; tipos, lint e build; 141 casos Playwright em Chromium, Firefox e WebKit. HTTPS local conserva a CSP de produção. Inclui WCAG/axe, teclado, telas pequenas, crescimento das regras e downloads. |
+| Web | 262 unitários; tipos, lint e build; 141 casos Playwright em Chromium, Firefox e WebKit. HTTPS local conserva a CSP de produção. Inclui WCAG/axe, teclado, telas pequenas, crescimento das regras e downloads. |
 | Android | 31 testes JVM, lint, APK debug/testes, release R8 e fluxo instrumentado em emulador isolado: login, seletor, resultado, decisão e revogação da sessão por outro dispositivo. O teste destinado apenas a gravação é opt-in. |
 | iOS | 43 testes DocmatchKit em Swift 6 no Linux. O build SwiftUI/Xcode precisa de um Mac e não foi validado neste host. |
 | SDKs | Go com race/vet, Rust com testes/fmt/clippy, TypeScript com build/testes/catálogo, Python com testes de transporte. Todos participam do runner local. |
@@ -96,6 +96,12 @@ Referências de formato e funcionamento: [lockfiles Gradle](https://docs.gradle.
   resolve `--out` antes de mudar de diretório e preserva versões anteriores do winget.
 - WebKit recebe um ambiente de processo sem bibliotecas incompatíveis herdadas do Snap.
   Todos os navegadores exigidos precisam iniciar; o portão não retorna verde pulando-os.
+  No clone limpo, a CSP também revelou um erro real em Safari: recursos de localhost eram
+  promovidos para HTTPS, embora o servidor local fosse HTTP. A exceção agora se limita a
+  builds HTTP de loopback; produção e os testes do build público continuam com upgrades.
+  O fluxo integrado local roda sequencialmente nos três navegadores.
+- O site de `make local` tem diretório de build próprio em `.cache/local/web`. Compilar
+  o site de produção ou os testes não substitui mais os arquivos da aplicação local aberta.
 - O emulador Gradle usa diretório próprio do checkout, sem disputar o AVD já aberto pelo
   desenvolvedor. O teste local desativa chamadas pagas ao modelo.
 - A tela de nova execução iOS foi dividida em seções menores para reduzir a expressão
