@@ -95,7 +95,7 @@ func (s *Store) CountRuns(ctx context.Context, orgID, workflowID uuid.UUID) (int
 
 func toRule(r sqlc.Rule) rules.Rule {
 	out := rules.Rule{
-		ID: r.ID, OrgID: r.OrgID, Title: r.Title, Body: r.Body, Version: int(r.Version), Status: r.Status, Scope: r.Scope, RunID: r.RunID,
+		ID: r.ID, OrgID: r.OrgID, Title: r.Title, Body: r.Body, Version: int(r.Version), Status: r.Status, Scope: r.Scope, RunID: r.RunID, ProjectID: r.ProjectID,
 		CreatedBy: r.CreatedBy, Enabled: r.Enabled, UseCount: r.UseCount, LastUsedAt: r.LastUsedAt, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}
 	if len(r.AppliesTo) > 0 && string(r.AppliesTo) != "{}" {
@@ -127,7 +127,7 @@ func (s *Store) CreateRule(ctx context.Context, r rules.Rule) (rules.Rule, error
 		}
 		row, err := q.InsertRuleFull(ctx, sqlc.InsertRuleFullParams{
 			OrgID: r.OrgID, Title: r.Title, Body: r.Body, Kind: "match", Source: source, CreatedBy: r.CreatedBy, Version: int32(max(r.Version, 1)), //nolint:gosec // small
-			Status: r.Status, Scope: r.Scope, AppliesTo: appliesTo, Compiled: jsonOrNil(r.Compiled), Provenance: nonEmpty(jsonOrNil(r.Provenance)), RunID: r.RunID,
+			Status: r.Status, Scope: r.Scope, AppliesTo: appliesTo, Compiled: jsonOrNil(r.Compiled), Provenance: nonEmpty(jsonOrNil(r.Provenance)), RunID: r.RunID, ProjectID: r.ProjectID,
 		})
 		if err != nil {
 			return err
@@ -143,7 +143,7 @@ func (s *Store) GetRule(ctx context.Context, orgID, id uuid.UUID) (rules.Rule, b
 	var out rules.Rule
 	found := false
 	err := s.org(ctx, orgID, func(ctx context.Context, q *sqlc.Queries, _ pgx.Tx) error {
-		row, err := q.GetRule(ctx, sqlc.GetRuleParams{OrgID: orgID, ID: id})
+		row, err := q.GetRule(ctx, sqlc.GetRuleParams{OrgID: orgID, ID: id, ProjectID: rules.ProjectID(ctx, orgID)})
 		if isNoRows(err) {
 			return nil
 		}
@@ -163,7 +163,7 @@ func (s *Store) ListRulesByIDs(ctx context.Context, orgID uuid.UUID, ids []uuid.
 		return out, nil
 	}
 	err := s.org(ctx, orgID, func(ctx context.Context, q *sqlc.Queries, _ pgx.Tx) error {
-		rows, err := q.ListRulesByIDs(ctx, sqlc.ListRulesByIDsParams{OrgID: orgID, Ids: ids})
+		rows, err := q.ListRulesByIDs(ctx, sqlc.ListRulesByIDsParams{OrgID: orgID, Ids: ids, ProjectID: rules.ProjectID(ctx, orgID)})
 		if err != nil {
 			return err
 		}
@@ -181,7 +181,7 @@ func (s *Store) SearchRules(ctx context.Context, orgID uuid.UUID, qry rules.Quer
 	err := s.org(ctx, orgID, func(ctx context.Context, q *sqlc.Queries, _ pgx.Tx) error {
 		rows, err := q.SearchRulesPage(ctx, sqlc.SearchRulesPageParams{
 			OrgID: orgID, Limit: int32(min(max(qry.Limit, 1), 1000)), Offset: int32(max(qry.Offset, 0)), //nolint:gosec // bounded
-			Status: strPtr(qry.Status), Scope: strPtr(qry.Scope), Term: strPtr(qry.Term),
+			ProjectID: rules.ProjectID(ctx, orgID), Status: strPtr(qry.Status), Scope: strPtr(qry.Scope), Term: strPtr(qry.Term),
 		})
 		if err != nil {
 			return err
@@ -198,7 +198,7 @@ func (s *Store) SearchRules(ctx context.Context, orgID uuid.UUID, qry rules.Quer
 func (s *Store) ListTrustedRules(ctx context.Context, orgID uuid.UUID) ([]rules.Rule, error) {
 	out := []rules.Rule{}
 	err := s.org(ctx, orgID, func(ctx context.Context, q *sqlc.Queries, _ pgx.Tx) error {
-		rows, err := q.ListTrustedRules(ctx, orgID)
+		rows, err := q.ListTrustedRules(ctx, sqlc.ListTrustedRulesParams{OrgID: orgID, ProjectID: rules.ProjectID(ctx, orgID)})
 		if err != nil {
 			return err
 		}

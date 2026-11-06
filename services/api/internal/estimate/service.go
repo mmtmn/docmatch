@@ -72,13 +72,25 @@ type Deps struct {
 
 // Service builds, signs and verifies quotes.
 type Service struct {
-	d Deps
+	d           Deps
+	checkAccess func(context.Context, apix.Principal, Request) error
 
 	mu      sync.Mutex
 	rates   ModelRates
 	ratesAt time.Time
 	tp      Throughput
 	tpAt    time.Time
+}
+
+// SetAccessCheck is wired before serving requests, once project storage exists.
+func (s *Service) SetAccessCheck(check func(context.Context, apix.Principal, Request) error) {
+	s.checkAccess = check
+}
+func (s *Service) CheckAccess(ctx context.Context, p apix.Principal, req Request) error {
+	if s.checkAccess != nil {
+		return s.checkAccess(ctx, p, req)
+	}
+	return nil
 }
 
 // New validates the dependencies.
@@ -369,6 +381,9 @@ func BuildOptions(p apix.Principal, req Request, v Validated, budget int64, dead
 
 // Estimate is POST /runs/estimate.
 func (s *Service) Estimate(ctx context.Context, p apix.Principal, req Request, uri func(u uploads.Upload) string) (Quote, error) {
+	if err := s.CheckAccess(ctx, p, req); err != nil {
+		return Quote{}, err
+	}
 	v, err := s.Validate(p, req)
 	if err != nil {
 		return Quote{}, err

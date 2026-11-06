@@ -27,6 +27,12 @@ pub mod text {
     /// `text.workflow_name`
     pub const WORKFLOW_NAME: u32 = 80;
 
+    /// `text.project_name`
+    pub const PROJECT_NAME: u32 = 120;
+
+    /// `text.reprocess_reason`
+    pub const REPROCESS_REASON: u32 = 500;
+
     /// `text.display_name`
     pub const DISPLAY_NAME: u32 = 80;
 
@@ -126,6 +132,15 @@ pub mod ids {
     /// `ids.api_key_scopes_max`
     pub const API_KEY_SCOPES_MAX: u32 = 10;
 
+    /// `ids.project_members_max`
+    pub const PROJECT_MEMBERS_MAX: u32 = 100;
+
+    /// `ids.project_rules_max`
+    pub const PROJECT_RULES_MAX: u32 = 50;
+
+    /// `ids.account_members_max`
+    pub const ACCOUNT_MEMBERS_MAX: u32 = 100;
+
     /// `ids.files_per_run_hard_max`
     pub const FILES_PER_RUN_HARD_MAX: u32 = 100;
 
@@ -146,6 +161,8 @@ pub fn limit_by_key(key: &str) -> Option<u32> {
         "text.saved_rule_body" => Some(text::SAVED_RULE_BODY),
         "text.rule_picker_search" => Some(text::RULE_PICKER_SEARCH),
         "text.workflow_name" => Some(text::WORKFLOW_NAME),
+        "text.project_name" => Some(text::PROJECT_NAME),
+        "text.reprocess_reason" => Some(text::REPROCESS_REASON),
         "text.display_name" => Some(text::DISPLAY_NAME),
         "text.company_name" => Some(text::COMPANY_NAME),
         "text.email" => Some(text::EMAIL),
@@ -176,6 +193,9 @@ pub fn limit_by_key(key: &str) -> Option<u32> {
         "http.sse_idle_timeout_s" => Some(http::SSE_IDLE_TIMEOUT_S),
         "ids.idempotency_key_max" => Some(ids::IDEMPOTENCY_KEY_MAX),
         "ids.api_key_scopes_max" => Some(ids::API_KEY_SCOPES_MAX),
+        "ids.project_members_max" => Some(ids::PROJECT_MEMBERS_MAX),
+        "ids.project_rules_max" => Some(ids::PROJECT_RULES_MAX),
+        "ids.account_members_max" => Some(ids::ACCOUNT_MEMBERS_MAX),
         "ids.files_per_run_hard_max" => Some(ids::FILES_PER_RUN_HARD_MAX),
         "ids.source_warnings_per_run" => Some(ids::SOURCE_WARNINGS_PER_RUN),
         "ids.media_files_per_run_hard_max" => Some(ids::MEDIA_FILES_PER_RUN_HARD_MAX),
@@ -191,6 +211,8 @@ pub const LIMIT_KEYS: &[&str] = &[
     "text.saved_rule_body",
     "text.rule_picker_search",
     "text.workflow_name",
+    "text.project_name",
+    "text.reprocess_reason",
     "text.display_name",
     "text.company_name",
     "text.email",
@@ -221,6 +243,9 @@ pub const LIMIT_KEYS: &[&str] = &[
     "http.sse_idle_timeout_s",
     "ids.idempotency_key_max",
     "ids.api_key_scopes_max",
+    "ids.project_members_max",
+    "ids.project_rules_max",
+    "ids.account_members_max",
     "ids.files_per_run_hard_max",
     "ids.source_warnings_per_run",
     "ids.media_files_per_run_hard_max",

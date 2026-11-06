@@ -9,11 +9,18 @@ RETURNING *;
 SELECT * FROM runs WHERE id = $1;
 
 -- name: ListRunsPage :many
-SELECT * FROM runs
-WHERE org_id = $1
-  AND (sqlc.narg(status)::text IS NULL OR status = sqlc.narg(status)::text)
-  AND (sqlc.narg(workflow_id)::uuid IS NULL OR workflow_id = sqlc.narg(workflow_id)::uuid)
-ORDER BY created_at DESC, id DESC
+SELECT r.* FROM runs r
+WHERE r.org_id = $1
+  AND (NOT sqlc.arg(project_only)::boolean OR EXISTS(SELECT 1 FROM project_runs pr WHERE pr.org_id=r.org_id AND pr.run_id=r.id))
+  AND NOT EXISTS(SELECT 1 FROM project_runs pr JOIN projects p ON p.org_id=pr.org_id AND p.id=pr.project_id WHERE pr.org_id=r.org_id AND pr.run_id=r.id AND p.deleted_at IS NOT NULL)
+  AND (sqlc.narg(status)::text IS NULL OR r.status = sqlc.narg(status)::text)
+  AND (sqlc.narg(workflow_id)::uuid IS NULL OR r.workflow_id = sqlc.narg(workflow_id)::uuid)
+  AND (sqlc.narg(project_id)::uuid IS NULL OR EXISTS(SELECT 1 FROM project_runs pr WHERE pr.org_id=r.org_id AND pr.run_id=r.id AND pr.project_id=sqlc.narg(project_id)::uuid))
+  AND (sqlc.narg(visible_to)::uuid IS NULL OR NOT EXISTS(SELECT 1 FROM project_runs pr WHERE pr.org_id=r.org_id AND pr.run_id=r.id)
+    OR EXISTS(SELECT 1 FROM project_runs pr JOIN projects p ON p.org_id=pr.org_id AND p.id=pr.project_id
+      WHERE pr.org_id=r.org_id AND pr.run_id=r.id AND p.deleted_at IS NULL
+      AND (p.owner_id=sqlc.narg(visible_to)::uuid OR p.visibility='team' OR EXISTS(SELECT 1 FROM project_members pm WHERE pm.org_id=p.org_id AND pm.project_id=p.id AND pm.user_id=sqlc.narg(visible_to)::uuid))))
+ORDER BY r.created_at DESC, r.id DESC
 LIMIT $2 OFFSET $3;
 
 -- name: CountRunsByWorkflow :one

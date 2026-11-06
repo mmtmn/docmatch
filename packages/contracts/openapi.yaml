@@ -23,6 +23,8 @@ info:
     - **Autenticação.** Sessão em cookie `HttpOnly` (apps e site) ou chave de API no header
       `Authorization: Bearer dm_live_<id>_<secret>` (integrações). Endpoints públicos têm
       `security: []`.
+    - **Conta escolhida.** `X-Docmatch-Org` seleciona a conta por requisição; nunca altera outras abas.
+      Sem o header, clientes antigos usam a conta da sessão. Chaves de API continuam presas à sua conta.
     - **Paginação** por cursor opaco: `cursor` + `limit` na consulta, `next_cursor` na resposta
       (nulo na última página).
     - **Eventos em tempo real** por SSE em `GET /runs/{id}/events`; cada evento tem `id`
@@ -46,6 +48,10 @@ security:
   - apiKey: []
 
 tags:
+  - name: teams
+    description: Equipes e convites com aceite, sem cobrança adicional por assento.
+  - name: projects
+    description: Projetos salvos, versões e conciliação sem repetição de cobranças.
   - name: auth
     description: Login com Google, Apple ou e-mail; sessão em cookie HttpOnly.
   - name: account
@@ -72,6 +78,1526 @@ tags:
     description: Planos, saúde e versão. Sem autenticação.
 
 paths:
+  /team:
+    parameters:
+      - $ref: "#/components/parameters/OrgContext"
+    get:
+      operationId: getTeam
+      tags:
+        - teams
+      summary: Consulta a equipe e a própria permissão
+      description: Somente responsáveis e administradores recebem a lista de pessoas e convites. Outros
+        participantes recebem listas vazias.
+      security:
+        - cookieSession: []
+      responses:
+        "200":
+          description: Operação concluída.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Team"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    post:
+      operationId: createTeam
+      tags:
+        - teams
+      summary: Transforma a conta paga em equipe
+      description: Requer responsável e assinatura ativa. Preserva a conta, assinatura, saldo e projetos existentes;
+        cria uma conta pessoal vazia se necessário. Não altera quantidades de cobrança. Projetos continuam
+        privados.
+      security:
+        - cookieSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TeamCreate"
+      responses:
+        "200":
+          description: Operação concluída.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Team"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          description: Créditos insuficientes para reservar o teto.
+          x-error-codes:
+            - insufficient_credits
+            - subscription_required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /team/invitations:
+    parameters:
+      - $ref: "#/components/parameters/OrgContext"
+    post:
+      operationId: inviteTeamMember
+      tags:
+        - teams
+      summary: Convida uma pessoa pelo e-mail
+      description: Requer gestão da conta e plano ativo. Sem cobrança adicional por assento. Um convite pendente
+        para o mesmo e-mail é reutilizado sem reenvio automático. O acesso exige aceite com e-mail verificado.
+      security:
+        - cookieSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TeamInvite"
+      responses:
+        "200":
+          description: Operação concluída.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamInvitation"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          description: Créditos insuficientes para reservar o teto.
+          x-error-codes:
+            - insufficient_credits
+            - subscription_required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /team/invitations/{invitation}/resend:
+    parameters:
+      - $ref: "#/components/parameters/OrgContext"
+      - $ref: "#/components/parameters/InvitationPath"
+    post:
+      operationId: resendTeamInvitation
+      tags:
+        - teams
+      summary: Reenvia e invalida o link anterior
+      description: Intervalo mínimo de um minuto e limite de envios por hora. O novo link vence em sete dias.
+      security:
+        - cookieSession: []
+      responses:
+        "204":
+          description: Operação concluída.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          description: Créditos insuficientes para reservar o teto.
+          x-error-codes:
+            - insufficient_credits
+            - subscription_required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /team/invitations/{invitation}:
+    parameters:
+      - $ref: "#/components/parameters/OrgContext"
+      - $ref: "#/components/parameters/InvitationPath"
+    delete:
+      operationId: revokeTeamInvitation
+      tags:
+        - teams
+      summary: Revoga um convite pendente
+      description: Revoga um convite pendente
+      security:
+        - cookieSession: []
+      responses:
+        "204":
+          description: Operação concluída.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /team/members/{user}:
+    parameters:
+      - $ref: "#/components/parameters/OrgContext"
+      - $ref: "#/components/parameters/TeamUserPath"
+    patch:
+      operationId: changeTeamMemberRole
+      tags:
+        - teams
+      summary: Altera a permissão de projetos
+      description: Altera a permissão de projetos
+      security:
+        - cookieSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TeamRoleChange"
+      responses:
+        "204":
+          description: Operação concluída.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    delete:
+      operationId: removeTeamMember
+      tags:
+        - teams
+      summary: Remove o acesso à equipe
+      description: Revoga o vínculo sem excluir a identidade, conta pessoal ou assinatura da pessoa. Não permite
+        remover o responsável por este caminho.
+      security:
+        - cookieSession: []
+      responses:
+        "204":
+          description: Operação concluída.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /team/owner:
+    parameters:
+      - $ref: "#/components/parameters/OrgContext"
+    post:
+      operationId: transferTeamOwnership
+      tags:
+        - teams
+      summary: Transfere a responsabilidade pela conta
+      description: Somente o responsável atual pode transferir para um participante aceito com acesso completo. O
+        novo responsável é promovido antes de reduzir o acesso do anterior.
+      security:
+        - cookieSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TeamTransfer"
+      responses:
+        "204":
+          description: Operação concluída.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /team/leave:
+    parameters:
+      - $ref: "#/components/parameters/OrgContext"
+    post:
+      operationId: leaveTeam
+      tags:
+        - teams
+      summary: Sai da equipe preservando a conta pessoal
+      description: O responsável precisa transferir a função antes de sair.
+      security:
+        - cookieSession: []
+      responses:
+        "204":
+          description: Operação concluída.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /invitations/preview:
+    post:
+      operationId: previewTeamInvitation
+      tags:
+        - teams
+      summary: Lê um convite sem aceitá-lo
+      description: O token chega no corpo. A abertura do link só exibe este resumo; não adiciona nenhum vínculo. O
+        e-mail é mascarado. email_matches considera a identidade autenticada, quando houver.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvitationPreviewRequest"
+      responses:
+        "200":
+          description: Operação concluída.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvitationPreview"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /invitations/respond:
+    post:
+      operationId: answerTeamInvitation
+      tags:
+        - teams
+      summary: Aceita ou recusa explicitamente um convite
+      description: Requer sessão válida e o e-mail convidado verificado. Não depende da antiga conta selecionada.
+        Repetir um aceite é seguro enquanto o vínculo existe; o link não recria um acesso removido.
+      security:
+        - cookieSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvitationAnswer"
+      responses:
+        "200":
+          description: Operação concluída.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvitationAnswerResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          description: Créditos insuficientes para reservar o teto.
+          x-error-codes:
+            - insufficient_credits
+            - subscription_required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /me/organizations:
+    get:
+      operationId: listOrganizations
+      tags:
+        - account
+      summary: Lista as contas do login
+      description: Lista as contas do login. Permissões e vínculo são verificados no servidor.
+      responses:
+        "200":
+          description: Operação concluída.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+      security:
+        - cookieSession: []
+  /projects:
+    parameters:
+      - $ref: "#/components/parameters/OrgContext"
+    get:
+      operationId: listProjects
+      tags:
+        - projects
+      summary: Lista projetos acessíveis
+      description: Lista projetos acessíveis. Permissões e vínculo são verificados no servidor.
+      responses:
+        "200":
+          description: Operação concluída.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: archived
+          in: query
+          schema:
+            type: boolean
+            default: false
+    post:
+      operationId: createProject
+      tags:
+        - projects
+      summary: Cria um projeto privado
+      description: Cria um projeto privado. Permissões e vínculo são verificados no servidor.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectCreate"
+      responses:
+        "201":
+          description: Operação concluída.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /projects/{project}:
+    parameters:
+      - $ref: "#/components/parameters/OrgContext"
+      - $ref: "#/components/parameters/ProjectPath"
+    get:
+      operationId: getProject
+      tags:
+        - projects
+      summary: Retoma documentos e opções do projeto
+      description: Retoma documentos e opções do projeto. Permissões e vínculo são verificados no servidor.
+      responses:
+        "200":
+          description: Operação concluída.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    patch:
+      operationId: updateProject
+      tags:
+        - projects
+      summary: Salva nome, opções ou arquivamento
+      description: Salva nome, opções ou arquivamento. Permissões e vínculo são verificados no servidor.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectPatch"
+      responses:
+        "200":
+          description: Operação concluída.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    delete:
+      operationId: deleteProject
+      tags:
+        - projects
+      summary: Remove o projeto
+      description: Remove o projeto. Permissões e vínculo são verificados no servidor.
+      responses:
+        "204":
+          description: Operação concluída.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+      parameters:
+        - $ref: "#/components/parameters/ProjectVersion"
+  /projects/activity:
+    parameters:
+      - $ref: "#/components/parameters/OrgContext"
+    get:
+      operationId: accountActivity
+      tags:
+        - projects
+      summary: Lista conciliações acessíveis da conta
+      description: Lista conciliações acessíveis da conta. Permissões e vínculo são verificados no servidor.
+      responses:
+        "200":
+          description: Operação concluída.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+  /projects/{project}/documents/{document}/replace:
+    parameters:
+      - $ref: "#/components/parameters/OrgContext"
+      - $ref: "#/components/parameters/ProjectPath"
+      - $ref: "#/components/parameters/DocumentPath"
+    post:
+      operationId: replaceProjectDocument
+      tags:
+        - projects
+      summary: Promove uma nova versão verificada mantendo o histórico
+      description: Promove uma nova versão verificada mantendo o histórico. Permissões e vínculo são verificados no
+        servidor.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectReplacement"
+      responses:
+        "200":
+          description: Operação concluída.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /projects/{project}/sharing:
+    parameters:
+      - $ref: "#/components/parameters/OrgContext"
+      - $ref: "#/components/parameters/ProjectPath"
+    put:
+      operationId: shareProject
+      tags:
+        - projects
+      summary: Compartilha com a equipe ou pessoas escolhidas
+      description: Compartilha com a equipe ou pessoas escolhidas. Permissões e vínculo são verificados no servidor.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectSharing"
+      responses:
+        "200":
+          description: Operação concluída.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /projects/{project}/activity:
+    parameters:
+      - $ref: "#/components/parameters/OrgContext"
+      - $ref: "#/components/parameters/ProjectPath"
+    get:
+      operationId: projectActivity
+      tags:
+        - projects
+      summary: Lista alterações recentes do projeto
+      description: Lista alterações recentes do projeto. Permissões e vínculo são verificados no servidor.
+      responses:
+        "200":
+          description: Operação concluída.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectActivity"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /projects/{project}/documents:
+    parameters:
+      - $ref: "#/components/parameters/OrgContext"
+      - $ref: "#/components/parameters/ProjectPath"
+    post:
+      operationId: attachProjectDocument
+      tags:
+        - projects
+      summary: Adiciona um upload ou substitui uma versão
+      description: Adiciona um upload ou substitui uma versão. Permissões e vínculo são verificados no servidor.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectAttach"
+      responses:
+        "200":
+          description: Operação concluída.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectAttachment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /projects/{project}/documents/{document}:
+    parameters:
+      - $ref: "#/components/parameters/OrgContext"
+      - $ref: "#/components/parameters/ProjectPath"
+      - $ref: "#/components/parameters/DocumentPath"
+    delete:
+      operationId: removeProjectDocument
+      tags:
+        - projects
+      summary: Retira uma versão da próxima conciliação
+      description: Retira uma versão da próxima conciliação. Permissões e vínculo são verificados no servidor.
+      responses:
+        "204":
+          description: Operação concluída.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+      parameters:
+        - $ref: "#/components/parameters/ProjectVersion"
+  /projects/{project}/uploads:
+    parameters:
+      - $ref: "#/components/parameters/OrgContext"
+      - $ref: "#/components/parameters/ProjectPath"
+    post:
+      operationId: createProjectUpload
+      summary: Pede uma URL pré-assinada para enviar um arquivo
+      description: Gera o envio na conta e no projeto escolhidos. O arquivo aparece como pendente até chegar e
+        passar pela verificação.
+      tags:
+        - projects
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectUploadRequest"
+      responses:
+        "201":
+          description: Ticket de envio.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadTicket"
+        "400":
+          description: Nome inválido ou campos faltando.
+          x-error-codes:
+            - validation_failed
+            - upload_rejected_name
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "413":
+          description: Arquivo maior que o permitido pelo plano.
+          x-error-codes:
+            - file_too_large
+            - upload_rejected_size
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: Tipo não suportado.
+          x-error-codes:
+            - upload_rejected_type
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /projects/{project}/uploads/{upload}/complete:
+    parameters:
+      - $ref: "#/components/parameters/OrgContext"
+      - $ref: "#/components/parameters/ProjectPath"
+      - $ref: "#/components/parameters/ProjectUploadPath"
+    post:
+      operationId: completeProjectUpload
+      summary: Confirma o envio e dispara a verificação
+      description: Confirma o recebimento do próprio upload no projeto e retorna a situação da verificação.
+      tags:
+        - projects
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadCompleteRequest"
+      responses:
+        "200":
+          description: Verificação concluída (arquivo pronto ou rejeitado).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Upload"
+        "202":
+          description: Verificação em andamento.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Upload"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: O objeto ainda não chegou ao storage.
+          x-error-codes:
+            - upload_incomplete
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "410":
+          description: Ticket expirado.
+          x-error-codes:
+            - upload_expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Conteúdo rejeitado.
+          x-error-codes:
+            - upload_checksum_mismatch
+            - upload_rejected_malware
+            - upload_rejected_bomb
+            - upload_rejected_playlist
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /projects/{project}/runs/estimate:
+    parameters:
+      - $ref: "#/components/parameters/OrgContext"
+      - $ref: "#/components/parameters/ProjectPath"
+    post:
+      operationId: estimateProject
+      tags:
+        - projects
+      summary: Estima alterações ou devolve o resultado existente
+      description: Estima alterações ou devolve o resultado existente. Permissões e vínculo são verificados no servidor.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectAnalysisRequest"
+      responses:
+        "200":
+          description: Operação concluída.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectAnalysis"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          description: Créditos insuficientes para reservar o teto.
+          x-error-codes:
+            - insufficient_credits
+            - subscription_required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /projects/{project}/runs:
+    parameters:
+      - $ref: "#/components/parameters/OrgContext"
+      - $ref: "#/components/parameters/ProjectPath"
+    get:
+      operationId: listProjectRuns
+      tags:
+        - projects
+      summary: Lista resultados e versões anteriores
+      description: Lista resultados e versões anteriores. Permissões e vínculo são verificados no servidor.
+      responses:
+        "200":
+          description: Operação concluída.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+    post:
+      operationId: reconcileProject
+      tags:
+        - projects
+      summary: Concilia alterações aprovadas sem duplicar reservas
+      description: Concilia alterações aprovadas sem duplicar reservas. Permissões e vínculo são verificados no servidor.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectAnalysisRequest"
+      responses:
+        "202":
+          description: Execução existente ou nova. Sem alterações, nenhum crédito é reservado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectAnalysis"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          description: Créditos insuficientes para reservar o teto.
+          x-error-codes:
+            - insufficient_credits
+            - subscription_required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "410":
+          description: Orçamento expirado.
+          x-error-codes:
+            - quote_expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Execuções simultâneas do plano esgotadas ou limite de requisições.
+          x-error-codes:
+            - concurrent_runs_exceeded
+            - rate_limited
+          headers:
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      x-spends-credits: true
+  /projects/{project}/runs/{id}:
+    get:
+      operationId: projectGetRun
+      summary: Consulta uma execução
+      description: Estado, progresso, créditos reservados e gastos, resumo quando concluída.
+      tags:
+        - projects
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "200":
+          description: A execução.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Execução não encontrada.
+          x-error-codes:
+            - run_not_found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    parameters:
+      - $ref: "#/components/parameters/OrgContext"
+      - $ref: "#/components/parameters/ProjectPath"
+  /projects/{project}/runs/{id}/cancel:
+    post:
+      operationId: projectCancelRun
+      summary: Cancela uma execução
+      description: Para a execução e devolve os créditos não gastos. Execuções já terminadas não mudam.
+      tags:
+        - projects
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "200":
+          description: Execução cancelada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Execução não encontrada.
+          x-error-codes:
+            - run_not_found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: A execução já terminou.
+          x-error-codes:
+            - run_already_finished
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    parameters:
+      - $ref: "#/components/parameters/OrgContext"
+      - $ref: "#/components/parameters/ProjectPath"
+  /projects/{project}/runs/{id}/events:
+    get:
+      operationId: projectStreamRunEvents
+      summary: Eventos da execução em tempo real (SSE)
+      description: |
+        Fluxo `text/event-stream`. Cada mensagem tem `id` (sequência monotônica), `event` (um dos
+        nomes abaixo) e `data` (JSON com o esquema do evento). O servidor envia `: ping` a cada
+        15 s; a conexão fecha após `completed`, `failed` ou `needs_approval`. Para retomar, envie
+        `Last-Event-ID` com a última sequência recebida.
+      tags:
+        - projects
+      x-sse-events:
+        stage_started: "#/components/schemas/RunEventStageStarted"
+        progress: "#/components/schemas/RunEventProgress"
+        token_usage: "#/components/schemas/RunEventTokenUsage"
+        finding: "#/components/schemas/RunEventFinding"
+        match: "#/components/schemas/RunEventMatch"
+        needs_approval: "#/components/schemas/RunEventNeedsApproval"
+        completed: "#/components/schemas/RunEventCompleted"
+        failed: "#/components/schemas/RunEventFailed"
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - name: Last-Event-ID
+          in: header
+          required: false
+          description: Última sequência recebida; o fluxo recomeça do evento seguinte.
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: Fluxo de eventos.
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/RunEvent"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Execução não encontrada.
+          x-error-codes:
+            - run_not_found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    parameters:
+      - $ref: "#/components/parameters/OrgContext"
+      - $ref: "#/components/parameters/ProjectPath"
+  /projects/{project}/runs/{id}/findings:
+    get:
+      operationId: projectListFindings
+      summary: Lista os achados de uma execução
+      description: Ordenados por severidade e valor em risco. Disponível enquanto a execução roda (parcial) e depois.
+      tags:
+        - projects
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: severity
+          in: query
+          description: Uma ou mais severidades, separadas por vírgula.
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/Severity"
+          style: form
+          explode: false
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/FindingStatus"
+      responses:
+        "200":
+          description: Página de achados.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FindingList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Execução não encontrada.
+          x-error-codes:
+            - run_not_found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    parameters:
+      - $ref: "#/components/parameters/OrgContext"
+      - $ref: "#/components/parameters/ProjectPath"
+  /projects/{project}/runs/{id}/findings/{fid}/feedback:
+    post:
+      operationId: projectGiveFindingFeedback
+      summary: Confirma, descarta ou resolve um achado
+      description: O feedback alimenta a calibração da confiança e, nos planos com aprendizado, a proposta de regras.
+      tags:
+        - projects
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - $ref: "#/components/parameters/FindingId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FindingFeedbackRequest"
+      responses:
+        "200":
+          description: Achado atualizado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Finding"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Execução ou achado não encontrado.
+          x-error-codes:
+            - run_not_found
+            - finding_not_found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+    parameters:
+      - $ref: "#/components/parameters/OrgContext"
+      - $ref: "#/components/parameters/ProjectPath"
+  /projects/{project}/runs/{id}/export:
+    get:
+      operationId: projectExportRun
+      summary: Exporta os resultados (xlsx, csv ou pdf)
+      description: |
+        Planilha com achados, casamentos e evidências; CSV só com achados; PDF com o relatório.
+        Só para execuções concluídas. O arquivo é gerado sob demanda e cacheado.
+      tags:
+        - projects
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - name: format
+          in: query
+          required: true
+          schema:
+            $ref: "#/components/schemas/ExportFormat"
+      responses:
+        "200":
+          description: O arquivo.
+          headers:
+            Content-Disposition:
+              description: '`attachment; filename="docmatch-<run_id>.<ext>"`'
+              schema:
+                type: string
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                $ref: "#/components/schemas/BinaryFile"
+            text/csv:
+              schema:
+                type: string
+            application/pdf:
+              schema:
+                $ref: "#/components/schemas/BinaryFile"
+        "400":
+          description: Formato não suportado.
+          x-error-codes:
+            - export_format_unsupported
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Execução não encontrada.
+          x-error-codes:
+            - run_not_found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: A execução ainda não terminou, ou o arquivo ainda está sendo gerado (tente de novo em instantes).
+          x-error-codes:
+            - run_not_completed
+            - export_not_ready
+          headers:
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    parameters:
+      - $ref: "#/components/parameters/OrgContext"
+      - $ref: "#/components/parameters/ProjectPath"
+  /projects/{project}/runs/{id}/approve-quote:
+    post:
+      operationId: projectApproveRunQuote
+      summary: Aprova o orçamento adicional de uma execução parada
+      description: |
+        Quando a execução para em `needs_approval` (ferramentas novas, teto atingido), o cliente
+        aprova o novo orçamento recebido no evento. Reserva a diferença e retoma do checkpoint.
+      tags:
+        - projects
+      x-spends-credits: true
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApproveQuoteRequest"
+      responses:
+        "200":
+          description: Execução retomada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+        "400":
+          description: Orçamento adulterado ou header ausente.
+          x-error-codes:
+            - quote_invalid_signature
+            - missing_idempotency_key
+            - validation_failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          description: Créditos insuficientes para a diferença.
+          x-error-codes:
+            - insufficient_credits
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Execução ou orçamento não encontrado.
+          x-error-codes:
+            - run_not_found
+            - quote_not_found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: A execução não está aguardando aprovação.
+          x-error-codes:
+            - run_not_awaiting_approval
+            - idempotency_key_reused
+            - quote_mismatch
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "410":
+          description: Orçamento expirado; a execução foi cancelada e os créditos devolvidos.
+          x-error-codes:
+            - quote_expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    parameters:
+      - $ref: "#/components/parameters/OrgContext"
+      - $ref: "#/components/parameters/ProjectPath"
+  /projects/{project}/rules:
+    get:
+      operationId: projectListRules
+      summary: Busca regras
+      description: Regras da organização e regras globais, filtradas por texto (`q`) e estado.
+      tags:
+        - projects
+      parameters:
+        - name: q
+          in: query
+          description: Busca por título e corpo.
+          schema:
+            type: string
+            maxLength: 100
+            x-limit: text.rule_picker_search
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/RuleStatus"
+        - name: scope
+          in: query
+          schema:
+            $ref: "#/components/schemas/RuleScope"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Página de regras.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RuleList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+    post:
+      operationId: projectCreateRule
+      summary: Cria uma regra
+      description: |
+        Salva a regra em linguagem natural e, por padrão, compila para SQL e avalia contra o
+        histórico confirmado (gasta créditos de modelo). Nasce `draft` sem compilar ou
+        `candidate` compilada.
+      tags:
+        - projects
+      x-spends-credits: true
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RuleCreateRequest"
+      responses:
+        "201":
+          description: Regra criada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Rule"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          $ref: "#/components/responses/PaymentRequired"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          description: Texto fora do limite ou regra que não compila.
+          x-error-codes:
+            - text_too_long
+            - rule_compile_failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    parameters:
+      - $ref: "#/components/parameters/OrgContext"
+      - $ref: "#/components/parameters/ProjectPath"
+  /projects/{project}/rules/{id}/versions:
+    post:
+      operationId: projectCreateRuleVersion
+      summary: Cria uma nova versão da regra
+      description: Mantém o `id`, incrementa `version`, recompila e reavalia. A versão anterior continua ativa até a
+        nova ser promovida.
+      tags:
+        - projects
+      x-spends-credits: true
+      parameters:
+        - $ref: "#/components/parameters/RuleId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RuleVersionRequest"
+      responses:
+        "201":
+          description: Nova versão.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Rule"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          $ref: "#/components/responses/PaymentRequired"
+        "403":
+          description: Regras globais são só leitura para organizações.
+          x-error-codes:
+            - rule_read_only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Regra não encontrada.
+          x-error-codes:
+            - rule_not_found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          description: Texto fora do limite ou regra que não compila.
+          x-error-codes:
+            - text_too_long
+            - rule_compile_failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    parameters:
+      - $ref: "#/components/parameters/OrgContext"
+      - $ref: "#/components/parameters/ProjectPath"
+  /projects/{project}/rules/{id}/promote:
+    post:
+      operationId: projectPromoteRule
+      summary: Promove uma regra
+      description: |
+        `candidate` → `verified` exige histórico sem falsos positivos; `verified` → `trusted`
+        passa a aplicar a regra automaticamente em toda execução. Só administradores promovem
+        regras globais (API admin).
+      tags:
+        - projects
+      parameters:
+        - $ref: "#/components/parameters/RuleId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RulePromoteRequest"
+      responses:
+        "200":
+          description: Regra promovida.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Rule"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Regra global.
+          x-error-codes:
+            - rule_read_only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Regra não encontrada.
+          x-error-codes:
+            - rule_not_found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Sem histórico suficiente.
+          x-error-codes:
+            - rule_not_promotable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    parameters:
+      - $ref: "#/components/parameters/OrgContext"
+      - $ref: "#/components/parameters/ProjectPath"
+
   # ------------------------------------------------------------------ auth
   /auth/google/start:
     post:
@@ -2342,6 +3868,55 @@ components:
       description: Chave de API criada em `POST /api-keys`. O servidor guarda só o HMAC da chave.
 
   parameters:
+    InvitationPath:
+      name: invitation
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/InvitationId"
+    TeamUserPath:
+      name: user
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/UserId"
+    OrgContext:
+      name: X-Docmatch-Org
+      in: header
+      required: false
+      description: Conta escolhida nesta requisição. A sessão precisa de vínculo ativo. Uma chave de API só aceita
+        sua própria conta. Não modifica outras abas.
+      schema:
+        $ref: "#/components/schemas/OrgId"
+    ProjectPath:
+      name: project
+      in: path
+      required: true
+      description: Projeto da conta selecionada.
+      schema:
+        $ref: "#/components/schemas/ProjectId"
+    DocumentPath:
+      name: document
+      in: path
+      required: true
+      description: Versão do documento no projeto.
+      schema:
+        $ref: "#/components/schemas/DocumentId"
+    ProjectUploadPath:
+      name: upload
+      in: path
+      required: true
+      description: Upload recebido no projeto.
+      schema:
+        $ref: "#/components/schemas/UploadId"
+    ProjectVersion:
+      name: version
+      in: query
+      required: true
+      description: Última versão recebida; uma edição concorrente retorna conflito.
+      schema:
+        type: integer
+        minimum: 1
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -2573,6 +4148,679 @@ components:
             $ref: "#/components/schemas/Error"
 
   schemas:
+    ProjectUploadRequest:
+      type: object
+      required:
+        - kind
+        - file_name
+        - size_bytes
+        - mime
+      properties:
+        kind:
+          $ref: "#/components/schemas/UploadKind"
+        file_name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          x-limit: files.uploaded_file_name_bytes
+          description: Nome original. O limite é em bytes UTF-8 após NFC; sem `/`, `\` nem
+            caracteres de controle.
+        size_bytes:
+          type: integer
+          minimum: 1
+        mime:
+          type: string
+          pattern: ^[a-z0-9!#$&^_.+-]+/[a-z0-9!#$&^_.+-]+$
+          description: Tipo declarado; o scanner sniffa o real e pode rejeitar.
+        sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          description: Opcional; conferido em `complete`.
+        role:
+          type: string
+          pattern: ^[a-z][a-z0-9_]{0,39}$
+          description: "Papel no fluxo (ex.: `bank_statement`)."
+        replaces_id:
+          $ref: "#/components/schemas/DocumentId"
+          description: Prepara uma substituição sem retirar a versão anterior. Após a
+            verificação, confirme pelo endpoint documents/{document}/replace.
+      additionalProperties: false
+    Email:
+      type: string
+      format: email
+      maxLength: 254
+      x-limit: text.email
+    InvitationId:
+      type: string
+      pattern: ^inv_[0-9A-Z]{26}$
+    SeatRole:
+      type: string
+      enum:
+        - uploader
+        - reconciler
+    InvitationStatus:
+      type: string
+      enum:
+        - pending
+        - accepted
+        - declined
+        - expired
+        - revoked
+    TeamMember:
+      type: object
+      required:
+        - id
+        - name
+        - email
+        - role
+        - joined_at
+      properties:
+        id:
+          $ref: "#/components/schemas/UserId"
+        name:
+          type: string
+        email:
+          $ref: "#/components/schemas/Email"
+        role:
+          $ref: "#/components/schemas/MembershipRole"
+        joined_at:
+          $ref: "#/components/schemas/Timestamp"
+      additionalProperties: false
+    TeamInvitation:
+      type: object
+      required:
+        - id
+        - email
+        - role
+        - status
+        - expires_at
+        - sent_at
+      properties:
+        id:
+          $ref: "#/components/schemas/InvitationId"
+        email:
+          $ref: "#/components/schemas/Email"
+        role:
+          $ref: "#/components/schemas/SeatRole"
+        status:
+          $ref: "#/components/schemas/InvitationStatus"
+        expires_at:
+          $ref: "#/components/schemas/Timestamp"
+        sent_at:
+          $ref: "#/components/schemas/Timestamp"
+      additionalProperties: false
+    Team:
+      type: object
+      required:
+        - id
+        - name
+        - kind
+        - role
+        - capabilities
+        - members
+        - invitations
+        - member_limit
+        - seat_price
+        - can_invite
+      properties:
+        id:
+          $ref: "#/components/schemas/OrgId"
+        name:
+          type: string
+        kind:
+          type: string
+          enum:
+            - personal
+            - team
+        role:
+          $ref: "#/components/schemas/MembershipRole"
+        capabilities:
+          $ref: "#/components/schemas/AccountCapabilities"
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/TeamMember"
+          maxItems: 100
+          x-limit: ids.account_members_max
+        invitations:
+          type: array
+          items:
+            $ref: "#/components/schemas/TeamInvitation"
+          maxItems: 100
+          x-limit: ids.account_members_max
+        member_limit:
+          type: integer
+          minimum: 1
+          description: Limite operacional de membros e convites pendentes; inclui o responsável.
+        seat_price:
+          type: integer
+          const: 0
+          description: Sem cobrança adicional por assento nesta versão.
+        can_invite:
+          type: boolean
+      additionalProperties: false
+    TeamCreate:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+          x-limit: text.company_name
+      additionalProperties: false
+    TeamInvite:
+      type: object
+      required:
+        - email
+        - role
+      properties:
+        email:
+          $ref: "#/components/schemas/Email"
+        role:
+          $ref: "#/components/schemas/SeatRole"
+      additionalProperties: false
+    TeamRoleChange:
+      type: object
+      required:
+        - role
+      properties:
+        role:
+          $ref: "#/components/schemas/SeatRole"
+      additionalProperties: false
+    TeamTransfer:
+      type: object
+      required:
+        - user_id
+      properties:
+        user_id:
+          $ref: "#/components/schemas/UserId"
+      additionalProperties: false
+    InvitationPreviewRequest:
+      type: object
+      required:
+        - token
+      properties:
+        token:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{43}$
+          description: Segredo do convite recebido por e-mail. Enviar somente no corpo; nunca em URLs da API.
+      additionalProperties: false
+    InvitationPreview:
+      type: object
+      required:
+        - id
+        - organization
+        - email_hint
+        - role
+        - status
+        - expires_at
+        - email_matches
+      properties:
+        id:
+          $ref: "#/components/schemas/InvitationId"
+        organization:
+          type: string
+        email_hint:
+          type: string
+        role:
+          $ref: "#/components/schemas/SeatRole"
+        status:
+          $ref: "#/components/schemas/InvitationStatus"
+        expires_at:
+          $ref: "#/components/schemas/Timestamp"
+        email_matches:
+          type: boolean
+      additionalProperties: false
+    InvitationAnswer:
+      type: object
+      required:
+        - token
+        - accept
+      properties:
+        token:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{43}$
+          description: Segredo do convite recebido por e-mail. Enviar somente no corpo; nunca em URLs da API.
+        accept:
+          type: boolean
+      additionalProperties: false
+    InvitationAnswerResult:
+      type: object
+      required:
+        - organization_id
+        - accepted
+      properties:
+        organization_id:
+          $ref: "#/components/schemas/OrgId"
+        accepted:
+          type: boolean
+      additionalProperties: false
+    ProjectId:
+      type: string
+      pattern: ^prj_[0-9A-Z]{26}$
+    DocumentId:
+      type: string
+      pattern: ^doc_[0-9A-Z]{26}$
+    MembershipRole:
+      type: string
+      enum:
+        - owner
+        - admin
+        - member
+        - viewer
+        - uploader
+        - reconciler
+    AccountCapabilities:
+      type: object
+      required:
+        - manage_account
+        - create_project
+        - reconcile
+        - read_results
+        - upload
+      properties:
+        manage_account:
+          type: boolean
+        create_project:
+          type: boolean
+        reconcile:
+          type: boolean
+        read_results:
+          type: boolean
+        upload:
+          type: boolean
+      additionalProperties: false
+    OrganizationMembership:
+      type: object
+      required:
+        - id
+        - name
+        - kind
+        - role
+        - plan
+        - capabilities
+      properties:
+        id:
+          $ref: "#/components/schemas/OrgId"
+        name:
+          type: string
+        kind:
+          type: string
+          enum:
+            - personal
+            - team
+        role:
+          $ref: "#/components/schemas/MembershipRole"
+        plan:
+          $ref: "#/components/schemas/PlanCode"
+        capabilities:
+          $ref: "#/components/schemas/AccountCapabilities"
+      additionalProperties: false
+    OrganizationList:
+      type: object
+      required:
+        - user_id
+        - items
+      properties:
+        user_id:
+          $ref: "#/components/schemas/UserId"
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrganizationMembership"
+      additionalProperties: false
+    ProjectSettings:
+      type: object
+      required:
+        - use_rules
+        - web_search
+      properties:
+        rules_text:
+          type: string
+          maxLength: 4000
+          x-limit: text.rules_text
+        use_rules:
+          type: boolean
+          default: true
+        rule_ids:
+          type: array
+          items:
+            $ref: "#/components/schemas/RuleId"
+          maxItems: 50
+          x-limit: ids.project_rules_max
+        llm_mode:
+          type: string
+          enum:
+            - ""
+            - off
+            - local
+            - openrouter
+        web_search:
+          type: boolean
+          default: false
+      additionalProperties: false
+    Project:
+      type: object
+      required:
+        - id
+        - name
+        - visibility
+        - version
+        - revision
+        - document_count
+        - created_at
+        - updated_at
+        - archived_at
+        - capabilities
+      properties:
+        id:
+          $ref: "#/components/schemas/ProjectId"
+        name:
+          type: string
+          maxLength: 120
+          x-limit: text.project_name
+          minLength: 1
+        visibility:
+          type: string
+          enum:
+            - private
+            - team
+        version:
+          type: integer
+          minimum: 1
+        revision:
+          type: integer
+          minimum: 1
+        settings:
+          $ref: "#/components/schemas/ProjectSettings"
+        document_count:
+          type: integer
+          minimum: 0
+        created_at:
+          $ref: "#/components/schemas/Timestamp"
+        updated_at:
+          $ref: "#/components/schemas/Timestamp"
+        archived_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+        capabilities:
+          $ref: "#/components/schemas/AccountCapabilities"
+      additionalProperties: false
+    ProjectDocument:
+      type: object
+      required:
+        - id
+        - upload_id
+        - file_name
+        - role
+        - status
+        - size_bytes
+        - created_at
+        - expires_at
+        - removed_at
+      properties:
+        id:
+          $ref: "#/components/schemas/DocumentId"
+        upload_id:
+          $ref: "#/components/schemas/UploadId"
+        replaces_id:
+          $ref: "#/components/schemas/DocumentId"
+        pending_replacement_id:
+          $ref: "#/components/schemas/DocumentId"
+        file_name:
+          type: string
+        role:
+          type: string
+        status:
+          $ref: "#/components/schemas/UploadStatus"
+        size_bytes:
+          type: integer
+          minimum: 0
+        created_at:
+          $ref: "#/components/schemas/Timestamp"
+        expires_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+        removed_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+      additionalProperties: false
+    ProjectList:
+      type: object
+      required:
+        - items
+        - next_cursor
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Project"
+        next_cursor:
+          type:
+            - string
+            - "null"
+      additionalProperties: false
+    ProjectCreate:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          maxLength: 120
+          x-limit: text.project_name
+          minLength: 1
+      additionalProperties: false
+    ProjectPatch:
+      type: object
+      required:
+        - version
+      properties:
+        version:
+          type: integer
+          minimum: 1
+        name:
+          type: string
+          maxLength: 120
+          x-limit: text.project_name
+          minLength: 1
+        archived:
+          type: boolean
+        settings:
+          $ref: "#/components/schemas/ProjectSettings"
+      additionalProperties: false
+    ProjectSharing:
+      type: object
+      required:
+        - version
+        - visibility
+        - user_ids
+      properties:
+        version:
+          type: integer
+          minimum: 1
+        visibility:
+          type: string
+          enum:
+            - private
+            - team
+        user_ids:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserId"
+          maxItems: 100
+          x-limit: ids.project_members_max
+      additionalProperties: false
+    ProjectAttach:
+      type: object
+      required:
+        - upload_id
+      properties:
+        upload_id:
+          $ref: "#/components/schemas/UploadId"
+        replaces_id:
+          $ref: "#/components/schemas/DocumentId"
+        role:
+          type: string
+          pattern: ^([a-z][a-z0-9_]{0,39})?$
+      additionalProperties: false
+    ProjectAttachment:
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          $ref: "#/components/schemas/DocumentId"
+      additionalProperties: false
+    ProjectReplacement:
+      type: object
+      required:
+        - version
+        - replacement_id
+      properties:
+        version:
+          type: integer
+          minimum: 1
+        replacement_id:
+          $ref: "#/components/schemas/DocumentId"
+      additionalProperties: false
+    ProjectActivity:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required:
+              - id
+              - action
+              - created_at
+            properties:
+              id:
+                type: integer
+                minimum: 1
+              action:
+                type: string
+              created_at:
+                $ref: "#/components/schemas/Timestamp"
+            additionalProperties: false
+      additionalProperties: false
+    ProjectAnalysisRequest:
+      type: object
+      required:
+        - revision
+      properties:
+        revision:
+          type: integer
+          minimum: 1
+        lane:
+          $ref: "#/components/schemas/Lane"
+        reprocess_reason:
+          type: string
+          maxLength: 500
+          x-limit: text.reprocess_reason
+        quote_id:
+          $ref: "#/components/schemas/QuoteId"
+        quote_signature:
+          type: string
+      additionalProperties: false
+    ProjectAnalysis:
+      type: object
+      required:
+        - state
+        - revision
+      properties:
+        state:
+          type: string
+          enum:
+            - ready
+            - unchanged
+            - queued
+            - running
+            - needs_approval
+            - completed
+            - failed
+            - cancelled
+            - expired
+        revision:
+          type: integer
+          minimum: 1
+        quote:
+          $ref: "#/components/schemas/Quote"
+        run:
+          $ref: "#/components/schemas/Run"
+      additionalProperties: false
+    ProjectDetail:
+      type: object
+      required:
+        - id
+        - name
+        - visibility
+        - version
+        - revision
+        - document_count
+        - created_at
+        - updated_at
+        - archived_at
+        - capabilities
+        - documents
+      properties:
+        id:
+          $ref: "#/components/schemas/ProjectId"
+        name:
+          type: string
+          maxLength: 120
+          x-limit: text.project_name
+          minLength: 1
+        visibility:
+          type: string
+          enum:
+            - private
+            - team
+        version:
+          type: integer
+          minimum: 1
+        revision:
+          type: integer
+          minimum: 1
+        settings:
+          $ref: "#/components/schemas/ProjectSettings"
+        document_count:
+          type: integer
+          minimum: 0
+        created_at:
+          $ref: "#/components/schemas/Timestamp"
+        updated_at:
+          $ref: "#/components/schemas/Timestamp"
+        archived_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+        capabilities:
+          $ref: "#/components/schemas/AccountCapabilities"
+        shared_with:
+          type: array
+          description: Pessoas escolhidas para um projeto privado; visível somente aos responsáveis.
+          items:
+            $ref: "#/components/schemas/UserId"
+          maxItems: 100
+          x-limit: ids.project_members_max
+        documents:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProjectDocument"
+      additionalProperties: false
     # ------------------------------------------------------------ primitives
     Error:
       type: object
@@ -2907,6 +5155,8 @@ components:
           type: string
           maxLength: 80
           x-limit: text.display_name
+        membership_role:
+          $ref: "#/components/schemas/MembershipRole"
         role:
           type: string
           enum: [ owner, member ]
@@ -3636,6 +5886,8 @@ components:
       type: object
       required: [ id, status, lane, sources, credits, created_at, expires_at ]
       properties:
+        project_id:
+          $ref: "#/components/schemas/ProjectId"
         id:
           $ref: "#/components/schemas/RunId"
         status:
@@ -4009,7 +6261,7 @@ components:
       properties:
         to:
           type: string
-          enum: [ verified, trusted ]
+          enum: [ verified, trusted, retired ]
       additionalProperties: false
 
     # --------------------------------------------------------------- billing
@@ -4260,6 +6512,8 @@ components:
         - workflows:write
         - rules:read
         - rules:write
+        - projects:read
+        - projects:write
         - credits:read
         - webhooks:write
     ApiKey:

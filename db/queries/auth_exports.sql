@@ -9,7 +9,7 @@ RETURNING id, user_id, org_id, status, requested_at, ready_at, expires_at, size_
 -- name: AuthLatestExport :one
 SELECT id, user_id, org_id, status, requested_at, ready_at, expires_at, size_bytes, error
 FROM account_exports
-WHERE user_id = $1
+WHERE user_id = $1 AND org_id = $2
 ORDER BY requested_at DESC
 LIMIT 1;
 

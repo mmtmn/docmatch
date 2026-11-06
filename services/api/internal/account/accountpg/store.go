@@ -361,11 +361,38 @@ func (s *Store) SetPassword(ctx context.Context, userID uuid.UUID, hash string) 
 
 // RequestDeletion implements account.Store.
 func (s *Store) RequestDeletion(ctx context.Context, userID uuid.UUID, scheduledFor time.Time) (bool, error) {
-	_, err := s.q.AuthRequestUserDeletion(ctx, sqlc.AuthRequestUserDeletionParams{ID: userID, DeletionScheduledFor: &scheduledFor})
-	if noRows(err) {
-		return false, nil
-	}
-	return err == nil, err
+	var changed bool
+	err := db.WithSystemTx(ctx, s.pool, func(ctx context.Context, tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT o.id FROM orgs o JOIN memberships m ON m.org_id=o.id
+ WHERE m.user_id=$1 AND m.role='owner' ORDER BY o.id FOR UPDATE OF o`, userID)
+		if err != nil {
+			return err
+		}
+		orgs, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+		if err != nil {
+			return err
+		}
+		for _, org := range orgs {
+			var orphan bool
+			err := tx.QueryRow(ctx, `SELECT (o.kind='team' OR EXISTS(SELECT 1 FROM memberships WHERE org_id=o.id AND user_id<>$2))
+ AND NOT EXISTS(SELECT 1 FROM memberships m JOIN users u ON u.id=m.user_id
+ WHERE m.org_id=o.id AND m.user_id<>$2 AND m.role='owner' AND u.deleted_at IS NULL AND u.deletion_requested_at IS NULL)
+ FROM orgs o WHERE o.id=$1`, org, userID).Scan(&orphan)
+			if err != nil {
+				return err
+			}
+			if orphan {
+				return account.ErrOwnerTransfer
+			}
+		}
+		_, err = sqlc.New(tx).AuthRequestUserDeletion(ctx, sqlc.AuthRequestUserDeletionParams{ID: userID, DeletionScheduledFor: &scheduledFor})
+		if noRows(err) {
+			return nil
+		}
+		changed = err == nil
+		return err
+	})
+	return changed, err
 }
 
 // DueErasures implements account.Store.
@@ -438,8 +465,8 @@ func (s *Store) CreateExport(ctx context.Context, userID, orgID uuid.UUID) (acco
 }
 
 // LatestExport implements account.Store.
-func (s *Store) LatestExport(ctx context.Context, userID uuid.UUID) (account.Export, bool, error) {
-	r, err := s.q.AuthLatestExport(ctx, userID)
+func (s *Store) LatestExport(ctx context.Context, userID, orgID uuid.UUID) (account.Export, bool, error) {
+	r, err := s.q.AuthLatestExport(ctx, sqlc.AuthLatestExportParams{UserID: userID, OrgID: orgID})
 	if noRows(err) {
 		return account.Export{}, false, nil
 	}

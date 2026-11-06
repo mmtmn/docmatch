@@ -14,6 +14,8 @@ public enum Limits {
         public static let savedRuleBody: Int = 2000
         public static let rulePickerSearch: Int = 100
         public static let workflowName: Int = 80
+        public static let projectName: Int = 120
+        public static let reprocessReason: Int = 500
         public static let displayName: Int = 80
         public static let companyName: Int = 120
         public static let email: Int = 254
@@ -56,6 +58,9 @@ public enum Limits {
     public enum IDs {
         public static let idempotencyKeyMax: Int = 128
         public static let apiKeyScopesMax: Int = 10
+        public static let projectMembersMax: Int = 100
+        public static let projectRulesMax: Int = 50
+        public static let accountMembersMax: Int = 100
         public static let filesPerRunHardMax: Int = 100
         public static let sourceWarningsPerRun: Int = 100
         public static let mediaFilesPerRunHardMax: Int = 50000
@@ -73,6 +78,8 @@ public enum Limits {
         "text.saved_rule_body": Text.savedRuleBody,
         "text.rule_picker_search": Text.rulePickerSearch,
         "text.workflow_name": Text.workflowName,
+        "text.project_name": Text.projectName,
+        "text.reprocess_reason": Text.reprocessReason,
         "text.display_name": Text.displayName,
         "text.company_name": Text.companyName,
         "text.email": Text.email,
@@ -103,6 +110,9 @@ public enum Limits {
         "http.sse_idle_timeout_s": HTTP.sseIdleTimeoutS,
         "ids.idempotency_key_max": IDs.idempotencyKeyMax,
         "ids.api_key_scopes_max": IDs.apiKeyScopesMax,
+        "ids.project_members_max": IDs.projectMembersMax,
+        "ids.project_rules_max": IDs.projectRulesMax,
+        "ids.account_members_max": IDs.accountMembersMax,
         "ids.files_per_run_hard_max": IDs.filesPerRunHardMax,
         "ids.source_warnings_per_run": IDs.sourceWarningsPerRun,
         "ids.media_files_per_run_hard_max": IDs.mediaFilesPerRunHardMax,

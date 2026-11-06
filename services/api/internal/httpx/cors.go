@@ -26,7 +26,7 @@ func DefaultCORSOptions(origins []string) CORSOptions {
 	return CORSOptions{
 		AllowedOrigins:   origins,
 		AllowedMethods:   []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete},
-		AllowedHeaders:   []string{"Content-Type", "Authorization", "Idempotency-Key", HeaderRequestID},
+		AllowedHeaders:   []string{"Content-Type", "Authorization", "Idempotency-Key", "X-Docmatch-Org", HeaderRequestID},
 		ExposedHeaders:   []string{HeaderRequestID, "RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset", "Retry-After"},
 		MaxAge:           10 * time.Minute,
 		AllowCredentials: true,

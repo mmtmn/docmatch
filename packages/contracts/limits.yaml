@@ -12,6 +12,8 @@ text:                       # em caracteres (code points após NFC)
   saved_rule_body: 2000
   rule_picker_search: 100
   workflow_name: 80
+  project_name: 120
+  reprocess_reason: 500
   display_name: 80
   company_name: 120
   email: 254
@@ -48,6 +50,9 @@ http:
 ids:
   idempotency_key_max: 128
   api_key_scopes_max: 10
+  project_members_max: 100
+  project_rules_max: 50
+  account_members_max: 100
   files_per_run_hard_max: 100
   source_warnings_per_run: 100
   media_files_per_run_hard_max: 50000

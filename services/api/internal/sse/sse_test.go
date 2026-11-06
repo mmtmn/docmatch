@@ -92,6 +92,27 @@ type frame struct {
 	id, event, data string
 }
 
+func TestRevocationStopsAnOpenStream(t *testing.T) {
+	org, run := uuid.New(), uuid.New()
+	src := &memSource{org: org, events: map[uuid.UUID][]Event{run: {
+		{Seq: 1, Name: "progress", Data: json.RawMessage(`{"percent":10}`)},
+		{Seq: 2, Name: "finding", Data: json.RawMessage(`{"title":"confidencial"}`)},
+	}}}
+	revoked := errors.New("membership revoked")
+	checks := 0
+	w := httptest.NewRecorder()
+	err := Stream(w, httptest.NewRequest(http.MethodGet, "/events", nil), NewBroker(), src, org, run, 0, Options{PageSize: 1, Authorize: func(context.Context) error {
+		checks++
+		if checks > 1 {
+			return revoked
+		}
+		return nil
+	}})
+	if !errors.Is(err, revoked) || strings.Contains(w.Body.String(), "confidencial") || !strings.Contains(w.Body.String(), "progress") {
+		t.Fatal("stream continued after revocation", err, w.Body.String())
+	}
+}
+
 func readFrames(t *testing.T, body string) ([]frame, int) {
 	t.Helper()
 	var frames []frame

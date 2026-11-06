@@ -33,7 +33,7 @@ const createOrg = `-- name: CreateOrg :one
 
 INSERT INTO orgs (id, name, slug, plan_code, country)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, name, slug, plan_code, country, created_at, updated_at, deleted_at
+RETURNING id, name, slug, plan_code, country, created_at, updated_at, deleted_at, kind
 `
 
 type CreateOrgParams struct {
@@ -65,6 +65,7 @@ func (q *Queries) CreateOrg(ctx context.Context, arg CreateOrgParams) (Org, erro
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.Kind,
 	)
 	return i, err
 }
@@ -91,7 +92,7 @@ func (q *Queries) GetMembership(ctx context.Context, arg GetMembershipParams) (M
 }
 
 const getOrg = `-- name: GetOrg :one
-SELECT id, name, slug, plan_code, country, created_at, updated_at, deleted_at FROM orgs WHERE id = $1 AND deleted_at IS NULL
+SELECT id, name, slug, plan_code, country, created_at, updated_at, deleted_at, kind FROM orgs WHERE id = $1 AND deleted_at IS NULL
 `
 
 func (q *Queries) GetOrg(ctx context.Context, id uuid.UUID) (Org, error) {
@@ -106,12 +107,13 @@ func (q *Queries) GetOrg(ctx context.Context, id uuid.UUID) (Org, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.Kind,
 	)
 	return i, err
 }
 
 const getOrgBySlug = `-- name: GetOrgBySlug :one
-SELECT id, name, slug, plan_code, country, created_at, updated_at, deleted_at FROM orgs WHERE slug = $1 AND deleted_at IS NULL
+SELECT id, name, slug, plan_code, country, created_at, updated_at, deleted_at, kind FROM orgs WHERE slug = $1 AND deleted_at IS NULL
 `
 
 func (q *Queries) GetOrgBySlug(ctx context.Context, slug string) (Org, error) {
@@ -126,6 +128,7 @@ func (q *Queries) GetOrgBySlug(ctx context.Context, slug string) (Org, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.Kind,
 	)
 	return i, err
 }

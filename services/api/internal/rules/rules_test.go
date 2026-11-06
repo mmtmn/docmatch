@@ -84,7 +84,7 @@ func TestLifecycle(t *testing.T) {
 	// Promotion rules.
 	_, err = svc.Promote(ctx, p, r.ID, "trusted")
 	assertCode(t, err, contracts.ErrRuleNotPromotable)
-	_, err = svc.Promote(ctx, p, r.ID, "retired")
+	_, err = svc.Promote(ctx, p, r.ID, "invalid")
 	assertCode(t, err, contracts.ErrValidationFailed)
 	cur, _, _ := store.GetRule(ctx, org, r.ID)
 	cur.Status, cur.Stats = StatusCandidate, Stats{RunsEvaluated: 2, FalsePositives: 1}
@@ -272,5 +272,30 @@ func TestHandler(t *testing.T) {
 	anon.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/rules", nil))
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("sem auth = %d", rec.Code)
+	}
+}
+
+func TestRetiredRuleLeavesAutomaticSelection(t *testing.T) {
+	store := NewMemStore()
+	svc, err := New(Deps{Store: store})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := apix.Principal{OrgID: uuid.New()}
+	rule, err := store.CreateRule(t.Context(), Rule{OrgID: p.OrgID, Title: "Conferir", Body: "Conferir valores", Status: StatusTrusted, Enabled: true, Scope: ScopeTenant})
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := svc.Resolve(t.Context(), p.OrgID, true, nil)
+	if err != nil || len(before) != 1 {
+		t.Fatal(before, err)
+	}
+	retired, err := svc.Promote(t.Context(), p, rule.ID, StatusRetired)
+	if err != nil || retired.Status != StatusRetired {
+		t.Fatal(retired, err)
+	}
+	after, err := svc.Resolve(t.Context(), p.OrgID, true, nil)
+	if err != nil || len(after) != 0 {
+		t.Fatal(after, err)
 	}
 }

@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/mmtmn/docmatch/services/api/internal/estimate"
+	"github.com/mmtmn/docmatch/services/api/internal/rules"
 	"github.com/mmtmn/docmatch/services/api/internal/runs/apix"
 	"github.com/mmtmn/docmatch/services/api/internal/sse"
 	"github.com/mmtmn/docmatch/services/api/internal/uploads"
@@ -70,6 +71,17 @@ type Inputs struct {
 	UserID   *uuid.UUID       `json:"user_id,omitempty"`
 	APIKeyID *uuid.UUID       `json:"api_key_id,omitempty"`
 	Lanes    []string         `json:"lanes,omitempty"`
+	Project  *ProjectSnapshot `json:"project,omitempty"`
+}
+
+// ProjectSnapshot freezes the exact rule versions approved with the documents.
+// Request already holds the immutable upload references and analysis options.
+type ProjectSnapshot struct {
+	ID              uuid.UUID    `json:"id"`
+	Revision        int64        `json:"revision"`
+	Signature       string       `json:"signature"`
+	Rules           []rules.Rule `json:"rules"`
+	ReprocessReason string       `json:"reprocess_reason,omitempty"`
 }
 
 // Principal rebuilds the caller for the worker.
@@ -222,6 +234,7 @@ type Credits struct {
 // View is openapi Run.
 type View struct {
 	ID           string          `json:"id"`
+	ProjectID    string          `json:"project_id,omitempty"`
 	Status       Status          `json:"status"`
 	WorkflowID   *string         `json:"workflow_id"`
 	Lane         string          `json:"lane"`
@@ -258,6 +271,9 @@ func (r Run) View(sources []uploads.View, quote, pending *estimate.Quote) View {
 	}
 	if r.ExpiresAt != nil {
 		v.ExpiresAt = r.ExpiresAt.UTC().Format(time.RFC3339)
+	}
+	if r.Inputs.Project != nil {
+		v.ProjectID = apix.Encode("prj", r.Inputs.Project.ID)
 	}
 	if v.Sources == nil {
 		v.Sources = []uploads.View{}
@@ -440,8 +456,11 @@ type Feedback struct {
 
 // ListFilter filters GET /runs.
 type ListFilter struct {
-	Status     Status
-	WorkflowID *uuid.UUID
+	ProjectOnly bool
+	VisibleTo   *uuid.UUID
+	ProjectID   *uuid.UUID
+	Status      Status
+	WorkflowID  *uuid.UUID
 }
 
 // FindingFilter filters GET /runs/{id}/findings.

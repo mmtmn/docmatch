@@ -66,6 +66,12 @@ func (m *MemStore) ListRuns(_ context.Context, orgID uuid.UUID, f ListFilter, li
 		if f.WorkflowID != nil && (r.WorkflowID == nil || *r.WorkflowID != *f.WorkflowID) {
 			continue
 		}
+		if f.ProjectID != nil && (r.Inputs.Project == nil || r.Inputs.Project.ID != *f.ProjectID) {
+			continue
+		}
+		if f.ProjectOnly && r.Inputs.Project == nil {
+			continue
+		}
 		all = append(all, r)
 	}
 	sort.Slice(all, func(i, j int) bool {

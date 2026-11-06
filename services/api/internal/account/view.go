@@ -8,12 +8,13 @@ import (
 
 // UserView mirrors the User schema.
 type UserView struct {
-	ID          string    `json:"id"`
-	Email       string    `json:"email"`
-	DisplayName string    `json:"display_name"`
-	Role        string    `json:"role"`
-	Locale      string    `json:"locale"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID             string    `json:"id"`
+	Email          string    `json:"email"`
+	DisplayName    string    `json:"display_name"`
+	Role           string    `json:"role"`
+	MembershipRole string    `json:"membership_role"`
+	Locale         string    `json:"locale"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 // OrgView mirrors the Org schema.
@@ -48,7 +49,7 @@ func NewUserView(u User, role string) UserView {
 	if role == RoleOwner || role == RoleAdmin {
 		r = "owner"
 	}
-	return UserView{ID: publicid.Encode(publicid.PrefixUser, u.ID), Email: u.Email, DisplayName: u.DisplayName, Role: r, Locale: Locale, CreatedAt: u.CreatedAt.UTC()}
+	return UserView{ID: publicid.Encode(publicid.PrefixUser, u.ID), Email: u.Email, DisplayName: u.DisplayName, Role: r, MembershipRole: role, Locale: Locale, CreatedAt: u.CreatedAt.UTC()}
 }
 
 // NewOrgView renders o with the plan of its active subscription (nil plan

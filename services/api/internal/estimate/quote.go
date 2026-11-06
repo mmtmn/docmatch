@@ -174,11 +174,14 @@ type Options struct {
 
 // Request is openapi EstimateRequest (and the base of RunCreateRequest).
 type Request struct {
-	Sources      []SourceRef `json:"sources"`
-	MediaSources []SourceRef `json:"media_sources,omitempty"`
-	WorkflowID   string      `json:"workflow_id,omitempty"`
-	RulesText    string      `json:"rules_text,omitempty"`
-	Options      *Options    `json:"options,omitempty"`
+	Sources           []SourceRef `json:"sources"`
+	MediaSources      []SourceRef `json:"media_sources,omitempty"`
+	WorkflowID        string      `json:"workflow_id,omitempty"`
+	RulesText         string      `json:"rules_text,omitempty"`
+	Options           *Options    `json:"options,omitempty"`
+	ProjectID         string      `json:"project_id,omitempty"`
+	ProjectRevision   int64       `json:"project_revision,omitempty"`
+	AnalysisSignature string      `json:"analysis_signature,omitempty"`
 }
 
 // UseRules applies the contract default (true).
@@ -199,16 +202,19 @@ func (r Request) Lane() string {
 
 // fingerprintDoc is the canonical, sorted form hashed by Fingerprint.
 type fingerprintDoc struct {
-	Sources    []fingerprintSource `json:"sources"`
-	Media      []fingerprintSource `json:"media"`
-	WorkflowID string              `json:"workflow_id"`
-	RulesText  string              `json:"rules_text"`
-	LlmMode    string              `json:"llm_mode"`
-	WebSearch  bool                `json:"web_search"`
-	UseRules   bool                `json:"use_rules"`
-	RuleIDs    []string            `json:"rule_ids"`
-	Lane       string              `json:"lane"`
-	Escalation bool                `json:"escalation"`
+	Sources           []fingerprintSource `json:"sources"`
+	Media             []fingerprintSource `json:"media"`
+	WorkflowID        string              `json:"workflow_id"`
+	RulesText         string              `json:"rules_text"`
+	LlmMode           string              `json:"llm_mode"`
+	WebSearch         bool                `json:"web_search"`
+	UseRules          bool                `json:"use_rules"`
+	RuleIDs           []string            `json:"rule_ids"`
+	Lane              string              `json:"lane"`
+	Escalation        bool                `json:"escalation"`
+	ProjectID         string              `json:"project_id,omitempty"`
+	ProjectRevision   int64               `json:"project_revision,omitempty"`
+	AnalysisSignature string              `json:"analysis_signature,omitempty"`
 }
 
 type fingerprintSource struct {
@@ -230,6 +236,7 @@ func Fingerprint(req Request, hashes map[string]string) string {
 		return out
 	}
 	doc := fingerprintDoc{Sources: conv(req.Sources), Media: conv(req.MediaSources), WorkflowID: req.WorkflowID, RulesText: req.RulesText, UseRules: req.UseRules(), Lane: req.Lane()}
+	doc.ProjectID, doc.ProjectRevision, doc.AnalysisSignature = req.ProjectID, req.ProjectRevision, req.AnalysisSignature
 	if req.Options != nil {
 		doc.LlmMode, doc.WebSearch, doc.Escalation = req.Options.LlmMode, req.Options.WebSearch, req.Options.Escalation
 		doc.RuleIDs = append([]string(nil), req.Options.RuleIDs...)

@@ -18,6 +18,8 @@ object Limits {
         const val SAVED_RULE_BODY: Int = 2000
         const val RULE_PICKER_SEARCH: Int = 100
         const val WORKFLOW_NAME: Int = 80
+        const val PROJECT_NAME: Int = 120
+        const val REPROCESS_REASON: Int = 500
         const val DISPLAY_NAME: Int = 80
         const val COMPANY_NAME: Int = 120
         const val EMAIL: Int = 254
@@ -60,6 +62,9 @@ object Limits {
     object Ids {
         const val IDEMPOTENCY_KEY_MAX: Int = 128
         const val API_KEY_SCOPES_MAX: Int = 10
+        const val PROJECT_MEMBERS_MAX: Int = 100
+        const val PROJECT_RULES_MAX: Int = 50
+        const val ACCOUNT_MEMBERS_MAX: Int = 100
         const val FILES_PER_RUN_HARD_MAX: Int = 100
         const val SOURCE_WARNINGS_PER_RUN: Int = 100
         const val MEDIA_FILES_PER_RUN_HARD_MAX: Int = 50000
@@ -75,6 +80,8 @@ object Limits {
         "text.saved_rule_body" to Text.SAVED_RULE_BODY,
         "text.rule_picker_search" to Text.RULE_PICKER_SEARCH,
         "text.workflow_name" to Text.WORKFLOW_NAME,
+        "text.project_name" to Text.PROJECT_NAME,
+        "text.reprocess_reason" to Text.REPROCESS_REASON,
         "text.display_name" to Text.DISPLAY_NAME,
         "text.company_name" to Text.COMPANY_NAME,
         "text.email" to Text.EMAIL,
@@ -105,6 +112,9 @@ object Limits {
         "http.sse_idle_timeout_s" to Http.SSE_IDLE_TIMEOUT_S,
         "ids.idempotency_key_max" to Ids.IDEMPOTENCY_KEY_MAX,
         "ids.api_key_scopes_max" to Ids.API_KEY_SCOPES_MAX,
+        "ids.project_members_max" to Ids.PROJECT_MEMBERS_MAX,
+        "ids.project_rules_max" to Ids.PROJECT_RULES_MAX,
+        "ids.account_members_max" to Ids.ACCOUNT_MEMBERS_MAX,
         "ids.files_per_run_hard_max" to Ids.FILES_PER_RUN_HARD_MAX,
         "ids.source_warnings_per_run" to Ids.SOURCE_WARNINGS_PER_RUN,
         "ids.media_files_per_run_hard_max" to Ids.MEDIA_FILES_PER_RUN_HARD_MAX,

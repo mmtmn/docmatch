@@ -887,7 +887,7 @@ func TestMemoryStoreExtras(t *testing.T) {
 		"DueErasures":       func() error { _, err := s.DueErasures(ctx, time.Now(), 1); return err },
 		"Erase":             func() error { _, err := s.Erase(ctx, u.ID, time.Now()); return err },
 		"CreateExport":      func() error { _, err := s.CreateExport(ctx, u.ID, o.ID); return err },
-		"LatestExport":      func() error { _, _, err := s.LatestExport(ctx, u.ID); return err },
+		"LatestExport":      func() error { _, _, err := s.LatestExport(ctx, u.ID, o.ID); return err },
 		"ExportByID":        func() error { _, _, err := s.ExportByID(ctx, u.ID); return err },
 		"ExportArchive":     func() error { _, _, err := s.ExportArchive(ctx, u.ID); return err },
 		"CompleteExport":    func() error { return s.CompleteExport(ctx, u.ID, nil, time.Now()) },

@@ -140,8 +140,9 @@ func (s *Service) Now() time.Time { return s.d.Now() }
 // CreateRequest is openapi RunCreateRequest.
 type CreateRequest struct {
 	estimate.Request
-	QuoteID        string `json:"quote_id"`
-	QuoteSignature string `json:"quote_signature"`
+	QuoteID        string           `json:"quote_id"`
+	QuoteSignature string           `json:"quote_signature"`
+	Project        *ProjectSnapshot `json:"-"`
 }
 
 // ApproveRequest is openapi ApproveQuoteRequest.
@@ -153,6 +154,24 @@ type ApproveRequest struct {
 // Create verifies the quote, reserves its cap, inserts the run and
 // enqueues the job in the same transaction.
 func (s *Service) Create(ctx context.Context, p apix.Principal, req CreateRequest) (Run, error) {
+	if store, ok := s.d.Store.(interface {
+		WithCreationTx(context.Context, uuid.UUID, func(context.Context) error) error
+	}); ok {
+		var out Run
+		err := store.WithCreationTx(ctx, p.OrgID, func(ctx context.Context) error {
+			var err error
+			out, err = s.create(ctx, p, req)
+			return err
+		})
+		return out, err
+	}
+	return s.create(ctx, p, req)
+}
+
+func (s *Service) create(ctx context.Context, p apix.Principal, req CreateRequest) (Run, error) {
+	if err := s.d.Estimates.CheckAccess(ctx, p, req.Request); err != nil {
+		return Run{}, err
+	}
 	v, err := s.d.Estimates.Validate(p, req.Request)
 	if err != nil {
 		return Run{}, err
@@ -196,7 +215,7 @@ func (s *Service) Create(ctx context.Context, p apix.Principal, req CreateReques
 	run := Run{
 		ID: id, OrgID: p.OrgID, WorkflowID: v.WorkflowID, UserID: p.UserID, APIKeyID: p.APIKeyID, QuoteID: &quoteID, HoldID: &hold.ID,
 		Lane: v.Lane, Status: StatusQueued, EstimatedCredits: rec.Expected, CreditsHeld: hold.Amount,
-		Inputs:    Inputs{Request: req.Request, Plan: p.Plan, UserID: p.UserID, APIKeyID: p.APIKeyID, Lanes: p.Lanes},
+		Inputs:    Inputs{Request: req.Request, Plan: p.Plan, UserID: p.UserID, APIKeyID: p.APIKeyID, Lanes: p.Lanes, Project: req.Project},
 		ExpiresAt: &expires, CreatedAt: now, UpdatedAt: now,
 	}
 	// The run keeps the timing of its initial quote: an approval later swaps
@@ -347,6 +366,29 @@ func (s *Service) release(ctx context.Context, r *Run) {
 // spent so far on the old hold, reserves the new cap and re-queues the run
 // from its checkpoint. An expired quote cancels the run (contract: 410).
 func (s *Service) Approve(ctx context.Context, p apix.Principal, id uuid.UUID, req ApproveRequest) (Run, error) {
+	if store, ok := s.d.Store.(interface {
+		WithCreationTx(context.Context, uuid.UUID, func(context.Context) error) error
+	}); ok {
+		var out Run
+		err := store.WithCreationTx(ctx, p.OrgID, func(ctx context.Context) error {
+			var err error
+			out, err = s.approve(ctx, p, id, req)
+			return err
+		})
+		// The failed transaction rolls back its cancellation too. Preserve the
+		// existing expiry behavior after the approval unit has rolled back.
+		var apiErr *apix.Error
+		if errors.As(err, &apiErr) && apiErr.Code == contracts.ErrQuoteExpired {
+			if _, cancelErr := s.Cancel(ctx, p, id); cancelErr != nil {
+				s.d.Logger.Warn("cancelar orçamento expirado falhou", slog.String("err", cancelErr.Error()))
+			}
+		}
+		return out, err
+	}
+	return s.approve(ctx, p, id, req)
+}
+
+func (s *Service) approve(ctx context.Context, p apix.Principal, id uuid.UUID, req ApproveRequest) (Run, error) {
 	r, err := s.Get(ctx, p.OrgID, id)
 	if err != nil {
 		return Run{}, err
@@ -530,7 +572,11 @@ func (s *Service) Learn(ctx context.Context, orgID, runID uuid.UUID) error {
 	if err != nil {
 		return fmt.Errorf("runs: aprender regras: %w", err)
 	}
-	proposed, err := s.d.Rules.Propose(ctx, orgID, &runID, resp.GetRules())
+	ruleCtx := ctx
+	if r.Inputs.Project != nil {
+		ruleCtx = rules.WithProject(ctx, orgID, r.Inputs.Project.ID)
+	}
+	proposed, err := s.d.Rules.Propose(ruleCtx, orgID, &runID, resp.GetRules())
 	if err != nil {
 		return err
 	}

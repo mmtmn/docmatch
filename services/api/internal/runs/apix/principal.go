@@ -1,6 +1,7 @@
 package apix
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
@@ -8,6 +9,15 @@ import (
 
 	"github.com/mmtmn/docmatch/services/api/internal/audit"
 )
+
+type recheckKey struct{}
+
+// RecheckContext revalidates credentials on a stream already counted against
+// request limits. This flag is internal context, never a client-supplied header.
+func RecheckContext(ctx context.Context) context.Context {
+	return context.WithValue(ctx, recheckKey{}, true)
+}
+func IsRecheck(ctx context.Context) bool { v, _ := ctx.Value(recheckKey{}).(bool); return v }
 
 // Principal is the authenticated caller of a business endpoint: a user with
 // a session or an API key, always inside exactly one organization.
@@ -18,7 +28,8 @@ type Principal struct {
 	// APIKeyID is set for API keys; nil for sessions.
 	APIKeyID *uuid.UUID
 	// Plan is the organization's plan code (config/pricing.yaml plans).
-	Plan string
+	Plan           string
+	MembershipRole string
 	// Lanes an API key may use (empty for sessions: the app lane).
 	Lanes []string
 	// Scopes granted to an API key (empty for sessions: everything).

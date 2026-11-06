@@ -1,6 +1,7 @@
 package runs
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -39,6 +40,19 @@ func (h *Handler) Mount(r *httpx.Router) {
 	r.HandleFunc(http.MethodPost, "/v1/runs/{id}/findings/{fid}/feedback", httpx.BodyJSON, h.feedback)
 	r.HandleFunc(http.MethodGet, "/v1/runs/{id}/export", httpx.BodyNone, h.export)
 	r.HandleFunc(http.MethodPost, "/v1/runs/{id}/approve-quote", httpx.BodyJSON, h.approve)
+}
+
+// MountProjectResults reuses evidence, exports and run controls under a project.
+// Its resolver checks both membership and the run's project before dispatch.
+func (h *Handler) MountProjectResults(r *httpx.Router) {
+	const base = "/v1/projects/{project}/runs/{id}"
+	r.HandleFunc(http.MethodGet, base, httpx.BodyNone, h.get)
+	r.HandleFunc(http.MethodPost, base+"/cancel", httpx.BodyNone, h.cancel)
+	r.HandleFunc(http.MethodGet, base+"/events", httpx.BodyNone, h.events)
+	r.HandleFunc(http.MethodGet, base+"/findings", httpx.BodyNone, h.findings)
+	r.HandleFunc(http.MethodPost, base+"/findings/{fid}/feedback", httpx.BodyJSON, h.feedback)
+	r.HandleFunc(http.MethodGet, base+"/export", httpx.BodyNone, h.export)
+	r.HandleFunc(http.MethodPost, base+"/approve-quote", httpx.BodyJSON, h.approve)
 }
 
 // ListResponse is openapi RunList.
@@ -101,6 +115,9 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var f ListFilter
+	if p.UserID != nil && p.MembershipRole != "" && p.MembershipRole != "owner" && p.MembershipRole != "admin" {
+		f.VisibleTo = p.UserID
+	}
 	q := r.URL.Query()
 	if st := q.Get("status"); st != "" {
 		f.Status = Status(st)
@@ -209,7 +226,10 @@ func (h *Handler) events(w http.ResponseWriter, r *http.Request) {
 		apix.Handle(w, r, apix.Validation(apix.FieldError{Path: "/" + sse.HeaderLastEventID, Code: "invalid"}))
 		return
 	}
-	opts := sse.Options{IdleTimeout: h.svc.d.Limits.HTTP.SSEIdleTimeout()}
+	opts := sse.Options{IdleTimeout: h.svc.d.Limits.HTTP.SSEIdleTimeout(), Authorize: func(ctx context.Context) error {
+		_, err := h.auth(r.WithContext(apix.RecheckContext(ctx)))
+		return err
+	}}
 	if err := sse.Stream(w, r, h.svc.Broker(), h.svc, p.OrgID, id, last, opts); err != nil {
 		h.svc.d.Logger.Warn("fluxo de eventos interrompido", "run_id", apix.Encode(apix.PrefixRun, id), "err", err.Error())
 	}

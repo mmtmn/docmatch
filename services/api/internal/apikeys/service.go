@@ -29,7 +29,7 @@ import (
 	"github.com/mmtmn/docmatch/services/api/internal/session"
 )
 
-var supportedScopes = []string{"runs:read", "runs:write", "uploads:write", "workflows:read", "workflows:write", "rules:read", "rules:write"}
+var supportedScopes = []string{"runs:read", "runs:write", "uploads:write", "workflows:read", "workflows:write", "rules:read", "rules:write", "projects:read", "projects:write"}
 
 type Service struct {
 	cfg     *config.Config
@@ -187,6 +187,21 @@ func requiredScope(r *http.Request) string {
 	path := strings.TrimPrefix(r.URL.Path, "/v1/")
 	group, _, _ := strings.Cut(path, "/")
 	switch group {
+	case "projects":
+		parts := strings.Split(path, "/")
+		if len(parts) >= 3 && parts[2] == "runs" {
+			if r.Method == http.MethodGet || r.Method == http.MethodHead {
+				return "runs:read"
+			}
+			return "runs:write"
+		}
+		if len(parts) >= 3 && parts[2] == "uploads" {
+			return "uploads:write"
+		}
+		if r.Method == http.MethodGet || r.Method == http.MethodHead {
+			return "projects:read"
+		}
+		return "projects:write"
 	case "uploads":
 		return "uploads:write"
 	case "runs", "workflows", "rules":
@@ -238,6 +253,12 @@ func (s *Service) Resolve(next apix.Resolver) apix.Resolver {
 			if !hmac.Equal(hash, s.digest(parts[1])) {
 				return apix.ErrInvalidAPIKey
 			}
+			if selected := r.Header.Get("X-Docmatch-Org"); selected != "" {
+				org, err := apix.Decode("org", selected)
+				if err != nil || org != p.OrgID {
+					return apix.ErrForbidden
+				}
+			}
 			plan, eligible, err := s.entitlement(ctx, tx, p.OrgID)
 			if err != nil {
 				return err
@@ -261,15 +282,20 @@ func (s *Service) Resolve(next apix.Resolver) apix.Resolver {
 			if scope == "" || !slices.Contains(p.Scopes, scope) {
 				return apix.ErrScopeDenied
 			}
-			d, err := s.limiter.Allow(ctx, id.String(), ratelimit.Policy{Limit: 60, Period: time.Minute})
-			if err != nil {
-				return err
-			}
-			if !d.Allowed {
-				return apix.E(contracts.ErrRateLimited, nil)
+			if !apix.IsRecheck(ctx) {
+				d, err := s.limiter.Allow(ctx, id.String(), ratelimit.Policy{Limit: 60, Period: time.Minute})
+				if err != nil {
+					return err
+				}
+				if !d.Allowed {
+					return apix.E(contracts.ErrRateLimited, nil)
+				}
 			}
 			p.Plan = plan
 			p.APIKeyID = &id
+			if apix.IsRecheck(ctx) {
+				return nil
+			}
 			_, err = tx.Exec(ctx, `UPDATE api_keys SET last_used_at=now() WHERE id=$1`, id)
 			return err
 		})

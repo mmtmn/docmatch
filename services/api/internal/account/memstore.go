@@ -317,6 +317,23 @@ func (s *MemoryStore) RequestDeletion(_ context.Context, userID uuid.UUID, sched
 	if !ok || u.DeletionRequestedAt != nil {
 		return false, nil
 	}
+	for _, memberships := range s.Memberships {
+		owns, otherOwner := false, false
+		for _, member := range memberships {
+			if member.Role != RoleOwner {
+				continue
+			}
+			if member.UserID == userID {
+				owns = true
+			} else {
+				other, active := s.Users[member.UserID]
+				otherOwner = otherOwner || active && other.DeletionRequestedAt == nil
+			}
+		}
+		if owns && len(memberships) > 1 && !otherOwner {
+			return false, ErrOwnerTransfer
+		}
+	}
 	now := s.now()
 	u.DeletionRequestedAt, u.DeletionScheduledFor = &now, &scheduledFor
 	s.Users[userID] = u
@@ -391,7 +408,7 @@ func (s *MemoryStore) CreateExport(_ context.Context, userID, orgID uuid.UUID) (
 }
 
 // LatestExport implements Store.
-func (s *MemoryStore) LatestExport(_ context.Context, userID uuid.UUID) (Export, bool, error) {
+func (s *MemoryStore) LatestExport(_ context.Context, userID, orgID uuid.UUID) (Export, bool, error) {
 	if err := s.fail("LatestExport"); err != nil {
 		return Export{}, false, err
 	}
@@ -400,7 +417,7 @@ func (s *MemoryStore) LatestExport(_ context.Context, userID uuid.UUID) (Export,
 	var latest Export
 	found := false
 	for _, e := range s.Exports {
-		if e.UserID == userID && (!found || e.RequestedAt.After(latest.RequestedAt)) {
+		if e.UserID == userID && e.OrgID == orgID && (!found || e.RequestedAt.After(latest.RequestedAt)) {
 			latest, found = e, true
 		}
 	}

@@ -38,6 +38,9 @@ type Source interface {
 
 // Options tune a stream.
 type Options struct {
+	// Authorize is rechecked before reading each page, including after a wake or
+	// heartbeat, so a removed member cannot keep receiving new events.
+	Authorize func(context.Context) error
 	// Heartbeat is the ": ping" interval (openapi: 15s).
 	Heartbeat time.Duration
 	// IdleTimeout closes a stream with no event for this long
@@ -103,6 +106,11 @@ func Stream(w http.ResponseWriter, r *http.Request, b *Broker, src Source, orgID
 
 	for {
 		for {
+			if opts.Authorize != nil {
+				if err := opts.Authorize(ctx); err != nil {
+					return err
+				}
+			}
 			events, err := src.EventsAfter(ctx, orgID, runID, lastSeq, opts.PageSize)
 			if err != nil {
 				return fmt.Errorf("sse: ler eventos: %w", err)

@@ -48,6 +48,10 @@ func writeErr(w http.ResponseWriter, r *http.Request, err error) {
 		apierr.Write(w, r, contracts.ErrUnauthenticated)
 	case errors.Is(err, ErrDeletionPending):
 		apierr.Write(w, r, contracts.ErrConflict)
+	case errors.Is(err, ErrOwnerTransfer):
+		apierr.WriteDetails(w, r, contracts.ErrConflict, map[string]any{"reason": "Transfira a responsabilidade pela equipe antes de excluir seu login."})
+	case errors.Is(err, ErrForbidden):
+		apierr.Write(w, r, contracts.ErrForbidden)
 	case errors.Is(err, ErrInvalidCredentials):
 		apierr.Write(w, r, contracts.ErrInvalidCredentials)
 	case errors.Is(err, ErrRecentLoginRequired):

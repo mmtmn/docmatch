@@ -236,14 +236,14 @@ func TestChallengesExportsAndErasure(t *testing.T) {
 	if _, err := auditSvc.Record(ctx, &o.ID, audit.Actor{Type: audit.ActorUser, ID: u.ID.String()}, "auth.login", audit.Target{Type: "session", ID: sid.String()}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok, _ := store.LatestExport(ctx, u.ID); ok {
+	if _, ok, _ := store.LatestExport(ctx, u.ID, o.ID); ok {
 		t.Fatal("sem exportações")
 	}
 	exp, err := store.CreateExport(ctx, u.ID, o.ID)
 	if err != nil || exp.Status != account.ExportPending {
 		t.Fatalf("CreateExport: %+v %v", exp, err)
 	}
-	if latest, ok, _ := store.LatestExport(ctx, u.ID); !ok || latest.ID != exp.ID {
+	if latest, ok, _ := store.LatestExport(ctx, u.ID, o.ID); !ok || latest.ID != exp.ID {
 		t.Fatal("LatestExport")
 	}
 	if _, ok, _ := store.ExportArchive(ctx, exp.ID); ok {

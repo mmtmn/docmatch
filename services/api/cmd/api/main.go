@@ -37,11 +37,14 @@ import (
 	"github.com/mmtmn/docmatch/services/api/internal/jobs/jobargs"
 	"github.com/mmtmn/docmatch/services/api/internal/limits"
 	"github.com/mmtmn/docmatch/services/api/internal/logx"
+	"github.com/mmtmn/docmatch/services/api/internal/projects"
 	"github.com/mmtmn/docmatch/services/api/internal/ratelimit"
 	"github.com/mmtmn/docmatch/services/api/internal/runs/apix"
 	"github.com/mmtmn/docmatch/services/api/internal/runs/wire"
 	"github.com/mmtmn/docmatch/services/api/internal/session"
 	"github.com/mmtmn/docmatch/services/api/internal/session/sessionpg"
+	"github.com/mmtmn/docmatch/services/api/internal/teams"
+	"github.com/mmtmn/docmatch/services/api/internal/tenancy"
 	"github.com/mmtmn/docmatch/services/api/internal/version"
 )
 
@@ -90,9 +93,17 @@ func run() error {
 	}
 	keysSvc := apikeys.New(cfg, catalog, pool)
 	workspaceSvc := customizations.New(cfg, catalog, pool)
+	tenants := tenancy.New(pool)
+	teamsSvc, err := teams.New(cfg, pool)
+	if err != nil {
+		return err
+	}
+	baseResolver := keysSvc.Resolve(sessionResolver(pool))
+	projectsSvc := projects.New(pool, baseResolver, nil)
+	resolve := projectsSvc.Resolve(baseResolver)
 	// Pipeline route groups (uploads, estimates, runs, workflows, rules),
 	// identified by the session the middleware above authenticated.
-	sys, err := wire.New(ctx, wire.Options{Config: cfg, Logger: log, Pool: pool, Auth: keysSvc.Resolve(sessionResolver(pool))})
+	sys, err := wire.New(ctx, wire.Options{Config: cfg, Logger: log, Pool: pool, Auth: resolve})
 	if err != nil {
 		return err
 	}
@@ -113,10 +124,11 @@ func run() error {
 	}()
 
 	billingSvc := billing.New(cfg, sys.Pricing, catalog, pool)
+	projectsSvc.SetEngine(projects.Engine{Config: cfg, Estimates: sys.Estimates, Runs: sys.Runs, Rules: sys.Rules, Uploads: sys.Uploads})
 	handler := api.NewHandler(api.Deps{
 		Config: cfg, Logger: log, Limits: limits.Must(), DB: pool,
-		Mount:        append([]func(*httpx.Router){authSvc.Mount, accountSvc.Mount, billingSvc.Mount, keysSvc.Mount, workspaceSvc.Mount}, sys.Mount()...),
-		Middleware:   []httpx.Middleware{sessions.Middleware},
+		Mount:        append([]func(*httpx.Router){authSvc.Mount, accountSvc.Mount, billingSvc.Mount, keysSvc.Mount, workspaceSvc.Mount, tenants.Mount, projectsSvc.Mount, teamsSvc.Mount}, sys.Mount()...),
+		Middleware:   []httpx.Middleware{sessions.Middleware, tenants.Middleware},
 		OriginExempt: auth.OriginExempt,
 	})
 	srv := httpx.New(httpx.ServerOptions{Addr: cfg.APIListen, Handler: handler, Limits: limits.Must(), Logger: log})
@@ -228,14 +240,31 @@ func sessionResolver(pool *pgxpool.Pool) apix.Resolver {
 			}
 			return apix.Principal{}, apix.ErrUnauthenticated
 		}
+		if !p.AccessExpiresAt.IsZero() && !time.Now().Before(p.AccessExpiresAt) {
+			return apix.Principal{}, apix.ErrSessionExpired
+		}
 		var plan string
+		var role string
 		err := db.WithOrgTx(r.Context(), pool, p.OrgID, func(ctx context.Context, tx pgx.Tx) error {
+			if apix.IsRecheck(ctx) {
+				var active bool
+				if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM sessions WHERE id=$1 AND user_id=$2 AND revoked_at IS NULL AND expires_at>now())`, p.SessionID, p.UserID).Scan(&active); err != nil {
+					return err
+				}
+				if !active {
+					return apix.ErrUnauthenticated
+				}
+			}
+			var err error
+			if role, err = tenancy.Check(ctx, tx, p.OrgID, p.UserID); err != nil {
+				return err
+			}
 			return tx.QueryRow(ctx, "SELECT plan_code FROM orgs WHERE id = $1", p.OrgID).Scan(&plan)
 		})
 		if err != nil {
 			return apix.Principal{}, fmt.Errorf("plano da organização: %w", err)
 		}
 		uid := p.UserID
-		return apix.Principal{OrgID: p.OrgID, UserID: &uid, Plan: plan}, nil
+		return apix.Principal{OrgID: p.OrgID, UserID: &uid, Plan: plan, MembershipRole: role}, nil
 	}
 }
