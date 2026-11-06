@@ -22,7 +22,7 @@ para copiar e colar. Requer Node 20+; o assistente verifica os demais requisitos
 
 ## Veja funcionando
 
-[Site (GIF)](docs/demos/website.gif) · [Terminal (GIF)](docs/demos/terminal.gif) · [Android (GIF)](docs/demos/android.gif) · [iOS (GIF)](docs/demos/ios.gif) · [iOS (vídeo)](docs/demos/ios.mp4)
+[Site](docs/demos/website.gif) · [Terminal](docs/demos/terminal.gif) · [Android](docs/demos/android.gif) · [iOS](docs/demos/ios.gif)
 
 As quatro gravações usam o gêmeo público Vantara: **100% dos itens avaliados**, com dados,
 achados, evidências e totais conferidos. [GIFs e relatórios](docs/demos/README.md).

@@ -4,21 +4,23 @@ Clientes para **npm/TypeScript, Go, Python e Rust**, licenciados em Apache-2.0. 
 arquivos, pedem uma estimativa, iniciam uma execução aprovada, aguardam por polling, leem os
 achados paginados e baixam XLSX, CSV e PDF. Não há telemetria.
 
-Os pacotes estão prontos para uso a partir deste checkout; **a publicação em npm, PyPI e
-crates.io ainda não foi feita**. Não use um pacote de nome semelhante de outro autor.
-O pacote npm `docmatch` já publicado é o terminal; o SDK TypeScript é `@docmatch/sdk`.
+Python e Rust **0.1.0** estão publicados no [PyPI](https://pypi.org/project/docmatch/0.1.0/)
+e no [crates.io](https://crates.io/crates/docmatch/0.1.0). Go **v0.1.0** está publicado
+no GitHub com a tag **`sdks/go/v0.1.0`**. O repositório é privado: a instalação Go exige
+acesso ao GitHub e `GOPRIVATE=github.com/mmtmn/docmatch`; não está disponível no proxy público.
+As três versões foram instaladas e verificadas fora deste checkout em 6 de novembro de 2026.
 
-Python e Rust estão preparados para a primeira versão **0.1.0**. Go usa o mesmo número,
-com a tag **`sdks/go/v0.1.0`**, ainda não publicada. O
+O SDK TypeScript `@docmatch/sdk` ainda não foi publicado no npm. O pacote npm `docmatch`
+já publicado é o terminal. Não use um pacote de nome semelhante de outro autor. O
 [guia de publicação](../docs/runbooks/publicar-sdks.md) explica contas, preparação local,
 upload, verificação e correção de uma release. Os testes e builds de publicação rodam localmente.
 
-| Linguagem | Pacote / pasta | Instalação local |
+| Linguagem | Pacote / pasta | Instalação |
 | --- | --- | --- |
 | TypeScript | [@docmatch/sdk](typescript/README.md) | `pnpm --dir sdks/typescript build` e `pnpm --dir sdks/typescript pack` |
-| Go | [github.com/mmtmn/docmatch/sdks/go](go/README.md) | `replace` ou workspace Go apontando para `sdks/go` |
-| Python | [docmatch](python/README.md) | `pip install -e sdks/python` dentro de um venv |
-| Rust | [docmatch](rust/README.md) | dependência Cargo `path = "../docmatch/sdks/rust"` |
+| Go | [github.com/mmtmn/docmatch/sdks/go](go/README.md) | Com acesso GitHub: `GOPRIVATE=github.com/mmtmn/docmatch go get github.com/mmtmn/docmatch/sdks/go@v0.1.0` |
+| Python | [docmatch](python/README.md) | `python -m pip install docmatch==0.1.0` dentro de um venv |
+| Rust | [docmatch](rust/README.md) | `cargo add docmatch@0.1.0` |
 
 ## Autorização e custos
 
