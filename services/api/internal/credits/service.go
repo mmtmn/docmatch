@@ -153,22 +153,26 @@ func (s *Service) Reserve(ctx context.Context, orgID uuid.UUID, p ReserveParams)
 		if err != nil {
 			return err
 		}
-		if acct.Available() < p.Amount {
+		amount := p.Amount
+		if acct.TokenExempt {
+			amount = 0
+		}
+		if acct.BillingBlocked || acct.Available() < amount {
 			return &InsufficientError{OrgID: orgID, Requested: p.Amount, Available: acct.Available()}
 		}
 		h, err := tx.InsertHold(ctx, Hold{
-			OrgID: orgID, Amount: p.Amount, Status: HoldHeld, RunID: p.RunID, QuoteID: p.QuoteID,
+			OrgID: orgID, Amount: amount, Sponsored: acct.TokenExempt, Status: HoldHeld, RunID: p.RunID, QuoteID: p.QuoteID,
 			Reference: p.Reference, CreatedAt: s.now(),
 		})
 		if err != nil {
 			return err
 		}
-		acct, err = tx.UpdateAccount(ctx, orgID, acct.Balance, acct.Held+p.Amount)
+		acct, err = tx.UpdateAccount(ctx, orgID, acct.Balance, acct.Held+amount)
 		if err != nil {
 			return err
 		}
 		_, err = tx.AppendLedger(ctx, LedgerEntry{
-			OrgID: orgID, Kind: LedgerHold, Amount: 0, HeldDelta: p.Amount,
+			OrgID: orgID, Kind: LedgerHold, Amount: 0, HeldDelta: amount,
 			BalanceAfter: acct.Balance, HeldAfter: acct.Held, HoldID: &h.ID, RunID: p.RunID, Reference: p.Reference, CreatedAt: s.now(),
 		})
 		if err != nil {

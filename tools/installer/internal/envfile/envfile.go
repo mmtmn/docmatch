@@ -40,14 +40,15 @@ const DockerHost = "host.docker.internal"
 
 // Settings are the non-secret values of the .env.
 type Settings struct {
-	Ports      ports.Set
-	Registry   string // DM_IMAGE_REGISTRY, e.g. ghcr.io/owner
-	Tag        string // DM_IMAGE_TAG
-	SourceDir  string // DM_SOURCE_DIR: repository root for local builds ("" = none)
-	Revision   string // DM_SOURCE_REVISION
-	LLMMode    string // off | local | openrouter
-	LocalLLM   string // DM_LOCAL_LLM_BASE_URL as the user typed it (localhost is rewritten)
-	OpenRouter string // OPENROUTER_API_KEY
+	Ports       ports.Set
+	Registry    string // DM_IMAGE_REGISTRY, e.g. ghcr.io/owner
+	Tag         string // DM_IMAGE_TAG
+	SourceDir   string // DM_SOURCE_DIR: repository root for local builds ("" = none)
+	Revision    string // DM_SOURCE_REVISION
+	LLMMode     string // off | local | openrouter
+	LocalLLM    string // DM_LOCAL_LLM_BASE_URL as the user typed it (localhost is rewritten)
+	ReviewModel string // model used by the evidence review stage
+	OpenRouter  string // OPENROUTER_API_KEY
 }
 
 // Values renders the settings as variables.
@@ -72,8 +73,11 @@ func (s Settings) Values() map[string]string {
 	switch mode {
 	case LLMLocal:
 		v["DM_LOCAL_LLM_BASE_URL"] = ContainerURL(s.LocalLLM)
+		v["DM_MODEL_EXTRACTION_LOCAL"] = s.ReviewModel
+		v["DM_MODEL_UI_PLANNER_LOCAL"] = s.ReviewModel
 	case LLMOpenRouter:
 		v["OPENROUTER_API_KEY"] = s.OpenRouter
+		v["DM_MODEL_EXTRACTION_PRIMARY"] = s.ReviewModel
 	}
 	return v
 }

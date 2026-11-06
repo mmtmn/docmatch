@@ -23,6 +23,7 @@ roles:
 
   extraction:
     primary: anthropic/claude-haiku-5.5
+    temperature_supported: false  # endpoints de Haiku 5.5 / GPT-6 não aceitam temperature
     fallback: openai/gpt-6-luna
     local: qwen3.6:35b
     structured_output: true

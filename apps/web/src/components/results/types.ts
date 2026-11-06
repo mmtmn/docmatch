@@ -35,6 +35,9 @@ export type Evidence = TableEvidence | MediaEvidence;
 
 export interface Finding {
   id: string;
+  severity?: string;
+  /** Source-backed balances, independent of the user's review verdict. */
+  documentRows?: import('../../lib/pipeline').ReconciledReceivable[];
   title: string;
   matchType: MatchType;
   amountAtRisk: number;
@@ -59,6 +62,7 @@ export interface CleanMatch {
 }
 
 export interface RunResults {
+  document?: import('../../lib/pipeline').ReconciliationDocument;
   runId: string;
   fileCount: number;
   findings: Finding[];

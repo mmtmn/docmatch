@@ -20,6 +20,8 @@ while IFS= read -r line || [[ -n "$line" ]]; do
   key="${line%%=*}"
   value="${line#*=}"
   [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+  # Explicit process settings win when the caller requests defaults from the file.
+  if [[ "${2:-}" == --defaults ]] && printenv "$key" >/dev/null; then continue; fi
   if [[ "$value" == \"*\" ]]; then
     value="${value#\"}"; value="${value%%\"*}"
   elif [[ "$value" == \'*\' ]]; then

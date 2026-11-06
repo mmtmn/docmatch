@@ -13,6 +13,7 @@ use tokio_stream::wrappers::{ReceiverStream, UnixListenerStream};
 use tonic::{Request, Response, Status};
 
 use crate::convert;
+use crate::model::{self, ModelRuntime};
 use crate::pb::harness_server::{Harness as HarnessApi, HarnessServer};
 use crate::pb::{self, run_event::Event};
 use crate::sources::materialize;
@@ -37,6 +38,8 @@ pub struct ServerConfig {
     pub workdir: PathBuf,
     /// Engine configuration.
     pub engine: EngineConfig,
+    /// Provider used for evidence-bound review when requested by the API.
+    pub models: ModelRuntime,
 }
 
 /// Configuration errors and server failures.
@@ -51,13 +54,21 @@ pub enum ServeError {
     /// The gRPC server failed.
     #[error("servidor gRPC: {0}")]
     Transport(String),
+    /// Model configuration is invalid; no silent fallback to deterministic mode.
+    #[error("configuração do modelo: {0}")]
+    Model(String),
 }
 
 impl ServerConfig {
     /// Reads `DM_HARNESS_SOCKET` (required) and `DM_MEDIA_LOCAL_DIR` (optional).
     pub fn from_env() -> Result<ServerConfig, ServeError> {
-        let socket = std::env::var("DM_HARNESS_SOCKET")
-            .ok()
+        Self::from_env_with_socket(None)
+    }
+
+    /// Command-line socket override; all other configuration still must be valid.
+    pub fn from_env_with_socket(socket: Option<String>) -> Result<ServerConfig, ServeError> {
+        let socket = socket
+            .or_else(|| std::env::var("DM_HARNESS_SOCKET").ok())
             .filter(|s| !s.trim().is_empty())
             .ok_or(ServeError::Missing("DM_HARNESS_SOCKET"))?;
         let local_root = std::env::var("DM_MEDIA_LOCAL_DIR")
@@ -69,6 +80,7 @@ impl ServerConfig {
             local_root,
             workdir: std::env::temp_dir().join("docmatch-harness"),
             engine: EngineConfig::default(),
+            models: ModelRuntime::from_env().map_err(|e| ServeError::Model(e.to_string()))?,
         })
     }
 }
@@ -99,6 +111,13 @@ impl Harness {
             }),
         }
     }
+
+    fn resolve_options(&self, options: &mut Option<pb::RunOptions>) {
+        let options = options.get_or_insert_with(pb::RunOptions::default);
+        if options.llm_mode == pb::LlmMode::Unspecified as i32 {
+            options.llm_mode = self.inner.cfg.models.mode() as i32;
+        }
+    }
 }
 
 fn now() -> Timestamp {
@@ -116,7 +135,7 @@ fn llm_enabled(options: Option<&pb::RunOptions>) -> bool {
 
 /// Tokens of model work forecast per source when models are enabled (the residual after the
 /// deterministic cascade; the API prices the quantity).
-const RESIDUAL_TOKENS_PER_SOURCE: f64 = 20_000.0;
+const REVIEW_TOKEN_FORECAST: f64 = model::FORECAST_TOKENS as f64;
 
 fn breakdown(req: &pb::EstimateRequest) -> pb::EstimateBreakdown {
     #[allow(clippy::cast_precision_loss)] // at most MAX_SOURCES
@@ -138,9 +157,9 @@ fn breakdown(req: &pb::EstimateRequest) -> pb::EstimateBreakdown {
     if llm_enabled(req.options.as_ref()) {
         items.push(pb::EstimateItem {
             item: pb::EstimateItemKind::LlmTokens as i32,
-            quantity: n * RESIDUAL_TOKENS_PER_SOURCE,
+            quantity: REVIEW_TOKEN_FORECAST,
             unit: pb::EstimateUnit::Tokens as i32,
-            note: "resíduo após a cascata determinística".to_string(),
+            note: "revisão por IA de até 24 achados, com evidências e próximos passos".to_string(),
             ..pb::EstimateItem::default()
         });
     }
@@ -273,6 +292,20 @@ async fn execute(inner: Arc<Inner>, req: pb::RunRequest, mut out: Emitter) {
 }
 
 async fn run_once(inner: &Inner, req: &pb::RunRequest, out: &mut Emitter, work: &Work) {
+    if llm_enabled(req.options.as_ref())
+        && req
+            .options
+            .as_ref()
+            .is_some_and(|o| o.llm_mode != inner.cfg.models.mode() as i32)
+    {
+        out.fail(
+            "model_unavailable",
+            "O provedor solicitado não corresponde à configuração do harness.".into(),
+            false,
+        )
+        .await;
+        return;
+    }
     let n = req.sources.len() as u64;
     if req.sources.is_empty() || req.sources.len() > MAX_SOURCES {
         out.fail(
@@ -346,7 +379,7 @@ async fn run_once(inner: &Inner, req: &pb::RunRequest, out: &mut Emitter, work: 
             run
         })
         .await;
-    let run = match run {
+    let mut run = match run {
         Ok(Ok(run)) => run,
         Ok(Err(e)) => {
             out.fail("run_source_unreadable", e.to_string(), false)
@@ -368,8 +401,55 @@ async fn run_once(inner: &Inner, req: &pb::RunRequest, out: &mut Emitter, work: 
         .into_iter()
         .map(|m| (m.file_name, m.source_id))
         .collect();
-    let findings = convert::findings(&run, &req.run_id, &index);
+    let mut findings = convert::findings(&run, &req.run_id, &index);
     let matches = convert::matches(&run, &req.run_id, &index);
+    if llm_enabled(req.options.as_ref()) && !findings.is_empty() {
+        let count = findings.len().min(model::MAX_FINDINGS);
+        if !out
+            .send(Event::StageStarted(pb::StageStarted {
+                stage: pb::Stage::Adjudicate as i32,
+                message: "Analisando os achados com IA e conferindo as referências".into(),
+                total_steps: count as u64,
+            }))
+            .await
+        {
+            return;
+        }
+        let rules = req.options.as_ref().map_or("", |o| o.rules_text.as_str());
+        for (i, batch) in findings[..count].chunks_mut(model::BATCH_SIZE).enumerate() {
+            // Drop the in-flight provider future when the worker disconnects.
+            let result = tokio::select! {
+                () = out.tx.closed() => return,
+                result = inner.cfg.models.review(batch, rules) => result,
+            };
+            if let Ok(meter) = result {
+                if !out
+                    .send(Event::TokenUsage(model::token_event(&meter)))
+                    .await
+                {
+                    return;
+                }
+            } else {
+                out.fail("model_unavailable", "A revisão por IA não pôde ser concluída. Confira o modelo configurado, o servidor local ou o acesso ao provedor e tente novamente.".into(), true).await;
+                return;
+            }
+            if !out
+                .send(Event::Progress(pb::Progress {
+                    stage: pb::Stage::Adjudicate as i32,
+                    done: ((i + 1) * model::BATCH_SIZE).min(count) as u64,
+                    total: count as u64,
+                    message: "Análise e próximos passos vinculados às evidências".into(),
+                    credits_spent: 0,
+                }))
+                .await
+            {
+                return;
+            }
+        }
+        if findings.len() > count {
+            run.dataset.warnings.push(format!("A revisão por IA cobriu os primeiros {count} achados; os demais mantêm a análise determinística."));
+        }
+    }
     for m in &matches {
         if !out.send(Event::Match(m.clone())).await {
             return;
@@ -395,7 +475,7 @@ async fn run_once(inner: &Inner, req: &pb::RunRequest, out: &mut Emitter, work: 
     let spent = quote.map_or(0, |q| q.expected_credits).min(budget);
     let _ = out
         .send(Event::Completed(pb::Completed {
-            summary: Some(convert::summary(&run, &findings, matches.len())),
+            summary: Some(convert::summary(&run, &findings, matches.len(), &index)),
             credits_spent: spent,
             credits_refunded: 0,
         }))
@@ -415,7 +495,8 @@ impl HarnessApi for Harness {
         &self,
         request: Request<pb::EstimateRequest>,
     ) -> Result<Response<pb::Quote>, Status> {
-        let req = request.into_inner();
+        let mut req = request.into_inner();
+        self.resolve_options(&mut req.options);
         if req.sources.len() > MAX_SOURCES {
             return Err(Status::invalid_argument(
                 "no máximo 100 fontes por execução",
@@ -435,7 +516,8 @@ impl HarnessApi for Harness {
         &self,
         request: Request<pb::RunRequest>,
     ) -> Result<Response<Self::RunStream>, Status> {
-        let req = request.into_inner();
+        let mut req = request.into_inner();
+        self.resolve_options(&mut req.options);
         if req.run_id.is_empty() {
             return Err(Status::invalid_argument("run_id obrigatório"));
         }
@@ -484,8 +566,8 @@ impl HarnessApi for Harness {
         Ok(Response::new(pb::HealthResponse {
             status: pb::ServingStatus::Serving as i32,
             version: env!("CARGO_PKG_VERSION").to_string(),
-            llm_mode: pb::LlmMode::Off as i32,
-            llm_reachable: false,
+            llm_mode: self.inner.cfg.models.mode() as i32,
+            llm_reachable: self.inner.cfg.models.reachable(),
             active_runs: self.inner.active.load(Ordering::SeqCst),
             started_at: Some(Timestamp::from(self.inner.started)),
         }))

@@ -1,0 +1,26 @@
+{
+  "website": {
+    "run_id": "run_01M6R0NP3FFFSRGQHYE2QR3KN1",
+    "score": "website-score.json",
+    "mp4_sha256": "03f15043962cfd10bd7cff684f530593922d9f632a0cc14a43218ed6ee586d97",
+    "gif_sha256": "041a45b9631364a9c3d665eb76c6b276a94e9f1934c14b0dec130147de55a42d",
+    "gif_speed": 3,
+    "scorecard_seconds": 4
+  },
+  "terminal": {
+    "run_id": "run_01M6QYB0AKEKBR2P7Y9MV13M2T",
+    "score": "terminal-score.json",
+    "mp4_sha256": "af7c6ab34ec9760ebb7ae165b989624f5feef3860ab349414d0e49e9add67a98",
+    "gif_sha256": "06410b801ba07c365005f0f415e0cc2a3c8f3dd3fdab7ac5220e87bc3cd7d9cc",
+    "gif_speed": 3,
+    "scorecard_seconds": 4
+  },
+  "android": {
+    "run_id": "run_01M6QZG8TKEQBTF1ZSNZHGRKHY",
+    "score": "android-score.json",
+    "mp4_sha256": "ea6c3ccc2a8bdce2563460feac1a59f7fe6f7cdf28946c93e7342cc3291ded65",
+    "gif_sha256": "8b23515136603e2a12a5483fba4d7e5bc12e5f8546652ee09d12a38e7504581c",
+    "gif_speed": 3,
+    "scorecard_seconds": 4
+  }
+}

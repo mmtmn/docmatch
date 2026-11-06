@@ -3,7 +3,7 @@ import { hasMessage, interpolate, t, tf, tl, type MessageKey } from './i18n';
 
 describe('i18n', () => {
   it('returns the pt-BR string for a key', () => {
-    expect(t('landing.title')).toBe('Concilie qualquer documento.');
+    expect(t('landing.title')).toBe('Seus documentos. Novas possibilidades.');
     expect(t('form.submit')).toBe('Conciliar');
   });
 

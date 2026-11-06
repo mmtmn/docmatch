@@ -13,7 +13,7 @@ import (
 )
 
 const getActiveSubscription = `-- name: GetActiveSubscription :one
-SELECT id, org_id, plan_code, stripe_customer_id, stripe_subscription_id, status, current_period_start, current_period_end, cancel_at, canceled_at, created_at, updated_at FROM subscriptions
+SELECT id, org_id, plan_code, stripe_customer_id, stripe_subscription_id, status, current_period_start, current_period_end, cancel_at, canceled_at, created_at, updated_at, livemode FROM subscriptions
 WHERE org_id = $1 AND status IN ('trialing', 'active', 'past_due')
 ORDER BY created_at DESC
 LIMIT 1
@@ -35,6 +35,7 @@ func (q *Queries) GetActiveSubscription(ctx context.Context, orgID uuid.UUID) (S
 		&i.CanceledAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Livemode,
 	)
 	return i, err
 }
@@ -152,7 +153,7 @@ ON CONFLICT (stripe_subscription_id) DO UPDATE SET
   current_period_end = EXCLUDED.current_period_end,
   cancel_at = EXCLUDED.cancel_at,
   canceled_at = EXCLUDED.canceled_at
-RETURNING id, org_id, plan_code, stripe_customer_id, stripe_subscription_id, status, current_period_start, current_period_end, cancel_at, canceled_at, created_at, updated_at
+RETURNING id, org_id, plan_code, stripe_customer_id, stripe_subscription_id, status, current_period_start, current_period_end, cancel_at, canceled_at, created_at, updated_at, livemode
 `
 
 type UpsertSubscriptionParams struct {
@@ -193,6 +194,7 @@ func (q *Queries) UpsertSubscription(ctx context.Context, arg UpsertSubscription
 		&i.CanceledAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Livemode,
 	)
 	return i, err
 }

@@ -378,7 +378,12 @@ pub fn matches(run: &Run, run_id: &str, index: &SourceIndex) -> Vec<pb::Match> {
 }
 
 /// Summary for the `completed` event.
-pub fn summary(run: &Run, findings: &[pb::Finding], matches_total: usize) -> pb::RunSummary {
+pub fn summary(
+    run: &Run,
+    findings: &[pb::Finding],
+    matches_total: usize,
+    index: &SourceIndex,
+) -> pb::RunSummary {
     let mut by_severity: BTreeMap<String, u32> = BTreeMap::new();
     for f in &run.result.findings {
         *by_severity.entry(f.severity.clone()).or_default() += 1;
@@ -411,6 +416,7 @@ pub fn summary(run: &Run, findings: &[pb::Finding], matches_total: usize) -> pb:
         new_tool_ids: Vec::new(),
         proposed_rule_ids: Vec::new(),
         source_warnings: run.dataset.warnings.clone(),
+        reconciliation: Some(crate::document::build(run, index)),
     }
 }
 

@@ -97,7 +97,8 @@ type Summary struct {
 	ProposedRuleIDs    []string       `json:"proposed_rule_ids,omitempty"`
 	// SourceWarnings says, in pt-BR and per file, what did not take part in
 	// the reconciliation (a scanned PDF, a ledger with no open titles...).
-	SourceWarnings []string `json:"source_warnings,omitempty"`
+	SourceWarnings []string                `json:"source_warnings,omitempty"`
+	Reconciliation *ReconciliationDocument `json:"reconciliation,omitempty"`
 }
 
 // RunError is openapi RunError.

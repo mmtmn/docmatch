@@ -1,0 +1,8 @@
+{
+  "name": "@docmatch/sdk", "version": "0.1.0", "description": "Cliente oficial da API docmatch", "license": "Apache-2.0",
+  "type": "module", "main": "./dist/cjs/index.js", "module": "./dist/esm/index.js", "types": "./dist/esm/index.d.ts",
+  "exports": { ".": { "import": { "types": "./dist/esm/index.d.ts", "default": "./dist/esm/index.js" }, "require": { "types": "./dist/cjs/index.d.ts", "default": "./dist/cjs/index.js" } } },
+  "files": ["dist", "LICENSE", "README.md"], "engines": { "node": ">=20" },
+  "scripts": { "build": "node build.mjs", "test": "node --test test/*.test.mjs", "prepack": "node build.mjs" },
+  "devDependencies": { "typescript": "5.9.3" }
+}

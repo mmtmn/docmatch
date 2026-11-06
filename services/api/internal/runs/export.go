@@ -1,6 +1,7 @@
 package runs
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -15,13 +16,10 @@ import (
 	"github.com/mmtmn/docmatch/services/api/internal/runs/apix"
 )
 
-// Export builds the XLSX or CSV of a completed run. PDF comes from the
-// harness report and is not generated here (export_format_unsupported).
+// Export builds a reconciled output document and its supporting findings.
 func (s *Service) Export(ctx context.Context, orgID, runID uuid.UUID, format string) (Export, error) {
 	switch format {
-	case export.FormatXLSX, export.FormatCSV:
-	case export.FormatPDF:
-		return Export{}, apix.Ef(contracts.ErrExportFormatUnsupported, "pdf é gerado pelo relatório do harness")
+	case export.FormatXLSX, export.FormatCSV, export.FormatPDF:
 	default:
 		return Export{}, apix.Ef(contracts.ErrExportFormatUnsupported, "formato %q", format)
 	}
@@ -37,8 +35,16 @@ func (s *Service) Export(ctx context.Context, orgID, runID uuid.UUID, format str
 		return Export{}, fmt.Errorf("runs: achados: %w", err)
 	}
 	name := "docmatch-" + r.PublicID()
+	var doc *ReconciliationDocument
+	if r.Summary != nil {
+		doc = r.Summary.Reconciliation
+	}
 	if format == export.FormatCSV {
 		table := findingsTable(findings)
+		if doc != nil && len(doc.Receivables) > 0 {
+			table = documentTables(doc)[1]
+			name += "-carteira-conciliada"
+		}
 		return Export{ContentType: export.ContentTypeCSV, FileName: name + ".csv", Write: func(w io.Writer) error { return export.WriteCSV(w, table) }}, nil
 	}
 	matches, err := s.d.Store.ListAllMatches(ctx, orgID, runID)
@@ -46,6 +52,25 @@ func (s *Service) Export(ctx context.Context, orgID, runID uuid.UUID, format str
 		return Export{}, fmt.Errorf("runs: casamentos: %w", err)
 	}
 	tables := []export.Table{findingsTable(findings), matchesTable(matches), evidenceTable(findings, matches)}
+	if doc != nil {
+		tables = append(documentTables(doc), tables...)
+		name += "-conciliacao"
+	}
+	if format == export.FormatPDF {
+		sourceNames := map[string]string{}
+		for _, id := range r.SourceIDs() {
+			if source, err := s.d.Uploads.Get(ctx, orgID, id); err == nil {
+				sourceNames[source.PublicID()] = source.FileName
+			}
+		}
+		report := reconciliationReport(r, doc, findings, sourceNames)
+		var buf bytes.Buffer
+		if err := export.WritePDF(&buf, report); err != nil {
+			return Export{}, fmt.Errorf("runs: gerar PDF: %w", err)
+		}
+		data := buf.Bytes()
+		return Export{ContentType: export.ContentTypePDF, FileName: name + ".pdf", Write: func(w io.Writer) error { _, err := w.Write(data); return err }}, nil
+	}
 	return Export{ContentType: export.ContentTypeXLSX, FileName: name + ".xlsx", Write: func(w io.Writer) error { return export.WriteXLSX(w, tables) }}, nil
 }
 
@@ -63,7 +88,7 @@ func Money(centavos int64) string {
 }
 
 func findingsTable(findings []Finding) export.Table {
-	t := export.Table{Name: "Achados", Header: []string{"id", "codigo", "tipo", "severidade", "valor_em_risco", "moeda", "titulo", "explicacao", "confianca", "rotulo", "status", "fontes", "evidencias", "criado_em"}}
+	t := export.Table{Name: "Achados", Header: []string{"id", "codigo", "tipo", "severidade", "valor_em_risco", "moeda", "titulo", "explicacao", "confianca", "rotulo", "status", "fontes", "evidencias", "criado_em"}, Types: []export.CellType{export.Text, export.Text, export.Text, export.Text, export.Currency}, Widths: []float64{30, 30, 20, 18, 22, 12, 55, 100, 14, 20, 20, 35, 65, 26}}
 	for _, f := range findings {
 		v := f.View()
 		t.Rows = append(t.Rows, []string{

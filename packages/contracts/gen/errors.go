@@ -26,6 +26,7 @@ const (
 
 // Error codes (errors.yaml, version 1).
 const (
+	ErrDisposableEmail                ErrorCode = "disposable_email"
 	ErrUnauthenticated                ErrorCode = "unauthenticated"
 	ErrSessionExpired                 ErrorCode = "session_expired"
 	ErrInvalidAPIKey                  ErrorCode = "invalid_api_key"
@@ -141,6 +142,7 @@ type ErrorSpec struct {
 
 // ErrorCodes lists every code in catalog order.
 var ErrorCodes = []ErrorCode{
+	ErrDisposableEmail,
 	ErrUnauthenticated,
 	ErrSessionExpired,
 	ErrInvalidAPIKey,
@@ -245,6 +247,7 @@ var ErrorCodes = []ErrorCode{
 
 // ErrorSpecs maps every code to its spec.
 var ErrorSpecs = map[ErrorCode]ErrorSpec{
+	ErrDisposableEmail:                {Code: ErrDisposableEmail, Status: 422, Category: ErrorCategoryAuth, Message: "Use um e-mail permanente. Endereços temporários não são aceitos para criar uma conta.", Retryable: false},
 	ErrUnauthenticated:                {Code: ErrUnauthenticated, Status: 401, Category: ErrorCategoryAuth, Message: "Faça login para continuar.", Retryable: false},
 	ErrSessionExpired:                 {Code: ErrSessionExpired, Status: 401, Category: ErrorCategoryAuth, Message: "Sua sessão expirou. Entre de novo.", Retryable: false},
 	ErrInvalidAPIKey:                  {Code: ErrInvalidAPIKey, Status: 401, Category: ErrorCategoryAuth, Message: "Chave de API inválida ou revogada.", Retryable: false},

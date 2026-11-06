@@ -62,7 +62,57 @@ export interface RunOptionsInput {
   ruleIds: string[];
 }
 
+/** All amounts in this source-backed snapshot are integer centavos. */
+export interface ReconciliationDocument {
+  version: number;
+  title: string;
+  currency: string;
+  period_start: string;
+  period_end: string;
+  receivables: ReconciledReceivable[];
+  bank_entries: {
+    row: number;
+    date: string;
+    description: string;
+    amount: number;
+    kind: string;
+    proposed: boolean;
+    matched_ids: string[];
+  }[];
+  totals: {
+    original_amount: number;
+    duplicate_excluded: number;
+    received_confirmed: number;
+    principal_confirmed: number;
+    open_balance: number;
+    proposed_amount: number;
+    projected_open_balance: number;
+    unapplied_cash: number;
+    bank_fees: number;
+    fines_received: number;
+    withholding_pending: number;
+  };
+}
+export interface ReconciledReceivable {
+  id: string;
+  reference: string;
+  customer: string;
+  source_id: string;
+  source_name: string;
+  source_row: number;
+  due_date: string;
+  paid_on: string;
+  original_amount: number;
+  received_amount: number;
+  applied_principal: number;
+  open_amount: number;
+  proposed_amount: number;
+  status: string;
+  duplicate_of: string;
+}
+
 export interface RunSummary {
+  reconciliation?: ReconciliationDocument;
   findings_total: number;
   amount_at_risk: number;
   lines_total: number;
@@ -100,6 +150,7 @@ export interface FindingView {
   confidence_label: string;
   evidence: EvidenceItem[];
   status: string;
+  feedback?: { note?: string };
 }
 
 const SCAN_POLL_MS = 1000;
@@ -271,6 +322,22 @@ export function sendFeedback(
 
 export function exportUrl(runId: string, format: 'csv' | 'xlsx' | 'pdf'): string | undefined {
   return apiUrl(`/v1/runs/${encodeURIComponent(runId)}/export?format=${format}`);
+}
+
+/** Download through the authenticated client, retaining session refresh and API errors. */
+export async function downloadExport(runId: string, format: 'csv' | 'xlsx' | 'pdf'): Promise<void> {
+  const blob = await api<Blob>(`/v1/runs/${encodeURIComponent(runId)}/export?format=${format}`, {
+    responseType: 'blob',
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `docmatch-${runId}.${format}`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  // Give the browser time to consume the download before releasing its backing bytes.
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 export interface RunEvent {

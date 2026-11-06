@@ -37,6 +37,28 @@ func TestRemotes(t *testing.T) {
 	}
 }
 
+func TestModelEnvCarriesWizardChoicesWithoutDuplicateSettings(t *testing.T) {
+	values := func(items []string) map[string]string {
+		out := map[string]string{}
+		for _, item := range items {
+			key, value, _ := strings.Cut(item, "=")
+			if _, exists := out[key]; exists {
+				t.Fatalf("duplicate setting %s", key)
+			}
+			out[key] = value
+		}
+		return out
+	}
+	local := values(ModelEnv([]string{"PATH=/bin", "DM_LOCAL_LLM_MODE=off", "DM_MODEL_EXTRACTION_LOCAL=old"}, Options{LLMMode: "local", LocalLLM: "http://localhost:11434/v1", ReviewModel: "installed:model"}))
+	if local["DM_LOCAL_LLM_MODE"] != "local" || local["DM_MODEL_EXTRACTION_LOCAL"] != "installed:model" || local["DM_LOCAL_LLM_BASE_URL"] != "http://localhost:11434/v1" || local["DM_LOCAL_LLM_REASONING_EFFORT"] != "none" {
+		t.Fatal("local wizard settings did not reach make local")
+	}
+	remote := values(ModelEnv([]string{"OPENROUTER_API_KEY=old"}, Options{LLMMode: "openrouter", OpenRouter: "test-only-key", ReviewModel: "provider/model"}))
+	if remote["OPENROUTER_API_KEY"] != "test-only-key" || remote["DM_MODEL_EXTRACTION_PRIMARY"] != "provider/model" {
+		t.Fatal("remote settings lost")
+	}
+}
+
 func TestServiceOf(t *testing.T) {
 	for _, c := range [][3]string{
 		{"docmatch-local", "docmatch-local-api-1", "api"},

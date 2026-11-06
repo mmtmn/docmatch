@@ -77,6 +77,8 @@ class SessionViewModel(private val dm: Docmatch, private val cleanup: () -> Unit
         (state.value as? SessionState.SignedOut)?.let { _state.value = it.copy(challengeId = null, error = null) }
     }
 
+    fun passwordLogin(email: String, password: String) = signingIn(keepEmail = email) { dm.api.passwordLogin(email.trim(), password).let { null } }
+
     fun devLogin() = signingIn { dm.api.devLogin().let { null } }
 
     fun googleIdToken(token: String) = signingIn { dm.api.googleNative(token).let { null } }

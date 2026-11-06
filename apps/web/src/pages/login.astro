@@ -6,7 +6,7 @@ import Base from '../layouts/Base.astro';
 import { t } from '../lib/i18n';
 ---
 
-<Base title={t('auth.login_title')} hideHeader noindex>
+<Base title={t('auth.login_title')} hideHeader hideFooter noindex>
   <Header variant="app" />
   <main id="conteudo" class="container login">
     <LoginPage client:only="react" />
@@ -15,7 +15,13 @@ import { t } from '../lib/i18n';
 
 <style>
   .login {
-    max-width: 28rem;
-    padding-block: var(--space-5);
+    display: grid;
+    place-items: center;
+    min-height: calc(100svh - 3.25rem);
+    padding-block: clamp(2rem, 7vh, 5rem);
+  }
+
+  .login :global(astro-island) {
+    width: 100%;
   }
 </style>

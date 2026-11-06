@@ -3,7 +3,8 @@
 #
 # tokens = ceil( (C_modelo * (1 + fee_openrouter) + C_computo) / ((1 - margem/(1-imposto) - pagamento - infra) * token_usd) )
 
-token_usd: 0.01
+token_usd: 0.01 # referência interna para estimar custos dos modelos em USD
+token_brl: 0.05 # preço de venda, sem conversão de câmbio no checkout
 
 rates:
   target_margin: 0.30        # margem após tudo
@@ -24,7 +25,7 @@ lanes:                       # multiplicador sobre o custo em tokens de uma exec
 
 plans:
   starter:
-    price_usd: 20
+    price_brl: 100
     tokens: 2000
     document_files_per_run: 10
     document_file_mb: 25
@@ -40,7 +41,7 @@ plans:
     escalation_model: false
     retention_days: 30
   pro:
-    price_usd: 100
+    price_brl: 500
     tokens: 10000
     document_files_per_run: 30
     document_file_mb: 25
@@ -56,7 +57,7 @@ plans:
     escalation_model: false
     retention_days: 30
   business:
-    price_usd: 200
+    price_brl: 1000
     tokens: 20000
     document_files_per_run: 100
     document_file_mb: 50

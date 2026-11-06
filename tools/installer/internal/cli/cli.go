@@ -69,7 +69,7 @@ func Main(args []string, b Build) int {
 }
 
 var commands = map[string]bool{
-	"install": true, "up": true, "down": true, "status": true, "logs": true, "doctor": true, "demo": true,
+	"workspace": true, "install": true, "up": true, "down": true, "status": true, "logs": true, "doctor": true, "demo": true,
 	"update": true, "uninstall": true, "version": true, "help": true,
 }
 
@@ -119,6 +119,8 @@ func run(ctx context.Context, w world, args []string, b Build) int {
 		code, err = runLogs(ctx, w, args, b)
 	case "doctor":
 		code, err = runDoctor(ctx, w, args, b)
+	case "workspace":
+		code, err = runWorkspace(ctx, w, args, b)
 	case "demo":
 		code, err = runDemo(ctx, w, args, b)
 	case "update":

@@ -143,6 +143,7 @@ type Tenant struct {
 
 // CreditSummary mirrors the CreditSummary schema.
 type CreditSummary struct {
+	TokenExempt     bool       `json:"token_exempt,omitempty"`
 	Balance         int64      `json:"balance"`
 	Reserved        int64      `json:"reserved"`
 	Available       int64      `json:"available"`

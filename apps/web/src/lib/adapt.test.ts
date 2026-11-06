@@ -46,6 +46,7 @@ describe('toResults', () => {
     const f = r.findings[0];
     expect(f?.amountAtRisk).toBe(49_000);
     expect(f?.confidence).toBe('high');
+    expect(f?.severity).toBe('high');
     expect(f?.matchType).toBe('amount');
     expect(f?.left).toMatchObject({ kind: 'table', sourceName: 'extrato.csv' });
     expect(f?.right).toMatchObject({ kind: 'table', sourceName: 'titulos.csv' });

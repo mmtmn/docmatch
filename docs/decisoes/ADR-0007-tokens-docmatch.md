@@ -91,3 +91,10 @@ antes do imposto = 1,07 − 0,1883 − 0,4731 = 0,4086; imposto 21% = 0,0858; l�
   para a mudança não exigir implantação.
 - Tudo que toca o ledger exige `Idempotency-Key`, cobertura de 95% e testes de mutação
   ([ADR-0002](ADR-0002-monolito-modular-go.md)).
+
+## Atualização: catálogo em reais
+
+A venda passou a usar `price_brl` (R$ 100/500/1.000) e `token_brl` (R$ 0,05), preservando
+2.000/10.000/20.000 tokens e os códigos de plano. O preço USD acima registra a decisão
+original; `token_usd` permanece apenas como referência do cálculo de custo. Não há conversão
+automática no Checkout. Procedimento e limites em [cobrança](../runbooks/stripe-billing.md).

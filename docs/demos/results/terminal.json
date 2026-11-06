@@ -1,0 +1,2530 @@
+{
+  "run": {
+    "id": "run_01M6QYB0AKEKBR2P7Y9MV13M2T",
+    "status": "completed",
+    "workflow_id": null,
+    "lane": "app",
+    "sources": [
+      {
+        "id": "upl_01M6QYATA0EJB9QZ304AEP6WYG",
+        "kind": "document",
+        "file_name": "01_contas_a_receber_protheus_jul2026.csv",
+        "size_bytes": 1603,
+        "mime": "text/csv",
+        "sha256": "cbe7bdb11774d1eef2efe57acfa8fca7a96c3cf45e5b56edae6cb4c640ee9071",
+        "status": "ready",
+        "created_at": "2026-11-06T08:06:49Z",
+        "expires_at": "2026-12-06T08:06:49Z"
+      },
+      {
+        "id": "upl_01M6QYAVBDF87BH15JNKP0BM59",
+        "kind": "document",
+        "file_name": "02_titulos_unidade_norte_omie_jul2026.csv",
+        "size_bytes": 415,
+        "mime": "text/csv",
+        "sha256": "7531b1869bd1f069477c200701143ac99b539de4316d093e9901d05bf1373de5",
+        "status": "ready",
+        "created_at": "2026-11-06T08:06:50Z",
+        "expires_at": "2026-12-06T08:06:50Z"
+      },
+      {
+        "id": "upl_01M6QYAWB0E5M8376P5B5RHT4V",
+        "kind": "document",
+        "file_name": "03_extrato_bancario_jul2026.csv",
+        "size_bytes": 1046,
+        "mime": "text/csv",
+        "sha256": "5c299a648be6551181aee54a9f92de998e7f5fcaaa015e4736409dab51a0a5eb",
+        "status": "ready",
+        "created_at": "2026-11-06T08:06:52Z",
+        "expires_at": "2026-12-06T08:06:52Z"
+      },
+      {
+        "id": "upl_01M6QYAXAJEQSS6YDPRAW9JCT8",
+        "kind": "document",
+        "file_name": "04_caixa_de_entrada_contas_a_pagar.txt",
+        "size_bytes": 2374,
+        "mime": "text/plain",
+        "sha256": "bfe39daa55a422183d6b4a345e68786e37ba4f54be2188ba365f4de0bc87f7e9",
+        "status": "ready",
+        "created_at": "2026-11-06T08:06:53Z",
+        "expires_at": "2026-12-06T08:06:53Z"
+      }
+    ],
+    "quote": {
+      "id": "qte_01M6QYAYA3EATR9ZQYFTBCAYR2",
+      "expected_credits": 643,
+      "cap_credits": 804,
+      "breakdown": {
+        "lane": "app",
+        "lane_multiplier": 1,
+        "items": [
+          {
+            "item": "llm_tokens",
+            "quantity": 100000,
+            "unit": "tokens",
+            "credits": 642,
+            "note": "revisão por IA de até 24 achados, com evidências e próximos passos"
+          },
+          {
+            "item": "scan_files",
+            "quantity": 4,
+            "unit": "files",
+            "credits": 1
+          },
+          {
+            "item": "documents",
+            "quantity": 4,
+            "unit": "files",
+            "credits": 0
+          }
+        ],
+        "subtotal_credits": 643,
+        "minimum_credits": 10,
+        "total_credits": 643,
+        "pricing_version": "pricing-8288d006da162132",
+        "calibration": {
+          "sample_runs": 18,
+          "p99_overrun": 1.25
+        }
+      },
+      "expires_at": "2026-11-06T08:21:54Z",
+      "signature": "v1=838a979b20c15b8f7263f9039909edf5455659fc3e5711741e9f43cf655edea2",
+      "fingerprint": "1a64e650e0ef0dc59b43bf722b37f638131c55f33b48e7e09d8356bee4f12713",
+      "requires_approval": false,
+      "large": false,
+      "created_at": "2026-11-06T08:06:54Z"
+    },
+    "credits": {
+      "reserved": 804,
+      "spent": 643,
+      "refunded": 161
+    },
+    "progress": {
+      "stage": "report",
+      "percent": 100,
+      "message": "Concluída"
+    },
+    "summary": {
+      "findings_total": 23,
+      "findings_by_severity": {
+        "critical": 1,
+        "high": 6,
+        "info": 4,
+        "low": 6,
+        "medium": 6
+      },
+      "amount_at_risk": 18336889,
+      "currency": "BRL",
+      "matches_total": 15,
+      "lines_total": 18,
+      "lines_matched": 17,
+      "reconciliation": {
+        "version": 1,
+        "title": "Conciliação de recebíveis",
+        "currency": "BRL",
+        "period_start": "2026-07-01",
+        "period_end": "2026-07-31",
+        "receivables": [
+          {
+            "id": "P01",
+            "source_id": "upl_01M6QYATA0EJB9QZ304AEP6WYG",
+            "source_name": "01_contas_a_receber_protheus_jul2026.csv",
+            "source_row": 1,
+            "reference": "NF 200311",
+            "customer": "Pao & Arte Panificadora Ltda",
+            "tax_id": "21456789000123",
+            "due_date": "2026-07-10",
+            "paid_on": "2026-07-10",
+            "original_amount": 2430000,
+            "received_amount": 2430000,
+            "applied_principal": 2430000,
+            "open_amount": 0,
+            "proposed_amount": 0,
+            "fine_received": 0,
+            "withholding_pending": 0,
+            "status": "paid",
+            "duplicate_of": "",
+            "bank_rows": [
+              1
+            ],
+            "flags": []
+          },
+          {
+            "id": "P02",
+            "source_id": "upl_01M6QYATA0EJB9QZ304AEP6WYG",
+            "source_name": "01_contas_a_receber_protheus_jul2026.csv",
+            "source_row": 2,
+            "reference": "NF 200312",
+            "customer": "Pao & Arte Panificadora Ltda",
+            "tax_id": "21456789000123",
+            "due_date": "2026-07-10",
+            "paid_on": "2026-07-10",
+            "original_amount": 270000,
+            "received_amount": 270000,
+            "applied_principal": 270000,
+            "open_amount": 0,
+            "proposed_amount": 0,
+            "fine_received": 0,
+            "withholding_pending": 0,
+            "status": "paid",
+            "duplicate_of": "",
+            "bank_rows": [
+              2
+            ],
+            "flags": []
+          },
+          {
+            "id": "P03",
+            "source_id": "upl_01M6QYATA0EJB9QZ304AEP6WYG",
+            "source_name": "01_contas_a_receber_protheus_jul2026.csv",
+            "source_row": 3,
+            "reference": "NF 200320",
+            "customer": "Confeitaria Lua Cheia Comercio de Alimentos",
+            "tax_id": "34567890000145",
+            "due_date": "2026-07-12",
+            "paid_on": "2026-07-14",
+            "original_amount": 3864050,
+            "received_amount": 3864050,
+            "applied_principal": 3864050,
+            "open_amount": 0,
+            "proposed_amount": 0,
+            "fine_received": 0,
+            "withholding_pending": 0,
+            "status": "paid",
+            "duplicate_of": "",
+            "bank_rows": [
+              4
+            ],
+            "flags": [
+              "late"
+            ]
+          },
+          {
+            "id": "P04",
+            "source_id": "upl_01M6QYATA0EJB9QZ304AEP6WYG",
+            "source_name": "01_contas_a_receber_protheus_jul2026.csv",
+            "source_row": 4,
+            "reference": "NF 200328",
+            "customer": "Forno da Serra Franqueado ME",
+            "tax_id": "56789012000167",
+            "due_date": "2026-07-13",
+            "paid_on": "2026-07-13",
+            "original_amount": 845000,
+            "received_amount": 845000,
+            "applied_principal": 845000,
+            "open_amount": 0,
+            "proposed_amount": 0,
+            "fine_received": 0,
+            "withholding_pending": 0,
+            "status": "paid",
+            "duplicate_of": "",
+            "bank_rows": [
+              3
+            ],
+            "flags": []
+          },
+          {
+            "id": "P05",
+            "source_id": "upl_01M6QYATA0EJB9QZ304AEP6WYG",
+            "source_name": "01_contas_a_receber_protheus_jul2026.csv",
+            "source_row": 5,
+            "reference": "NF 200335",
+            "customer": "Rede Trigo Dourado Ltda",
+            "tax_id": "67890123000189",
+            "due_date": "2026-07-15",
+            "paid_on": "2026-07-15",
+            "original_amount": 7190000,
+            "received_amount": 7190000,
+            "applied_principal": 7190000,
+            "open_amount": 0,
+            "proposed_amount": 0,
+            "fine_received": 0,
+            "withholding_pending": 0,
+            "status": "paid",
+            "duplicate_of": "",
+            "bank_rows": [
+              5
+            ],
+            "flags": []
+          },
+          {
+            "id": "P06",
+            "source_id": "upl_01M6QYATA0EJB9QZ304AEP6WYG",
+            "source_name": "01_contas_a_receber_protheus_jul2026.csv",
+            "source_row": 6,
+            "reference": "NF 200336",
+            "customer": "Rede Trigo Dourado Ltda",
+            "tax_id": "67890123000189",
+            "due_date": "2026-07-15",
+            "paid_on": "2026-07-24",
+            "original_amount": 630000,
+            "received_amount": 630000,
+            "applied_principal": 630000,
+            "open_amount": 0,
+            "proposed_amount": 0,
+            "fine_received": 0,
+            "withholding_pending": 0,
+            "status": "paid",
+            "duplicate_of": "",
+            "bank_rows": [
+              13
+            ],
+            "flags": [
+              "late"
+            ]
+          },
+          {
+            "id": "P07",
+            "source_id": "upl_01M6QYATA0EJB9QZ304AEP6WYG",
+            "source_name": "01_contas_a_receber_protheus_jul2026.csv",
+            "source_row": 7,
+            "reference": "NF 200340",
+            "customer": "Mercearia Colina Verde Alimentos SA",
+            "tax_id": "78901234000101",
+            "due_date": "2026-07-16",
+            "paid_on": "2026-07-16",
+            "original_amount": 9800000,
+            "received_amount": 4900000,
+            "applied_principal": 4900000,
+            "open_amount": 4900000,
+            "proposed_amount": 0,
+            "fine_received": 0,
+            "withholding_pending": 0,
+            "status": "partial",
+            "duplicate_of": "",
+            "bank_rows": [
+              7
+            ],
+            "flags": [
+              "overdue"
+            ]
+          },
+          {
+            "id": "P08",
+            "source_id": "upl_01M6QYATA0EJB9QZ304AEP6WYG",
+            "source_name": "01_contas_a_receber_protheus_jul2026.csv",
+            "source_row": 8,
+            "reference": "NF 200351",
+            "customer": "Sabor da Roca Franquias Ltda",
+            "tax_id": "89012345000112",
+            "due_date": "2026-07-17",
+            "paid_on": "2026-07-17",
+            "original_amount": 1240000,
+            "received_amount": 1178000,
+            "applied_principal": 1178000,
+            "open_amount": 62000,
+            "proposed_amount": 0,
+            "fine_received": 0,
+            "withholding_pending": 62000,
+            "status": "withholding",
+            "duplicate_of": "",
+            "bank_rows": [
+              8
+            ],
+            "flags": [
+              "withholding_pending"
+            ]
+          },
+          {
+            "id": "P09",
+            "source_id": "upl_01M6QYATA0EJB9QZ304AEP6WYG",
+            "source_name": "01_contas_a_receber_protheus_jul2026.csv",
+            "source_row": 9,
+            "reference": "NF 200360",
+            "customer": "Moinho Azul Comercio Ltda",
+            "tax_id": "90123456000134",
+            "due_date": "2026-07-20",
+            "paid_on": "2026-07-21",
+            "original_amount": 2785000,
+            "received_amount": 2785000,
+            "applied_principal": 2785000,
+            "open_amount": 0,
+            "proposed_amount": 0,
+            "fine_received": 0,
+            "withholding_pending": 0,
+            "status": "paid",
+            "duplicate_of": "",
+            "bank_rows": [
+              10
+            ],
+            "flags": [
+              "late"
+            ]
+          },
+          {
+            "id": "P10",
+            "source_id": "upl_01M6QYATA0EJB9QZ304AEP6WYG",
+            "source_name": "01_contas_a_receber_protheus_jul2026.csv",
+            "source_row": 10,
+            "reference": "NF 200372",
+            "customer": "Confeitaria Lua Cheia Comercio de Alimentos",
+            "tax_id": "34567890000145",
+            "due_date": "2026-07-20",
+            "paid_on": "2026-07-14",
+            "original_amount": 512000,
+            "received_amount": 512000,
+            "applied_principal": 512000,
+            "open_amount": 0,
+            "proposed_amount": 0,
+            "fine_received": 0,
+            "withholding_pending": 0,
+            "status": "paid",
+            "duplicate_of": "",
+            "bank_rows": [
+              4
+            ],
+            "flags": [
+              "early"
+            ]
+          },
+          {
+            "id": "P11",
+            "source_id": "upl_01M6QYATA0EJB9QZ304AEP6WYG",
+            "source_name": "01_contas_a_receber_protheus_jul2026.csv",
+            "source_row": 11,
+            "reference": "NF 200377",
+            "customer": "Trigo Express Delivery ME",
+            "tax_id": "13579246000156",
+            "due_date": "2026-07-21",
+            "paid_on": "2026-07-22",
+            "original_amount": 621000,
+            "received_amount": 621000,
+            "applied_principal": 621000,
+            "open_amount": 0,
+            "proposed_amount": 0,
+            "fine_received": 0,
+            "withholding_pending": 0,
+            "status": "paid",
+            "duplicate_of": "",
+            "bank_rows": [
+              11
+            ],
+            "flags": [
+              "late"
+            ]
+          },
+          {
+            "id": "P12",
+            "source_id": "upl_01M6QYATA0EJB9QZ304AEP6WYG",
+            "source_name": "01_contas_a_receber_protheus_jul2026.csv",
+            "source_row": 12,
+            "reference": "NF 200383",
+            "customer": "Padaria Beira Rio Ltda",
+            "tax_id": "24680135000178",
+            "due_date": "2026-07-22",
+            "paid_on": "2026-07-23",
+            "original_amount": 1950000,
+            "received_amount": 1989000,
+            "applied_principal": 1950000,
+            "open_amount": 0,
+            "proposed_amount": 0,
+            "fine_received": 39000,
+            "withholding_pending": 0,
+            "status": "paid",
+            "duplicate_of": "",
+            "bank_rows": [
+              12
+            ],
+            "flags": [
+              "late",
+              "fine_received"
+            ]
+          },
+          {
+            "id": "O01",
+            "source_id": "upl_01M6QYAVBDF87BH15JNKP0BM59",
+            "source_name": "02_titulos_unidade_norte_omie_jul2026.csv",
+            "source_row": 1,
+            "reference": "FAT-2026-0411",
+            "customer": "MOINHO AZUL COM LTDA",
+            "tax_id": "90123456000134",
+            "due_date": "2026-07-20",
+            "paid_on": "",
+            "original_amount": 2785000,
+            "received_amount": 0,
+            "applied_principal": 0,
+            "open_amount": 0,
+            "proposed_amount": 0,
+            "fine_received": 0,
+            "withholding_pending": 0,
+            "status": "duplicate",
+            "duplicate_of": "P09",
+            "bank_rows": [],
+            "flags": []
+          },
+          {
+            "id": "O02",
+            "source_id": "upl_01M6QYAVBDF87BH15JNKP0BM59",
+            "source_name": "02_titulos_unidade_norte_omie_jul2026.csv",
+            "source_row": 2,
+            "reference": "FAT-2026-0412",
+            "customer": "NORTE PAES EIRELI",
+            "tax_id": "35791357000190",
+            "due_date": "2026-07-14",
+            "paid_on": "2026-07-27",
+            "original_amount": 1045000,
+            "received_amount": 1045000,
+            "applied_principal": 1045000,
+            "open_amount": 0,
+            "proposed_amount": 0,
+            "fine_received": 0,
+            "withholding_pending": 0,
+            "status": "paid",
+            "duplicate_of": "",
+            "bank_rows": [
+              14
+            ],
+            "flags": [
+              "late",
+              "intercompany"
+            ]
+          },
+          {
+            "id": "O03",
+            "source_id": "upl_01M6QYAVBDF87BH15JNKP0BM59",
+            "source_name": "02_titulos_unidade_norte_omie_jul2026.csv",
+            "source_row": 3,
+            "reference": "FAT-2026-0415",
+            "customer": "COLINA VERDE MERCEARIA S/A",
+            "tax_id": "78901234000101",
+            "due_date": "2026-07-16",
+            "paid_on": "2026-07-29",
+            "original_amount": 290000,
+            "received_amount": 290000,
+            "applied_principal": 290000,
+            "open_amount": 0,
+            "proposed_amount": 0,
+            "fine_received": 0,
+            "withholding_pending": 0,
+            "status": "paid",
+            "duplicate_of": "",
+            "bank_rows": [
+              16
+            ],
+            "flags": [
+              "late",
+              "intercompany"
+            ]
+          },
+          {
+            "id": "O04",
+            "source_id": "upl_01M6QYAVBDF87BH15JNKP0BM59",
+            "source_name": "02_titulos_unidade_norte_omie_jul2026.csv",
+            "source_row": 4,
+            "reference": "FAT-2026-0420",
+            "customer": "GRAOS DO NORTE LTDA",
+            "tax_id": "46802468000112",
+            "due_date": "2026-07-24",
+            "paid_on": "",
+            "original_amount": 438000,
+            "received_amount": 0,
+            "applied_principal": 0,
+            "open_amount": 438000,
+            "proposed_amount": 438000,
+            "fine_received": 0,
+            "withholding_pending": 0,
+            "status": "review",
+            "duplicate_of": "",
+            "bank_rows": [
+              15
+            ],
+            "flags": [
+              "late",
+              "proposed",
+              "intercompany"
+            ]
+          },
+          {
+            "id": "O05",
+            "source_id": "upl_01M6QYAVBDF87BH15JNKP0BM59",
+            "source_name": "02_titulos_unidade_norte_omie_jul2026.csv",
+            "source_row": 5,
+            "reference": "FAT-2026-0421",
+            "customer": "NORTE PAES EIRELI",
+            "tax_id": "35791357000190",
+            "due_date": "2026-07-28",
+            "paid_on": "",
+            "original_amount": 765000,
+            "received_amount": 0,
+            "applied_principal": 0,
+            "open_amount": 765000,
+            "proposed_amount": 0,
+            "fine_received": 0,
+            "withholding_pending": 0,
+            "status": "open",
+            "duplicate_of": "",
+            "bank_rows": [],
+            "flags": [
+              "overdue"
+            ]
+          }
+        ],
+        "bank_entries": [
+          {
+            "row": 1,
+            "date": "2026-07-10",
+            "description": "LIQUIDACAO COBRANCA SIMPLES",
+            "amount": 2430000,
+            "kind": "receipt",
+            "proposed": false,
+            "matched_ids": [
+              "P01"
+            ],
+            "rule": "nosso_numero_exact",
+            "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V",
+            "source_name": "03_extrato_bancario_jul2026.csv"
+          },
+          {
+            "row": 2,
+            "date": "2026-07-10",
+            "description": "PIX RECEBIDO PAO E ARTE PANIFICAD",
+            "amount": 270000,
+            "kind": "receipt",
+            "proposed": false,
+            "matched_ids": [
+              "P02"
+            ],
+            "rule": "name_amount_due",
+            "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V",
+            "source_name": "03_extrato_bancario_jul2026.csv"
+          },
+          {
+            "row": 3,
+            "date": "2026-07-13",
+            "description": "LIQUIDACAO COBRANCA SIMPLES",
+            "amount": 845000,
+            "kind": "receipt",
+            "proposed": false,
+            "matched_ids": [
+              "P04"
+            ],
+            "rule": "nosso_numero_exact",
+            "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V",
+            "source_name": "03_extrato_bancario_jul2026.csv"
+          },
+          {
+            "row": 4,
+            "date": "2026-07-14",
+            "description": "TED RECEBIDA CONFEITARIA LUA CHEI",
+            "amount": 4376050,
+            "kind": "receipt",
+            "proposed": false,
+            "matched_ids": [
+              "P03",
+              "P10"
+            ],
+            "rule": "subset_sum_same_customer",
+            "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V",
+            "source_name": "03_extrato_bancario_jul2026.csv"
+          },
+          {
+            "row": 5,
+            "date": "2026-07-15",
+            "description": "LIQUIDACAO COBRANCA SIMPLES",
+            "amount": 7190000,
+            "kind": "receipt",
+            "proposed": false,
+            "matched_ids": [
+              "P05"
+            ],
+            "rule": "nosso_numero_exact",
+            "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V",
+            "source_name": "03_extrato_bancario_jul2026.csv"
+          },
+          {
+            "row": 6,
+            "date": "2026-07-15",
+            "description": "TARIFA PACOTE COBRANCA JUL",
+            "amount": -98000,
+            "kind": "fee",
+            "proposed": false,
+            "matched_ids": [],
+            "rule": "bank_fee_pattern",
+            "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V",
+            "source_name": "03_extrato_bancario_jul2026.csv"
+          },
+          {
+            "row": 7,
+            "date": "2026-07-16",
+            "description": "LIQUIDACAO COBRANCA SIMPLES",
+            "amount": 4900000,
+            "kind": "receipt",
+            "proposed": false,
+            "matched_ids": [
+              "P07"
+            ],
+            "rule": "nosso_numero_partial",
+            "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V",
+            "source_name": "03_extrato_bancario_jul2026.csv"
+          },
+          {
+            "row": 8,
+            "date": "2026-07-17",
+            "description": "PIX RECEBIDO SABOR DA ROCA FRANQU",
+            "amount": 1178000,
+            "kind": "receipt",
+            "proposed": false,
+            "matched_ids": [
+              "P08"
+            ],
+            "rule": "name_amount_withholding",
+            "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V",
+            "source_name": "03_extrato_bancario_jul2026.csv"
+          },
+          {
+            "row": 9,
+            "date": "2026-07-20",
+            "description": "PAGAMENTO FORNECEDOR NF 55120",
+            "amount": -1470000,
+            "kind": "supplier_payment",
+            "proposed": false,
+            "matched_ids": [
+              "AP-55120"
+            ],
+            "rule": "document_in_text",
+            "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V",
+            "source_name": "03_extrato_bancario_jul2026.csv"
+          },
+          {
+            "row": 10,
+            "date": "2026-07-21",
+            "description": "LIQUIDACAO COBRANCA SIMPLES",
+            "amount": 2785000,
+            "kind": "receipt",
+            "proposed": false,
+            "matched_ids": [
+              "P09"
+            ],
+            "rule": "nosso_numero_exact",
+            "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V",
+            "source_name": "03_extrato_bancario_jul2026.csv"
+          },
+          {
+            "row": 11,
+            "date": "2026-07-22",
+            "description": "PIX RECEBIDO 13579246000156",
+            "amount": 621000,
+            "kind": "receipt",
+            "proposed": false,
+            "matched_ids": [
+              "P11"
+            ],
+            "rule": "tax_id_in_text",
+            "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V",
+            "source_name": "03_extrato_bancario_jul2026.csv"
+          },
+          {
+            "row": 12,
+            "date": "2026-07-23",
+            "description": "TED RECEBIDA CNPJ 24680135000178",
+            "amount": 1989000,
+            "kind": "receipt",
+            "proposed": false,
+            "matched_ids": [
+              "P12"
+            ],
+            "rule": "tax_id_amount_fine",
+            "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V",
+            "source_name": "03_extrato_bancario_jul2026.csv"
+          },
+          {
+            "row": 13,
+            "date": "2026-07-24",
+            "description": "PIX RECEBIDO REDE TRIGO",
+            "amount": 630000,
+            "kind": "receipt",
+            "proposed": false,
+            "matched_ids": [
+              "P06"
+            ],
+            "rule": "fuzzy_name_unique_amount",
+            "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V",
+            "source_name": "03_extrato_bancario_jul2026.csv"
+          },
+          {
+            "row": 14,
+            "date": "2026-07-27",
+            "description": "PIX RECEBIDO NORTE PAES EIRELI",
+            "amount": 1045000,
+            "kind": "receipt",
+            "proposed": false,
+            "matched_ids": [
+              "O02"
+            ],
+            "rule": "name_amount",
+            "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V",
+            "source_name": "03_extrato_bancario_jul2026.csv"
+          },
+          {
+            "row": 15,
+            "date": "2026-07-28",
+            "description": "DEPOSITO NAO IDENTIFICADO",
+            "amount": 438000,
+            "kind": "receipt",
+            "proposed": true,
+            "matched_ids": [
+              "O04"
+            ],
+            "rule": "amount_only_unique",
+            "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V",
+            "source_name": "03_extrato_bancario_jul2026.csv"
+          },
+          {
+            "row": 16,
+            "date": "2026-07-29",
+            "description": "PIX RECEBIDO MERCEARIA COLINA VER",
+            "amount": 290000,
+            "kind": "receipt",
+            "proposed": false,
+            "matched_ids": [
+              "O03"
+            ],
+            "rule": "name_amount",
+            "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V",
+            "source_name": "03_extrato_bancario_jul2026.csv"
+          },
+          {
+            "row": 17,
+            "date": "2026-07-30",
+            "description": "PIX RECEBIDO PAO E ARTE PANIFICAD",
+            "amount": 115000,
+            "kind": "unapplied",
+            "proposed": false,
+            "matched_ids": [],
+            "rule": "none",
+            "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V",
+            "source_name": "03_extrato_bancario_jul2026.csv"
+          },
+          {
+            "row": 18,
+            "date": "2026-07-31",
+            "description": "TARIFA PIX EMISSAO JUL",
+            "amount": -6200,
+            "kind": "fee",
+            "proposed": false,
+            "matched_ids": [],
+            "rule": "bank_fee_pattern",
+            "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V",
+            "source_name": "03_extrato_bancario_jul2026.csv"
+          }
+        ],
+        "totals": {
+          "original_amount": 37460050,
+          "duplicate_excluded": 2785000,
+          "received_confirmed": 28549050,
+          "principal_confirmed": 28510050,
+          "open_balance": 6165000,
+          "proposed_amount": 438000,
+          "projected_open_balance": 5727000,
+          "unapplied_cash": 553000,
+          "bank_fees": 104200,
+          "fines_received": 39000,
+          "withholding_pending": 62000
+        }
+      }
+    },
+    "created_at": "2026-11-06T08:06:56Z",
+    "started_at": "2026-11-06T08:06:56Z",
+    "finished_at": "2026-11-06T08:07:29Z",
+    "expires_at": "2026-12-06T08:06:56Z"
+  },
+  "findings": [
+    {
+      "id": "fnd_01M6QYC0WJF918HJAVYVTFC014",
+      "run_id": "run_01M6QYB0AKEKBR2P7Y9MV13M2T",
+      "code": "recon.ap_boleto_invalid",
+      "kind": "anomaly",
+      "severity": "critical",
+      "amount_at_risk": 1499400,
+      "currency": "BRL",
+      "title": "Linha digitável inválida: possível fraude de boleto",
+      "explanation": "Na linha digitável enviada, os dígitos verificadores não conferem; o valor codificado é R$ 149,94; o vencimento codificado é 29/09/2022. Não pague este boleto.\n\nAnálise da IA — sugestão para revisão: A linha digitável enviada no e-mail foi apontada como inválida, com dígitos verificadores que não conferem, valor codificado de R$ 149,94 e vencimento codificado de 29/09/2022, divergentes do documento de cobrança. O achado indica possível fraude de boleto, e a evidência disponível é apenas o e-mail de cobrança.\nPróximo passo sugerido: Não pagar o boleto recebido. Solicitar confirmação formal da cobrança ao fornecedor por canal previamente cadastrado e registrar o caso com a área de segurança ou jurídica para análise.",
+      "confidence": 0.9700000286102295,
+      "confidence_label": "Confirmado",
+      "evidence": [
+        {
+          "label": "E-mail 2",
+          "values": {
+            "date": "2026-07-18T16:52",
+            "document": "ana.lima@caixasboavista.com.br",
+            "description": "RE: cobranca em aberto - Caixas Boa Vista"
+          },
+          "excerpt": "RE: cobranca em aberto - Caixas Boa Vista — ana.lima@caixasboavista.com.br",
+          "locator": {
+            "row": 1,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAXAJEQSS6YDPRAW9JCT8"
+        }
+      ],
+      "status": "open",
+      "source_ids": [
+        "upl_01M6QYAXAJEQSS6YDPRAW9JCT8"
+      ],
+      "details": {
+        "references": [
+          "email:2"
+        ],
+        "engine_code": "F18",
+        "model_review": {
+          "model": "anthropic/claude-haiku-5.5",
+          "cached": false,
+          "status": "needs_review",
+          "analysis": "A linha digitável enviada no e-mail foi apontada como inválida, com dígitos verificadores que não conferem, valor codificado de R$ 149,94 e vencimento codificado de 29/09/2022, divergentes do documento de cobrança. O achado indica possível fraude de boleto, e a evidência disponível é apenas o e-mail de cobrança.",
+          "next_step": "Não pagar o boleto recebido. Solicitar confirmação formal da cobrança ao fornecedor por canal previamente cadastrado e registrar o caso com a área de segurança ou jurídica para análise.",
+          "evidence_indices": [
+            1
+          ]
+        }
+      },
+      "created_at": "2026-11-06T08:07:29Z",
+      "updated_at": "2026-11-06T08:07:29Z"
+    },
+    {
+      "id": "fnd_01M6QYC0V8F86SGGCMDN7BDW9B",
+      "run_id": "run_01M6QYB0AKEKBR2P7Y9MV13M2T",
+      "code": "recon.partial_payment",
+      "kind": "partial",
+      "severity": "high",
+      "amount_at_risk": 4900000,
+      "currency": "BRL",
+      "title": "Pagamento parcial de exatamente 50%",
+      "explanation": "R$ 49.000,00 de R$ 98.000,00 recebidos para NF 200340; faltam R$ 49.000,00.\n\nAnálise da IA — sugestão para revisão: Foi recebido R$ 49.000,00 em 16/07/2026 da Mercearia Colina Verde Alimentos SA, equivalente a exatamente 50% da nota de R$ 98.000,00 com vencimento na mesma data. O saldo de R$ 49.000,00 aparece como pendente, o que indica pagamento parcial. Não há no documento evidência de acordo de parcelamento.\nPróximo passo sugerido: Confirmar com a Mercearia Colina Verde se há acordo de pagamento parcelado e localizar o comprovante do saldo; se não houver acordo, acionar cobrança do valor remanescente.",
+      "confidence": 0.9700000286102295,
+      "confidence_label": "Confirmado",
+      "evidence": [
+        {
+          "label": "Linha 7 do extrato",
+          "values": {
+            "date": "2026-07-16",
+            "amount": 4900000,
+            "document": "98765007",
+            "description": "LIQUIDACAO COBRANCA SIMPLES"
+          },
+          "excerpt": "16/07/2026 · LIQUIDACAO COBRANCA SIMPLES · R$ 49.000,00",
+          "locator": {
+            "row": 7,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V"
+        },
+        {
+          "label": "NF 200340",
+          "values": {
+            "date": "2026-07-16",
+            "amount": 9800000,
+            "document": "NF 200340",
+            "description": "Mercearia Colina Verde Alimentos SA"
+          },
+          "excerpt": "Mercearia Colina Verde Alimentos SA · venc. 16/07/2026 · R$ 98.000,00",
+          "locator": {
+            "row": 7,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYATA0EJB9QZ304AEP6WYG"
+        }
+      ],
+      "status": "open",
+      "source_ids": [
+        "upl_01M6QYATA0EJB9QZ304AEP6WYG",
+        "upl_01M6QYAWB0E5M8376P5B5RHT4V"
+      ],
+      "details": {
+        "references": [
+          "bank:7",
+          "title:P07"
+        ],
+        "engine_code": "F04",
+        "model_review": {
+          "model": "anthropic/claude-haiku-5.5",
+          "cached": false,
+          "status": "needs_review",
+          "analysis": "Foi recebido R$ 49.000,00 em 16/07/2026 da Mercearia Colina Verde Alimentos SA, equivalente a exatamente 50% da nota de R$ 98.000,00 com vencimento na mesma data. O saldo de R$ 49.000,00 aparece como pendente, o que indica pagamento parcial. Não há no documento evidência de acordo de parcelamento.",
+          "next_step": "Confirmar com a Mercearia Colina Verde se há acordo de pagamento parcelado e localizar o comprovante do saldo; se não houver acordo, acionar cobrança do valor remanescente.",
+          "evidence_indices": [
+            1,
+            2
+          ]
+        }
+      },
+      "created_at": "2026-11-06T08:07:29Z",
+      "updated_at": "2026-11-06T08:07:29Z"
+    },
+    {
+      "id": "fnd_01M6QYC0WWF9FAWZ4A9NYV9MXP",
+      "run_id": "run_01M6QYB0AKEKBR2P7Y9MV13M2T",
+      "code": "recon.ap_invoice_without_payment_or_approval",
+      "kind": "missing",
+      "severity": "high",
+      "amount_at_risk": 2948015,
+      "currency": "BRL",
+      "title": "38 CT-e vencidos sem pagamento nesta conta e sem aprovação",
+      "explanation": "R$ 29.480,15 de contato@transportadoravianorte.com.br venceu em 14/07/2026: não há débito correspondente no extrato nem aprovação no grupo.\n\nAnálise da IA — sugestão para revisão: O achado indica 38 CT-e vencidos somando R$ 29.480,15, sem débito correspondente no extrato e sem aprovação no grupo. O documento de origem citado é a fatura da semana 27, com contato de e-mail da transportadora, que não deve ser tratado como comprovante de pagamento. Não há como confirmar a situação apenas com este trecho.\nPróximo passo sugerido: Conferir os 38 CT-e vencidos da transportadora no sistema de contas a pagar, verificar se existe lançamento ou pagamento em outra conta do grupo e confirmar a aprovação formal antes de qualquer liberação.",
+      "confidence": 0.9700000286102295,
+      "confidence_label": "Confirmado",
+      "evidence": [
+        {
+          "label": "E-mail 3",
+          "values": {
+            "date": "2026-07-09T07:41",
+            "document": "contato@transportadoravianorte.com.br",
+            "description": "Faturas semana 27"
+          },
+          "excerpt": "Faturas semana 27 — contato@transportadoravianorte.com.br",
+          "locator": {
+            "row": 1,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAXAJEQSS6YDPRAW9JCT8"
+        }
+      ],
+      "status": "open",
+      "source_ids": [
+        "upl_01M6QYAXAJEQSS6YDPRAW9JCT8"
+      ],
+      "details": {
+        "references": [
+          "email:3"
+        ],
+        "engine_code": "F21",
+        "model_review": {
+          "model": "anthropic/claude-haiku-5.5",
+          "cached": false,
+          "status": "needs_review",
+          "analysis": "O achado indica 38 CT-e vencidos somando R$ 29.480,15, sem débito correspondente no extrato e sem aprovação no grupo. O documento de origem citado é a fatura da semana 27, com contato de e-mail da transportadora, que não deve ser tratado como comprovante de pagamento. Não há como confirmar a situação apenas com este trecho.",
+          "next_step": "Conferir os 38 CT-e vencidos da transportadora no sistema de contas a pagar, verificar se existe lançamento ou pagamento em outra conta do grupo e confirmar a aprovação formal antes de qualquer liberação.",
+          "evidence_indices": [
+            1
+          ]
+        }
+      },
+      "created_at": "2026-11-06T08:07:29Z",
+      "updated_at": "2026-11-06T08:07:29Z"
+    },
+    {
+      "id": "fnd_01M6QYC0VEFM28ZA7EDMPK0M99",
+      "run_id": "run_01M6QYB0AKEKBR2P7Y9MV13M2T",
+      "code": "recon.duplicate_title_across_erps",
+      "kind": "duplicate",
+      "severity": "high",
+      "amount_at_risk": 2785000,
+      "currency": "BRL",
+      "title": "Mesmo título nos dois ERPs; contas a receber superestimado",
+      "explanation": "NF 200360 (protheus) e FAT-2026-0411 (omie) têm o mesmo CNPJ, valor e vencimento; só um pagamento entrou.\n\nAnálise da IA — sugestão para revisão: O mesmo título aparece no Protheus (NF 200360) e no Omie (FAT-2026-0411), com mesmo CNPJ, valor de R$ 27.850,00 e vencimento em 20/07/2026, enquanto apenas uma liquidação de R$ 27.850,00 em 21/07/2026 foi registrada. Isso sugere duplicidade no contas a receber, mas não há evidência de que a duplicidade seja real sem conferir os dois sistemas.\nPróximo passo sugerido: Verificar no Protheus e no Omie se a NF 200360 e a FAT-2026-0411 representam a mesma venda e, se confirmado, cancelar ou ajustar a duplicidade antes de considerar o saldo a receber correto.",
+      "confidence": 0.9700000286102295,
+      "confidence_label": "Confirmado",
+      "evidence": [
+        {
+          "label": "NF 200360",
+          "values": {
+            "date": "2026-07-20",
+            "amount": 2785000,
+            "document": "NF 200360",
+            "description": "Moinho Azul Comercio Ltda"
+          },
+          "excerpt": "Moinho Azul Comercio Ltda · venc. 20/07/2026 · R$ 27.850,00",
+          "locator": {
+            "row": 9,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYATA0EJB9QZ304AEP6WYG"
+        },
+        {
+          "label": "FAT-2026-0411",
+          "values": {
+            "date": "2026-07-20",
+            "amount": 2785000,
+            "document": "FAT-2026-0411",
+            "description": "MOINHO AZUL COM LTDA"
+          },
+          "excerpt": "MOINHO AZUL COM LTDA · venc. 20/07/2026 · R$ 27.850,00",
+          "locator": {
+            "row": 1,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAVBDF87BH15JNKP0BM59"
+        },
+        {
+          "label": "Linha 10 do extrato",
+          "values": {
+            "date": "2026-07-21",
+            "amount": 2785000,
+            "document": "98765009",
+            "description": "LIQUIDACAO COBRANCA SIMPLES"
+          },
+          "excerpt": "21/07/2026 · LIQUIDACAO COBRANCA SIMPLES · R$ 27.850,00",
+          "locator": {
+            "row": 10,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V"
+        }
+      ],
+      "status": "open",
+      "source_ids": [
+        "upl_01M6QYATA0EJB9QZ304AEP6WYG",
+        "upl_01M6QYAVBDF87BH15JNKP0BM59",
+        "upl_01M6QYAWB0E5M8376P5B5RHT4V"
+      ],
+      "details": {
+        "references": [
+          "title:P09",
+          "title:O01",
+          "bank:10"
+        ],
+        "engine_code": "F06",
+        "model_review": {
+          "model": "anthropic/claude-haiku-5.5",
+          "cached": false,
+          "status": "needs_review",
+          "analysis": "O mesmo título aparece no Protheus (NF 200360) e no Omie (FAT-2026-0411), com mesmo CNPJ, valor de R$ 27.850,00 e vencimento em 20/07/2026, enquanto apenas uma liquidação de R$ 27.850,00 em 21/07/2026 foi registrada. Isso sugere duplicidade no contas a receber, mas não há evidência de que a duplicidade seja real sem conferir os dois sistemas.",
+          "next_step": "Verificar no Protheus e no Omie se a NF 200360 e a FAT-2026-0411 representam a mesma venda e, se confirmado, cancelar ou ajustar a duplicidade antes de considerar o saldo a receber correto.",
+          "evidence_indices": [
+            1,
+            2,
+            3
+          ]
+        }
+      },
+      "created_at": "2026-11-06T08:07:29Z",
+      "updated_at": "2026-11-06T08:07:29Z"
+    },
+    {
+      "id": "fnd_01M6QYC0WCFH8ANYT07797JT3E",
+      "run_id": "run_01M6QYB0AKEKBR2P7Y9MV13M2T",
+      "code": "recon.ap_invoice_already_paid",
+      "kind": "contradiction",
+      "severity": "high",
+      "amount_at_risk": 1499400,
+      "currency": "BRL",
+      "title": "NF 055120 é a NF 55120, já paga no vencimento",
+      "explanation": "O fornecedor cobra R$ 14.994,00 pela NF 55120, mas o extrato mostra o pagamento de R$ 14.700,00 em 20/07/2026.\n\nAnálise da IA — sugestão para revisão: O fornecedor cobra R$ 14.994,00 pela NF 55120, enquanto o extrato mostra pagamento de R$ 14.700,00 em 20/07/2026, diferença de R$ 294,00. Os e-mails indicam que a cobrança reaparece e que há dúvida se a nota já foi paga. A diferença de valor e a possível duplicidade exigem conferência antes de qualquer decisão. Não é possível afirmar pelas evidências se a diferença corresponde a juros, desconto ou erro.\nPróximo passo sugerido: Comparar a NF 55120 com o pagamento de 20/07/2026 e com o histórico do fornecedor, verificando se há juros, desconto ou nota de crédito que explique a diferença de R$ 294,00, e responder ao fornecedor somente após essa conferência.",
+      "confidence": 0.9700000286102295,
+      "confidence_label": "Confirmado",
+      "evidence": [
+        {
+          "label": "Linha 9 do extrato",
+          "values": {
+            "date": "2026-07-20",
+            "amount": -1470000,
+            "description": "PAGAMENTO FORNECEDOR NF 55120"
+          },
+          "excerpt": "20/07/2026 · PAGAMENTO FORNECEDOR NF 55120 · R$ 14.700,00",
+          "locator": {
+            "row": 9,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V"
+        },
+        {
+          "label": "E-mail 1",
+          "values": {
+            "date": "2026-07-06T09:14",
+            "document": "financeiro@caixasboavista.com.br",
+            "description": "NF 55120 - Fatura de embalagens"
+          },
+          "excerpt": "NF 55120 - Fatura de embalagens — financeiro@caixasboavista.com.br",
+          "locator": {
+            "row": 1,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAXAJEQSS6YDPRAW9JCT8"
+        },
+        {
+          "label": "E-mail 2",
+          "values": {
+            "date": "2026-07-18T16:52",
+            "document": "ana.lima@caixasboavista.com.br",
+            "description": "RE: cobranca em aberto - Caixas Boa Vista"
+          },
+          "excerpt": "RE: cobranca em aberto - Caixas Boa Vista — ana.lima@caixasboavista.com.br",
+          "locator": {
+            "row": 1,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAXAJEQSS6YDPRAW9JCT8"
+        },
+        {
+          "label": "Mensagem de 19/07 08:33 (Renata)",
+          "values": {
+            "date": "2026-07-19T08:33",
+            "document": "Renata",
+            "description": "gente a Boa Vista cobrando de novo a 55120, ja pagamos?"
+          },
+          "excerpt": "gente a Boa Vista cobrando de novo a 55120, ja pagamos?",
+          "locator": {
+            "row": 1,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAXAJEQSS6YDPRAW9JCT8"
+        }
+      ],
+      "status": "open",
+      "source_ids": [
+        "upl_01M6QYAWB0E5M8376P5B5RHT4V",
+        "upl_01M6QYAXAJEQSS6YDPRAW9JCT8"
+      ],
+      "details": {
+        "references": [
+          "bank:9",
+          "email:1",
+          "email:2",
+          "chat:2026-07-19T08:33"
+        ],
+        "engine_code": "F16",
+        "model_review": {
+          "model": "anthropic/claude-haiku-5.5",
+          "cached": false,
+          "status": "needs_review",
+          "analysis": "O fornecedor cobra R$ 14.994,00 pela NF 55120, enquanto o extrato mostra pagamento de R$ 14.700,00 em 20/07/2026, diferença de R$ 294,00. Os e-mails indicam que a cobrança reaparece e que há dúvida se a nota já foi paga. A diferença de valor e a possível duplicidade exigem conferência antes de qualquer decisão. Não é possível afirmar pelas evidências se a diferença corresponde a juros, desconto ou erro.",
+          "next_step": "Comparar a NF 55120 com o pagamento de 20/07/2026 e com o histórico do fornecedor, verificando se há juros, desconto ou nota de crédito que explique a diferença de R$ 294,00, e responder ao fornecedor somente após essa conferência.",
+          "evidence_indices": [
+            1,
+            2,
+            3,
+            4
+          ]
+        }
+      },
+      "created_at": "2026-11-06T08:07:29Z",
+      "updated_at": "2026-11-06T08:07:29Z"
+    },
+    {
+      "id": "fnd_01M6QYC0WPE2BT3QKVWT64M2C1",
+      "run_id": "run_01M6QYB0AKEKBR2P7Y9MV13M2T",
+      "code": "recon.ap_sender_or_bank_details_changed",
+      "kind": "anomaly",
+      "severity": "high",
+      "amount_at_risk": 1499400,
+      "currency": "BRL",
+      "title": "Remetente e forma de pagamento mudaram entre os e-mails",
+      "explanation": "O primeiro e-mail veio de financeiro@caixasboavista.com.br (transferência); o seguinte, de ana.lima@caixasboavista.com.br (boleto). Confirme por telefone antes de pagar.\n\nAnálise da IA — sugestão para revisão: Os dois e-mails de cobrança vieram de remetentes diferentes do mesmo domínio: um de financeiro para transferência e outro de uma pessoa específica para boleto. A mudança de remetente e de forma de pagamento para a mesma NF 55120 é um sinal de risco que exige validação independente.\nPróximo passo sugerido: Confirmar por telefone, usando contato já cadastrado no fornecedor e não o informado nos e-mails, qual é a forma correta de pagamento e os dados bancários antes de qualquer pagamento.",
+      "confidence": 0.9700000286102295,
+      "confidence_label": "Confirmado",
+      "evidence": [
+        {
+          "label": "E-mail 1",
+          "values": {
+            "date": "2026-07-06T09:14",
+            "document": "financeiro@caixasboavista.com.br",
+            "description": "NF 55120 - Fatura de embalagens"
+          },
+          "excerpt": "NF 55120 - Fatura de embalagens — financeiro@caixasboavista.com.br",
+          "locator": {
+            "row": 1,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAXAJEQSS6YDPRAW9JCT8"
+        },
+        {
+          "label": "E-mail 2",
+          "values": {
+            "date": "2026-07-18T16:52",
+            "document": "ana.lima@caixasboavista.com.br",
+            "description": "RE: cobranca em aberto - Caixas Boa Vista"
+          },
+          "excerpt": "RE: cobranca em aberto - Caixas Boa Vista — ana.lima@caixasboavista.com.br",
+          "locator": {
+            "row": 1,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAXAJEQSS6YDPRAW9JCT8"
+        }
+      ],
+      "status": "open",
+      "source_ids": [
+        "upl_01M6QYAXAJEQSS6YDPRAW9JCT8"
+      ],
+      "details": {
+        "references": [
+          "email:1",
+          "email:2"
+        ],
+        "engine_code": "F19",
+        "model_review": {
+          "model": "anthropic/claude-haiku-5.5",
+          "cached": false,
+          "status": "needs_review",
+          "analysis": "Os dois e-mails de cobrança vieram de remetentes diferentes do mesmo domínio: um de financeiro para transferência e outro de uma pessoa específica para boleto. A mudança de remetente e de forma de pagamento para a mesma NF 55120 é um sinal de risco que exige validação independente.",
+          "next_step": "Confirmar por telefone, usando contato já cadastrado no fornecedor e não o informado nos e-mails, qual é a forma correta de pagamento e os dados bancários antes de qualquer pagamento.",
+          "evidence_indices": [
+            1,
+            2
+          ]
+        }
+      },
+      "created_at": "2026-11-06T08:07:29Z",
+      "updated_at": "2026-11-06T08:07:29Z"
+    },
+    {
+      "id": "fnd_01M6QYC0WSEY4T3PSG9677M6Z9",
+      "run_id": "run_01M6QYB0AKEKBR2P7Y9MV13M2T",
+      "code": "recon.ap_three_way_match_failed",
+      "kind": "mismatch",
+      "severity": "high",
+      "amount_at_risk": 367500,
+      "currency": "BRL",
+      "title": "Pedido entregue 9 de 12 volumes, pago integralmente",
+      "explanation": "A NF 55120 foi paga por inteiro (R$ 14.700,00) com 9 de 12 volumes recebidos; a aprovação não confirmou a entrega.\n\nAnálise da IA — sugestão para revisão: A NF 55120 aparece como paga integralmente em R$ 14.700,00, mas o registro indica que apenas 9 de 12 volumes foram recebidos e que a aprovação não confirmou a entrega. Há também um trecho de e-mail indicando que a confirmação teria sido feita por Pedro, sem que o documento permita verificar essa confirmação.\nPróximo passo sugerido: Verificar com o recebimento e o responsável de almoxarifado se os 3 volumes faltantes foram entregues ou se há nota de devolução ou crédito, e conferir a aprovação de Pedro antes de considerar o pagamento regular.",
+      "confidence": 0.800000011920929,
+      "confidence_label": "Provável",
+      "evidence": [
+        {
+          "label": "E-mail 2",
+          "values": {
+            "date": "2026-07-18T16:52",
+            "document": "ana.lima@caixasboavista.com.br",
+            "description": "RE: cobranca em aberto - Caixas Boa Vista"
+          },
+          "excerpt": "RE: cobranca em aberto - Caixas Boa Vista — ana.lima@caixasboavista.com.br",
+          "locator": {
+            "row": 1,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAXAJEQSS6YDPRAW9JCT8"
+        },
+        {
+          "label": "Mensagem de 06/07 14:18 (Diego)",
+          "values": {
+            "date": "2026-07-06T14:18",
+            "document": "Diego",
+            "description": "acho que sim, o Pedro confirmou"
+          },
+          "excerpt": "acho que sim, o Pedro confirmou",
+          "locator": {
+            "row": 1,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAXAJEQSS6YDPRAW9JCT8"
+        },
+        {
+          "label": "Linha 9 do extrato",
+          "values": {
+            "date": "2026-07-20",
+            "amount": -1470000,
+            "description": "PAGAMENTO FORNECEDOR NF 55120"
+          },
+          "excerpt": "20/07/2026 · PAGAMENTO FORNECEDOR NF 55120 · R$ 14.700,00",
+          "locator": {
+            "row": 9,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V"
+        }
+      ],
+      "status": "open",
+      "source_ids": [
+        "upl_01M6QYAWB0E5M8376P5B5RHT4V",
+        "upl_01M6QYAXAJEQSS6YDPRAW9JCT8"
+      ],
+      "details": {
+        "references": [
+          "email:2",
+          "chat:2026-07-06T14:18",
+          "bank:9"
+        ],
+        "engine_code": "F20",
+        "model_review": {
+          "model": "anthropic/claude-haiku-5.5",
+          "cached": false,
+          "status": "needs_review",
+          "analysis": "A NF 55120 aparece como paga integralmente em R$ 14.700,00, mas o registro indica que apenas 9 de 12 volumes foram recebidos e que a aprovação não confirmou a entrega. Há também um trecho de e-mail indicando que a confirmação teria sido feita por Pedro, sem que o documento permita verificar essa confirmação.",
+          "next_step": "Verificar com o recebimento e o responsável de almoxarifado se os 3 volumes faltantes foram entregues ou se há nota de devolução ou crédito, e conferir a aprovação de Pedro antes de considerar o pagamento regular.",
+          "evidence_indices": [
+            1,
+            2,
+            3
+          ]
+        }
+      },
+      "created_at": "2026-11-06T08:07:29Z",
+      "updated_at": "2026-11-06T08:07:29Z"
+    },
+    {
+      "id": "fnd_01M6QYC0VQFFSS6MX04ZTQZ7Q8",
+      "run_id": "run_01M6QYB0AKEKBR2P7Y9MV13M2T",
+      "code": "recon.intercompany_receipt",
+      "kind": "note",
+      "severity": "medium",
+      "amount_at_risk": 1045000,
+      "currency": "BRL",
+      "title": "Recebível da unidade Norte caiu na conta principal",
+      "explanation": "FAT-2026-0412 é um título da unidade Norte e foi pago na conta da operação principal: registre o repasse entre as empresas.\n\nAnálise da IA — sugestão para revisão: O PIX de R$ 10.450,00 recebido em 27/07/2026 de NORTE PAES EIRELI coincide em valor com o título vencido em 14/07/2026 da mesma empresa. O achado sugere que o recebível da unidade Norte caiu na conta principal, o que indica possível repasse entre empresas do grupo, mas o documento não traz a confirmação dessa origem.\nPróximo passo sugerido: Conferir o extrato bancário e o contrato ou política de repasse entre as empresas do grupo para confirmar se o PIX de 27/07/2026 é um repasse interno e se o registro contábil correspondente foi feito corretamente.",
+      "confidence": 0.9700000286102295,
+      "confidence_label": "Confirmado",
+      "evidence": [
+        {
+          "label": "Linha 14 do extrato",
+          "values": {
+            "date": "2026-07-27",
+            "amount": 1045000,
+            "description": "PIX RECEBIDO NORTE PAES EIRELI"
+          },
+          "excerpt": "27/07/2026 · PIX RECEBIDO NORTE PAES EIRELI · R$ 10.450,00",
+          "locator": {
+            "row": 14,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V"
+        },
+        {
+          "label": "FAT-2026-0412",
+          "values": {
+            "date": "2026-07-14",
+            "amount": 1045000,
+            "document": "FAT-2026-0412",
+            "description": "NORTE PAES EIRELI"
+          },
+          "excerpt": "NORTE PAES EIRELI · venc. 14/07/2026 · R$ 10.450,00",
+          "locator": {
+            "row": 2,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAVBDF87BH15JNKP0BM59"
+        }
+      ],
+      "status": "open",
+      "source_ids": [
+        "upl_01M6QYAVBDF87BH15JNKP0BM59",
+        "upl_01M6QYAWB0E5M8376P5B5RHT4V"
+      ],
+      "details": {
+        "references": [
+          "bank:14",
+          "title:O02"
+        ],
+        "engine_code": "F09",
+        "model_review": {
+          "model": "anthropic/claude-haiku-5.5",
+          "cached": false,
+          "status": "needs_review",
+          "analysis": "O PIX de R$ 10.450,00 recebido em 27/07/2026 de NORTE PAES EIRELI coincide em valor com o título vencido em 14/07/2026 da mesma empresa. O achado sugere que o recebível da unidade Norte caiu na conta principal, o que indica possível repasse entre empresas do grupo, mas o documento não traz a confirmação dessa origem.",
+          "next_step": "Conferir o extrato bancário e o contrato ou política de repasse entre as empresas do grupo para confirmar se o PIX de 27/07/2026 é um repasse interno e se o registro contábil correspondente foi feito corretamente.",
+          "evidence_indices": [
+            1,
+            2
+          ]
+        }
+      },
+      "created_at": "2026-11-06T08:07:29Z",
+      "updated_at": "2026-11-06T08:07:29Z"
+    },
+    {
+      "id": "fnd_01M6QYC0W6FHYSEVGMZ9SDEVT5",
+      "run_id": "run_01M6QYB0AKEKBR2P7Y9MV13M2T",
+      "code": "recon.overdue_open",
+      "kind": "missing",
+      "severity": "medium",
+      "amount_at_risk": 765000,
+      "currency": "BRL",
+      "title": "Título vencido há 3 dias sem cobrança",
+      "explanation": "FAT-2026-0421 de NORTE PAES EIRELI venceu em 28/07/2026 e não tem pagamento no extrato.\n\nAnálise da IA — sugestão para revisão: O título FAT-2026-0421 de NORTE PAES EIRELI, com vencimento em 28/07/2026 e valor de R$ 7.650,00, aparece como vencido sem cobrança. A evidência confirma apenas o vencimento e o valor, não a ausência de pagamento, que depende da conferência do extrato completo.\nPróximo passo sugerido: Verificar no extrato bancário e no contas a receber se houve algum recebimento ou baixa do título FAT-2026-0421 após 28/07/2026 e, se não houver, avaliar com a área comercial a cobrança do cliente.",
+      "confidence": 0.9700000286102295,
+      "confidence_label": "Confirmado",
+      "evidence": [
+        {
+          "label": "FAT-2026-0421",
+          "values": {
+            "date": "2026-07-28",
+            "amount": 765000,
+            "document": "FAT-2026-0421",
+            "description": "NORTE PAES EIRELI"
+          },
+          "excerpt": "NORTE PAES EIRELI · venc. 28/07/2026 · R$ 7.650,00",
+          "locator": {
+            "row": 5,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAVBDF87BH15JNKP0BM59"
+        }
+      ],
+      "status": "open",
+      "source_ids": [
+        "upl_01M6QYAVBDF87BH15JNKP0BM59"
+      ],
+      "details": {
+        "references": [
+          "title:O05"
+        ],
+        "engine_code": "F14",
+        "model_review": {
+          "model": "anthropic/claude-haiku-5.5",
+          "cached": false,
+          "status": "needs_review",
+          "analysis": "O título FAT-2026-0421 de NORTE PAES EIRELI, com vencimento em 28/07/2026 e valor de R$ 7.650,00, aparece como vencido sem cobrança. A evidência confirma apenas o vencimento e o valor, não a ausência de pagamento, que depende da conferência do extrato completo.",
+          "next_step": "Verificar no extrato bancário e no contas a receber se houve algum recebimento ou baixa do título FAT-2026-0421 após 28/07/2026 e, se não houver, avaliar com a área comercial a cobrança do cliente.",
+          "evidence_indices": [
+            1
+          ]
+        }
+      },
+      "created_at": "2026-11-06T08:07:29Z",
+      "updated_at": "2026-11-06T08:07:29Z"
+    },
+    {
+      "id": "fnd_01M6QYC0VTFC0VTZ5NF6BFNDQV",
+      "run_id": "run_01M6QYB0AKEKBR2P7Y9MV13M2T",
+      "code": "recon.amount_only_proposal",
+      "kind": "note",
+      "severity": "medium",
+      "amount_at_risk": 438000,
+      "currency": "BRL",
+      "title": "Depósito não identificado: proposta por valor único, precisa de confirmação",
+      "explanation": "Só FAT-2026-0420 tem saldo aberto de R$ 4.380,00; confirme com o cliente antes de baixar.\n\nAnálise da IA — sugestão para revisão: Há um depósito não identificado de R$ 4.380,00 em 28/07/2026 com valor igual ao título de GRAOS DO NORTE LTDA vencido em 24/07/2026. A correspondência é apenas de valor, sem identificação do pagador, por isso a associação ainda não está confirmada.\nPróximo passo sugerido: Confirmar com o cliente GRAOS DO NORTE LTDA, por meio de comprovante bancário ou documento do pagador, se foi ele quem fez o depósito antes de qualquer baixa do título.",
+      "confidence": 0.6000000238418579,
+      "confidence_label": "Provável",
+      "evidence": [
+        {
+          "label": "Linha 15 do extrato",
+          "values": {
+            "date": "2026-07-28",
+            "amount": 438000,
+            "description": "DEPOSITO NAO IDENTIFICADO"
+          },
+          "excerpt": "28/07/2026 · DEPOSITO NAO IDENTIFICADO · R$ 4.380,00",
+          "locator": {
+            "row": 15,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V"
+        },
+        {
+          "label": "FAT-2026-0420",
+          "values": {
+            "date": "2026-07-24",
+            "amount": 438000,
+            "document": "FAT-2026-0420",
+            "description": "GRAOS DO NORTE LTDA"
+          },
+          "excerpt": "GRAOS DO NORTE LTDA · venc. 24/07/2026 · R$ 4.380,00",
+          "locator": {
+            "row": 4,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAVBDF87BH15JNKP0BM59"
+        }
+      ],
+      "status": "open",
+      "source_ids": [
+        "upl_01M6QYAVBDF87BH15JNKP0BM59",
+        "upl_01M6QYAWB0E5M8376P5B5RHT4V"
+      ],
+      "details": {
+        "references": [
+          "bank:15",
+          "title:O04"
+        ],
+        "engine_code": "F10",
+        "model_review": {
+          "model": "anthropic/claude-haiku-5.5",
+          "cached": false,
+          "status": "needs_review",
+          "analysis": "Há um depósito não identificado de R$ 4.380,00 em 28/07/2026 com valor igual ao título de GRAOS DO NORTE LTDA vencido em 24/07/2026. A correspondência é apenas de valor, sem identificação do pagador, por isso a associação ainda não está confirmada.",
+          "next_step": "Confirmar com o cliente GRAOS DO NORTE LTDA, por meio de comprovante bancário ou documento do pagador, se foi ele quem fez o depósito antes de qualquer baixa do título.",
+          "evidence_indices": [
+            1,
+            2
+          ]
+        }
+      },
+      "created_at": "2026-11-06T08:07:29Z",
+      "updated_at": "2026-11-06T08:07:29Z"
+    },
+    {
+      "id": "fnd_01M6QYC0W0FH7T0A6ZP57WQBC4",
+      "run_id": "run_01M6QYB0AKEKBR2P7Y9MV13M2T",
+      "code": "recon.unapplied_cash",
+      "kind": "missing",
+      "severity": "medium",
+      "amount_at_risk": 115000,
+      "currency": "BRL",
+      "title": "Recebimento sem título em aberto: adiantamento de cliente",
+      "explanation": "R$ 1.150,00 em 30/07/2026 (\"PIX RECEBIDO PAO E ARTE PANIFICAD\") não corresponde a nenhum título aberto.\n\nAnálise da IA — sugestão para revisão: O PIX de R$ 1.150,00 recebido em 30/07/2026 do pagador PAO E ARTE PANIFICAD não corresponde a nenhum título aberto apresentado no documento. O achado sugere adiantamento de cliente, mas o documento não traz contrato, pedido ou outra prova dessa natureza.\nPróximo passo sugerido: Verificar com o cliente PAO E ARTE PANIFICAD e com o setor comercial se existe pedido, adiantamento ou contrato que justifique o valor, antes de registrar o recebimento como adiantamento.",
+      "confidence": 0.9700000286102295,
+      "confidence_label": "Confirmado",
+      "evidence": [
+        {
+          "label": "Linha 17 do extrato",
+          "values": {
+            "date": "2026-07-30",
+            "amount": 115000,
+            "description": "PIX RECEBIDO PAO E ARTE PANIFICAD"
+          },
+          "excerpt": "30/07/2026 · PIX RECEBIDO PAO E ARTE PANIFICAD · R$ 1.150,00",
+          "locator": {
+            "row": 17,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V"
+        }
+      ],
+      "status": "open",
+      "source_ids": [
+        "upl_01M6QYAWB0E5M8376P5B5RHT4V"
+      ],
+      "details": {
+        "references": [
+          "bank:17"
+        ],
+        "engine_code": "F12",
+        "model_review": {
+          "model": "anthropic/claude-haiku-5.5",
+          "cached": false,
+          "status": "needs_review",
+          "analysis": "O PIX de R$ 1.150,00 recebido em 30/07/2026 do pagador PAO E ARTE PANIFICAD não corresponde a nenhum título aberto apresentado no documento. O achado sugere adiantamento de cliente, mas o documento não traz contrato, pedido ou outra prova dessa natureza.",
+          "next_step": "Verificar com o cliente PAO E ARTE PANIFICAD e com o setor comercial se existe pedido, adiantamento ou contrato que justifique o valor, antes de registrar o recebimento como adiantamento.",
+          "evidence_indices": [
+            1
+          ]
+        }
+      },
+      "created_at": "2026-11-06T08:07:29Z",
+      "updated_at": "2026-11-06T08:07:29Z"
+    },
+    {
+      "id": "fnd_01M6QYC0VBFBQVVWSQ14SRVE3T",
+      "run_id": "run_01M6QYB0AKEKBR2P7Y9MV13M2T",
+      "code": "recon.withholding_suspected",
+      "kind": "mismatch",
+      "severity": "medium",
+      "amount_at_risk": 62000,
+      "currency": "BRL",
+      "title": "Diferença de 5% em nota de serviço: provável ISS retido",
+      "explanation": "NF 200351 é de serviço e entrou com R$ 620,00 a menos; peça o comprovante de retenção antes de baixar a diferença.\n\nAnálise da IA — sugestão para revisão: O achado indica diferença de R$ 620,00 entre o título de R$ 12.400,00 e o recebimento de R$ 11.780,00, com suspeita de ISS retido na NF 200351. As evidências mostram os valores, mas não o comprovante de retenção, então a causa ainda não está confirmada.\nPróximo passo sugerido: Conferir o comprovante de retenção do ISS da NF 200351 e a nota de serviço correspondente antes de baixar a diferença de R$ 620,00 no título da Sabor da Roca Franquias Ltda.",
+      "confidence": 0.800000011920929,
+      "confidence_label": "Provável",
+      "evidence": [
+        {
+          "label": "Linha 8 do extrato",
+          "values": {
+            "date": "2026-07-17",
+            "amount": 1178000,
+            "description": "PIX RECEBIDO SABOR DA ROCA FRANQU"
+          },
+          "excerpt": "17/07/2026 · PIX RECEBIDO SABOR DA ROCA FRANQU · R$ 11.780,00",
+          "locator": {
+            "row": 8,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V"
+        },
+        {
+          "label": "NF 200351",
+          "values": {
+            "date": "2026-07-17",
+            "amount": 1240000,
+            "document": "NF 200351",
+            "description": "Sabor da Roca Franquias Ltda"
+          },
+          "excerpt": "Sabor da Roca Franquias Ltda · venc. 17/07/2026 · R$ 12.400,00",
+          "locator": {
+            "row": 8,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYATA0EJB9QZ304AEP6WYG"
+        }
+      ],
+      "status": "open",
+      "source_ids": [
+        "upl_01M6QYATA0EJB9QZ304AEP6WYG",
+        "upl_01M6QYAWB0E5M8376P5B5RHT4V"
+      ],
+      "details": {
+        "references": [
+          "bank:8",
+          "title:P08"
+        ],
+        "engine_code": "F05",
+        "model_review": {
+          "model": "anthropic/claude-haiku-5.5",
+          "cached": false,
+          "status": "needs_review",
+          "analysis": "O achado indica diferença de R$ 620,00 entre o título de R$ 12.400,00 e o recebimento de R$ 11.780,00, com suspeita de ISS retido na NF 200351. As evidências mostram os valores, mas não o comprovante de retenção, então a causa ainda não está confirmada.",
+          "next_step": "Conferir o comprovante de retenção do ISS da NF 200351 e a nota de serviço correspondente antes de baixar a diferença de R$ 620,00 no título da Sabor da Roca Franquias Ltda.",
+          "evidence_indices": [
+            1,
+            2
+          ]
+        }
+      },
+      "created_at": "2026-11-06T08:07:29Z",
+      "updated_at": "2026-11-06T08:07:29Z"
+    },
+    {
+      "id": "fnd_01M6QYC0WFF5MVHZ1N9QPBA672",
+      "run_id": "run_01M6QYB0AKEKBR2P7Y9MV13M2T",
+      "code": "recon.ap_premature_recharge",
+      "kind": "mismatch",
+      "severity": "medium",
+      "amount_at_risk": 29400,
+      "currency": "BRL",
+      "title": "Recobrança com 2% enviada antes do vencimento",
+      "explanation": "A cobrança atualizada chegou em 18/07/2026, antes do vencimento original de 20/07/2026.\n\nAnálise da IA — sugestão para revisão: A cobrança atualizada com 2% foi recebida em 18/07/2026, antes do vencimento original de 20/07/2026, conforme a evidência de e-mail de cobrança. Há também registro de pagamento de R$ 14.700,00 na mesma data de vencimento, o que exige conferência para verificar se a recobrança corresponde à mesma NF e se já houve quitação.\nPróximo passo sugerido: Conferir no extrato bancário e no sistema de contas a pagar se o pagamento de R$ 14.700,00 da NF 55120 já foi realizado e se a recobrança de 2% se refere ao mesmo título antes de aceitar qualquer valor adicional.",
+      "confidence": 0.9700000286102295,
+      "confidence_label": "Confirmado",
+      "evidence": [
+        {
+          "label": "E-mail 2",
+          "values": {
+            "date": "2026-07-18T16:52",
+            "document": "ana.lima@caixasboavista.com.br",
+            "description": "RE: cobranca em aberto - Caixas Boa Vista"
+          },
+          "excerpt": "RE: cobranca em aberto - Caixas Boa Vista — ana.lima@caixasboavista.com.br",
+          "locator": {
+            "row": 1,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAXAJEQSS6YDPRAW9JCT8"
+        },
+        {
+          "label": "Linha 9 do extrato",
+          "values": {
+            "date": "2026-07-20",
+            "amount": -1470000,
+            "description": "PAGAMENTO FORNECEDOR NF 55120"
+          },
+          "excerpt": "20/07/2026 · PAGAMENTO FORNECEDOR NF 55120 · R$ 14.700,00",
+          "locator": {
+            "row": 9,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V"
+        }
+      ],
+      "status": "open",
+      "source_ids": [
+        "upl_01M6QYAWB0E5M8376P5B5RHT4V",
+        "upl_01M6QYAXAJEQSS6YDPRAW9JCT8"
+      ],
+      "details": {
+        "references": [
+          "email:2",
+          "bank:9"
+        ],
+        "engine_code": "F17",
+        "model_review": {
+          "model": "anthropic/claude-haiku-5.5",
+          "cached": false,
+          "status": "needs_review",
+          "analysis": "A cobrança atualizada com 2% foi recebida em 18/07/2026, antes do vencimento original de 20/07/2026, conforme a evidência de e-mail de cobrança. Há também registro de pagamento de R$ 14.700,00 na mesma data de vencimento, o que exige conferência para verificar se a recobrança corresponde à mesma NF e se já houve quitação.",
+          "next_step": "Conferir no extrato bancário e no sistema de contas a pagar se o pagamento de R$ 14.700,00 da NF 55120 já foi realizado e se a recobrança de 2% se refere ao mesmo título antes de aceitar qualquer valor adicional.",
+          "evidence_indices": [
+            1,
+            2
+          ]
+        }
+      },
+      "created_at": "2026-11-06T08:07:29Z",
+      "updated_at": "2026-11-06T08:07:29Z"
+    },
+    {
+      "id": "fnd_01M6QYC0WZFEW983YDN7JN5MJV",
+      "run_id": "run_01M6QYB0AKEKBR2P7Y9MV13M2T",
+      "code": "recon.uncharged_late_fees",
+      "kind": "mismatch",
+      "severity": "low",
+      "amount_at_risk": 147515,
+      "currency": "BRL",
+      "title": "Seis títulos pagos com atraso sem multa nem juros",
+      "explanation": "Somando multa e juros contratuais, cerca de R$ 1.475,15 deixaram de ser cobrados.\n\nAnálise da IA — sugestão para revisão: O achado aponta seis títulos pagos com atraso sem multa nem juros, com diferença estimada em cerca de R$ 1.475,15. Nas evidências disponíveis aparecem quatro títulos com vencimentos entre 12/07/2026 e 21/07/2026, mas o texto menciona seis títulos e a evidência não cobre todos eles, então a conferência não pode ser completa.\nPróximo passo sugerido: Localizar os seis títulos pagos com atraso, comparar datas de vencimento e de pagamento com o contrato de cada fornecedor e calcular multa e juros previstos para confirmar se o valor de R$ 1.475,15 está correto.",
+      "confidence": 0.9700000286102295,
+      "confidence_label": "Confirmado",
+      "evidence": [
+        {
+          "label": "NF 200320",
+          "values": {
+            "date": "2026-07-12",
+            "amount": 3864050,
+            "document": "NF 200320",
+            "description": "Confeitaria Lua Cheia Comercio de Alimentos"
+          },
+          "excerpt": "Confeitaria Lua Cheia Comercio de Alimentos · venc. 12/07/2026 · R$ 38.640,50",
+          "locator": {
+            "row": 3,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYATA0EJB9QZ304AEP6WYG"
+        },
+        {
+          "label": "NF 200336",
+          "values": {
+            "date": "2026-07-15",
+            "amount": 630000,
+            "document": "NF 200336",
+            "description": "Rede Trigo Dourado Ltda"
+          },
+          "excerpt": "Rede Trigo Dourado Ltda · venc. 15/07/2026 · R$ 6.300,00",
+          "locator": {
+            "row": 6,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYATA0EJB9QZ304AEP6WYG"
+        },
+        {
+          "label": "NF 200377",
+          "values": {
+            "date": "2026-07-21",
+            "amount": 621000,
+            "document": "NF 200377",
+            "description": "Trigo Express Delivery ME"
+          },
+          "excerpt": "Trigo Express Delivery ME · venc. 21/07/2026 · R$ 6.210,00",
+          "locator": {
+            "row": 11,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYATA0EJB9QZ304AEP6WYG"
+        },
+        {
+          "label": "FAT-2026-0412",
+          "values": {
+            "date": "2026-07-14",
+            "amount": 1045000,
+            "document": "FAT-2026-0412",
+            "description": "NORTE PAES EIRELI"
+          },
+          "excerpt": "NORTE PAES EIRELI · venc. 14/07/2026 · R$ 10.450,00",
+          "locator": {
+            "row": 2,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAVBDF87BH15JNKP0BM59"
+        },
+        {
+          "label": "FAT-2026-0415",
+          "values": {
+            "date": "2026-07-16",
+            "amount": 290000,
+            "document": "FAT-2026-0415",
+            "description": "COLINA VERDE MERCEARIA S/A"
+          },
+          "excerpt": "COLINA VERDE MERCEARIA S/A · venc. 16/07/2026 · R$ 2.900,00",
+          "locator": {
+            "row": 3,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAVBDF87BH15JNKP0BM59"
+        },
+        {
+          "label": "FAT-2026-0420",
+          "values": {
+            "date": "2026-07-24",
+            "amount": 438000,
+            "document": "FAT-2026-0420",
+            "description": "GRAOS DO NORTE LTDA"
+          },
+          "excerpt": "GRAOS DO NORTE LTDA · venc. 24/07/2026 · R$ 4.380,00",
+          "locator": {
+            "row": 4,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAVBDF87BH15JNKP0BM59"
+        }
+      ],
+      "status": "open",
+      "source_ids": [
+        "upl_01M6QYATA0EJB9QZ304AEP6WYG",
+        "upl_01M6QYAVBDF87BH15JNKP0BM59"
+      ],
+      "details": {
+        "references": [
+          "title:P03",
+          "title:P06",
+          "title:P11",
+          "title:O02",
+          "title:O03",
+          "title:O04"
+        ],
+        "engine_code": "F22",
+        "model_review": {
+          "model": "anthropic/claude-haiku-5.5",
+          "cached": false,
+          "status": "needs_review",
+          "analysis": "O achado aponta seis títulos pagos com atraso sem multa nem juros, com diferença estimada em cerca de R$ 1.475,15. Nas evidências disponíveis aparecem quatro títulos com vencimentos entre 12/07/2026 e 21/07/2026, mas o texto menciona seis títulos e a evidência não cobre todos eles, então a conferência não pode ser completa.",
+          "next_step": "Localizar os seis títulos pagos com atraso, comparar datas de vencimento e de pagamento com o contrato de cada fornecedor e calcular multa e juros previstos para confirmar se o valor de R$ 1.475,15 está correto.",
+          "evidence_indices": [
+            1,
+            2,
+            3,
+            4
+          ]
+        }
+      },
+      "created_at": "2026-11-06T08:07:29Z",
+      "updated_at": "2026-11-06T08:07:29Z"
+    },
+    {
+      "id": "fnd_01M6QYC0W3FNBRPNRXWHMAHQ86",
+      "run_id": "run_01M6QYB0AKEKBR2P7Y9MV13M2T",
+      "code": "recon.unbooked_bank_fees",
+      "kind": "missing",
+      "severity": "low",
+      "amount_at_risk": 104200,
+      "currency": "BRL",
+      "title": "Tarifas bancárias sem lançamento",
+      "explanation": "R$ 1.042,00 em tarifas debitadas no extrato precisam de lançamento como despesa bancária.\n\nAnálise da IA — sugestão para revisão: O achado indica R$ 1.042,00 em tarifas debitadas no extrato sem lançamento como despesa bancária. As evidências mostram duas tarifas (R$ 980,00 em 15/07 e R$ 62,00 em 31/07), cuja soma confere com o valor informado. Não há informação sobre se já foram contabilizadas em outro lugar.\nPróximo passo sugerido: Conferir no razão contábil se as tarifas de cobrança de julho e de Pix de julho foram lançadas como despesa bancária, comparando com o extrato completo do banco e com o contrato de tarifas.",
+      "confidence": 0.9700000286102295,
+      "confidence_label": "Confirmado",
+      "evidence": [
+        {
+          "label": "Linha 6 do extrato",
+          "values": {
+            "date": "2026-07-15",
+            "amount": -98000,
+            "description": "TARIFA PACOTE COBRANCA JUL"
+          },
+          "excerpt": "15/07/2026 · TARIFA PACOTE COBRANCA JUL · R$ 980,00",
+          "locator": {
+            "row": 6,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V"
+        },
+        {
+          "label": "Linha 18 do extrato",
+          "values": {
+            "date": "2026-07-31",
+            "amount": -6200,
+            "description": "TARIFA PIX EMISSAO JUL"
+          },
+          "excerpt": "31/07/2026 · TARIFA PIX EMISSAO JUL · R$ 62,00",
+          "locator": {
+            "row": 18,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V"
+        }
+      ],
+      "status": "open",
+      "source_ids": [
+        "upl_01M6QYAWB0E5M8376P5B5RHT4V"
+      ],
+      "details": {
+        "references": [
+          "bank:6",
+          "bank:18"
+        ],
+        "engine_code": "F13",
+        "model_review": {
+          "model": "anthropic/claude-haiku-5.5",
+          "cached": false,
+          "status": "needs_review",
+          "analysis": "O achado indica R$ 1.042,00 em tarifas debitadas no extrato sem lançamento como despesa bancária. As evidências mostram duas tarifas (R$ 980,00 em 15/07 e R$ 62,00 em 31/07), cuja soma confere com o valor informado. Não há informação sobre se já foram contabilizadas em outro lugar.",
+          "next_step": "Conferir no razão contábil se as tarifas de cobrança de julho e de Pix de julho foram lançadas como despesa bancária, comparando com o extrato completo do banco e com o contrato de tarifas.",
+          "evidence_indices": [
+            1,
+            2
+          ]
+        }
+      },
+      "created_at": "2026-11-06T08:07:29Z",
+      "updated_at": "2026-11-06T08:07:29Z"
+    },
+    {
+      "id": "fnd_01M6QYC0V5FJ2RPWMG9FNASDA0",
+      "run_id": "run_01M6QYB0AKEKBR2P7Y9MV13M2T",
+      "code": "recon.paid_late_no_fee",
+      "kind": "mismatch",
+      "severity": "low",
+      "amount_at_risk": 78569,
+      "currency": "BRL",
+      "title": "Vencimento em domingo; paga 1 dia útil atrasada sem encargos",
+      "explanation": "Multa de 2% e juros de 1% ao mês não cobrados em NF 200320: cerca de R$ 785,69.\n\nAnálise da IA — sugestão para revisão: A nota de R$ 38.640,50 venceu em 12/07/2026, um domingo, e foi paga em 14/07/2026, o primeiro dia útil seguinte. O documento aponta que não foram cobrados multa de 2% e juros de 1% ao mês, o que daria cerca de R$ 785,69. A análise depende da política de prorrogação para dias não úteis e da cláusula contratual da nota.\nPróximo passo sugerido: Conferir o contrato ou as condições comerciais da Confeitaria Lua Cheia e a política de vencimento em fim de semana para decidir se os encargos são devidos ou se a ausência de cobrança é regular.",
+      "confidence": 0.9700000286102295,
+      "confidence_label": "Confirmado",
+      "evidence": [
+        {
+          "label": "Linha 4 do extrato",
+          "values": {
+            "date": "2026-07-14",
+            "amount": 4376050,
+            "description": "TED RECEBIDA CONFEITARIA LUA CHEI"
+          },
+          "excerpt": "14/07/2026 · TED RECEBIDA CONFEITARIA LUA CHEI · R$ 43.760,50",
+          "locator": {
+            "row": 4,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V"
+        },
+        {
+          "label": "NF 200320",
+          "values": {
+            "date": "2026-07-12",
+            "amount": 3864050,
+            "document": "NF 200320",
+            "description": "Confeitaria Lua Cheia Comercio de Alimentos"
+          },
+          "excerpt": "Confeitaria Lua Cheia Comercio de Alimentos · venc. 12/07/2026 · R$ 38.640,50",
+          "locator": {
+            "row": 3,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYATA0EJB9QZ304AEP6WYG"
+        }
+      ],
+      "status": "open",
+      "source_ids": [
+        "upl_01M6QYATA0EJB9QZ304AEP6WYG",
+        "upl_01M6QYAWB0E5M8376P5B5RHT4V"
+      ],
+      "details": {
+        "references": [
+          "bank:4",
+          "title:P03"
+        ],
+        "engine_code": "F03",
+        "model_review": {
+          "model": "anthropic/claude-haiku-5.5",
+          "cached": false,
+          "status": "needs_review",
+          "analysis": "A nota de R$ 38.640,50 venceu em 12/07/2026, um domingo, e foi paga em 14/07/2026, o primeiro dia útil seguinte. O documento aponta que não foram cobrados multa de 2% e juros de 1% ao mês, o que daria cerca de R$ 785,69. A análise depende da política de prorrogação para dias não úteis e da cláusula contratual da nota.",
+          "next_step": "Conferir o contrato ou as condições comerciais da Confeitaria Lua Cheia e a política de vencimento em fim de semana para decidir se os encargos são devidos ou se a ausência de cobrança é regular.",
+          "evidence_indices": [
+            1,
+            2
+          ]
+        }
+      },
+      "created_at": "2026-11-06T08:07:29Z",
+      "updated_at": "2026-11-06T08:07:29Z"
+    },
+    {
+      "id": "fnd_01M6QYC0VHFWTBBFMZGNYDP4C9",
+      "run_id": "run_01M6QYB0AKEKBR2P7Y9MV13M2T",
+      "code": "recon.overpayment_fine_received",
+      "kind": "mismatch",
+      "severity": "low",
+      "amount_at_risk": 39000,
+      "currency": "BRL",
+      "title": "Recebido 2% a mais: multa por atraso a contabilizar como receita financeira",
+      "explanation": "NF 200383 entrou com R$ 390,00 acima do valor de face.\n\nAnálise da IA — sugestão para revisão: A TED de R$ 19.890,00 recebida em 23/07/2026 supera em R$ 390,00 o valor de face do título de R$ 19.500,00 da NF 200383, com vencimento em 22/07/2026. A evidência não mostra a origem do excedente, por isso a hipótese de multa por atraso ainda precisa ser conferida.\nPróximo passo sugerido: Conferir a TED de 23/07/2026 e o extrato bancário e verificar se o excedente de R$ 390,00 corresponde a multa ou juros de atraso antes de classificá-lo como receita financeira.",
+      "confidence": 0.9700000286102295,
+      "confidence_label": "Confirmado",
+      "evidence": [
+        {
+          "label": "Linha 12 do extrato",
+          "values": {
+            "date": "2026-07-23",
+            "amount": 1989000,
+            "description": "TED RECEBIDA CNPJ 24680135000178"
+          },
+          "excerpt": "23/07/2026 · TED RECEBIDA CNPJ 24680135000178 · R$ 19.890,00",
+          "locator": {
+            "row": 12,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V"
+        },
+        {
+          "label": "NF 200383",
+          "values": {
+            "date": "2026-07-22",
+            "amount": 1950000,
+            "document": "NF 200383",
+            "description": "Padaria Beira Rio Ltda"
+          },
+          "excerpt": "Padaria Beira Rio Ltda · venc. 22/07/2026 · R$ 19.500,00",
+          "locator": {
+            "row": 12,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYATA0EJB9QZ304AEP6WYG"
+        }
+      ],
+      "status": "open",
+      "source_ids": [
+        "upl_01M6QYATA0EJB9QZ304AEP6WYG",
+        "upl_01M6QYAWB0E5M8376P5B5RHT4V"
+      ],
+      "details": {
+        "references": [
+          "bank:12",
+          "title:P12"
+        ],
+        "engine_code": "F07",
+        "model_review": {
+          "model": "anthropic/claude-haiku-5.5",
+          "cached": false,
+          "status": "needs_review",
+          "analysis": "A TED de R$ 19.890,00 recebida em 23/07/2026 supera em R$ 390,00 o valor de face do título de R$ 19.500,00 da NF 200383, com vencimento em 22/07/2026. A evidência não mostra a origem do excedente, por isso a hipótese de multa por atraso ainda precisa ser conferida.",
+          "next_step": "Conferir a TED de 23/07/2026 e o extrato bancário e verificar se o excedente de R$ 390,00 corresponde a multa ou juros de atraso antes de classificá-lo como receita financeira.",
+          "evidence_indices": [
+            1,
+            2
+          ]
+        }
+      },
+      "created_at": "2026-11-06T08:07:29Z",
+      "updated_at": "2026-11-06T08:07:29Z"
+    },
+    {
+      "id": "fnd_01M6QYC0VMFGEBJBK23ZAM79NT",
+      "run_id": "run_01M6QYB0AKEKBR2P7Y9MV13M2T",
+      "code": "recon.ambiguous_name_match",
+      "kind": "note",
+      "severity": "low",
+      "amount_at_risk": 14490,
+      "currency": "BRL",
+      "title": "Nome ambíguo resolvido pelo valor; 9 dias de atraso sem encargos",
+      "explanation": "\"PIX RECEBIDO REDE TRIGO\" serve para mais de um cliente; só Rede Trigo Dourado Ltda tinha título aberto de R$ 6.300,00.\n\nAnálise da IA — sugestão para revisão: O PIX de R$ 6.300,00 com a descrição Rede Trigo pode corresponder ao título da Rede Trigo Dourado Ltda, de mesmo valor, ou ao título da Trigo Express Delivery ME, de R$ 6.210,00, que não coincide com o valor. As evidências não trazem o pagador do PIX, então a associação depende de confirmação.\nPróximo passo sugerido: Consultar o extrato PIX com o identificador completo do pagador e confirmar a qual cliente pertence o recebimento de R$ 6.300,00 antes de baixar o título.",
+      "confidence": 0.800000011920929,
+      "confidence_label": "Provável",
+      "evidence": [
+        {
+          "label": "Linha 13 do extrato",
+          "values": {
+            "date": "2026-07-24",
+            "amount": 630000,
+            "description": "PIX RECEBIDO REDE TRIGO"
+          },
+          "excerpt": "24/07/2026 · PIX RECEBIDO REDE TRIGO · R$ 6.300,00",
+          "locator": {
+            "row": 13,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V"
+        },
+        {
+          "label": "NF 200336",
+          "values": {
+            "date": "2026-07-15",
+            "amount": 630000,
+            "document": "NF 200336",
+            "description": "Rede Trigo Dourado Ltda"
+          },
+          "excerpt": "Rede Trigo Dourado Ltda · venc. 15/07/2026 · R$ 6.300,00",
+          "locator": {
+            "row": 6,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYATA0EJB9QZ304AEP6WYG"
+        },
+        {
+          "label": "NF 200377",
+          "values": {
+            "date": "2026-07-21",
+            "amount": 621000,
+            "document": "NF 200377",
+            "description": "Trigo Express Delivery ME"
+          },
+          "excerpt": "Trigo Express Delivery ME · venc. 21/07/2026 · R$ 6.210,00",
+          "locator": {
+            "row": 11,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYATA0EJB9QZ304AEP6WYG"
+        }
+      ],
+      "status": "open",
+      "source_ids": [
+        "upl_01M6QYATA0EJB9QZ304AEP6WYG",
+        "upl_01M6QYAWB0E5M8376P5B5RHT4V"
+      ],
+      "details": {
+        "references": [
+          "bank:13",
+          "title:P06",
+          "title:P11"
+        ],
+        "engine_code": "F08",
+        "model_review": {
+          "model": "anthropic/claude-haiku-5.5",
+          "cached": false,
+          "status": "needs_review",
+          "analysis": "O PIX de R$ 6.300,00 com a descrição Rede Trigo pode corresponder ao título da Rede Trigo Dourado Ltda, de mesmo valor, ou ao título da Trigo Express Delivery ME, de R$ 6.210,00, que não coincide com o valor. As evidências não trazem o pagador do PIX, então a associação depende de confirmação.",
+          "next_step": "Consultar o extrato PIX com o identificador completo do pagador e confirmar a qual cliente pertence o recebimento de R$ 6.300,00 antes de baixar o título.",
+          "evidence_indices": [
+            1,
+            2,
+            3
+          ]
+        }
+      },
+      "created_at": "2026-11-06T08:07:29Z",
+      "updated_at": "2026-11-06T08:07:29Z"
+    },
+    {
+      "id": "fnd_01M6QYC0VXF5NAPX3Z5HEBT8J0",
+      "run_id": "run_01M6QYB0AKEKBR2P7Y9MV13M2T",
+      "code": "recon.customer_master_duplicate",
+      "kind": "duplicate",
+      "severity": "low",
+      "amount_at_risk": 0,
+      "currency": "BRL",
+      "title": "Mesmo CNPJ com nomes diferentes nos dois cadastros",
+      "explanation": "O CNPJ 78901234000101 aparece como \"COLINA VERDE MERCEARIA S/A\" e \"Mercearia Colina Verde Alimentos SA\"; unifique o cadastro para o casamento por nome não depender do CNPJ.\n\nAnálise da IA — sugestão para revisão: O mesmo CNPJ aparece em dois cadastros com nomes diferentes: COLINA VERDE MERCEARIA S/A e Mercearia Colina Verde Alimentos SA. Há dois títulos com vencimento em 16/07/2026, de R$ 98.000,00 e R$ 2.900,00, e um PIX de R$ 2.900,00 em 29/07/2026. O documento não indica qual título o PIX quita, e a diferença de nomes pode ser erro de cadastro ou de razão social.\nPróximo passo sugerido: Verificar no cadastro de clientes e na consulta do CNPJ na Receita Federal se os dois nomes correspondem à mesma entidade e unificar o cadastro, conferindo antes qual título o PIX de R$ 2.900,00 deve quitar.",
+      "confidence": 0.9700000286102295,
+      "confidence_label": "Confirmado",
+      "evidence": [
+        {
+          "label": "NF 200340",
+          "values": {
+            "date": "2026-07-16",
+            "amount": 9800000,
+            "document": "NF 200340",
+            "description": "Mercearia Colina Verde Alimentos SA"
+          },
+          "excerpt": "Mercearia Colina Verde Alimentos SA · venc. 16/07/2026 · R$ 98.000,00",
+          "locator": {
+            "row": 7,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYATA0EJB9QZ304AEP6WYG"
+        },
+        {
+          "label": "FAT-2026-0415",
+          "values": {
+            "date": "2026-07-16",
+            "amount": 290000,
+            "document": "FAT-2026-0415",
+            "description": "COLINA VERDE MERCEARIA S/A"
+          },
+          "excerpt": "COLINA VERDE MERCEARIA S/A · venc. 16/07/2026 · R$ 2.900,00",
+          "locator": {
+            "row": 3,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAVBDF87BH15JNKP0BM59"
+        },
+        {
+          "label": "Linha 16 do extrato",
+          "values": {
+            "date": "2026-07-29",
+            "amount": 290000,
+            "description": "PIX RECEBIDO MERCEARIA COLINA VER"
+          },
+          "excerpt": "29/07/2026 · PIX RECEBIDO MERCEARIA COLINA VER · R$ 2.900,00",
+          "locator": {
+            "row": 16,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V"
+        }
+      ],
+      "status": "open",
+      "source_ids": [
+        "upl_01M6QYATA0EJB9QZ304AEP6WYG",
+        "upl_01M6QYAVBDF87BH15JNKP0BM59",
+        "upl_01M6QYAWB0E5M8376P5B5RHT4V"
+      ],
+      "details": {
+        "references": [
+          "title:P07",
+          "title:O03",
+          "bank:16"
+        ],
+        "engine_code": "F11",
+        "model_review": {
+          "model": "anthropic/claude-haiku-5.5",
+          "cached": false,
+          "status": "needs_review",
+          "analysis": "O mesmo CNPJ aparece em dois cadastros com nomes diferentes: COLINA VERDE MERCEARIA S/A e Mercearia Colina Verde Alimentos SA. Há dois títulos com vencimento em 16/07/2026, de R$ 98.000,00 e R$ 2.900,00, e um PIX de R$ 2.900,00 em 29/07/2026. O documento não indica qual título o PIX quita, e a diferença de nomes pode ser erro de cadastro ou de razão social.",
+          "next_step": "Verificar no cadastro de clientes e na consulta do CNPJ na Receita Federal se os dois nomes correspondem à mesma entidade e unificar o cadastro, conferindo antes qual título o PIX de R$ 2.900,00 deve quitar.",
+          "evidence_indices": [
+            1,
+            2,
+            3
+          ]
+        }
+      },
+      "created_at": "2026-11-06T08:07:29Z",
+      "updated_at": "2026-11-06T08:07:29Z"
+    },
+    {
+      "id": "fnd_01M6QYC0TZEKARX1TAKMH8WTQT",
+      "run_id": "run_01M6QYB0AKEKBR2P7Y9MV13M2T",
+      "code": "recon.one_payment_many_titles",
+      "kind": "note",
+      "severity": "info",
+      "amount_at_risk": 0,
+      "currency": "BRL",
+      "title": "Uma TED paga duas notas",
+      "explanation": "O crédito de R$ 43.760,50 em 14/07/2026 quita de uma vez NF 200320 e NF 200372.\n\nAnálise da IA — sugestão para revisão: A TED de R$ 43.760,50 em 14/07/2026 coincide com a soma de duas notas da Confeitaria Lua Cheia (R$ 38.640,50 com vencimento em 12/07/2026 e R$ 5.120,00 com vencimento em 20/07/2026). Um único crédito quitando duas notas pode ser legítimo, mas precisa ser confirmado com o comprovante bancário e com a rastreabilidade do lançamento para cada nota.\nPróximo passo sugerido: Conferir o comprovante completo da TED e o extrato bancário, verificar se o valor foi destinado às duas notas e registrar a baixa de cada título separadamente com a respectiva referência.",
+      "confidence": 0.9700000286102295,
+      "confidence_label": "Confirmado",
+      "evidence": [
+        {
+          "label": "Linha 4 do extrato",
+          "values": {
+            "date": "2026-07-14",
+            "amount": 4376050,
+            "description": "TED RECEBIDA CONFEITARIA LUA CHEI"
+          },
+          "excerpt": "14/07/2026 · TED RECEBIDA CONFEITARIA LUA CHEI · R$ 43.760,50",
+          "locator": {
+            "row": 4,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V"
+        },
+        {
+          "label": "NF 200320",
+          "values": {
+            "date": "2026-07-12",
+            "amount": 3864050,
+            "document": "NF 200320",
+            "description": "Confeitaria Lua Cheia Comercio de Alimentos"
+          },
+          "excerpt": "Confeitaria Lua Cheia Comercio de Alimentos · venc. 12/07/2026 · R$ 38.640,50",
+          "locator": {
+            "row": 3,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYATA0EJB9QZ304AEP6WYG"
+        },
+        {
+          "label": "NF 200372",
+          "values": {
+            "date": "2026-07-20",
+            "amount": 512000,
+            "document": "NF 200372",
+            "description": "Confeitaria Lua Cheia Comercio de Alimentos"
+          },
+          "excerpt": "Confeitaria Lua Cheia Comercio de Alimentos · venc. 20/07/2026 · R$ 5.120,00",
+          "locator": {
+            "row": 10,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYATA0EJB9QZ304AEP6WYG"
+        }
+      ],
+      "status": "open",
+      "source_ids": [
+        "upl_01M6QYATA0EJB9QZ304AEP6WYG",
+        "upl_01M6QYAWB0E5M8376P5B5RHT4V"
+      ],
+      "details": {
+        "references": [
+          "bank:4",
+          "title:P03",
+          "title:P10"
+        ],
+        "engine_code": "F01",
+        "model_review": {
+          "model": "anthropic/claude-haiku-5.5",
+          "cached": false,
+          "status": "needs_review",
+          "analysis": "A TED de R$ 43.760,50 em 14/07/2026 coincide com a soma de duas notas da Confeitaria Lua Cheia (R$ 38.640,50 com vencimento em 12/07/2026 e R$ 5.120,00 com vencimento em 20/07/2026). Um único crédito quitando duas notas pode ser legítimo, mas precisa ser confirmado com o comprovante bancário e com a rastreabilidade do lançamento para cada nota.",
+          "next_step": "Conferir o comprovante completo da TED e o extrato bancário, verificar se o valor foi destinado às duas notas e registrar a baixa de cada título separadamente com a respectiva referência.",
+          "evidence_indices": [
+            1,
+            2,
+            3
+          ]
+        }
+      },
+      "created_at": "2026-11-06T08:07:29Z",
+      "updated_at": "2026-11-06T08:07:29Z"
+    },
+    {
+      "id": "fnd_01M6QYC0V2FBYRAD6ZN2ASNDJ4",
+      "run_id": "run_01M6QYB0AKEKBR2P7Y9MV13M2T",
+      "code": "recon.early_payment",
+      "kind": "note",
+      "severity": "info",
+      "amount_at_risk": 0,
+      "currency": "BRL",
+      "title": "Nota paga 6 dias antes do vencimento",
+      "explanation": "NF 200372 vencia em 20/07/2026 e foi paga em 14/07/2026.\n\nAnálise da IA — sugestão para revisão: A nota de R$ 5.120,00 com vencimento em 20/07/2026 aparece como paga em 14/07/2026, seis dias antes do vencimento. O pagamento antecipado é plausível, mas o documento não traz a data de baixa nem a conciliação individual da nota com a TED.\nPróximo passo sugerido: Verificar no sistema contábil a data de baixa da nota e confirmar com o comprovante da TED que o valor foi efetivamente destinado a essa nota.",
+      "confidence": 0.9700000286102295,
+      "confidence_label": "Confirmado",
+      "evidence": [
+        {
+          "label": "Linha 4 do extrato",
+          "values": {
+            "date": "2026-07-14",
+            "amount": 4376050,
+            "description": "TED RECEBIDA CONFEITARIA LUA CHEI"
+          },
+          "excerpt": "14/07/2026 · TED RECEBIDA CONFEITARIA LUA CHEI · R$ 43.760,50",
+          "locator": {
+            "row": 4,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V"
+        },
+        {
+          "label": "NF 200372",
+          "values": {
+            "date": "2026-07-20",
+            "amount": 512000,
+            "document": "NF 200372",
+            "description": "Confeitaria Lua Cheia Comercio de Alimentos"
+          },
+          "excerpt": "Confeitaria Lua Cheia Comercio de Alimentos · venc. 20/07/2026 · R$ 5.120,00",
+          "locator": {
+            "row": 10,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYATA0EJB9QZ304AEP6WYG"
+        }
+      ],
+      "status": "open",
+      "source_ids": [
+        "upl_01M6QYATA0EJB9QZ304AEP6WYG",
+        "upl_01M6QYAWB0E5M8376P5B5RHT4V"
+      ],
+      "details": {
+        "references": [
+          "bank:4",
+          "title:P10"
+        ],
+        "engine_code": "F02",
+        "model_review": {
+          "model": "anthropic/claude-haiku-5.5",
+          "cached": false,
+          "status": "needs_review",
+          "analysis": "A nota de R$ 5.120,00 com vencimento em 20/07/2026 aparece como paga em 14/07/2026, seis dias antes do vencimento. O pagamento antecipado é plausível, mas o documento não traz a data de baixa nem a conciliação individual da nota com a TED.",
+          "next_step": "Verificar no sistema contábil a data de baixa da nota e confirmar com o comprovante da TED que o valor foi efetivamente destinado a essa nota.",
+          "evidence_indices": [
+            1,
+            2
+          ]
+        }
+      },
+      "created_at": "2026-11-06T08:07:29Z",
+      "updated_at": "2026-11-06T08:07:29Z"
+    },
+    {
+      "id": "fnd_01M6QYC0W9FEVB4NV0TNBFZYTH",
+      "run_id": "run_01M6QYB0AKEKBR2P7Y9MV13M2T",
+      "code": "recon.paid_without_nosso_numero",
+      "kind": "note",
+      "severity": "info",
+      "amount_at_risk": 0,
+      "currency": "BRL",
+      "title": "Pago por Pix, sem nosso número no extrato",
+      "explanation": "NF 200312 tinha boleto (000098765002), mas o cliente pagou por Pix identificado só pelo nome.\n\nAnálise da IA — sugestão para revisão: Um Pix de R$ 2.700,00 recebido em 10/07/2026 de PAO E ARTE PANIFICADORA LTDA corresponde ao valor e à data de vencimento de um título, mas o pagamento não traz o nosso número do boleto, sendo identificado apenas pelo nome. A associação depende de confirmação, pois o achado indica que o título estava vinculado a um boleto.\nPróximo passo sugerido: Conferir o comprovante do Pix e os dados do pagador com o cliente Pao & Arte Panificadora Ltda, confirmando antes de baixar o título associado ao boleto da NF 200312 no contas a receber.",
+      "confidence": 0.9700000286102295,
+      "confidence_label": "Confirmado",
+      "evidence": [
+        {
+          "label": "Linha 2 do extrato",
+          "values": {
+            "date": "2026-07-10",
+            "amount": 270000,
+            "description": "PIX RECEBIDO PAO E ARTE PANIFICAD"
+          },
+          "excerpt": "10/07/2026 · PIX RECEBIDO PAO E ARTE PANIFICAD · R$ 2.700,00",
+          "locator": {
+            "row": 2,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAWB0E5M8376P5B5RHT4V"
+        },
+        {
+          "label": "NF 200312",
+          "values": {
+            "date": "2026-07-10",
+            "amount": 270000,
+            "document": "NF 200312",
+            "description": "Pao & Arte Panificadora Ltda"
+          },
+          "excerpt": "Pao & Arte Panificadora Ltda · venc. 10/07/2026 · R$ 2.700,00",
+          "locator": {
+            "row": 2,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYATA0EJB9QZ304AEP6WYG"
+        }
+      ],
+      "status": "open",
+      "source_ids": [
+        "upl_01M6QYATA0EJB9QZ304AEP6WYG",
+        "upl_01M6QYAWB0E5M8376P5B5RHT4V"
+      ],
+      "details": {
+        "references": [
+          "bank:2",
+          "title:P02"
+        ],
+        "engine_code": "F15",
+        "model_review": {
+          "model": "anthropic/claude-haiku-5.5",
+          "cached": false,
+          "status": "needs_review",
+          "analysis": "Um Pix de R$ 2.700,00 recebido em 10/07/2026 de PAO E ARTE PANIFICADORA LTDA corresponde ao valor e à data de vencimento de um título, mas o pagamento não traz o nosso número do boleto, sendo identificado apenas pelo nome. A associação depende de confirmação, pois o achado indica que o título estava vinculado a um boleto.",
+          "next_step": "Conferir o comprovante do Pix e os dados do pagador com o cliente Pao & Arte Panificadora Ltda, confirmando antes de baixar o título associado ao boleto da NF 200312 no contas a receber.",
+          "evidence_indices": [
+            1,
+            2
+          ]
+        }
+      },
+      "created_at": "2026-11-06T08:07:29Z",
+      "updated_at": "2026-11-06T08:07:29Z"
+    },
+    {
+      "id": "fnd_01M6QYC0X2FDPS3M5QDTC9MCT7",
+      "run_id": "run_01M6QYB0AKEKBR2P7Y9MV13M2T",
+      "code": "recon.invalid_tax_ids",
+      "kind": "note",
+      "severity": "info",
+      "amount_at_risk": 0,
+      "currency": "BRL",
+      "title": "Todos os 11 CNPJs falham no dígito verificador",
+      "explanation": "Nenhum documento dos cadastros passa na conferência do dígito verificador: os cadastros parecem fictícios ou corrompidos.\n\nAnálise da IA — sugestão para revisão: O achado afirma que nenhum dos 11 CNPJs passa na conferência do dígito verificador, sugerindo cadastros fictícios ou corrompidos. Porém, as evidências trazem apenas dois fornecedores, Paoê Arte Panificadora Ltda e Norte Paes Eireli, e não há os demais CNPJs para verificação. O valor do achado é zero, então o impacto financeiro direto não está quantificado.\nPróximo passo sugerido: Consultar o cadastro dos 11 CNPJs na base oficial da Receita Federal, conferir os dígitos verificadores de cada um e comparar com os documentos fiscais e contratos de fornecedores antes de manter ou bloquear qualquer cadastro.",
+      "confidence": 0.9700000286102295,
+      "confidence_label": "Confirmado",
+      "evidence": [
+        {
+          "label": "NF 200311",
+          "values": {
+            "date": "2026-07-10",
+            "amount": 2430000,
+            "document": "NF 200311",
+            "description": "Pao & Arte Panificadora Ltda"
+          },
+          "excerpt": "Pao & Arte Panificadora Ltda · venc. 10/07/2026 · R$ 24.300,00",
+          "locator": {
+            "row": 1,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYATA0EJB9QZ304AEP6WYG"
+        },
+        {
+          "label": "FAT-2026-0412",
+          "values": {
+            "date": "2026-07-14",
+            "amount": 1045000,
+            "document": "FAT-2026-0412",
+            "description": "NORTE PAES EIRELI"
+          },
+          "excerpt": "NORTE PAES EIRELI · venc. 14/07/2026 · R$ 10.450,00",
+          "locator": {
+            "row": 2,
+            "type": "row"
+          },
+          "source_id": "upl_01M6QYAVBDF87BH15JNKP0BM59"
+        }
+      ],
+      "status": "open",
+      "source_ids": [
+        "upl_01M6QYATA0EJB9QZ304AEP6WYG",
+        "upl_01M6QYAVBDF87BH15JNKP0BM59"
+      ],
+      "details": {
+        "references": [
+          "title:P01",
+          "title:O02"
+        ],
+        "engine_code": "F23",
+        "model_review": {
+          "model": "anthropic/claude-haiku-5.5",
+          "cached": false,
+          "status": "needs_review",
+          "analysis": "O achado afirma que nenhum dos 11 CNPJs passa na conferência do dígito verificador, sugerindo cadastros fictícios ou corrompidos. Porém, as evidências trazem apenas dois fornecedores, Paoê Arte Panificadora Ltda e Norte Paes Eireli, e não há os demais CNPJs para verificação. O valor do achado é zero, então o impacto financeiro direto não está quantificado.",
+          "next_step": "Consultar o cadastro dos 11 CNPJs na base oficial da Receita Federal, conferir os dígitos verificadores de cada um e comparar com os documentos fiscais e contratos de fornecedores antes de manter ou bloquear qualquer cadastro.",
+          "evidence_indices": [
+            1,
+            2
+          ]
+        }
+      },
+      "created_at": "2026-11-06T08:07:29Z",
+      "updated_at": "2026-11-06T08:07:29Z"
+    }
+  ]
+}

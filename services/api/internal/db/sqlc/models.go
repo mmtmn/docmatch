@@ -102,6 +102,32 @@ type AuditLogDefault struct {
 	CreatedAt  time.Time
 }
 
+type BillingAccount struct {
+	OrgID            uuid.UUID
+	Livemode         bool
+	StripeCustomerID string
+	Blocked          bool
+	CreatedAt        time.Time
+}
+
+type BillingOrder struct {
+	ID              uuid.UUID
+	OrgID           uuid.UUID
+	Livemode        bool
+	IdempotencyKey  string
+	Kind            string
+	PlanCode        string
+	Credits         int64
+	AmountCents     int64
+	PriceID         string
+	StripeSessionID *string
+	CheckoutUrl     *string
+	ExpiresAt       *time.Time
+	PaidAt          *time.Time
+	CreatedAt       time.Time
+	Currency        string
+}
+
 type BlogPost struct {
 	ID          uuid.UUID
 	TopicID     *uuid.UUID
@@ -173,11 +199,13 @@ type BurstPool struct {
 }
 
 type CreditAccount struct {
-	OrgID     uuid.UUID
-	Balance   int64
-	Held      int64
-	LedgerSeq int64
-	UpdatedAt time.Time
+	OrgID          uuid.UUID
+	Balance        int64
+	Held           int64
+	LedgerSeq      int64
+	UpdatedAt      time.Time
+	BillingBlocked bool
+	TokenExempt    bool
 }
 
 type CreditGrant struct {
@@ -204,6 +232,7 @@ type CreditHold struct {
 	Reference     *string
 	CreatedAt     time.Time
 	ClosedAt      *time.Time
+	Sponsored     bool
 }
 
 type CreditLedger struct {
@@ -241,16 +270,18 @@ type CreditLedgerDefault struct {
 }
 
 type Customization struct {
-	ID        uuid.UUID
-	OrgID     uuid.UUID
-	UserID    *uuid.UUID
-	Request   string
-	Status    string
-	Plan      []byte
-	Result    []byte
-	Credits   int64
-	CreatedAt time.Time
-	AppliedAt *time.Time
+	ID          uuid.UUID
+	OrgID       uuid.UUID
+	UserID      *uuid.UUID
+	Request     string
+	Status      string
+	Plan        []byte
+	Result      []byte
+	Credits     int64
+	CreatedAt   time.Time
+	AppliedAt   *time.Time
+	BaseVersion int32
+	RequestKey  *uuid.UUID
 }
 
 type Feedback struct {
@@ -622,6 +653,7 @@ type Subscription struct {
 	CanceledAt           *time.Time
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
+	Livemode             bool
 }
 
 type TenantKey struct {
@@ -638,6 +670,7 @@ type TenantTheme struct {
 	Css       *string
 	Version   int32
 	UpdatedAt time.Time
+	Endpoints []byte
 }
 
 type Tool struct {
@@ -733,4 +766,14 @@ type Workflow struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	DeletedAt   *time.Time
+}
+
+type WorkspaceVersion struct {
+	OrgID           uuid.UUID
+	Version         int32
+	Manifest        []byte
+	Endpoints       []byte
+	CustomizationID *uuid.UUID
+	CreatedBy       *uuid.UUID
+	CreatedAt       time.Time
 }

@@ -8,7 +8,7 @@ export const LANE_IDS = ['app', 'api_batch', 'api_standard', 'api_priority'] as 
 export type LaneId = (typeof LANE_IDS)[number];
 
 export const PLAN_NUMBER_FIELDS = [
-  'price_usd',
+  'price_brl',
   'tokens',
   'document_files_per_run',
   'document_file_mb',
@@ -31,6 +31,7 @@ export type Plan = { readonly [K in (typeof PLAN_NUMBER_FIELDS)[number]]: number
 };
 
 export interface Pricing {
+  readonly token_brl: number;
   readonly token_usd: number;
   readonly min_tokens_per_run: number;
   readonly quote_ttl_minutes: number;
@@ -49,7 +50,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function validatePricing(data: unknown, source: string): Pricing {
   if (!isRecord(data)) throw new Error(`${source}: conteúdo inválido (esperado um mapa YAML)`);
   const problems: string[] = [];
-  for (const key of ['token_usd', 'min_tokens_per_run', 'quote_ttl_minutes'] as const) {
+  for (const key of [
+    'token_brl',
+    'token_usd',
+    'min_tokens_per_run',
+    'quote_ttl_minutes',
+  ] as const) {
     if (typeof data[key] !== 'number') problems.push(`${key} (número)`);
   }
   const lanes = data['lanes'];
@@ -112,6 +118,7 @@ function publicSubset(data: Pricing): Pricing {
   for (const lane of LANE_IDS) lanes[lane] = data.lanes[lane];
   return {
     token_usd: data.token_usd,
+    token_brl: data.token_brl,
     min_tokens_per_run: data.min_tokens_per_run,
     quote_ttl_minutes: data.quote_ttl_minutes,
     lanes,

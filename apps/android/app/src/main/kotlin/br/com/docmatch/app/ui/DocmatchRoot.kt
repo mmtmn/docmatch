@@ -39,14 +39,14 @@ fun DocmatchRoot(dm: Docmatch) {
             when (val s = session.state.collectAsState().value) {
                 SessionState.Loading -> Scaffold { p -> androidx.compose.foundation.layout.Box(Modifier.padding(p)) { Loading(t("mobile.loading")) } }
                 is SessionState.SignedOut -> Scaffold { p -> androidx.compose.foundation.layout.Box(Modifier.padding(p)) { LoginScreen(s, session, dm.baseUrl) } }
-                is SessionState.SignedIn -> SignedIn(dm) { notice -> session.signedOut(notice) }
+                is SessionState.SignedIn -> SignedIn(dm, s.me.credits?.tokenExempt == true) { notice -> session.signedOut(notice) }
             }
         }
     }
 }
 
 @Composable
-private fun SignedIn(dm: Docmatch, onSignedOut: (String?) -> Unit) {
+private fun SignedIn(dm: Docmatch, tokenExempt: Boolean, onSignedOut: (String?) -> Unit) {
     val nav = rememberNavController()
     val tabs =
         listOf(
@@ -78,7 +78,7 @@ private fun SignedIn(dm: Docmatch, onSignedOut: (String?) -> Unit) {
         NavHost(nav, startDestination = "new", modifier = Modifier.padding(padding)) {
             composable("new") {
                 val vm: NewRunViewModel = viewModel { NewRunViewModel(dm) }
-                NewRunScreen(vm) { runId -> nav.navigate("run/$runId") }
+                NewRunScreen(vm, tokenExempt) { runId -> nav.navigate("run/$runId") }
             }
             composable("history") {
                 val vm: HistoryViewModel = viewModel { HistoryViewModel(dm) }
@@ -91,7 +91,7 @@ private fun SignedIn(dm: Docmatch, onSignedOut: (String?) -> Unit) {
             composable("run/{id}") { back ->
                 val id = back.arguments?.getString("id").orEmpty()
                 val vm: RunViewModel = viewModel(key = "run-$id") { RunViewModel(dm, id) }
-                RunScreen(vm)
+                RunScreen(vm) { nav.navigate("new") }
             }
         }
     }

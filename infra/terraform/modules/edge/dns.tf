@@ -150,6 +150,12 @@ locals {
   # Certificate authorities allowed to issue for the domain: ACM (Amazon) for CloudFront and
   # Let's Encrypt for the origin certificate Caddy obtains on the instance.
   caa_issuers = ["amazon.com", "amazontrust.com", "awstrust.com", "amazonaws.com", "letsencrypt.org"]
+  # Route 53 has one TXT record set per name. Merge apex verifications with SPF so
+  # extra_records cannot compete with (or overwrite) the existing apex record set.
+  apex_txt_records = distinct(concat(
+    compact([var.apex_spf]),
+    flatten([for r in var.extra_records : r.records if r.name == "" && upper(r.type) == "TXT"]),
+  ))
 }
 
 resource "aws_route53_record" "caa" {
@@ -164,13 +170,14 @@ resource "aws_route53_record" "caa" {
 }
 
 resource "aws_route53_record" "spf" {
-  count = var.apex_spf != "" ? 1 : 0
+  # Keep the existing Terraform address when adding other apex TXT values.
+  count = length(local.apex_txt_records) > 0 ? 1 : 0
 
   zone_id = aws_route53_zone.this.zone_id
   name    = var.domain
   type    = "TXT"
   ttl     = 3600
-  records = [var.apex_spf]
+  records = local.apex_txt_records
 }
 
 resource "aws_route53_record" "dmarc" {
@@ -184,7 +191,7 @@ resource "aws_route53_record" "dmarc" {
 }
 
 resource "aws_route53_record" "extra" {
-  for_each = { for r in var.extra_records : "${r.name}/${r.type}" => r }
+  for_each = { for r in var.extra_records : "${r.name}/${r.type}" => r if !(r.name == "" && upper(r.type) == "TXT") }
 
   zone_id = aws_route53_zone.this.zone_id
   name    = each.value.name == "" ? var.domain : "${each.value.name}.${var.domain}"

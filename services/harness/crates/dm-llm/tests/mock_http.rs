@@ -19,6 +19,29 @@ fn models() -> ModelsConfig {
     ModelsConfig::parse(YAML).unwrap()
 }
 
+#[tokio::test]
+async fn remote_models_can_omit_unsupported_temperature() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(completion("ok", "test/primary")))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let mut config = models();
+    config
+        .roles
+        .get_mut("extraction")
+        .unwrap()
+        .temperature_supported = Some(false);
+    let client =
+        HttpLlmClient::openrouter(server.uri(), "test-key", config, None, fast_retry()).unwrap();
+    client.complete(&request()).await.unwrap();
+    let requests = server.received_requests().await.unwrap();
+    let body: serde_json::Value = requests[0].body_json().unwrap();
+    assert!(body.get("temperature").is_none());
+    assert_eq!(body["provider"]["require_parameters"], true);
+}
+
 fn fast_retry() -> RetryPolicy {
     RetryPolicy {
         max_attempts: 3,
@@ -326,4 +349,43 @@ fn building_a_client_installs_the_ring_crypto_provider() {
         HttpLlmClient::local("http://localhost:1/v1", models(), None, fast_retry()).unwrap();
     drop(client);
     assert!(HttpLlmClient::crypto_provider_installed());
+}
+
+#[tokio::test]
+async fn local_reasoning_control_is_optional_and_separates_cached_answers() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/chat/completions"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(completion("ok", "local-model")))
+        .expect(2)
+        .mount(&server)
+        .await;
+    let dir = tempfile::tempdir().unwrap();
+    let cache = ResponseCache::new(dir.path(), CacheMode::ReadWrite);
+    let plain = HttpLlmClient::local(
+        format!("{}/v1", server.uri()),
+        models(),
+        Some(cache.clone()),
+        fast_retry(),
+    )
+    .unwrap();
+    let direct = HttpLlmClient::local(
+        format!("{}/v1", server.uri()),
+        models(),
+        Some(cache),
+        fast_retry(),
+    )
+    .unwrap()
+    .with_local_reasoning_effort(Some(" none ".to_string()));
+    assert!(!plain.complete(&request()).await.unwrap().meter.cached);
+    assert!(!direct.complete(&request()).await.unwrap().meter.cached);
+    assert!(direct.complete(&request()).await.unwrap().meter.cached);
+    let requests = server.received_requests().await.unwrap();
+    let first: serde_json::Value = requests[0].body_json().unwrap();
+    let second: serde_json::Value = requests[1].body_json().unwrap();
+    assert!(first.get("reasoning_effort").is_none());
+    assert_eq!(second["reasoning_effort"], "none");
+    assert!(requests
+        .iter()
+        .all(|r| !r.headers.contains_key("authorization")));
 }

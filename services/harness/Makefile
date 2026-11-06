@@ -65,9 +65,9 @@ dev: ## compila e mostra a ajuda do CLI `dm`
 serve: ## servidor gRPC do harness no socket de DM_HARNESS_SOCKET (fontes local:// em DM_MEDIA_LOCAL_DIR)
 	cargo run -p dm-server --release
 
-# dm-server estático para a instância (Graviton): musl ligado pelo rust-lld do próprio Rust, sem
-# toolchain C cruzada (o servidor não tem dependências em C; um crate novo com `cc` quebraria
-# este alvo de propósito). Sai como docmatch-harness, o nome da unidade systemd.
+# dm-server estático para a instância (Graviton): musl ligado pelo rust-lld do próprio Rust;
+# requer toolchain C cruzada para ring/TLS (aarch64-linux-musl-gcc ou CC/AR do target configurados).
+# Sai como docmatch-harness, o nome da unidade systemd.
 RELEASE_TARGET ?= aarch64-unknown-linux-musl
 RELEASE_DIR ?= $(abspath ../../dist/release)
 release: ## dm-server linux/arm64 estático em RELEASE_DIR como docmatch-harness (infra/scripts/deploy-app.sh)

@@ -21,3 +21,6 @@ packages/*/node_modules
 !tools/installer/go.sum
 !tools/installer/internal/webserve
 !tools/installer/cmd/dm-web
+
+!sdks/go
+!sdks/typescript/package.json

@@ -19,6 +19,7 @@ import (
 
 // Pricing is the parsed file.
 type Pricing struct {
+	TokenBRL        float64            `yaml:"token_brl"`
 	TokenUSD        float64            `yaml:"token_usd"`
 	Rates           Rates              `yaml:"rates"`
 	MinTokensPerRun int64              `yaml:"min_tokens_per_run"`
@@ -51,7 +52,7 @@ type Rates struct {
 
 // Plan is one row of `plans`.
 type Plan struct {
-	PriceUSD                 float64  `yaml:"price_usd"`
+	PriceBRL                 float64  `yaml:"price_brl"`
 	Tokens                   int64    `yaml:"tokens"`
 	DocumentFilesPerRun      int      `yaml:"document_files_per_run"`
 	DocumentFileMB           int64    `yaml:"document_file_mb"`
@@ -140,6 +141,14 @@ func (p *Pricing) Validate() error {
 	var problems []error
 	if p.TokenUSD <= 0 {
 		problems = append(problems, errors.New("token_usd precisa ser positivo"))
+	}
+	if p.TokenBRL <= 0 || math.IsNaN(p.TokenBRL) || math.IsInf(p.TokenBRL, 0) || math.Abs(p.TokenBRL*100-math.Round(p.TokenBRL*100)) > 1e-8 {
+		problems = append(problems, errors.New("token_brl precisa ser positivo em centavos inteiros"))
+	}
+	for code, plan := range p.Plans {
+		if plan.PriceBRL <= 0 || math.IsNaN(plan.PriceBRL) || math.IsInf(plan.PriceBRL, 0) || math.Abs(plan.PriceBRL*100-math.Round(plan.PriceBRL*100)) > 1e-8 {
+			problems = append(problems, fmt.Errorf("plans.%s.price_brl precisa ser positivo em centavos inteiros", code))
+		}
 	}
 	r := p.Rates
 	for name, v := range map[string]float64{"target_margin": r.TargetMargin, "income_tax": r.IncomeTax, "payment": r.Payment, "infra": r.Infra, "openrouter_fee": r.OpenRouterFee} {

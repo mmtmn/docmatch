@@ -1,0 +1,36 @@
+name: sdks
+on:
+  push:
+    branches: [main]
+    paths: ['sdks/**', 'packages/contracts/**', '.github/workflows/sdks.yml']
+  pull_request:
+    paths: ['sdks/**', 'packages/contracts/**', '.github/workflows/sdks.yml']
+permissions:
+  contents: read
+jobs:
+  sdk-clients:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/api/go.mod
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --dir tools/codegen install --frozen-lockfile
+      - run: node sdks/tools/generate.mjs --check
+      - run: pnpm --dir sdks/typescript build && pnpm --dir sdks/typescript test
+      - run: go test -race ./...
+        working-directory: sdks/go
+      - run: pip install -e sdks/python
+      - run: python -m unittest discover -s sdks/python/tests
+      - run: cargo test --locked --manifest-path sdks/rust/Cargo.toml

@@ -42,3 +42,7 @@ require (
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	golang.org/x/text v0.28.0 // indirect
 )
+
+require github.com/mmtmn/docmatch/sdks/go v0.0.0
+
+replace github.com/mmtmn/docmatch/sdks/go => ../../sdks/go

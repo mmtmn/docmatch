@@ -57,7 +57,7 @@ export default defineConfig({
         "default-src 'self'",
         "base-uri 'self'",
         "object-src 'none'",
-        "frame-src 'none'",
+        "frame-src 'self'",
         "img-src 'self' data: blob:",
         "font-src 'self'",
         "manifest-src 'self'",

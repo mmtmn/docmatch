@@ -46,10 +46,15 @@ private struct SignedInView: View {
         _account = State(initialValue: AccountModel(dm: session.dm) { notice in await session.signedOut(notice: notice) })
     }
 
+    private var tokenExempt: Bool {
+        if case .signedIn(let me) = session.state { return me.credits?.tokenExempt == true }
+        return false
+    }
+
     var body: some View {
         TabView(selection: $tab) {
             NavigationStack(path: $newRunPath) {
-                NewRunView(model: newRun) { runId in newRunPath.append(runId) }
+                NewRunView(model: newRun, tokenExempt: tokenExempt) { runId in newRunPath.append(runId) }
                     .navigationDestination(for: String.self) { RunView(dm: session.dm, runId: $0) }
             }
             .tabItem { Label(texts.t("mobile.tab_new"), systemImage: "plus.circle") }

@@ -67,11 +67,12 @@ func TestOverridesAndValidation(t *testing.T) {
 	t.Parallel()
 	base := `
 token_usd: 0.01
+token_brl: 0.05
 rates: {target_margin: 0.30, income_tax: 0.21, payment: 0.076, infra: 0.10, openrouter_fee: 0.055}
 min_tokens_per_run: 10
 quote_ttl_minutes: 15
 lanes: {app: 1.0}
-plans: {starter: {price_usd: 20, tokens: 2000}}
+plans: {starter: {price_brl: 100, tokens: 2000}}
 `
 	margin := 0.5
 	p, err := Parse([]byte(base), Overrides{TargetMargin: &margin})
@@ -85,12 +86,15 @@ plans: {starter: {price_usd: 20, tokens: 2000}}
 		name string
 		yaml string
 	}{
+		{"venda BRL zero", strings.Replace(base, "token_brl: 0.05", "token_brl: 0", 1)},
+		{"venda fracionária", strings.Replace(base, "token_brl: 0.05", "token_brl: 0.005", 1)},
+		{"plano BRL zero", strings.Replace(base, "price_brl: 100", "price_brl: 0", 1)},
 		{"token zero", strings.Replace(base, "token_usd: 0.01", "token_usd: 0", 1)},
 		{"taxa fora de 0..1", strings.Replace(base, "payment: 0.076", "payment: 1.5", 1)},
 		{"sem margem", strings.Replace(base, "target_margin: 0.30", "target_margin: 0.9", 1)},
 		{"ttl zero", strings.Replace(base, "quote_ttl_minutes: 15", "quote_ttl_minutes: 0", 1)},
 		{"lane < 1", strings.Replace(base, "app: 1.0", "app: 0.5", 1)},
-		{"sem planos", strings.Replace(base, "plans: {starter: {price_usd: 20, tokens: 2000}}", "plans: {}", 1)},
+		{"sem planos", strings.Replace(base, "plans: {starter: {price_brl: 100, tokens: 2000}}", "plans: {}", 1)},
 		{"yaml inválido", "token_usd: [}"},
 	}
 	for _, tc := range bad {

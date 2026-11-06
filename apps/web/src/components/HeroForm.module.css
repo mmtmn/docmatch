@@ -38,10 +38,22 @@
 
 .rules {
   min-height: 0;
+  align-self: end;
 }
 
 .action {
   min-height: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: space-between;
+}
+.secondary {
+  flex: none;
+}
+.hero[data-compact='true'] .secondary {
+  display: none;
 }
 
 .notice {

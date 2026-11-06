@@ -182,6 +182,13 @@ func SummaryFromProto(s *pb.RunSummary) *Summary {
 	if out.Currency == "" {
 		out.Currency = "BRL"
 	}
+	if doc := s.GetReconciliation(); doc != nil {
+		raw, err := json.Marshal(doc.AsMap())
+		var decoded ReconciliationDocument
+		if err == nil && json.Unmarshal(raw, &decoded) == nil && decoded.Version == 1 {
+			out.Reconciliation = &decoded
+		}
+	}
 	return out
 }
 

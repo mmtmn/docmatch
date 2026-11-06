@@ -69,7 +69,7 @@ describe('virtual:limits', () => {
 describe('virtual:pricing', () => {
   it('loads and validates config/pricing.yaml', () => {
     const pricing = loadPricing();
-    expect(pricing.plans.starter.price_usd).toBeGreaterThan(0);
+    expect(pricing.plans.starter.price_brl).toBeGreaterThan(0);
     expect(pricing.plans.business.api_lanes).toContain('api_priority');
     expect(pricing.lanes.app).toBe(1);
   });
@@ -89,7 +89,15 @@ describe('virtual:pricing', () => {
     (input['plans'] as Record<string, Record<string, unknown>>)['pro']!['internal_note'] = 'x';
     const pricing = validatePricing(input, 'pricing.yaml') as unknown as Record<string, unknown>;
     expect(Object.keys(pricing).sort()).toEqual(
-      ['lanes', 'min_tokens_per_run', 'plans', 'quote_ttl_minutes', 'rollover', 'token_usd'].sort(),
+      [
+        'lanes',
+        'min_tokens_per_run',
+        'plans',
+        'quote_ttl_minutes',
+        'rollover',
+        'token_brl',
+        'token_usd',
+      ].sort(),
     );
     expect(pricing['plans']).not.toHaveProperty('pro.internal_note');
     expect(loadPricing()).not.toHaveProperty('rates');

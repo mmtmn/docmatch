@@ -2,10 +2,12 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type DragEvent,
+  type ReactNode,
   type SubmitEvent,
 } from 'react';
 import { useVisualViewport } from '../hooks/useVisualViewport';
@@ -16,6 +18,7 @@ import { precheckFiles, type AcceptedFile, type RejectedFile } from '../lib/prec
 import { DropZone } from './DropZone';
 import { CloseIcon } from './icons';
 import type { RuleOption } from './RulePicker';
+import { ProcessingScene, type ProcessingState } from './ProcessingScene';
 import { RulesBox } from './RulesBox';
 import { RunButton, type Quote } from './RunButton';
 import styles from './HeroForm.module.css';
@@ -39,6 +42,8 @@ export interface HeroFormProps {
   onSubmit?: (request: RunRequest) => Promise<void> | void;
   /** Plan caps, never looser than the shared hard caps. */
   caps?: Partial<FileCaps>;
+  processing?: ProcessingState | null;
+  secondaryAction?: ReactNode;
   /** Keep an encrypted draft in IndexedDB (default true). */
   persistDraft?: boolean;
   /** Injectable store (tests). */
@@ -63,10 +68,14 @@ export function HeroForm({
   quoteProvider,
   onSubmit,
   caps,
+  processing = null,
+  secondaryAction,
   persistDraft = true,
   store: injectedStore,
 }: HeroFormProps) {
   const baseId = useId();
+  const formRef = useRef<HTMLFormElement>(null);
+  const [rulesRoom, setRulesRoom] = useState(Number.POSITIVE_INFINITY);
   const store = useMemo<DraftStore | null>(
     () => injectedStore ?? (persistDraft ? defaultDraftStore() : null),
     [injectedStore, persistDraft],
@@ -90,6 +99,7 @@ export function HeroForm({
     quote: null,
   });
   const [submitting, setSubmitting] = useState(false);
+  const busy = submitting || processing !== null;
   const [online, setOnline] = useState(true);
 
   // Mirror of `files` for async code (precheck totals, paste); updated wherever files change.
@@ -103,9 +113,27 @@ export function HeroForm({
   const viewport = useVisualViewport();
   const compact = viewport.keyboardOpen;
 
+  useLayoutEffect(() => {
+    const form = formRef.current;
+    if (!form) return undefined;
+    const measure = () => {
+      const drop = form.querySelector<HTMLElement>('[data-drop-area]');
+      const textarea = form.querySelector('textarea');
+      if (!drop || !textarea) return;
+      // The bottom controls stay anchored; reserve a usable target for another file.
+      const room =
+        drop.getBoundingClientRect().height + textarea.getBoundingClientRect().height - 64;
+      setRulesRoom(Math.max(44, Math.floor(room)));
+    };
+    measure();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    observer?.observe(form);
+    return () => observer?.disconnect();
+  }, []);
+
   const addFiles = useCallback(
     (incoming: File[]): Promise<void> => {
-      if (incoming.length === 0) return Promise.resolve();
+      if (busy || incoming.length === 0) return Promise.resolve();
       // Serialised so two quick drops cannot both pass the per-run totals.
       queue.current = queue.current.then(async () => {
         const result = await precheckFiles(incoming, {
@@ -126,7 +154,7 @@ export function HeroForm({
       });
       return queue.current;
     },
-    [caps, store],
+    [busy, caps, store],
   );
 
   const removeFile = useCallback((id: string): void => {
@@ -318,7 +346,7 @@ export function HeroForm({
 
   const handleSubmit = async (event: SubmitEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
-    if (disabledReason || submitting) return;
+    if (disabledReason || busy) return;
     const request: RunRequest = {
       files,
       rulesText: useRules ? rulesText : '',
@@ -351,9 +379,11 @@ export function HeroForm({
 
   return (
     <form
+      ref={formRef}
       className={styles.hero}
       data-compact={compact ? 'true' : undefined}
       data-testid="hero"
+      aria-busy={busy}
       noValidate
       aria-labelledby={`${baseId}-title`}
       onSubmit={(event) => void handleSubmit(event)}
@@ -367,7 +397,7 @@ export function HeroForm({
       </h1>
       <p className={styles.subtitle}>{t('landing.subtitle')}</p>
 
-      <div className={styles.drop}>
+      <div className={styles.drop} data-drop-area>
         {notice && (
           <div className={styles.notice} role="status">
             <span className={styles.noticeText}>{notice}</span>
@@ -390,16 +420,20 @@ export function HeroForm({
             </button>
           </div>
         )}
-        <DropZone
-          files={files}
-          rejected={rejected}
-          dragging={dragging}
-          compact={compact}
-          disabled={submitting}
-          onAdd={(list) => void addFiles(list)}
-          onRemove={removeFile}
-          onDismissRejection={dismissRejection}
-        />
+        {processing ? (
+          <ProcessingScene {...processing} />
+        ) : (
+          <DropZone
+            files={files}
+            rejected={rejected}
+            dragging={dragging}
+            compact={compact}
+            disabled={busy}
+            onAdd={(list) => void addFiles(list)}
+            onRemove={removeFile}
+            onDismissRejection={dismissRejection}
+          />
+        )}
       </div>
 
       <div className={styles.rules}>
@@ -413,9 +447,10 @@ export function HeroForm({
           ruleOptions={ruleOptions}
           selectedRules={selectedRules}
           onSelectedRulesChange={mark(setSelectedRules)}
-          maxLines={compact ? 3 : 6}
+          maxLines={compact ? 3 : 10}
+          maxHeight={rulesRoom}
           compact={compact}
-          disabled={submitting}
+          disabled={busy}
         />
       </div>
 
@@ -425,8 +460,9 @@ export function HeroForm({
           reason={disabledReason}
           quote={quote}
           quoteLoading={quoteLoading}
-          busy={submitting}
+          busy={busy}
         />
+        {secondaryAction && <div className={styles.secondary}>{secondaryAction}</div>}
       </div>
     </form>
   );

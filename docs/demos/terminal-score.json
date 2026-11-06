@@ -1,0 +1,32 @@
+{
+  "passed": true,
+  "score_percent": 100,
+  "sections": {
+    "bank": {
+      "ok": 18,
+      "total": 18
+    },
+    "titles": {
+      "ok": 17,
+      "total": 17
+    },
+    "findings": {
+      "ok": 23,
+      "total": 23
+    },
+    "totals": {
+      "ok": 11,
+      "total": 11
+    }
+  },
+  "extras": {
+    "bank": 0,
+    "titles": 0,
+    "findings": 0
+  },
+  "differences": [],
+  "model_advice_present": true,
+  "run_id": "run_01M6QYB0AKEKBR2P7Y9MV13M2T",
+  "expected_sha256": "ac29216b56058068e8d848e253e0726a71ac80e2feca865766217431a1e0ff96",
+  "result_sha256": "ac30f7fcbf832bfe2c5871304b2c95abdd740df634d0c151dd3ee7f6daa5f775"
+}

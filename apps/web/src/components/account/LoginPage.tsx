@@ -33,15 +33,38 @@ function openApp(): void {
 // Rendered with client:only (it reads the URL on the first render).
 export function LoginPage() {
   const [notice] = useState(() => noticeFor(errorCode()));
+  const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    // Already signed in on this device: straight to the app.
-    currentUser()
-      .then((me) => {
-        if (me) openApp();
-      })
-      .catch(() => undefined);
+    let ctrl: AbortController;
+    const check = () => {
+      ctrl?.abort();
+      ctrl = new AbortController();
+      const signal = ctrl.signal;
+      setChecking(true);
+      currentUser(signal)
+        .then((me) => {
+          if (signal.aborted) return;
+          // A bookmarked /login or a click before the header hydrates should open the
+          // account, not bounce back to the same app screen looking like a reload.
+          if (me) window.location.replace('/conta');
+          else setChecking(false);
+        })
+        .catch(() => {
+          if (!signal.aborted) setChecking(false);
+        });
+    };
+    const restore = (event: PageTransitionEvent) => {
+      if (event.persisted) check();
+    };
+    check();
+    window.addEventListener('pageshow', restore);
+    return () => {
+      ctrl.abort();
+      window.removeEventListener('pageshow', restore);
+    };
   }, []);
 
+  if (checking) return <p role="status">{t('account.loading')}</p>;
   return <AuthDialog open inline onClose={() => undefined} onSignedIn={openApp} notice={notice} />;
 }

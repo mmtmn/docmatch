@@ -60,12 +60,34 @@ make lint        # Android lint
 make build       # APK de debug, APK dos testes e o release minificado (R8)
 make ci          # tokens + test + lint + build (o que o pre-push roda)
 make e2e-local   # make local + o fluxo inteiro num emulador gerenciado pelo Gradle (KVM)
+make e2e-local DEVICE=connected # o mesmo teste em um emulador/aparelho já iniciado e visível no adb
 make release     # AAB para o ambiente (ENV=prod), com a origem lida dos outputs do Terraform
 ```
 
 O SDK vem de `sdk.dir` em `local.properties` (fora do git) ou de `ANDROID_HOME`: plataforma 36 e
 build-tools 35. O `e2e-local` usa a imagem `system-images;android-34;aosp_atd;x86_64` (o Gradle
 baixa se faltar) e precisa de KVM.
+
+Se o setup de snapshot do dispositivo gerenciado falhar, inicie o AVD pelo Android Studio e use
+`DEVICE=connected`; o teste continua exercitando o app e a API reais. Para um aparelho via USB,
+ou um emulador usando a mesma configuração de loopback:
+
+```bash
+make local                  # na raiz do repositório
+adb reverse tcp:8080 tcp:8080
+cd apps/android
+./gradlew :app:assembleDebug -Pdocmatch.apiBaseUrl=http://localhost:8080
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+./gradlew :app:connectedDebugAndroidTest \
+  -Pdocmatch.apiBaseUrl=http://localhost:8080 \
+  -Pandroid.testInstrumentationRunnerArguments.docmatchLocal=1
+```
+
+O APK de debug usa o login local; não exige credenciais Google. Isso valida o fluxo de
+desenvolvimento. Login Google, assinatura de distribuição e publicação no Play precisam de
+suas próprias credenciais/configuração, descritas abaixo. O app usa o provedor configurado no servidor: a conciliação calcula os fatos e a etapa de IA
+acrescenta análise e próximos passos às evidências. Use os comandos de Ollama ou OpenRouter do
+README da raiz antes de iniciar o app.
 
 ## Configuração
 
@@ -94,3 +116,26 @@ A assinatura do release vem do ambiente da máquina que gera o build: `DOCMATCH_
 - Links pré-assinados nunca levam cookie; exportações saem do cache pelo FileProvider, sem permissão
   de armazenamento.
 - Release com R8 (minificação e remoção de recursos).
+
+Para exigir que o teste instrumentado encontre a análise da IA, acrescente
+`-Pandroid.testInstrumentationRunnerArguments.docmatchRequireModel=1`. Um pacote privado pode
+ser fornecido com `-Pdocmatch.testDataDir=/caminho/absoluto`; a pasta precisa conter os quatro
+arquivos de entrada e `expected.yaml`. Isso só afeta o APK de testes, nunca o APK distribuído.
+
+## Paridade com os resultados do site
+
+A tela começa pelo download dos dados corrigidos em Excel e pelo relatório em PDF. CSV fica
+em outros formatos. Pendências, alterações e dados completos aparecem em seções recolhidas;
+alertas críticos continuam visíveis. Os valores vêm de `summary.reconciliation`, incluindo
+saldo confirmado e sugestões pendentes separados. Resultados antigos sem snapshot oferecem
+relatórios de achados e um caminho para reenviar os arquivos, sem prometer dados corrigidos.
+
+Revisar, descartar ou anotar um achado registra uma decisão; não aplica pagamentos nem muda
+o snapshot. A prioridade usa gravidade antes de valor. Senha tem mostrar/ocultar; códigos
+por e-mail só aparecem ao escolher esse método, quando habilitado no servidor. Nenhuma
+senha ou chave de provedor é embutida no app. A paleta compartilhada tem cores suaves e pares
+verificados; o progresso mostra a etapa real, sem percentual fictício.
+
+O app usa a API configurada e o modelo escolhido **no servidor** (Ollama ou OpenRouter).
+Não carrega o modelo no telefone. Planos e chaves de integração ficam na página web de conta;
+veja [API](../../docs/api.md) e [estruturas, algoritmos e padrões](../../docs/estruturas-algoritmos-padroes.md).

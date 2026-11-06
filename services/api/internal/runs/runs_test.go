@@ -352,8 +352,14 @@ func TestExecuteCompletesAndSettles(t *testing.T) {
 	if err := xl.Write(&buf); err != nil || buf.Len() == 0 {
 		t.Fatal("xlsx vazio")
 	}
-	_, err = f.svc.Export(ctx, f.org, run.ID, "pdf")
-	assertCode(t, err, contracts.ErrExportFormatUnsupported)
+	pdf, err := f.svc.Export(ctx, f.org, run.ID, "pdf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	buf.Reset()
+	if err := pdf.Write(&buf); err != nil || !bytes.HasPrefix(buf.Bytes(), []byte("%PDF-")) {
+		t.Fatal("PDF inválido", err)
+	}
 	_, err = f.svc.Export(ctx, f.org, run.ID, "txt")
 	assertCode(t, err, contracts.ErrExportFormatUnsupported)
 	// Re-executing a finished run is a no-op; cancelling it is refused.

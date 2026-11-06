@@ -50,7 +50,7 @@ na pasta da instalação, e as imagens já compiladas a partir da mesma revisão
 
 **Experimentar** usa só o Docker, com [deploy/local/compose.yaml](../../deploy/local/compose.yaml):
 Postgres com pgvector, Mailpit, migrações, harness, API, worker e site, como o `make local`
-(`DM_ENV=dev`, `DM_DEV_LOGIN=1`, modelo desligado, uploads numa pasta local servida pela API). As
+(`DM_ENV=dev`, `DM_DEV_LOGIN=1`, modelo desligado por padrão, uploads numa pasta local servida pela API). As
 imagens `docmatch-api`, `docmatch-harness` e `docmatch-web` vêm do registro (GHCR por padrão,
 `ghcr.io/<dono do repositório>`); quando o registro não as tem (hoje, com o repositório privado,
 sempre), o instalador compila a partir do código com os Dockerfiles de `deploy/local`, usando o
@@ -111,8 +111,8 @@ alguns minutos; as seguintes usam o cache do BuildKit.
 4. **As etapas**: clonar (quando preciso), `make setup-local` (os git hooks e as ferramentas só
    do que o `make local` compila: contratos, API, harness e site; uma barra por subsistema; ao
    retomar a mesma pasta, pula; checkouts antigos sem esse alvo usam `make setup`), `make local`,
-   conferir API e site e conciliar o gêmeo da Vantara. Portas e modelo vêm do `.env` do
-   repositório. `docmatch up`, `down` e `uninstall` chamam o `make` com o mesmo `PATH` e o mesmo
+   conferir API e site e conciliar o gêmeo da Vantara. Portas vêm do `.env` do repositório; provedor e modelo vêm das escolhas do instalador.
+   A chave OpenRouter existente no `.env` é reutilizada sem ser exibida. `docmatch up`, `down` e `uninstall` chamam o `make` com o mesmo `PATH` e o mesmo
    `GOTOOLCHAIN` da instalação.
 5. **No Windows**, o `make local` roda no WSL2: a tela de ferramentas instala o WSL e o Docker
    Desktop (perguntando antes) e mostra o comando para continuar no Ubuntu, onde o instalador se
@@ -147,6 +147,7 @@ alguns minutos; as seguintes usam o cache do BuildKit.
 | `--port-web`, `--port-api`, `--port-postgres`, `--port-mailpit` | 4321, 8080, 5432, 8025 | portas em 127.0.0.1 |
 | `--ports web=N,api=N,...` | | as quatro de uma vez |
 | `--llm off\|local\|openrouter` | `off` | modelo de linguagem |
+| `--model NOME` | modelo configurado (Ollama: `qwen3.5:0.8b`) | modelo da análise; deve estar instalado no Ollama |
 | `--ollama-url URL` | `http://localhost:11434/v1` | servidor local compatível com a API da OpenAI |
 | `--openrouter-key CHAVE` | | ou `OPENROUTER_API_KEY`; fica só no `.env` (600) |
 | `--registry`, `--tag` | GHCR do repositório, a versão | de onde vêm as imagens (`DOCMATCH_REGISTRY`, `DOCMATCH_TAG`) |
@@ -313,3 +314,37 @@ publicado: com o repositório privado, nenhum dos dois pode apontar para ele. Qu
   `manifests/<letra>/<dono>/docmatch/<versão>/` gerada (ou `wingetcreate submit` nela); depois
   `winget install <dono>.docmatch`. É um pacote portátil: o winget cria o atalho `docmatch` no PATH,
   e `docmatch update` e `docmatch uninstall` indicam o winget.
+
+## Análise com modelos
+
+O provedor escolhido é aplicado tanto em Experimentar quanto em Desenvolver. O harness analisa
+até 24 achados com o modelo, preserva os cálculos e as referências do motor, mostra sugestões de
+próximos passos e registra os tokens consumidos. Uma resposta inválida ou um provedor indisponível
+faz a execução falhar; não há troca silenciosa para uma demonstração sem IA.
+
+No Ollama, confira `ollama list` e escolha um nome existente em `--model`. O modelo pequeno padrão
+serve para a demonstração; a qualidade das sugestões depende do modelo. O instalador usa
+`reasoning_effort=none` para esse fluxo curto. Para outro servidor compatível que não aceite esse
+campo, ajuste `DM_LOCAL_LLM_REASONING_EFFORT` no ambiente (Desenvolver) ou `.env` (Experimentar).
+
+## Operar os arquivos pelo terminal
+
+Depois de instalar, rode `docmatch workspace`. O comando usa a API da instalação salva;
+`--api URL` escolhe outra origem. `--dir PASTA` escolhe a pasta inicial de arquivos. Para
+uma API remota, forneça `DOCMATCH_API_KEY` pelo ambiente. Sem chave, o login automático só
+é tentado em localhost, em servidor com login de desenvolvimento habilitado.
+
+- Setas navegam; Enter abre pasta; Espaço marca um arquivo; `a` marca todos os documentos
+  visíveis; `d` limpa a seleção.
+- Tab abre o campo onde você cola ou arrasta vários caminhos, com aspas quando houver espaços.
+  Enter adiciona os arquivos. Nenhum texto é executado como comando de shell.
+- `r` envia os arquivos e pede uma estimativa. `s` aprova o limite; `n` volta.
+- O indicador animado acompanha etapas reais. Ao concluir, `x` baixa XLSX corrigido, `c` CSV
+  e `p` PDF. Setas percorrem os achados; `n` inicia outra execução.
+- `--no-animation`, `NO_COLOR` e `--plain` continuam disponíveis. Sem TTY, informe os arquivos
+  e `--yes` para autorizar explicitamente o limite da estimativa. Resultados ficam em
+  `docmatch-output` ou em `--output PASTA`, com permissões privadas.
+
+O seletor cobre CSV, TXT, PDF, XLSX e JSON, até 40 arquivos e 50 MB por arquivo antes dos
+limites do servidor. Os comandos `up`, `down`, `status`, `logs` e `doctor` continuam
+administrando a instalação. O workspace é uma interface para a API, não um executor de código.

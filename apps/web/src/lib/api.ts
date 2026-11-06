@@ -28,10 +28,13 @@ export class ApiError extends Error {
 
 export interface RequestOptions {
   method?: string;
+  responseType?: 'blob';
   body?: unknown;
   signal?: AbortSignal;
   /** Adds an Idempotency-Key, required by the endpoints that spend tokens. */
   idempotent?: boolean;
+  /** Reuse this key when retrying the same purchase. */
+  idempotencyKey?: string;
   /** Skip the silent refresh on an expired access window (used by the refresh itself). */
   noRefresh?: boolean;
 }
@@ -63,7 +66,8 @@ async function send<T>(path: string, opts: RequestOptions): Promise<T> {
     headers['Content-Type'] = 'application/json';
     body = JSON.stringify(opts.body);
   }
-  if (opts.idempotent) headers['Idempotency-Key'] = newKey();
+  if (opts.idempotencyKey) headers['Idempotency-Key'] = opts.idempotencyKey;
+  else if (opts.idempotent) headers['Idempotency-Key'] = newKey();
   let res: Response;
   try {
     res = await fetch(url, {
@@ -71,6 +75,7 @@ async function send<T>(path: string, opts: RequestOptions): Promise<T> {
       headers,
       ...(body === undefined ? {} : { body }),
       credentials: 'include',
+      cache: 'no-store',
       ...(opts.signal ? { signal: opts.signal } : {}),
     });
   } catch (err) {
@@ -78,6 +83,7 @@ async function send<T>(path: string, opts: RequestOptions): Promise<T> {
     throw new ApiError(0, 'network', t('errors.network'));
   }
   if (res.status === 204) return undefined as T;
+  if (res.ok && opts.responseType === 'blob') return (await res.blob()) as T;
   const text = await res.text();
   let data: unknown;
   if (text) {
@@ -101,7 +107,10 @@ async function send<T>(path: string, opts: RequestOptions): Promise<T> {
 }
 
 /** Calls the API; on an expired access window refreshes the session once and retries. */
+let refreshing: Promise<unknown> | null = null;
+
 export async function api<T>(path: string, opts: RequestOptions = {}): Promise<T> {
+  if (opts.idempotent && !opts.idempotencyKey) opts = { ...opts, idempotencyKey: newKey() };
   try {
     return await send<T>(path, opts);
   } catch (err) {
@@ -111,7 +120,15 @@ export async function api<T>(path: string, opts: RequestOptions = {}): Promise<T
       err.status === 401 &&
       err.code === 'session_expired'
     ) {
-      await send<unknown>('/v1/auth/refresh', { method: 'POST', noRefresh: true });
+      // Refresh tokens rotate. Concurrent refreshes would replay the old token and revoke
+      // the session family, so all callers share one refresh before retrying their requests.
+      refreshing ??= send<unknown>('/v1/auth/refresh', { method: 'POST', noRefresh: true }).finally(
+        () => {
+          refreshing = null;
+        },
+      );
+      await refreshing;
+      opts.signal?.throwIfAborted();
       return send<T>(path, opts);
     }
     throw err;

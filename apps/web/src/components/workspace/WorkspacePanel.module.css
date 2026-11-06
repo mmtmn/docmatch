@@ -1,0 +1,60 @@
+.panel {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg);
+  color: var(--color-fg);
+  margin-block: 1rem;
+}
+.panel > summary {
+  cursor: pointer;
+  padding: 1rem 1.25rem;
+  font-weight: 600;
+}
+.body {
+  padding: 0 1.25rem 1.25rem;
+}
+.body form {
+  display: grid;
+  gap: 0.75rem;
+}
+.body textarea,
+.history select {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 0.5rem;
+  color: var(--color-fg);
+  background: var(--color-bg);
+  font: inherit;
+}
+.examples,
+.history {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-block: 0.75rem;
+}
+.examples button {
+  font-size: 0.85rem;
+}
+.preview {
+  margin-block: 1.5rem;
+}
+.preview iframe {
+  width: 100%;
+  min-height: 290px;
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+}
+.preview dl > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding-block: 0.5rem;
+}
+.preview dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}

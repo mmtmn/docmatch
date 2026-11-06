@@ -2,6 +2,9 @@
 # domain or e-mail specific value is a variable (terraform.tfvars, never committed).
 
 locals {
+  r2_host         = var.cloudflare_account_id != "" ? "${var.cloudflare_account_id}.r2.cloudflarestorage.com" : ""
+  r2_hosts        = local.r2_host != "" ? [local.r2_host, "${local.name}-media.${local.r2_host}"] : []
+  upload_origins  = concat([module.storage.uploads_origin], [for host in local.r2_hosts : "https://${host}"])
   env             = "dev"
   name            = "docmatch-${local.env}"
   origin_hostname = "origin.${var.domain}"
@@ -34,6 +37,8 @@ locals {
   # Secrets whose feature stays off while they are empty (created as __EMPTY__, never blocking the
   # boot): the pool of on-demand workers boots off until DM_BURST_POOL_SECRET holds 32+ characters.
   optional_secret_names = [
+    "DM_STRIPE_PRICE_STARTER", "DM_STRIPE_PRICE_PRO", "DM_STRIPE_PRICE_BUSINESS", "DM_STRIPE_PRICE_TOPUP",
+    "DM_STRIPE_PORTAL_CONFIGURATION_ID", "DM_STRIPE_PAYMENT_METHOD_CONFIGURATION_ID", "DM_STRIPE_TEST_EMAILS",
     "DM_BURST_POOL_SECRET",
   ]
 }
@@ -88,7 +93,10 @@ module "edge" {
   wait_for_certificate_validation  = var.wait_for_certificate_validation
   dmarc_rua_email                  = var.dmarc_rua_email
   extra_records                    = var.extra_dns_records
-  connect_src_extra                = [module.storage.uploads_origin]
+  connect_src_extra                = local.upload_origins
+  # Astro's per-page CSP meta includes exact script/style hashes. An additional
+  # script-src 'self' header would block those scripts (see apps/web/docs/headers.md).
+  content_security_policy = "frame-ancestors 'none'"
 }
 
 module "sandbox" {
@@ -133,11 +141,13 @@ module "secrets" {
     DM_SANDBOX_TOOLRUNNER     = module.sandbox.function_names["toolrunner"]
     DM_SANDBOX_FETCHER        = module.sandbox.function_names["fetcher"]
     DM_R2_MEDIA_BUCKET        = var.cloudflare_account_id != "" ? module.r2[0].media_bucket_name : "${local.name}-media"
+    R2_ACCOUNT_ID             = var.cloudflare_account_id != "" ? var.cloudflare_account_id : "__EMPTY__"
+    DM_R2_ENDPOINT            = local.r2_host != "" ? "https://${local.r2_host}" : "__EMPTY__"
     DM_LLM_MODE               = var.llm_mode
     DM_EMAIL_FROM             = var.email_from
     DM_SECURITY_CONTACT       = var.security_contact_email
     DM_ALERT_EMAIL            = var.alert_email
-    DM_EGRESS_ALLOWLIST       = join(" ", var.egress_allowlist)
+    DM_EGRESS_ALLOWLIST       = join(" ", distinct(concat(var.egress_allowlist, local.r2_hosts)))
     DM_BACKUPS_PGBACKREST_KEY = "pgbackrest"
     # Pool of on-demand workers (docs/escala.md). SSM refuses empty values: __EMPTY__ renders as "".
     DM_BURST_ENABLED       = var.burst_enabled ? "1" : "0"

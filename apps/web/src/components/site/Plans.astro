@@ -9,11 +9,6 @@ const PLAN_NAME: Record<PlanId, MessageKey> = {
   pro: 'plans.pro_name',
   business: 'plans.business_name',
 };
-const PLAN_TAGLINE: Record<PlanId, MessageKey> = {
-  starter: 'plans.starter_tagline',
-  pro: 'plans.pro_tagline',
-  business: 'plans.business_tagline',
-};
 const LANE_NAME: Record<LaneId, MessageKey> = {
   app: 'plans.lane_app',
   api_batch: 'plans.lane_api_batch',
@@ -92,10 +87,12 @@ const plans = PLAN_IDS.map((id) => ({ id, plan: pricing.plans[id] }));
         <li class="card plan" data-plan={id}>
           {id === 'pro' && <p class="plan__badge">{t('plans.most_popular')}</p>}
           <h3 class="plan__name">{t(PLAN_NAME[id])}</h3>
-          <p class="plan__price">{t('plans.price', { price: plan.price_usd })}</p>
+          <p class="plan__price">
+            {t('plans.price', { price: plan.price_brl.toLocaleString('pt-BR') })}
+          </p>
           <p class="plan__tokens">{t('plans.tokens', { tokens: plan.tokens })}</p>
-          <p class="plan__tagline muted">{t(PLAN_TAGLINE[id])}</p>
-          <a class="btn btn--primary plan__cta" href="/app">
+          <p class="muted">{t('plans.api_included')}</p>
+          <a class="btn btn--primary plan__cta" href={`/conta?plano=${id}`}>
             {t('plans.cta', { plan: t(PLAN_NAME[id]) })}
           </a>
         </li>

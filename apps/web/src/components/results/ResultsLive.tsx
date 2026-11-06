@@ -5,13 +5,15 @@ import { feedbackStatus, toResults } from '../../lib/adapt';
 import { ApiError } from '../../lib/api';
 import { t } from '../../lib/i18n';
 import {
-  exportUrl,
+  downloadExport,
   getRun,
   listFindings,
   sendFeedback,
   watchRun,
   type RunView,
 } from '../../lib/pipeline';
+import { ProcessingScene } from '../ProcessingScene';
+import styles from './ResultsLive.module.css';
 import { ResultsScreen } from './ResultsScreen';
 import type { FindingStatus, RunResults } from './types';
 
@@ -95,19 +97,16 @@ export function ResultsLive() {
   }, [runId]);
 
   const onDecision = useCallback(
-    (findingId: string, status: FindingStatus, note?: string) => {
-      // The API records decisions (confirmed, dismissed, resolved); going back to "open" only
-      // changes this screen.
-      if (!runId || status === 'open') return;
-      void sendFeedback(runId, findingId, feedbackStatus(status), note).catch(() => undefined);
+    async (findingId: string, status: FindingStatus, note?: string) => {
+      if (!runId) return;
+      await sendFeedback(runId, findingId, feedbackStatus(status), note);
     },
     [runId],
   );
 
   const onExport = useCallback(
-    (format: 'xlsx' | 'pdf') => {
-      const url = runId ? exportUrl(runId, format) : undefined;
-      if (url) window.location.assign(url);
+    async (format: 'csv' | 'xlsx' | 'pdf') => {
+      if (runId) await downloadExport(runId, format);
     },
     [runId],
   );
@@ -116,10 +115,21 @@ export function ResultsLive() {
     case 'missing':
       return <p>{t('results.live_missing')}</p>;
     case 'running':
-      return <p role="status">{t('results.live_running', { message: state.message })}</p>;
+      return (
+        <div className={styles.processing}>
+          <ProcessingScene phase="reconcile" message={state.message} />
+        </div>
+      );
     case 'failed':
       return <p role="alert">{t('results.live_failed', { message: state.message })}</p>;
     case 'done':
-      return <ResultsScreen results={state.results} onDecision={onDecision} onExport={onExport} />;
+      return (
+        <ResultsScreen
+          results={state.results}
+          onDecision={onDecision}
+          onExport={onExport}
+          allowUndo={false}
+        />
+      );
   }
 }

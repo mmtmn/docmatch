@@ -35,7 +35,7 @@ public struct AuthMethods: Decodable, Sendable, Equatable {
 
     private enum CodingKeys: String, CodingKey { case email, google, apple, password, dev }
 
-    public var any: Bool { email || google || apple || dev }
+    public var any: Bool { email || google || apple || password || dev }
 }
 
 public struct User: Decodable, Sendable, Equatable {
@@ -70,18 +70,20 @@ public struct Org: Decodable, Sendable, Equatable {
 }
 
 public struct Credits: Decodable, Sendable, Equatable {
+    public let tokenExempt: Bool
     public let balance: Int64
     public let reserved: Int64
     public let available: Int64
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        tokenExempt = try c.value(.tokenExempt, false)
         balance = try c.value(.balance, 0)
         reserved = try c.value(.reserved, 0)
         available = try c.value(.available, 0)
     }
 
-    private enum CodingKeys: String, CodingKey { case balance, reserved, available }
+    private enum CodingKeys: String, CodingKey { case balance, reserved, available; case tokenExempt = "token_exempt" }
 }
 
 /// GET /v1/me: the account every client of the same person sees.
@@ -279,6 +281,7 @@ public struct RunProgress: Decodable, Sendable, Equatable {
 }
 
 public struct RunSummary: Decodable, Sendable, Equatable {
+    public let reconciliation: ReconciliationDocument?
     public let findingsTotal: Int
     public let amountAtRisk: Int64
     public let currency: String
@@ -287,6 +290,7 @@ public struct RunSummary: Decodable, Sendable, Equatable {
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        reconciliation = try c.decodeIfPresent(ReconciliationDocument.self, forKey: .reconciliation)
         findingsTotal = try c.value(.findingsTotal, 0)
         amountAtRisk = try c.value(.amountAtRisk, 0)
         currency = try c.value(.currency, "BRL")
@@ -294,7 +298,7 @@ public struct RunSummary: Decodable, Sendable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case currency
+        case currency, reconciliation
         case findingsTotal = "findings_total"
         case amountAtRisk = "amount_at_risk"
         case sourceWarnings = "source_warnings"
@@ -371,14 +375,17 @@ public struct EvidenceValues: Decodable, Sendable, Equatable {
     public let document: String?
 }
 
+public struct EvidenceLocator: Decodable, Sendable, Equatable { public let row: Int? }
+
 public struct Evidence: Decodable, Sendable, Equatable {
+    public let locator: EvidenceLocator?
     public let sourceId: String
     public let label: String?
     public let excerpt: String?
     public let values: EvidenceValues?
 
     private enum CodingKeys: String, CodingKey {
-        case label, excerpt, values
+        case label, excerpt, values, locator
         case sourceId = "source_id"
     }
 }

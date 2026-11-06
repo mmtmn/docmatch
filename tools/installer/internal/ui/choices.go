@@ -30,13 +30,13 @@ const (
 
 // choiceValues are the fields the form edits (huh binds to pointers).
 type choiceValues struct {
-	llm, localURL, key  string
-	web, api, pg, mail  string
-	dir, source         string
-	portByName          map[string]*string
-	ours                map[int]bool
-	free                ports.Prober
-	homeForExpand, goos string
+	llm, localURL, key, model, remoteModel string
+	web, api, pg, mail                     string
+	dir, source                            string
+	portByName                             map[string]*string
+	ours                                   map[int]bool
+	free                                   ports.Prober
+	homeForExpand, goos                    string
 }
 
 // choicesModel is the Huh form: model mode, ports and folder.
@@ -108,13 +108,19 @@ func keyMap() *huh.KeyMap {
 func newChoices(t Theme, opts install.Options, ours map[int]bool, free ports.Prober, goos string) *choicesModel {
 	home, _ := os.UserHomeDir()
 	v := &choiceValues{
-		llm: opts.LLMMode, localURL: opts.LocalLLM, key: opts.OpenRouter,
+		llm: opts.LLMMode, localURL: opts.LocalLLM, key: opts.OpenRouter, model: opts.ReviewModel,
 		web: strconv.Itoa(opts.Ports[ports.Web]), api: strconv.Itoa(opts.Ports[ports.API]),
 		pg: strconv.Itoa(opts.Ports[ports.Postgres]), mail: strconv.Itoa(opts.Ports[ports.Mailpit]),
 		dir: opts.Dir, source: opts.CloneDir, ours: ours, free: free, homeForExpand: home, goos: goos,
 	}
 	if v.llm == "" {
 		v.llm = envfile.LLMOff
+	}
+	if opts.LLMMode == envfile.LLMOpenRouter {
+		v.remoteModel, v.model = opts.ReviewModel, ""
+	}
+	if v.model == "" {
+		v.model = "qwen3.5:0.8b"
 	}
 	if v.localURL == "" {
 		v.localURL = "http://localhost:11434/v1"
@@ -144,38 +150,61 @@ func newChoices(t Theme, opts install.Options, ours map[int]bool, free ports.Pro
 	default:
 		groups = append(groups,
 			huh.NewGroup(
-				huh.NewSelect[string]().Title(text.T("form.llm_title")).Description(t.plainText(text.T("form.llm_desc"))).
-					Options(
-						huh.NewOption(text.T("form.llm_off"), envfile.LLMOff),
-						huh.NewOption(text.T("form.llm_local"), envfile.LLMLocal),
-						huh.NewOption(text.T("form.llm_openrouter"), envfile.LLMOpenRouter),
-					).Value(&v.llm),
-			),
-			huh.NewGroup(
-				huh.NewInput().Title(text.T("form.ollama_title")).Description(t.plainText(text.T("form.ollama_desc"))).
-					Value(&v.localURL).Validate(func(s string) error {
-					if envfile.ValidateLLMURL(s) != nil {
-						return errors.New(text.T("form.err_url"))
-					}
-					return nil
-				}),
-			).WithHideFunc(func() bool { return v.llm != envfile.LLMLocal }),
-			huh.NewGroup(
-				huh.NewInput().Title(text.T("form.openrouter_title")).Description(t.plainText(text.T("form.openrouter_desc"))).
-					EchoMode(huh.EchoModePassword).Value(&v.key).Validate(func(s string) error {
-					if strings.TrimSpace(s) == "" {
-						return errors.New(text.T("form.err_key"))
-					}
-					return nil
-				}),
-			).WithHideFunc(func() bool { return v.llm != envfile.LLMOpenRouter }),
-			huh.NewGroup(
 				v.portInput(ports.Web, text.T("form.ports_title"), t.plainText(text.T("form.ports_desc"))),
 				v.portInput(ports.API, "", ""),
 				v.portInput(ports.Postgres, "", ""),
 				v.portInput(ports.Mailpit, "", ""),
 			),
 		)
+	}
+	groups = append(groups,
+		huh.NewGroup(
+			huh.NewSelect[string]().Title(text.T("form.llm_title")).Description(t.plainText(text.T("form.llm_desc"))).
+				Options(
+					huh.NewOption(text.T("form.llm_off"), envfile.LLMOff),
+					huh.NewOption(text.T("form.llm_local"), envfile.LLMLocal),
+					huh.NewOption(text.T("form.llm_openrouter"), envfile.LLMOpenRouter),
+				).Value(&v.llm),
+		),
+		huh.NewGroup(
+			huh.NewInput().Title(text.T("form.ollama_title")).Description(t.plainText(text.T("form.ollama_desc"))).
+				Value(&v.localURL).Validate(func(s string) error {
+				if envfile.ValidateLLMURL(s) != nil {
+					return errors.New(text.T("form.err_url"))
+				}
+				return nil
+			}),
+		).WithHideFunc(func() bool { return v.llm != envfile.LLMLocal }),
+		huh.NewGroup(
+			huh.NewInput().Title(text.T("form.openrouter_title")).Description(t.plainText(text.T("form.openrouter_desc"))).
+				EchoMode(huh.EchoModePassword).Value(&v.key).Validate(func(s string) error {
+				if strings.TrimSpace(s) == "" {
+					return errors.New(text.T("form.err_key"))
+				}
+				return nil
+			}),
+		).WithHideFunc(func() bool { return v.llm != envfile.LLMOpenRouter }),
+		huh.NewGroup(
+			huh.NewInput().Title(text.T("form.model_title")).Description(text.T("form.model_desc")).
+				Value(&v.model).Validate(func(s string) error {
+				if strings.ContainsAny(s, "\r\n") || (v.llm == envfile.LLMLocal && strings.TrimSpace(s) == "") {
+					return errors.New(text.T("form.err_model"))
+				}
+				return nil
+			}),
+		).WithHideFunc(func() bool { return v.llm != envfile.LLMLocal }),
+		huh.NewGroup(
+			huh.NewInput().Title(text.T("form.model_title")).Description(text.T("form.model_desc")).
+				Value(&v.remoteModel).Validate(func(s string) error {
+				if strings.ContainsAny(s, "\r\n") {
+					return errors.New(text.T("form.err_model"))
+				}
+				return nil
+			}),
+		).WithHideFunc(func() bool { return v.llm != envfile.LLMOpenRouter }),
+	)
+	if opts.Mode != state.ModeDev {
+		groups = append(groups[1:], groups[0])
 	}
 	groups = append(groups, huh.NewGroup(
 		huh.NewInput().Title(text.T("form.dir_title")).Description(t.plainText(text.T("form.dir_desc"))).
@@ -248,12 +277,6 @@ func (m *choicesModel) update(msg tea.Msg) (tea.Cmd, formStatus) {
 func (m *choicesModel) apply(opts install.Options) install.Options {
 	v := m.v
 	opts.Dir = expandDir(strings.TrimSpace(v.dir), v.homeForExpand)
-	if m.mode == state.ModeDev {
-		if opts.SourceDir == "" {
-			opts.CloneDir = expandDir(strings.TrimSpace(v.source), v.homeForExpand)
-		}
-		return opts.Resolved()
-	}
 	opts.LLMMode = v.llm
 	opts.LocalLLM, opts.OpenRouter = "", ""
 	switch v.llm {
@@ -261,6 +284,16 @@ func (m *choicesModel) apply(opts install.Options) install.Options {
 		opts.LocalLLM = strings.TrimSpace(v.localURL)
 	case envfile.LLMOpenRouter:
 		opts.OpenRouter = strings.TrimSpace(v.key)
+	}
+	opts.ReviewModel = strings.TrimSpace(v.model)
+	if v.llm == envfile.LLMOpenRouter {
+		opts.ReviewModel = strings.TrimSpace(v.remoteModel)
+	}
+	if m.mode == state.ModeDev {
+		if opts.SourceDir == "" {
+			opts.CloneDir = expandDir(strings.TrimSpace(v.source), v.homeForExpand)
+		}
+		return opts.Resolved()
 	}
 	p := opts.Ports.Clone()
 	for name, s := range v.portByName {

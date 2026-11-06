@@ -464,7 +464,8 @@ func TestKnownVarsMatchEnvExample(t *testing.T) {
 	known := KnownVars()
 	extra := ExtraVars()
 	for name := range documented {
-		if !slices.Contains(known, name) {
+		// These two settings are consumed only by the Rust local-model adapter.
+		if !slices.Contains(known, name) && name != "DM_LOCAL_LLM_MODE" && name != "DM_LOCAL_LLM_REASONING_EFFORT" {
 			t.Errorf("%s está em .env.example mas config não a lê", name)
 		}
 	}
@@ -590,5 +591,34 @@ func TestGoogleNativeClientIDs(t *testing.T) {
 		if _, err := LoadFrom(lookupFrom(env)); err == nil {
 			t.Fatalf("%q deveria ser rejeitado", bad)
 		}
+	}
+}
+
+func TestStripeBillingConfiguration(t *testing.T) {
+	env := validEnv()
+	env[VarStripeTestEmails] = " Owner@example.com,other+test@example.com, owner@example.com, "
+	env[VarStripePriceStarter] = "price_starter"
+	env[VarStripePricePro] = "price_pro"
+	env[VarStripePriceBusiness] = "price_business"
+	env[VarStripePriceTopup] = "price_topup"
+	env[VarStripePortalConfig] = "bpc_fixture"
+	env[VarStripePaymentConfig] = "pmc_fixture"
+	cfg := mustLoad(t, env)
+	if !slices.Equal(cfg.Billing.StripeTestEmails, []string{"owner@example.com", "other+test@example.com"}) {
+		t.Fatal("email allowlist parsing")
+	}
+	if cfg.Billing.StripePrices["starter"] != "price_starter" || cfg.Billing.StripePrices["topup"] != "price_topup" || cfg.Billing.StripePortalConfig != "bpc_fixture" || cfg.Billing.StripePaymentConfig != "pmc_fixture" {
+		t.Fatal("billing configuration incomplete")
+	}
+	for _, bad := range []string{"not-an-email", "Owner <owner@example.com>", "owner@example.com\nBcc: other@example.com"} {
+		env[VarStripeTestEmails] = bad
+		_, err := LoadFrom(lookupFrom(env))
+		if err == nil || !slices.Contains(validationVars(t, err), VarStripeTestEmails) {
+			t.Fatal("invalid email list accepted")
+		}
+	}
+	env[VarStripeTestEmails] = ""
+	if len(mustLoad(t, env).Billing.StripeTestEmails) != 0 {
+		t.Fatal("empty allowlist must deny test purchases")
 	}
 }

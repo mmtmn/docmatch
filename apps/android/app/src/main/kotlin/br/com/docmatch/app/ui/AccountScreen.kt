@@ -140,7 +140,8 @@ fun AccountScreen(vm: AccountViewModel) {
                             Text(t("account.profile"), fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
                             if (s.me.user.displayName.isNotBlank()) Labeled(t("account.name_label"), s.me.user.displayName)
                             Labeled(t("account.email_label"), s.me.user.email)
-                            s.me.credits?.let { Labeled(t("account.credits"), t("account.credits_available", mapOf("available" to it.available))) }
+                            s.me.credits?.let { Labeled(t("account.credits"), if (it.tokenExempt) t("account.token_exempt") else t("account.credits_available", mapOf("available" to it.available))) }
+                            OutlinedButton(onClick = vm::signOut) { Text(t("account.sign_out")) }
                         }
                     }
                 }
@@ -165,7 +166,6 @@ fun AccountScreen(vm: AccountViewModel) {
                 }
                 item {
                     Row(horizontalArrangement = Arrangement.spacedBy(DmSize.space2)) {
-                        Button(onClick = vm::signOut) { Text(t("account.sign_out")) }
                         // The stores' rule: an app that creates accounts lets them be deleted in it.
                         TextButton(onClick = { confirmDeletion = true }) { Text(t("mobile.delete_account"), color = MaterialTheme.colorScheme.error) }
                     }

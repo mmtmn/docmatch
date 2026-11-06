@@ -50,8 +50,8 @@ SELECT DISTINCT org_id FROM credit_grants
 WHERE expired_at IS NULL AND remaining > 0 AND expires_at IS NOT NULL AND expires_at <= $1;
 
 -- name: InsertCreditHold :one
-INSERT INTO credit_holds (org_id, amount, run_id, quote_id, reference)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO credit_holds (org_id, amount, run_id, quote_id, reference, sponsored)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING *;
 
 -- name: GetCreditHold :one

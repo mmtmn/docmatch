@@ -205,6 +205,8 @@ func (s *Service) webURL(path string) string {
 // codeFor maps login errors onto catalog codes.
 func codeFor(err error) contracts.ErrorCode {
 	switch {
+	case errors.Is(err, ErrDisposableEmail):
+		return contracts.ErrDisposableEmail
 	case errors.Is(err, ErrStateMismatch):
 		return contracts.ErrOauthStateMismatch
 	case errors.Is(err, ErrProvider):

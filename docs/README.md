@@ -8,6 +8,11 @@ enrolação. Identificadores de código e comentários em código ficam em ingl�
 | Documento | Para quê |
 | --- | --- |
 | [arquitetura.md](arquitetura.md) | Como o sistema é montado: diagrama, componentes, caminhos de requisição (upload → varredura → execução → relatório), fronteiras de confiança, onde cada dado vive, modelo de evidências, glossário. |
+| [estruturas-algoritmos-padroes.md](estruturas-algoritmos-padroes.md) | Guia de implementação: estruturas, algoritmos, padrões, invariantes e testes. |
+| [personalizacao.md](personalizacao.md) | Caixa de sugestões, aprovação, versões e operações por organização. |
+| [demos/](demos/README.md) | Gravações reais e verificação reproduzível do gêmeo público Vantara. |
+| [SDKs](../sdks/README.md) | Clientes npm, Go, Python e Rust. |
+| [api.md](api.md) | Chaves de todos os planos, permissões e fluxo de integração. |
 | [plano-mestre.md](plano-mestre.md) | O plano condensado: fases e portões (sem datas), o que cada subsistema faz, a fórmula de preço com exemplo, a tabela de papéis de modelo, os estágios de infraestrutura. |
 | [decisoes/](decisoes/README.md) | Registros de decisão de arquitetura (ADR-0001 a ADR-0012): contexto, decisão, consequências. |
 | [seguranca/](seguranca/README.md) | Perfil NIST CSF 2.0, checklist ASVS 5.0, OWASP LLM Top 10, modelo de ameaças e testes de aceitação com comandos. |

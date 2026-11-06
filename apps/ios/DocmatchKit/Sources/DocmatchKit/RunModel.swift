@@ -38,7 +38,12 @@ public final class RunModel {
             }
             switch run.status {
             case RunStatus.completed:
-                let findings = try await dm.api.findings(run.id).sorted { $0.amountAtRisk > $1.amountAtRisk }
+                let findings = try await dm.api.findings(run.id).sorted {
+                    let a = findingPriority($0.severity), b = findingPriority($1.severity)
+                    if a != b { return a < b }
+                    if $0.amountAtRisk != $1.amountAtRisk { return $0.amountAtRisk > $1.amountAtRisk }
+                    return $0.id < $1.id
+                }
                 state = .done(run, findings)
             case RunStatus.needsApproval:
                 state = .needsApproval(run, busy: false)

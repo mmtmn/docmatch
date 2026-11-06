@@ -1,0 +1,42 @@
+/* Script-free workspace preview. Only these audited theme pairs are allowed. */
+body {
+  margin: 0;
+  padding: 20px;
+  font: 16px system-ui;
+  background: #fcfcfd;
+  color: #1b1f24;
+}
+h2 {
+  font-size: 20px;
+}
+p {
+  line-height: 1.5;
+}
+small {
+  font-size: 14px;
+}
+article {
+  border: 1px solid #6e7781;
+  border-radius: 12px;
+  padding: 16px;
+  margin: 8px 0;
+}
+[data-mode='dark'] body {
+  background: #1b2026;
+  color: #e6ebf0;
+}
+[data-mode='dark'] article {
+  border-color: #8b949e;
+}
+[data-density='compact'] article {
+  padding: 8px;
+}
+@media (prefers-color-scheme: dark) {
+  [data-mode='system'] body {
+    background: #1b2026;
+    color: #e6ebf0;
+  }
+  [data-mode='system'] article {
+    border-color: #8b949e;
+  }
+}

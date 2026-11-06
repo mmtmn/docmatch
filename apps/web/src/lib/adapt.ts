@@ -94,6 +94,10 @@ export function toResults(run: RunView, findings: FindingView[]): RunResults {
     const right = table(rightName, restItems);
     return {
       id: f.id,
+      severity: f.severity,
+      documentRows: (run.summary?.reconciliation?.receivables ?? []).filter((row) =>
+        f.evidence.some((e) => e.source_id === row.source_id && e.locator?.row === row.source_row),
+      ),
       title: f.title,
       matchType: matchType(f),
       amountAtRisk: f.amount_at_risk / 100,
@@ -101,6 +105,7 @@ export function toResults(run: RunView, findings: FindingView[]): RunResults {
       confidence: confidence(f.confidence_label),
       status: decisionStatus(f.status),
       explanation: f.explanation,
+      ...(f.feedback?.note ? { note: f.feedback.note } : {}),
       left,
       right,
     };
@@ -110,6 +115,7 @@ export function toResults(run: RunView, findings: FindingView[]): RunResults {
     fileCount: run.sources.length,
     findings: mapped,
     cleanMatches: [],
+    ...(run.summary?.reconciliation ? { document: run.summary.reconciliation } : {}),
     sourceWarnings: run.summary?.source_warnings ?? [],
   };
 }

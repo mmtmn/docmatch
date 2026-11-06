@@ -14,6 +14,7 @@ import (
 	"github.com/mmtmn/docmatch/services/api/internal/apierr"
 	"github.com/mmtmn/docmatch/services/api/internal/crypto"
 	"github.com/mmtmn/docmatch/services/api/internal/email"
+	"github.com/mmtmn/docmatch/services/api/internal/emailpolicy"
 	"github.com/mmtmn/docmatch/services/api/internal/httpx"
 	"github.com/mmtmn/docmatch/services/api/internal/publicid"
 	"github.com/mmtmn/docmatch/services/api/internal/session"
@@ -58,6 +59,10 @@ func (s *Service) emailStart(w http.ResponseWriter, r *http.Request) {
 	addr, ok := s.normalizeEmail(req.Email)
 	if !ok {
 		apierr.Validation(w, r, apierr.Field{Path: "/email", Code: apierr.FieldInvalid, Max: s.d.Limits.Text.Email})
+		return
+	}
+	if emailpolicy.Disposable(addr) {
+		apierr.Write(w, r, contracts.ErrDisposableEmail)
 		return
 	}
 	if !s.allow(w, r, limitKey(s.d.ClientIP(r), addr)) {

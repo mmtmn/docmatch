@@ -32,8 +32,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -258,7 +260,7 @@ fun CharCounter(count: Int, max: Int) {
 fun codePoints(s: String): Int = Normalizer.normalize(s, Normalizer.Form.NFC).let { it.codePointCount(0, it.length) }
 
 @Composable
-fun NewRunScreen(vm: NewRunViewModel, onStarted: (String) -> Unit) {
+fun NewRunScreen(vm: NewRunViewModel, tokenExempt: Boolean = false, onStarted: (String) -> Unit) {
     val context = LocalContext.current
     val texts = LocalTexts.current
     val files by vm.files.collectAsState()
@@ -268,6 +270,13 @@ fun NewRunScreen(vm: NewRunViewModel, onStarted: (String) -> Unit) {
     val started by vm.started.collectAsState()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris -> vm.add(context, uris) }
     val busy = phase !is NewRunPhase.Idle
+    val scroll = rememberScrollState()
+    LaunchedEffect(error) {
+        if (error != null) {
+            withFrameNanos { }
+            scroll.animateScrollTo(scroll.maxValue)
+        }
+    }
 
     LaunchedEffect(started) {
         started?.let {
@@ -277,7 +286,7 @@ fun NewRunScreen(vm: NewRunViewModel, onStarted: (String) -> Unit) {
     }
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(DmSize.space3),
+        Modifier.fillMaxSize().verticalScroll(scroll).imePadding().padding(DmSize.space3),
         verticalArrangement = Arrangement.spacedBy(DmSize.space2),
     ) {
         Text(t("common.app_title"), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
@@ -309,14 +318,14 @@ fun NewRunScreen(vm: NewRunViewModel, onStarted: (String) -> Unit) {
         CharCounter(codePoints(options.rulesText), Limits.Text.RULES_TEXT)
         OptionSwitch(t("form.use_rules"), t("tooltips.use_rules"), options.useRules, !busy, vm::setUseRules)
         OptionSwitch(t("form.web_search"), t("tooltips.web_search"), options.webSearch, !busy, vm::setWebSearch)
-        Button(onClick = vm::submit, enabled = !busy && files.isNotEmpty(), modifier = Modifier.fillMaxWidth()) {
+        error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive }) }
+        Button(onClick = vm::submit, enabled = !busy && files.isNotEmpty(), modifier = Modifier.fillMaxWidth().testTag("submit-run")) {
             Text(if (busy) t("form.submitting") else t("form.submit"))
         }
         (phase as? NewRunPhase.Working)?.let { w ->
             LinearProgressIndicator(Modifier.fillMaxWidth())
             Text(stepLabel(w.step), modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
         }
-        error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive }) }
     }
 
     (phase as? NewRunPhase.Confirm)?.let { c ->
@@ -325,7 +334,8 @@ fun NewRunScreen(vm: NewRunViewModel, onStarted: (String) -> Unit) {
             title = { Text(t("mobile.confirm_title")) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(DmSize.space1)) {
-                    Text(t("app.confirm_run", mapOf("expected" to c.prepared.quote.expectedCredits, "cap" to c.prepared.quote.capCredits)))
+                    Text(if (tokenExempt) t("app.confirm_exempt") else t("app.confirm_run", mapOf("expected" to c.prepared.quote.expectedCredits, "cap" to c.prepared.quote.capCredits)))
+                    Text(t("app.confirm_scope"))
                     Format.largeNotice(texts, c.prepared.quote)?.let { Text(it) }
                     error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }

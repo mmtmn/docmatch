@@ -49,3 +49,10 @@ literal:169\.254\.169\.253|169\.254\.169\.123
 literal:https?://[a-z0-9.-]+\.invalid\b
 literal:https?://schemas\.android\.com/(apk/res/android|apk/res-auto|tools)\b
 literal:https?://www\.apple\.com/DTDs/PropertyList-1\.0\.dtd
+
+# Hosted Stripe return URLs validated by the billing client and its fixtures.
+literal:https://(checkout|billing)\.stripe\.com/
+
+# Upstream license texts retain their required attribution and public source URLs.
+path:services/api/internal/emailpolicy/LICENSE\.upstream\.txt$
+path:services/api/internal/export/fonts/LICENSE\.txt$

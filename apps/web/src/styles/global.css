@@ -227,10 +227,8 @@ html[data-vv] .first-screen > header {
   font-weight: 600;
   text-decoration: none;
   cursor: pointer;
-  transition:
-    background-color var(--duration) var(--ease),
-    color var(--duration) var(--ease),
-    border-color var(--duration) var(--ease);
+  /* Theme foreground/background pairs must switch together; fading them can lose contrast. */
+  transition: border-color var(--duration) var(--ease);
 }
 
 .btn:hover {

@@ -78,4 +78,28 @@ describe('api', () => {
     fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
     await expect(api('/v1/auth/logout', { method: 'POST' })).resolves.toBeUndefined();
   });
+
+  it('shares one rotating refresh across simultaneous expired requests', async () => {
+    let finish!: (response: Response) => void;
+    let refreshCalls = 0;
+    let refreshed = false;
+    fetchMock.mockImplementation((url) => {
+      if (typeof url === 'string' && url.endsWith('/v1/auth/refresh')) {
+        refreshCalls++;
+        return new Promise((resolve) => {
+          finish = resolve;
+        });
+      }
+      return Promise.resolve(
+        refreshed ? json(200, { ok: true }) : json(401, { code: 'session_expired' }),
+      );
+    });
+    const first = api('/v1/me');
+    const second = api('/v1/billing/status');
+    await vi.waitFor(() => expect(refreshCalls).toBe(1));
+    refreshed = true;
+    finish(json(200, {}));
+    await expect(Promise.all([first, second])).resolves.toEqual([{ ok: true }, { ok: true }]);
+    expect(refreshCalls).toBe(1);
+  });
 });

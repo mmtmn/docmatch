@@ -52,6 +52,9 @@ class DocmatchApi(private val http: HttpTransport) {
     suspend fun googleNative(idToken: String): SessionInfo =
         http.call("POST", "/v1/auth/google/native", buildJsonObject { put("id_token", idToken) }, SessionInfo.serializer())!!
 
+    suspend fun passwordLogin(email: String, password: String): SessionInfo =
+        http.call("POST", "/v1/auth/password/login", buildJsonObject { put("email", email); put("password", password) }, SessionInfo.serializer())!!
+
     /** Local sign-in (development API only). */
     suspend fun devLogin(email: String? = null): SessionInfo =
         http.call(

@@ -1,0 +1,33 @@
+{
+  "schema_sha256": "56a0c35eed148d2bd808c8d0bba280481932a8f4bff2132747b8fa48b1e4cbea",
+  "operations": {
+    "createUpload": {
+      "method": "POST",
+      "path": "/v1/uploads"
+    },
+    "completeUpload": {
+      "method": "POST",
+      "path": "/v1/uploads/{id}/complete"
+    },
+    "estimateRun": {
+      "method": "POST",
+      "path": "/v1/runs/estimate"
+    },
+    "createRun": {
+      "method": "POST",
+      "path": "/v1/runs"
+    },
+    "getRun": {
+      "method": "GET",
+      "path": "/v1/runs/{id}"
+    },
+    "listFindings": {
+      "method": "GET",
+      "path": "/v1/runs/{id}/findings"
+    },
+    "exportRun": {
+      "method": "GET",
+      "path": "/v1/runs/{id}/export"
+    }
+  }
+}

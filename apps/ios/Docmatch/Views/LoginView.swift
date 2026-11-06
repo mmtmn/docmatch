@@ -9,6 +9,9 @@ struct LoginView: View {
     let session: SessionModel
     @State private var email = ""
     @State private var code = ""
+    @State private var password = ""
+    @State private var showPassword = false
+    @State private var useCode = false
     @State private var localError: String?
     @Environment(\.texts) private var texts
     @Environment(\.webAuthenticationSession) private var webAuthenticationSession
@@ -21,7 +24,7 @@ struct LoginView: View {
     var body: some View {
         let m = state.methods
         let google = m.google ? AppConfig.shared.google : nil
-        let usable = m.email || m.dev || m.apple || google != nil
+        let usable = m.email || m.password || m.dev || m.apple || google != nil
         Form {
             Section {
                 Text(texts.t("auth.login_title"))
@@ -57,7 +60,28 @@ struct LoginView: View {
                 }
             }
 
-            if m.email {
+            if m.password && !useCode {
+                Section {
+                    TextField(texts.t("auth.email_label"), text: $email)
+                        .keyboardType(.emailAddress).textContentType(.username)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    HStack {
+                        Group {
+                            if showPassword { TextField(texts.t("auth.password_label"), text: $password) }
+                            else { SecureField(texts.t("auth.password_label"), text: $password) }
+                        }.textContentType(.password).textInputAutocapitalization(.never).autocorrectionDisabled()
+                        Button(texts.t(showPassword ? "auth.hide_password" : "auth.show_password")) { showPassword.toggle() }.buttonStyle(.borderless)
+                    }
+                    Button(texts.t(state.busy ? "auth.signing_in" : "nav.login")) {
+                        let secret = password; password = ""
+                        Task { await session.passwordLogin(email: email, password: secret) }
+                    }.disabled(state.busy || password.isEmpty || !email.contains("@"))
+                }.disabled(state.busy)
+            }
+            if m.email && m.password {
+                Button(texts.t(useCode ? "auth.use_password" : "auth.send_code")) { useCode.toggle(); session.changeEmail(); password = "" }
+            }
+            if m.email && (!m.password || useCode) {
                 Section {
                     if state.challengeId == nil {
                         TextField(texts.t("auth.email_label"), text: $email)

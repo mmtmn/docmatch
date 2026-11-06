@@ -27,6 +27,10 @@ categories:
   internal: Falhas do nosso lado
 
 errors:
+  disposable_email:
+    status: 422
+    category: auth
+    message: Use um e-mail permanente. Endereços temporários não são aceitos para criar uma conta.
   # ------------------------------------------------------------------ auth
   unauthenticated:
     status: 401

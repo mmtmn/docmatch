@@ -16,6 +16,7 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./
 COPY apps/web/package.json apps/web/
 COPY packages/locales/package.json packages/locales/
 COPY packages/design-tokens/package.json packages/design-tokens/
+COPY sdks/typescript/package.json sdks/typescript/
 RUN --mount=type=cache,id=docmatch-pnpm-store,target=/pnpm/store \
     pnpm install --frozen-lockfile --store-dir /pnpm/store --filter "@docmatch/web..."
 COPY packages/locales packages/locales
@@ -30,7 +31,8 @@ RUN cd apps/web && node tools/i18n-check.mjs && \
 
 FROM ${GO_IMAGE} AS server
 ENV CGO_ENABLED=0 GOTOOLCHAIN=local GOFLAGS=-mod=mod
-WORKDIR /src
+WORKDIR /src/tools/installer
+COPY sdks/go /src/sdks/go
 COPY tools/installer/go.mod tools/installer/go.sum ./
 COPY tools/installer/internal/webserve internal/webserve
 COPY tools/installer/cmd/dm-web cmd/dm-web

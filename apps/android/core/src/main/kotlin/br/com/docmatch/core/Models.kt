@@ -23,7 +23,7 @@ data class AuthMethods(
     /** Local sign-in without any provider: only a development API offers it. */
     val dev: Boolean = false,
 ) {
-    val any: Boolean get() = email || google || apple || dev
+    val any: Boolean get() = email || google || apple || password || dev
 }
 
 @Serializable
@@ -37,7 +37,7 @@ data class User(
 data class Org(val id: String, val name: String = "")
 
 @Serializable
-data class Credits(val balance: Long = 0, val reserved: Long = 0, val available: Long = 0)
+data class Credits(val balance: Long = 0, val reserved: Long = 0, val available: Long = 0, @SerialName("token_exempt") val tokenExempt: Boolean = false)
 
 /** GET /v1/me: the account every client of the same person sees. */
 @Serializable
@@ -135,6 +135,7 @@ data class RunProgress(val stage: String = "", val percent: Int = 0, val message
 
 @Serializable
 data class RunSummary(
+    val reconciliation: ReconciliationDocument? = null,
     @SerialName("findings_total") val findingsTotal: Int = 0,
     @SerialName("amount_at_risk") val amountAtRisk: Long = 0,
     val currency: String = "BRL",
@@ -174,11 +175,15 @@ data class EvidenceValues(
 )
 
 @Serializable
+data class EvidenceLocator(val row: Int? = null)
+
+@Serializable
 data class Evidence(
     @SerialName("source_id") val sourceId: String,
     val label: String? = null,
     val excerpt: String? = null,
     val values: EvidenceValues? = null,
+    val locator: EvidenceLocator? = null,
 )
 
 @Serializable

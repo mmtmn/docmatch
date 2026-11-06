@@ -125,6 +125,11 @@ done
 install -m 0644 -o root -g root pricing.yaml models.yaml '$config_dir/'
 # Releases before throughput.yaml existed (rollbacks) do not carry it.
 if [[ -f throughput.yaml ]]; then install -m 0644 -o root -g root throughput.yaml '$config_dir/'; fi
+# Older AMIs configured models.yaml only for Go. The Rust model client needs the same
+# explicit path; persist this on deploy as well as in the AMI template.
+install -d -m 0755 /etc/systemd/system/docmatch-harness.service.d
+printf '%s\n' '[Service]' 'Environment="DM_MODELS_FILE=$config_dir/models.yaml"' > /etc/systemd/system/docmatch-harness.service.d/models.conf
+systemctl daemon-reload
 systemctl restart docmatch-env.service
 db_url="\$(sed -n 's/^DATABASE_URL="\(.*\)"\$/\1/p' '$env_file')"
 [[ "\$db_url" =~ ^postgres(ql)?://([^:/@]+):[^@]*@[^/]+/([^?]+) ]] || { echo "DATABASE_URL fora do formato esperado"; exit 1; }

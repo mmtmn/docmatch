@@ -13,6 +13,9 @@ verificação, reversão e uma tabela de registro das execuções passadas.
 | [trocar-modelo.md](trocar-modelo.md) | Trocar o modelo de um papel em `config/models.yaml`, com portões de qualidade e custo. |
 | [kill-switches.md](kill-switches.md) | Desligar uma capacidade (gastos, cadastros, modelos, mídia, toolsmith, API, manutenção) sem implantar código. |
 | [burst.md](burst.md) | Ligar, verificar, subir e descer à mão, diagnosticar e desligar o pool de trabalhadores sob demanda (Spot). |
+| [google-sign-in.md](google-sign-in.md) | Preparar branding, URLs e cliente OAuth Web do Google; importar o JSON como segredos. |
+
+| [private-test-account.md](private-test-account.md) | Acesso privado de teste, isenção de tokens e revogação. |
 
 ## Convenções
 
@@ -61,3 +64,5 @@ aws ssm start-session --target "$INSTANCE_ID"
 | `docmatch-api.service` | API pública e admin | 2 | 5 |
 | `caddy.service` | TLS, limites, bouncer | 4 | 6 |
 | `crowdsec.service`, `falco.service`, `aide` (timer), `clamav-freshclam` | Detecção | nunca | sempre |
+
+- [Cobrança e pagamentos Stripe](stripe-billing.md) — catálogo, webhooks, testes e entrada em produção.

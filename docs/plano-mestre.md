@@ -17,7 +17,7 @@ Primeira tela: título, subtítulo, zona de soltar, caixa de regras opcional (1 
 6 e depois rola), botão "Conciliar". Sempre cabe em `100dvh`, sem rolagem de página. Interruptores
 "Usar regras" e "Pesquisar na web" com tooltip ⓘ. Seletor de regras com busca para usuários
 pagantes com histórico. Rascunhos anônimos cifrados no navegador por 30 dias. Login com Google,
-Apple ou e-mail. Modal de planos com preços por país (US$ 20, 100 e 200: Starter, Pro, Business).
+Apple ou e-mail. Planos em reais: Essencial R$ 100, Plus R$ 500 e Max R$ 1.000; API em todos.
 "Continuar conectado" por dispositivo (refresh token rotativo, 30 dias deslizantes).
 
 ## 2. Princípios
@@ -153,7 +153,14 @@ Portão:
 
 Chaves de API com escopos, lanes com multiplicador, webhooks de saída assinados, SDKs Python, npm,
 Go e Rust gerados dos contratos, documentação para desenvolvedores, customização de interface por
-cliente via manifesto (`ui_planner`), tudo medido em tokens docmatch.
+cliente via manifesto (`ui_planner`), tudo medido em tokens docmatch no desenho alvo.
+
+Já entregues: chaves para todos os planos pagos, clientes locais nas quatro linguagens,
+catálogos de operações gerados do OpenAPI e personalização web com prévia, aprovação e rollback.
+A solicitação de interface está incluída na quota do plano, sem tokens adicionais nesta versão.
+Veja [SDKs e lacunas de publicação](../sdks/README.md) e o
+[escopo do manifesto implementado](personalizacao.md). Os portões abaixo continuam mais amplos
+que essa entrega; webhooks de saída e aplicação do manifesto nos apps nativos seguem pendentes.
 
 Portão:
 
@@ -207,10 +214,10 @@ Conferência da margem: receita 1,07 − pagamento 0,0813 − infra 0,107 − cu
 do imposto; menos 21% = 0,3228, ou 30,2% da receita.
 
 Fluxo: quote assinada (cap no percentil 0,99, 15 minutos) → hold do cap → execução → settle pelo
-gasto real → pergunta antes de ultrapassar. Mínimo de 10 tokens por execução. Planos: Starter
-US$ 20 = 2 000 tokens, Pro US$ 100 = 10 000, Business US$ 200 = 20 000; tokens do plano valem um
-ciclo, recargas valem 12 meses. O cliente paga o IOF de 3,5% ao emissor do cartão, e a tela de
-planos diz isso.
+gasto real → pergunta antes de ultrapassar. Mínimo de 10 tokens por execução. Planos: Essencial R$ 100 = 2 000 tokens, Plus R$ 500 = 10 000, Max R$ 1.000 = 20 000.
+Tokens do plano valem um ciclo extra; recargas valem 12 meses e custam R$ 0,05 por token.
+O exemplo de custo acima usa `token_usd` como referência interna; a venda usa `token_brl`.
+A margem em reais depende do câmbio efetivo. Consulte o [runbook de cobrança](runbooks/stripe-billing.md).
 
 ## 6. Papéis de modelo
 

@@ -24,15 +24,16 @@ const FileName = "state.json"
 
 // State is the content of state.json. The OpenRouter key never goes here (only in .env, 0600).
 type State struct {
-	Version   int       `json:"version"`
-	Mode      string    `json:"mode"`
-	Project   string    `json:"project"`
-	Ports     ports.Set `json:"ports"`
-	LLMMode   string    `json:"llm_mode"`
-	LocalLLM  string    `json:"local_llm_url,omitempty"`
-	Registry  string    `json:"registry"`
-	Tag       string    `json:"tag"`
-	SourceDir string    `json:"source_dir,omitempty"`
+	Version     int       `json:"version"`
+	Mode        string    `json:"mode"`
+	Project     string    `json:"project"`
+	Ports       ports.Set `json:"ports"`
+	LLMMode     string    `json:"llm_mode"`
+	LocalLLM    string    `json:"local_llm_url,omitempty"`
+	ReviewModel string    `json:"review_model,omitempty"`
+	Registry    string    `json:"registry"`
+	Tag         string    `json:"tag"`
+	SourceDir   string    `json:"source_dir,omitempty"`
 	// Images is how the docmatch images arrived: "pulled" or "built".
 	Images string `json:"images,omitempty"`
 	// Revision is the source revision the built images came from.

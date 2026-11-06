@@ -29,8 +29,9 @@ struct AccountView: View {
                         }
                         LabeledContent(texts.t("account.email_label"), value: me.user.email)
                         if let credits = me.credits {
-                            LabeledContent(texts.t("account.credits"), value: texts.t("account.credits_available", ["available": credits.available]))
+                            LabeledContent(texts.t("account.credits"), value: credits.tokenExempt ? texts.t("account.token_exempt") : texts.t("account.credits_available", ["available": credits.available]))
                         }
+                        Button(texts.t("account.sign_out")) { Task { await model.signOut() } }
                     } header: {
                         Text(texts.t("account.profile")).accessibilityAddTraits(.isHeader)
                     }
@@ -59,7 +60,6 @@ struct AccountView: View {
                         Text(texts.t("account.devices_text"))
                     }
                     Section {
-                        Button(texts.t("account.sign_out")) { Task { await model.signOut() } }
                         // The stores' rule: an app that creates accounts lets them be deleted in it.
                         Button(texts.t("mobile.delete_account"), role: .destructive) { confirmingDeletion = true }
                     }

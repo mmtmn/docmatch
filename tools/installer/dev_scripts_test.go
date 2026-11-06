@@ -20,6 +20,22 @@ var gnuOnly = map[string]*regexp.Regexp{
 	"stat -c":                             regexp.MustCompile(`\bstat\s+-c\b`),
 }
 
+func TestEnvDefaultsPreserveExplicitModelSelection(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash environment loader")
+	}
+	file := filepath.Join(t.TempDir(), ".env")
+	if err := os.WriteFile(file, []byte("DM_MODEL_EXTRACTION_LOCAL=from-file\nDM_LOCAL_LLM_MODE=off\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("bash", "../dev/env.sh", file, "--defaults")
+	cmd.Env = append(os.Environ(), "DM_MODEL_EXTRACTION_LOCAL=chosen-model", "DM_LOCAL_LLM_MODE=local")
+	out, err := cmd.CombinedOutput()
+	if err != nil || len(out) != 0 {
+		t.Fatalf("explicit settings overridden: %v %s", err, out)
+	}
+}
+
 func TestDevScriptsArePortable(t *testing.T) {
 	for _, rel := range []string{"../dev/local.sh", "../dev/env.sh", "../git-hooks/install.sh"} {
 		data, err := os.ReadFile(rel)

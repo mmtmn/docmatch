@@ -1,253 +1,391 @@
+import { defaultManifest, useWorkspace } from '../../lib/workspace';
+import { WorkspaceShell } from '../workspace/WorkspaceShell';
+import { WorkspacePanel } from '../workspace/WorkspacePanel';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { downloadText, toCsv } from '../../lib/csv';
 import { formatCurrency, formatShortDate } from '../../lib/format';
 import { t } from '../../lib/i18n';
-import { ConfidenceBadge, confidenceLabel } from './ConfidenceBadge';
+import { FileKindIcon, WarningIcon } from '../icons';
+import { confidenceLabel } from './ConfidenceBadge';
+import { Disclosure } from './Disclosure';
 import { ExportButtons } from './ExportButtons';
-import { FindingDrawer, MATCH_TYPE_LABEL, STATUS_LABEL } from './FindingDrawer';
+import { DocumentChanges, DocumentPending, ReconciledDocument } from './ReconciledDocument';
+import { FindingDrawer, STATUS_LABEL } from './FindingDrawer';
 import type { ExportFormat, Finding, FindingStatus, RunResults } from './types';
 import styles from './ResultsScreen.module.css';
 
 export interface ResultsScreenProps {
   results: RunResults;
-  /** Called with the decisions; the API client will persist them (plan phase: API). */
-  onDecision?: (id: string, status: FindingStatus, note?: string) => void;
-  /** XLSX/PDF are produced server-side; CSV is built here. */
-  onExport?: (format: Exclude<ExportFormat, 'csv'>) => Promise<void> | void;
+  onDecision?: (id: string, status: FindingStatus, note?: string) => Promise<void> | void;
+  allowUndo?: boolean;
+  onExport?: (format: ExportFormat) => Promise<void> | void;
 }
-
-/** Exceptions first, biggest amount at risk first; ties keep the API order. */
+const priority: Record<string, number> = { critical: 5, high: 4, medium: 3, low: 2, info: 1 };
+/** Severity precedes amount: a critical warning must not disappear below a large informational match. */
 export function sortByRisk(findings: readonly Finding[]): Finding[] {
-  return [...findings].sort((a, b) => b.amountAtRisk - a.amountAtRisk);
+  return [...findings].sort(
+    (a, b) =>
+      (priority[b.severity ?? ''] ?? 2) - (priority[a.severity ?? ''] ?? 2) ||
+      b.amountAtRisk - a.amountAtRisk,
+  );
 }
-
 export function findingsCsv(findings: readonly Finding[]): string {
-  const header = [
-    t('results.col_finding'),
-    t('results.col_amount'),
-    t('results.col_confidence'),
-    t('results.col_status'),
-    t('results.explanation'),
-  ];
-  const rows = findings.map((finding) => [
-    finding.title,
-    finding.amountAtRisk,
-    confidenceLabel(finding.confidence),
-    t(STATUS_LABEL[finding.status]),
-    finding.explanation,
-  ]);
-  return toCsv(header, rows);
+  return toCsv(
+    [
+      t('results.col_finding'),
+      t('results.col_amount'),
+      t('results.col_confidence'),
+      t('results.col_status'),
+      t('results.explanation'),
+    ],
+    findings.map((f) => [
+      f.title,
+      f.amountAtRisk,
+      confidenceLabel(f.confidence),
+      t(STATUS_LABEL[f.status]),
+      f.explanation,
+    ]),
+  );
 }
 
-export function ResultsScreen({ results, onDecision, onExport }: ResultsScreenProps) {
-  // Only the user's decisions live here; the list itself is derived from props so updates to the
-  // run (e.g. media URLs resolved on the client) flow through.
+function FindingsTable({
+  items,
+  onOpen,
+}: {
+  items: Finding[];
+  onOpen: (finding: Finding, opener: HTMLElement) => void;
+}) {
+  return (
+    <div className={styles.tableWrap}>
+      <table className={styles.table}>
+        <thead>
+          <tr>
+            <th scope="col">{t('results.col_finding')}</th>
+            <th scope="col">{t('results.col_amount')}</th>
+            <th scope="col">{t('results.col_status')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((f) => (
+            <tr key={f.id} data-status={f.status} data-testid="finding-row">
+              <td>
+                <button
+                  type="button"
+                  className={styles.rowButton}
+                  onClick={(event) => onOpen(f, event.currentTarget)}
+                >
+                  <span className={styles.rowTitle}>{f.title}</span>
+                  <span className={styles.rowKicker}>
+                    {f.severity === 'info'
+                      ? t('results.findings_information')
+                      : t('results.findings_review')}
+                  </span>
+                </button>
+              </td>
+              <td className={styles.amount} data-label={t('results.col_amount')}>
+                {formatCurrency(f.amountAtRisk, f.currency)}
+              </td>
+              <td className={styles.status} data-label={t('results.col_status')}>
+                {t(STATUS_LABEL[f.status])}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export function ResultsScreen({
+  results,
+  onDecision,
+  onExport,
+  allowUndo = true,
+}: ResultsScreenProps) {
+  const workspace = useWorkspace();
+  const manifest = workspace?.manifest ?? defaultManifest;
   const [decisions, setDecisions] = useState<
     Record<string, { status: FindingStatus; note?: string | undefined }>
   >({});
-  const findings = useMemo<Finding[]>(
+  const findings = useMemo(
     () =>
-      sortByRisk(results.findings).map((finding) => {
-        const decision = decisions[finding.id];
-        if (!decision) return finding;
-        return {
-          ...finding,
-          status: decision.status,
-          ...(decision.note !== undefined ? { note: decision.note } : {}),
-        };
-      }),
-    [results.findings, decisions],
+      sortByRisk(results.findings)
+        .sort((a, b) =>
+          manifest.sort_by === 'amount_at_risk'
+            ? b.amountAtRisk - a.amountAtRisk
+            : manifest.sort_by === 'confidence'
+              ? { high: 3, medium: 2, low: 1 }[b.confidence] -
+                { high: 3, medium: 2, low: 1 }[a.confidence]
+              : 0,
+        )
+        .map((f) => {
+          const decision = decisions[f.id];
+          return decision
+            ? {
+                ...f,
+                status: decision.status,
+                ...(decision.note !== undefined ? { note: decision.note } : {}),
+              }
+            : f;
+        }),
+    [results.findings, decisions, manifest.sort_by],
   );
   const [openId, setOpenId] = useState<string | null>(null);
-  const [showClean, setShowClean] = useState(false);
   const [exportStatus, setExportStatus] = useState<string | null>(null);
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportFailed, setExportFailed] = useState(false);
+  const exportLock = useRef(false);
   const openerRef = useRef<HTMLElement | null>(null);
-
-  const open = findings.find((finding) => finding.id === openId) ?? null;
-
-  const closeDrawer = useCallback((): void => {
+  const headingRef = useRef<HTMLHeadingElement | null>(null);
+  const open = findings.find((f) => f.id === openId) ?? null;
+  const doc = results.document;
+  const corrected = Boolean(doc && (doc.receivables.length || doc.bank_entries.length));
+  const pending = findings.filter((f) => f.severity !== 'info' && f.status === 'open');
+  // Review feedback alone never resolves the underlying critical condition.
+  const critical = findings.filter((f) => f.severity === 'critical');
+  const closeDrawer = useCallback(() => {
     setOpenId(null);
-    openerRef.current?.focus();
+    if (openerRef.current?.isConnected) openerRef.current.focus();
+    else headingRef.current?.focus();
   }, []);
-
   const decide = useCallback(
-    (id: string, status: FindingStatus, note?: string): void => {
+    async (id: string, status: FindingStatus, note?: string) => {
+      await onDecision?.(id, status, note);
       setDecisions((prev) => ({ ...prev, [id]: { status, note: note ?? prev[id]?.note } }));
-      onDecision?.(id, status, note);
     },
     [onDecision],
   );
-
-  const exportAs = async (format: ExportFormat): Promise<void> => {
-    if (format === 'csv') {
-      const name = `docmatch-${results.runId}.csv`;
-      downloadText(name, findingsCsv(findings));
-      setExportStatus(t('results.export_done', { name }));
-      return;
+  const exportAs = async (format: ExportFormat) => {
+    if (exportLock.current) return;
+    exportLock.current = true;
+    setExportBusy(true);
+    setExportFailed(false);
+    setExportStatus(t('results.export_preparing'));
+    try {
+      if (onExport) await onExport(format);
+      else if (format === 'csv')
+        downloadText(`docmatch-${results.runId}.csv`, findingsCsv(findings));
+      else return;
+      setExportStatus(t('results.export_done', { name: `docmatch-${results.runId}.${format}` }));
+    } catch (err) {
+      setExportFailed(true);
+      setExportStatus(err instanceof Error ? err.message : t('errors.unknown'));
+    } finally {
+      exportLock.current = false;
+      setExportBusy(false);
     }
-    if (onExport) {
-      await onExport(format);
-      return;
-    }
-    setExportStatus(t('results.export_soon', { format: format.toUpperCase() }));
+  };
+  const openFinding = (finding: Finding, opener: HTMLElement) => {
+    openerRef.current = opener;
+    setOpenId(finding.id);
   };
 
-  const cleanTotal = useMemo(
-    () => results.cleanMatches.reduce((sum, item) => sum + item.amount, 0),
-    [results.cleanMatches],
-  );
-
   return (
-    <div className={styles.screen}>
-      <header className={styles.header}>
-        <div>
-          <h1 className={styles.title}>{t('results.title')}</h1>
+    <WorkspaceShell>
+      <div className={styles.screen}>
+        <header className={styles.header}>
+          <h1 ref={headingRef} tabIndex={-1} className={styles.title}>
+            {t(corrected ? 'results.document_ready' : 'results.report_ready')}
+          </h1>
           <p className={styles.subtitle}>
-            {t('results.subtitle', {
-              exceptions: findings.length,
-              clean: results.cleanMatches.length,
-              files: results.fileCount,
-            })}
+            {t(corrected ? 'results.document_subtitle' : 'results.report_subtitle')}
           </p>
-          {results.demo && (
-            <p className="notice notice--info small" role="note">
-              {t('results.demo_notice')}
-            </p>
+        </header>
+        {results.demo && (
+          <p className="notice small" role="note">
+            {t('results.demo_notice')}
+          </p>
+        )}
+        <section className={styles.output} aria-labelledby="output-title">
+          <div className={styles.outputTitle}>
+            <FileKindIcon kind="xlsx" size={24} />
+            <h2 id="output-title">{corrected && doc ? doc.title : t('results.all_findings')}</h2>
+          </div>
+          {corrected && doc ? (
+            <>
+              <p className="muted">{t('results.output_description')}</p>
+              {doc.period_start && doc.period_end && (
+                <p className="small muted">
+                  {t('results.doc_period', {
+                    start: formatShortDate(doc.period_start),
+                    end: formatShortDate(doc.period_end),
+                  })}
+                </p>
+              )}
+              <ExportButtons
+                preferred={manifest.export_format}
+                corrected
+                available={Boolean(onExport)}
+                onExport={(format) => void exportAs(format)}
+                status={exportStatus}
+                busy={exportBusy}
+                failed={exportFailed}
+              />
+              <p className="small muted">
+                {t('results.output_meta', {
+                  titles: doc.receivables.length,
+                  entries: doc.bank_entries.length,
+                })}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="muted">{t('results.legacy_output')}</p>
+              <ExportButtons
+                preferred={manifest.export_format}
+                available={Boolean(onExport)}
+                onExport={(format) => void exportAs(format)}
+                status={exportStatus}
+                busy={exportBusy}
+                failed={exportFailed}
+              />
+            </>
           )}
-          {results.sourceWarnings && results.sourceWarnings.length > 0 && (
-            <div className="notice notice--warning small" role="note">
-              <p>{t('results.source_warnings_title')}</p>
-              <ul>
-                {results.sourceWarnings.map((warning) => (
-                  <li key={warning}>{warning}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-        <ExportButtons onExport={(format) => void exportAs(format)} status={exportStatus} />
-      </header>
-
-      <section className={styles.section} aria-labelledby="divergencias">
-        <div className={styles.sectionHead}>
-          <h2 id="divergencias" className={styles.sectionTitle}>
-            {t('results.exceptions_heading')}
-          </h2>
-          <p className="small muted">{t('results.sorted_by_risk')}</p>
-        </div>
-        {findings.length === 0 ? (
-          <p className="muted">{t('results.exceptions_empty')}</p>
-        ) : (
-          <div className={styles.tableWrap}>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th scope="col">{t('results.col_finding')}</th>
-                  <th scope="col" className={styles.amountHead}>
-                    {t('results.col_amount')}
-                  </th>
-                  <th scope="col">{t('results.col_confidence')}</th>
-                  <th scope="col">{t('results.col_status')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {findings.map((finding) => (
-                  <tr key={finding.id} data-status={finding.status} data-testid="finding-row">
-                    <td>
-                      <button
-                        type="button"
-                        className={styles.rowButton}
-                        onClick={(event) => {
-                          openerRef.current = event.currentTarget;
-                          setOpenId(finding.id);
-                        }}
-                      >
-                        <span className={styles.rowTitle}>{finding.title}</span>
-                        <span className={styles.rowKicker}>
-                          {t(MATCH_TYPE_LABEL[finding.matchType])}
-                        </span>
-                      </button>
-                    </td>
-                    <td className={styles.amount}>
-                      {formatCurrency(finding.amountAtRisk, finding.currency)}
-                    </td>
-                    <td>
-                      <ConfidenceBadge level={finding.confidence} />
-                    </td>
-                    <td>
-                      <span className={styles.status} data-status={finding.status}>
-                        {t(STATUS_LABEL[finding.status])}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        </section>
+        {critical.length > 0 && (
+          <aside className={styles.warning} aria-labelledby="critical-title">
+            <h2 id="critical-title">
+              <WarningIcon size={20} />
+              {t('results.critical_heading')}
+            </h2>
+            <ul>
+              {critical.map((f) => (
+                <li key={f.id}>
+                  <button
+                    className={styles.warningLink}
+                    type="button"
+                    onClick={(event) => openFinding(f, event.currentTarget)}
+                    aria-label={t('results.critical_open', { title: f.title })}
+                  >
+                    {f.title}
+                  </button>
+                  <span className="small muted">{t(STATUS_LABEL[f.status])}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="small muted">{t('results.critical_scope')}</p>
+          </aside>
+        )}
+        {results.sourceWarnings && results.sourceWarnings.length > 0 && (
+          <aside className={styles.warning}>
+            <h2>{t('results.source_warnings_title')}</h2>
+            <ul>
+              {results.sourceWarnings.map((warning) => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
+          </aside>
+        )}
+        {corrected && doc && doc.receivables.length > 0 && (
+          <div className={styles.balance}>
+            <span>{t('results.doc_open')}</span>
+            <strong>{formatCurrency(doc.totals.open_balance / 100, doc.currency)}</strong>
           </div>
         )}
-      </section>
-
-      <section className={styles.section} aria-labelledby="limpas">
-        <div className={styles.cleanRow}>
-          <h2 id="limpas" className={styles.cleanTitle}>
-            {t('results.clean_summary', { count: results.cleanMatches.length })}
-            <span className={styles.cleanTotal}>
-              {' '}
-              · {formatCurrency(cleanTotal, results.cleanMatches[0]?.currency ?? 'BRL')}
-            </span>
-          </h2>
-          {results.cleanMatches.length > 0 && (
-            <button
-              type="button"
-              className="btn btn--ghost"
-              aria-expanded={showClean}
-              aria-controls="limpas-lista"
-              onClick={() => setShowClean((value) => !value)}
-            >
-              {showClean ? t('results.clean_hide') : t('results.clean_show')}
-            </button>
+        <div className={styles.sections}>
+          <Disclosure
+            title={t('results.review_heading')}
+            description={t('results.review_count', { count: pending.length })}
+          >
+            {corrected && doc && <DocumentPending document={doc} />}
+            <p className="small muted">{t('results.review_scope')}</p>
+            {pending.length ? (
+              <FindingsTable items={pending} onOpen={openFinding} />
+            ) : (
+              <p className="muted">{t('results.review_empty')}</p>
+            )}
+          </Disclosure>
+          {corrected && doc && (
+            <Disclosure title={t('results.changes_heading')}>
+              <DocumentChanges document={doc} />
+            </Disclosure>
           )}
+          <Disclosure title={t('results.all_heading')} description={t('results.all_description')}>
+            {corrected && doc && <ReconciledDocument document={doc} />}
+            <section className={styles.section} aria-label={t('results.all_findings')}>
+              <h3>{manifest.findings_label}</h3>
+              <p className="small muted">
+                {t(('workspace.sort_' + manifest.sort_by) as Parameters<typeof t>[0])}{' '}
+                {t('results.findings_scope')}
+              </p>
+              {findings.length ? (
+                manifest.group_by === 'none' ? (
+                  <FindingsTable items={findings} onOpen={openFinding} />
+                ) : (
+                  [
+                    ...new Set(
+                      findings.map((f) =>
+                        manifest.group_by === 'severity' ? (f.severity ?? 'medium') : f.matchType,
+                      ),
+                    ),
+                  ].map((group) => (
+                    <section key={group}>
+                      <h4>{t(('workspace.group_value_' + group) as Parameters<typeof t>[0])}</h4>
+                      <FindingsTable
+                        items={findings.filter(
+                          (f) =>
+                            (manifest.group_by === 'severity'
+                              ? (f.severity ?? 'medium')
+                              : f.matchType) === group,
+                        )}
+                        onOpen={openFinding}
+                      />
+                    </section>
+                  ))
+                )
+              ) : (
+                <p className="muted">{t('results.exceptions_empty')}</p>
+              )}
+            </section>
+            {results.cleanMatches.length > 0 && (
+              <Disclosure
+                title={t('results.clean_summary', { count: results.cleanMatches.length })}
+              >
+                <div className={styles.tableWrap}>
+                  <table className={styles.table}>
+                    <thead>
+                      <tr>
+                        <th scope="col">{t('results.col_description')}</th>
+                        <th scope="col">{t('results.col_date')}</th>
+                        <th scope="col">{t('results.col_value')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {results.cleanMatches.map((item) => (
+                        <tr key={item.id}>
+                          <td>
+                            {item.description}
+                            <p className="small muted">
+                              {item.leftSource} ↔ {item.rightSource}
+                            </p>
+                          </td>
+                          <td>{formatShortDate(item.date)}</td>
+                          <td>{formatCurrency(item.amount, item.currency)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Disclosure>
+            )}
+          </Disclosure>
         </div>
-        {results.cleanMatches.length === 0 && <p className="muted">{t('results.clean_empty')}</p>}
-        {showClean && (
-          <div className={styles.tableWrap} id="limpas-lista">
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th scope="col">{t('results.col_date')}</th>
-                  <th scope="col">{t('results.col_description')}</th>
-                  <th scope="col" className={styles.amountHead}>
-                    {t('results.col_value')}
-                  </th>
-                  <th scope="col">{t('results.sources')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {results.cleanMatches.map((item) => (
-                  <tr key={item.id}>
-                    <td>{formatShortDate(item.date)}</td>
-                    <td>{item.description}</td>
-                    <td className={styles.amount}>{formatCurrency(item.amount, item.currency)}</td>
-                    <td className={styles.sources}>
-                      {item.leftSource} ↔ {item.rightSource}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <footer className={styles.footer}>
+          <p>{t('results.doc_preserved')}</p>
+          <p>{t('results.doc_boundary')}</p>
+          <a href="/app">{t('results.back_to_form')}</a>
+        </footer>
+        {open && (
+          <FindingDrawer
+            key={open.id}
+            finding={open}
+            onClose={closeDrawer}
+            onDecision={decide}
+            allowUndo={allowUndo}
+          />
         )}
-      </section>
-
-      <p>
-        <a className="btn btn--ghost" href="/app">
-          {t('results.back_to_form')}
-        </a>
-      </p>
-
-      {open && (
-        <FindingDrawer key={open.id} finding={open} onClose={closeDrawer} onDecision={decide} />
-      )}
-    </div>
+        <WorkspacePanel />
+      </div>
+    </WorkspaceShell>
   );
 }

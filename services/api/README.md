@@ -62,11 +62,13 @@ curl -s http://127.0.0.1:8080/readyz
 Alvos do Makefile: `setup`, `generate`, `lint`, `test`, `test-integration`, `vuln`, `ci`,
 `ci-full`, `build`, `migrate`, `run-api`, `run-worker`, `dev`, `clean`.
 
-- `make test`: unitários com `-race -short` e pisos de cobertura (85% em `internal/`, 95% em
-  `internal/credits` e `internal/config`). Pacotes que só falam com o banco (`internal/db`,
-  `pgstore`, `sqlc`) são medidos no `ci-full`.
+- `make test`: unitários com `-race -short` e testes de autenticação, chaves de API,
+  cobrança e personalização no PostgreSQL real (Docker). Os perfis são combinados sem
+  contar o mesmo bloco duas vezes; os pisos continuam em 85% para `internal/`, 95% para
+  `internal/credits` e `internal/config`, e 90% para autenticação e sessão. Os adaptadores
+  de banco excluídos do piso rápido (`internal/db`, `pgstore`, `sqlc`) são medidos no `ci-full`.
 - `make ci` (< 6 min): lint (gofmt, go vet, golangci-lint com gosec/errcheck/staticcheck,
-  deriva do sqlc) + test + govulncheck.
+  deriva do sqlc) + test + testes do pool sob demanda (Docker) + govulncheck.
 - `make ci-full`: `ci` + testes de integração com testcontainers (`-tags integration`) +
   orçamento de `EXPLAIN` com ~100 mil linhas no razão (falha em Seq Scan sobre tabelas quentes).
   Com `DM_TEST_DATABASE_URL` apontando para um Postgres existente, os testes criam um banco

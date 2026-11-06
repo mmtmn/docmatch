@@ -73,7 +73,8 @@ android {
     }
     sourceSets["androidTest"].apply {
         // The public Vantara twin and its answer key, the same files the site's local e2e uses.
-        assets.srcDir(rootProject.file("../../testdata/golden/vantara-twin"))
+        assets.srcDir(providers.gradleProperty("docmatch.testDataDir").orNull?.let { file(it) }
+            ?: rootProject.file("../../testdata/golden/vantara-twin"))
     }
 
     testOptions {
