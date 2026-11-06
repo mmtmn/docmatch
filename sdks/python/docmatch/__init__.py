@@ -9,10 +9,12 @@ from email.utils import parsedate_to_datetime
 from urllib.parse import urlsplit, quote
 import httpx
 from .operations import OPERATIONS
+from .projects import Project, AsyncProject
 
 class DocmatchError(Exception):
-    def __init__(self, status: int, code: str, message: str, request_id=None):
+    def __init__(self, status: int, code: str, message: str, request_id=None, details=None):
         self.status, self.code, self.message, self.request_id = status, code, message, request_id
+        self.details = details
         super().__init__(f"{message} ({status} {code})")
 
 def safe_url(value: str):
@@ -23,6 +25,12 @@ def safe_url(value: str):
 
 def route(operation: str, id: str) -> str:
     return OPERATIONS[operation]["path"].replace("{id}", quote(id, safe=""))
+
+def run_route(operation: str, run_id: str, project_id=None) -> str:
+    if project_id is None:
+        return route(operation, run_id)
+    names = {"getRun": "projectGetRun", "listFindings": "projectListFindings", "exportRun": "projectExportRun"}
+    return route(names[operation], run_id).replace("{project}", quote(project_id, safe=""))
 
 def retry_delay(header, attempt):
     if header:
@@ -56,6 +64,15 @@ class AsyncClient:
         safe_url(base_url)
         self.base_url, self.api_key, self.lane, self.timeout = base_url.rstrip("/"), api_key, lane, timeout
 
+    def project(self, project_id: str):
+        return AsyncProject(self, project_id)
+
+    async def list_projects(self, *, archived=False, cursor="") -> dict:
+        return await self.request("GET", OPERATIONS["listProjects"]["path"] + "?archived=" + str(archived).lower() + "&cursor=" + quote(cursor, safe=""))
+
+    async def create_project(self, name: str) -> dict:
+        return await self.request("POST", OPERATIONS["createProject"]["path"], {"name": name})
+
     def input(self, upload_ids: list[str], rules_text: str = "") -> dict:
         return {"sources": [{"upload_id": i} for i in upload_ids], "rules_text": rules_text,
                 "options": {"lane": self.lane, "use_rules": True, "web_search": False}}
@@ -66,7 +83,7 @@ class AsyncClient:
         headers = {"Authorization": "Bearer " + self.api_key, "Accept": "application/json"}
         if method != "GET":
             headers["Idempotency-Key"] = str(uuid.uuid4())
-        retry = method == "GET" or (method == "POST" and path == OPERATIONS["createRun"]["path"])
+        retry = method == "GET" or (method == "POST" and (path == OPERATIONS["createRun"]["path"] or (path.startswith("/v1/projects/") and path.endswith("/runs"))))
         async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=False) as client:
             for attempt in range(4):
                 try:
@@ -85,7 +102,7 @@ class AsyncClient:
                     error = response.json()
                 except ValueError:
                     error = {}
-                raise DocmatchError(response.status_code, error.get("code", "http_error"), error.get("message", "Falha na API."), error.get("request_id"))
+                raise DocmatchError(response.status_code, error.get("code", "http_error"), error.get("message", "Falha na API."), error.get("request_id"), error.get("details"))
         raise RuntimeError("Unreachable retry state")
 
     async def request(self, method: str, path: str, body=None):
@@ -98,13 +115,13 @@ class AsyncClient:
     async def run(self, quote: dict, input: dict) -> dict:
         return await self.request("POST", OPERATIONS["createRun"]["path"], {**input, "quote_id": quote["id"], "quote_signature": quote["signature"]})
 
-    async def get_run(self, run_id: str) -> dict:
-        return await self.request("GET", route("getRun", run_id))
+    async def get_run(self, run_id: str, *, project_id=None) -> dict:
+        return await self.request("GET", run_route("getRun", run_id, project_id))
 
-    async def wait(self, run_id: str, timeout: float = 600, poll_interval: float = 1, on_progress=None) -> dict:
+    async def wait(self, run_id: str, timeout: float = 600, poll_interval: float = 1, on_progress=None, *, project_id=None) -> dict:
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            run = await self.get_run(run_id)
+            run = await self.get_run(run_id, project_id=project_id)
             if on_progress:
                 on_progress(run)
             if run["status"] == "completed":
@@ -115,10 +132,10 @@ class AsyncClient:
             await asyncio.sleep(poll_interval)
         raise TimeoutError("Run wait timed out")
 
-    async def findings(self, run_id: str) -> list[dict]:
+    async def findings(self, run_id: str, *, project_id=None) -> list[dict]:
         result, cursor = [], ""
         for _ in range(1000):
-            page = await self.request("GET", route("listFindings", run_id) + "?limit=100&cursor=" + quote(cursor, safe=""))
+            page = await self.request("GET", run_route("listFindings", run_id, project_id) + "?limit=100&cursor=" + quote(cursor, safe=""))
             result.extend(page["items"])
             next_cursor = page.get("next_cursor")
             if not next_cursor:
@@ -128,14 +145,20 @@ class AsyncClient:
             cursor = next_cursor
         raise RuntimeError("Pagination limit exceeded")
 
-    async def export(self, run_id: str, format: str = "xlsx") -> bytes:
+    async def export(self, run_id: str, format: str = "xlsx", *, project_id=None) -> bytes:
         if format not in ("xlsx", "csv", "pdf"):
             raise ValueError("Invalid export format")
-        return (await self._response("GET", route("exportRun", run_id) + "?format=" + format)).content
+        return (await self._response("GET", run_route("exportRun", run_id, project_id) + "?format=" + format)).content
 
-    async def upload(self, name: str, data: bytes, mime: str = "application/octet-stream") -> dict:
+    async def upload(self, name: str, data: bytes, mime: str = "application/octet-stream", *, project_id=None, role="", replaces_id=None) -> dict:
+        prefix = "/v1/projects/" + quote(project_id, safe="") + "/uploads" if project_id is not None else OPERATIONS["createUpload"]["path"]
+        extra = {"role": role} if role else {}
+        if replaces_id is not None:
+            if project_id is None:
+                raise ValueError("Replacement requires a project")
+            extra["replaces_id"] = replaces_id
         digest = hashlib.sha256(data).hexdigest()
-        ticket = await self.request("POST", OPERATIONS["createUpload"]["path"], {"kind": "document", "file_name": name, "size_bytes": len(data), "mime": mime, "sha256": digest})
+        ticket = await self.request("POST", prefix, {**extra, "kind": "document", "file_name": name, "size_bytes": len(data), "mime": mime, "sha256": digest})
         safe_url(ticket["url"])
         # Separate client: no API Authorization or cookies reach object storage.
         async with httpx.AsyncClient(timeout=120, follow_redirects=False) as storage:
@@ -148,7 +171,7 @@ class AsyncClient:
             if not 200 <= response.status_code < 300:
                 raise DocmatchError(response.status_code, "upload_failed", "Falha no envio do arquivo.")
         for _ in range(120):
-            upload = await self.request("POST", route("completeUpload", ticket["id"]), {"sha256": digest})
+            upload = await self.request("POST", prefix + "/" + quote(ticket["id"], safe="") + "/complete", {"sha256": digest})
             if upload["status"] == "ready":
                 return upload
             if upload["status"] not in ("pending", "scanning"):
@@ -162,6 +185,15 @@ class Client:
         safe_url(base_url)
         self.base_url, self.api_key, self.lane, self.timeout = base_url.rstrip("/"), api_key, lane, timeout
 
+    def project(self, project_id: str):
+        return Project(self, project_id)
+
+    def list_projects(self, *, archived=False, cursor="") -> dict:
+        return self.request("GET", OPERATIONS["listProjects"]["path"] + "?archived=" + str(archived).lower() + "&cursor=" + quote(cursor, safe=""))
+
+    def create_project(self, name: str) -> dict:
+        return self.request("POST", OPERATIONS["createProject"]["path"], {"name": name})
+
     def input(self, upload_ids: list[str], rules_text: str = "") -> dict:
         return {"sources": [{"upload_id": i} for i in upload_ids], "rules_text": rules_text,
                 "options": {"lane": self.lane, "use_rules": True, "web_search": False}}
@@ -172,7 +204,7 @@ class Client:
         headers = {"Authorization": "Bearer " + self.api_key, "Accept": "application/json"}
         if method != "GET":
             headers["Idempotency-Key"] = str(uuid.uuid4())
-        retry = method == "GET" or (method == "POST" and path == OPERATIONS["createRun"]["path"])
+        retry = method == "GET" or (method == "POST" and (path == OPERATIONS["createRun"]["path"] or (path.startswith("/v1/projects/") and path.endswith("/runs"))))
         with httpx.Client(timeout=self.timeout, follow_redirects=False) as client:
             for attempt in range(4):
                 try:
@@ -191,7 +223,7 @@ class Client:
                     error = response.json()
                 except ValueError:
                     error = {}
-                raise DocmatchError(response.status_code, error.get("code", "http_error"), error.get("message", "Falha na API."), error.get("request_id"))
+                raise DocmatchError(response.status_code, error.get("code", "http_error"), error.get("message", "Falha na API."), error.get("request_id"), error.get("details"))
         raise RuntimeError("Unreachable retry state")
 
     def request(self, method: str, path: str, body=None):
@@ -204,13 +236,13 @@ class Client:
     def run(self, quote: dict, input: dict) -> dict:
         return self.request("POST", OPERATIONS["createRun"]["path"], {**input, "quote_id": quote["id"], "quote_signature": quote["signature"]})
 
-    def get_run(self, run_id: str) -> dict:
-        return self.request("GET", route("getRun", run_id))
+    def get_run(self, run_id: str, *, project_id=None) -> dict:
+        return self.request("GET", run_route("getRun", run_id, project_id))
 
-    def wait(self, run_id: str, timeout: float = 600, poll_interval: float = 1, on_progress=None) -> dict:
+    def wait(self, run_id: str, timeout: float = 600, poll_interval: float = 1, on_progress=None, *, project_id=None) -> dict:
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            run = self.get_run(run_id)
+            run = self.get_run(run_id, project_id=project_id)
             if on_progress:
                 on_progress(run)
             if run["status"] == "completed":
@@ -221,10 +253,10 @@ class Client:
             time.sleep(poll_interval)
         raise TimeoutError("Run wait timed out")
 
-    def findings(self, run_id: str) -> list[dict]:
+    def findings(self, run_id: str, *, project_id=None) -> list[dict]:
         result, cursor = [], ""
         for _ in range(1000):
-            page = self.request("GET", route("listFindings", run_id) + "?limit=100&cursor=" + quote(cursor, safe=""))
+            page = self.request("GET", run_route("listFindings", run_id, project_id) + "?limit=100&cursor=" + quote(cursor, safe=""))
             result.extend(page["items"])
             next_cursor = page.get("next_cursor")
             if not next_cursor:
@@ -234,14 +266,20 @@ class Client:
             cursor = next_cursor
         raise RuntimeError("Pagination limit exceeded")
 
-    def export(self, run_id: str, format: str = "xlsx") -> bytes:
+    def export(self, run_id: str, format: str = "xlsx", *, project_id=None) -> bytes:
         if format not in ("xlsx", "csv", "pdf"):
             raise ValueError("Invalid export format")
-        return (self._response("GET", route("exportRun", run_id) + "?format=" + format)).content
+        return (self._response("GET", run_route("exportRun", run_id, project_id) + "?format=" + format)).content
 
-    def upload(self, name: str, data: bytes, mime: str = "application/octet-stream") -> dict:
+    def upload(self, name: str, data: bytes, mime: str = "application/octet-stream", *, project_id=None, role="", replaces_id=None) -> dict:
+        prefix = "/v1/projects/" + quote(project_id, safe="") + "/uploads" if project_id is not None else OPERATIONS["createUpload"]["path"]
+        extra = {"role": role} if role else {}
+        if replaces_id is not None:
+            if project_id is None:
+                raise ValueError("Replacement requires a project")
+            extra["replaces_id"] = replaces_id
         digest = hashlib.sha256(data).hexdigest()
-        ticket = self.request("POST", OPERATIONS["createUpload"]["path"], {"kind": "document", "file_name": name, "size_bytes": len(data), "mime": mime, "sha256": digest})
+        ticket = self.request("POST", prefix, {**extra, "kind": "document", "file_name": name, "size_bytes": len(data), "mime": mime, "sha256": digest})
         safe_url(ticket["url"])
         # Separate client: no API Authorization or cookies reach object storage.
         with httpx.Client(timeout=120, follow_redirects=False) as storage:
@@ -254,7 +292,7 @@ class Client:
             if not 200 <= response.status_code < 300:
                 raise DocmatchError(response.status_code, "upload_failed", "Falha no envio do arquivo.")
         for _ in range(120):
-            upload = self.request("POST", route("completeUpload", ticket["id"]), {"sha256": digest})
+            upload = self.request("POST", prefix + "/" + quote(ticket["id"], safe="") + "/complete", {"sha256": digest})
             if upload["status"] == "ready":
                 return upload
             if upload["status"] not in ("pending", "scanning"):

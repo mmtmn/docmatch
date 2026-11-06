@@ -26,3 +26,22 @@ login de desenvolvimento. O terminal operacional usa este cliente. Veja [contrat
 
 A tag de release deste módulo é **`sdks/go/v0.1.0`**, pois ele mora numa subpasta do repositório.
 Não é necessário criar conta ou token num registro Go. Veja o [guia de publicação](../../docs/runbooks/publicar-sdks.md).
+
+## Projetos (código da próxima versão)
+
+Crie com `client.CreateProject(ctx, "Fechamento mensal")` e guarde o ID. `client.Project("prj_ID")` mantém os envios,
+regras e resultados no mesmo projeto. A estimativa devolve a conciliação existente quando
+nada mudou. Uma análise nova exige cotação aprovada; nunca aprove custos adicionais automaticamente.
+
+O exemplo consulta um projeto existente. Só inicia trabalho se `DOCMATCH_APPROVE_CAP`
+for maior ou igual ao limite exibido. Configure `DM_API_BASE_URL` e `DOCMATCH_API_KEY`, com
+`projects:read`, `projects:write`, `uploads:write`, `runs:read` e `runs:write`.
+
+```sh
+go run ./examples/project prj_ID
+```
+
+Envio de substituição fica pendente até aplicar a versão com `replace_document`
+(Go: `ReplaceDocument`; TypeScript: `replaceDocument`). Atualize o projeto antes de editar:
+`version` protege o salvamento e `revision` identifica os dados estimados. Em conflito, releia
+as alterações; em acesso negado, confira o vínculo e os escopos da chave.

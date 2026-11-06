@@ -22,6 +22,22 @@ upload, verificação e correção de uma release. Os testes e builds de publica
 | Python | [docmatch](python/README.md) | `python -m pip install docmatch==0.1.0` dentro de um venv |
 | Rust | [docmatch](rust/README.md) | `cargo add docmatch@0.1.0` |
 
+## Projetos na próxima versão
+
+O código desta branch acrescenta projetos aos quatro SDKs. As versões `0.1.0` publicadas
+continuam intactas; os novos métodos só devem ser usados após a implantação da API e a
+publicação da nova versão.
+
+Crie um projeto, envie arquivos por ele e guarde seu ID para voltar depois. O objeto
+`client.project(id)` (Go: `client.Project(id)`) reúne envio, estimativa, conciliação,
+resultados, versões de documentos e regras. `estimate` pode devolver o resultado existente:
+nesse caso, abra-o sem iniciar outra execução. Para uma nova análise, apresente o limite da
+estimativa e passe a cotação aprovada a `reconcile`.
+
+A chave continua presa à conta em que foi criada. Não use outra conta em um header para
+redirecioná-la. Para o fluxo de projetos, selecione `projects:read`, `projects:write`,
+`uploads:write`, `runs:read` e `runs:write`.
+
 ## Autorização e custos
 
 Crie uma chave em **Minha conta → Acesso à API**, disponível em todos os planos pagos e na

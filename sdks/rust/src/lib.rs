@@ -1,7 +1,9 @@
 //! Official docmatch API client. Apache-2.0. No telemetry.
 mod operations;
+mod projects;
 use hmac::{Hmac, Mac};
 pub use operations::OPERATIONS;
+pub use projects::*;
 use reqwest::{Client as Http, Method, Url};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -21,6 +23,8 @@ pub struct Error {
     pub message: String,
     #[serde(default)]
     pub request_id: Option<String>,
+    #[serde(default)]
+    pub details: Value,
 }
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -34,6 +38,7 @@ fn failure(code: &str, message: &str) -> Error {
         code: code.into(),
         message: message.into(),
         request_id: None,
+        details: Value::Null,
     }
 }
 impl From<reqwest::Error> for Error {
@@ -62,6 +67,8 @@ pub struct Quote {
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Run {
+    #[serde(default)]
+    pub project_id: Option<String>,
     pub id: String,
     pub status: String,
     #[serde(default)]
@@ -156,7 +163,10 @@ impl Client {
             return Err(failure("invalid_path", "Use um caminho relativo /v1/."));
         }
         let key = uuid::Uuid::new_v4().to_string();
-        let retry = method == Method::GET || (method == Method::POST && path == "/v1/runs");
+        let retry = method == Method::GET
+            || (method == Method::POST
+                && (path == "/v1/runs"
+                    || (path.starts_with("/v1/projects/") && path.ends_with("/runs"))));
         for attempt in 0..4 {
             let mut req = self
                 .http
@@ -260,10 +270,13 @@ impl Client {
         .map_err(|_| failure("timeout", "Tempo de espera esgotado."))?
     }
     pub async fn findings(&self, id: &str) -> Result<Vec<Finding>, Error> {
+        self.findings_at(&route("listFindings", id)?).await
+    }
+    async fn findings_at(&self, prefix: &str) -> Result<Vec<Finding>, Error> {
         let mut all = vec![];
         let mut cursor = String::new();
         for _ in 0..1000 {
-            let mut u = Url::parse(&format!("{}{}", self.base_url, route("listFindings", id)?))
+            let mut u = Url::parse(&format!("{}{}", self.base_url, prefix))
                 .map_err(|_| failure("invalid_url", "URL inválida."))?;
             u.query_pairs_mut()
                 .append_pair("limit", "100")
@@ -300,8 +313,23 @@ impl Client {
             .to_vec())
     }
     pub async fn upload(&self, name: &str, data: Vec<u8>, mime: &str) -> Result<Upload, Error> {
+        self.upload_at(&route("createUpload", "")?, name, data, mime, json!({}))
+            .await
+    }
+    async fn upload_at(
+        &self,
+        prefix: &str,
+        name: &str,
+        data: Vec<u8>,
+        mime: &str,
+        extra: Value,
+    ) -> Result<Upload, Error> {
         let digest = hex(&Sha256::digest(&data));
-        let ticket=self.request(Method::POST,&route("createUpload","")?,Some(&json!({"kind":"document","file_name":name,"mime":mime,"size_bytes":data.len(),"sha256":digest}))).await?;
+        let mut body = json!({"kind":"document","file_name":name,"mime":mime,"size_bytes":data.len(),"sha256":digest});
+        if let (Some(body), Some(extra)) = (body.as_object_mut(), extra.as_object()) {
+            body.extend(extra.clone());
+        }
+        let ticket = self.request(Method::POST, prefix, Some(&body)).await?;
         let url = safe_url(
             ticket["url"]
                 .as_str()
@@ -344,12 +372,11 @@ impl Client {
         if !res.status().is_success() {
             return Err(failure("upload_failed", "Falha no envio do arquivo."));
         }
-        let path = route(
-            "completeUpload",
-            ticket["id"]
-                .as_str()
-                .ok_or_else(|| failure("invalid_ticket", "Ticket inválido."))?,
-        )?;
+        let id = ticket["id"]
+            .as_str()
+            .ok_or_else(|| failure("invalid_ticket", "Ticket inválido."))?;
+        route("completeUpload", id)?; // validate the server-returned identifier
+        let path = format!("{prefix}/{id}/complete");
         for _ in 0..120 {
             let upload: Upload = serde_json::from_value(
                 self.request(Method::POST, &path, Some(&json!({"sha256":digest})))

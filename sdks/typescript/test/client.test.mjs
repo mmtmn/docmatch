@@ -81,3 +81,25 @@ test('signature rejects tampering, expiry and duplicate timestamps', async () =>
     false,
   );
 });
+
+test('project retries reuse one key and keep result pagination scoped', async () => {
+  const requests = []; let attempts = 0;
+  const client = new Client({baseURL:'https://api.example.invalid',apiKey:'fixture',fetch:async (url,options) => {
+    requests.push({url,options});
+    if(url.endsWith('/projects/prj_one/runs')) {
+      if(++attempts === 1) return new Response('{}',{status:503,headers:{'Retry-After':'0'}});
+      return Response.json({state:'unchanged',revision:4,run:{id:'run_saved',status:'completed'}});
+    }
+    if(url.includes('cursor=&') || url.endsWith('cursor=')) return Response.json({items:[],next_cursor:'a+b/='});
+    return Response.json({items:[],next_cursor:null});
+  }});
+  const project=client.project('prj_one');
+  const result=await project.reconcile(4);
+  assert.equal(result.run.id,'run_saved');assert.equal(result.quote,undefined);
+  assert.equal(requests[0].options.headers['Idempotency-Key'],requests[1].options.headers['Idempotency-Key']);
+  assert.equal(JSON.parse(requests[1].options.body).quote_id,undefined);
+  await project.findings(result.run.id);
+  assert.ok(requests[2].url.includes('/projects/prj_one/runs/run_saved/findings'));
+  assert.ok(requests[3].url.endsWith('a%2Bb%2F%3D'));
+  assert.equal(requests.length,4);
+});

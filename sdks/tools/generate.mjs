@@ -25,7 +25,13 @@ const wanted = [
   'getRun',
   'listFindings',
   'exportRun',
+  'listOrganizations',
 ];
+for (const [path, item] of Object.entries(spec.paths)) {
+  if (path.startsWith('/projects')) {
+    for (const op of Object.values(item)) if (op?.operationId) wanted.push(op.operationId);
+  }
+}
 const operations = {};
 for (const [path, item] of Object.entries(spec.paths))
   for (const [method, op] of Object.entries(item))
