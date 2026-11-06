@@ -4,6 +4,14 @@ version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
 description = "Cliente oficial assíncrono da API docmatch"
+homepage = "https://docmatch.com.br"
+repository = "https://github.com/mmtmn/docmatch"
+documentation = "https://docs.rs/docmatch"
+readme = "README.md"
+keywords = ["docmatch", "documents", "reconciliation", "api-client"]
+categories = ["api-bindings", "asynchronous"]
+include = ["src/**", "tests/**", "examples/**", "Cargo.toml", "Cargo.lock", "README.md", "LICENSE"]
+
 [dependencies]
 reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls"] }
 tokio = { version = "1", features = ["time", "macros", "rt-multi-thread"] }

@@ -6,6 +6,12 @@ achados paginados e baixam XLSX, CSV e PDF. Não há telemetria.
 
 Os pacotes estão prontos para uso a partir deste checkout; **a publicação em npm, PyPI e
 crates.io ainda não foi feita**. Não use um pacote de nome semelhante de outro autor.
+O pacote npm `docmatch` já publicado é o terminal; o SDK TypeScript é `@docmatch/sdk`.
+
+Python e Rust estão preparados para a primeira versão **0.1.0**. Go usa o mesmo número,
+com a tag **`sdks/go/v0.1.0`**, ainda não publicada. O
+[guia de publicação](../docs/runbooks/publicar-sdks.md) explica contas, preparação local,
+upload, verificação e correção de uma release. Os testes e builds de publicação rodam localmente.
 
 | Linguagem | Pacote / pasta | Instalação local |
 | --- | --- | --- |
