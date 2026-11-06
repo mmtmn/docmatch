@@ -253,16 +253,18 @@ const exportRequest = {
   path: '/v1/projects/prj_00000000000000000000000000/runs/run_00000000000000000000000000/export?format=csv',
 };
 describe('foreground exports', () => {
-  it('streams only bounded chunks and never puts credentials in replies', async () => {
+  it('streams each bounded chunk once despite duplicate messages and keeps credentials private', async () => {
     mocks.data[key] = { epoch, tokens: pair() };
     const data = new Uint8Array(100000).map((_, i) => i % 251);
     mocks.fetch.mockResolvedValue(new Response(data, { headers: { 'Content-Type': 'text/csv' } }));
     const stream = exportPort();
-    stream.send({ type: 'start', request: exportRequest });
+    stream.send({ type: 'start', sequence: 0, request: exportRequest });
     await vi.waitFor(() => expect(stream.output[0]?.type).toBe('ready'));
+    stream.send({ type: 'start', sequence: 0, request: exportRequest });
     const decoded: number[] = [];
     for (let i = 0; i < 5; i++) {
-      stream.send({ type: 'next' });
+      stream.send({ type: 'next', sequence: i + 1 });
+      stream.send({ type: 'next', sequence: i + 1 });
       await vi.waitFor(() => expect(stream.output.length).toBe(i + 2));
       const item = stream.output[i + 1]!;
       if (item.type === 'end') break;
@@ -276,6 +278,7 @@ describe('foreground exports', () => {
     expect(stream.output.at(-1)?.type).toBe('end');
     expect(stream.port.disconnect).not.toHaveBeenCalled();
     expect(new Uint8Array(decoded)).toEqual(data);
+    expect(mocks.fetch).toHaveBeenCalledOnce();
     expect(JSON.stringify(stream.output)).not.toContain('dmxA1_');
     expect(mocks.fetch.mock.calls[0]![1]).toMatchObject({ credentials: 'omit', redirect: 'error' });
     stream.port.disconnect();
@@ -287,10 +290,10 @@ describe('foreground exports', () => {
     mocks.data[key] = { epoch, tokens: pair() };
     mocks.fetch.mockResolvedValue(new Response('private file'));
     const stream = exportPort();
-    stream.send({ type: 'start', request: exportRequest });
+    stream.send({ type: 'start', sequence: 0, request: exportRequest });
     await vi.waitFor(() => expect(stream.output[0]?.type).toBe('ready'));
     mocks.data[key] = { epoch: '00000000-0000-4000-8000-000000000002', tokens: pair('b') };
-    stream.send({ type: 'next' });
+    stream.send({ type: 'next', sequence: 1 });
     await vi.waitFor(() => expect(stream.output.at(-1)?.code).toBe('session_changed'));
     expect(stream.output.some((m) => m.type === 'chunk')).toBe(false);
     expect(stream.port.disconnect).not.toHaveBeenCalled();

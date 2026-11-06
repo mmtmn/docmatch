@@ -321,6 +321,7 @@ browser.runtime.onConnect.addListener((port) => {
   let epoch: string | undefined;
   let closed = false;
   let terminal = false;
+  let lastSequence = -1;
   let work: Promise<unknown> = Promise.resolve();
   let timer: ReturnType<typeof setTimeout>;
   const close = () => {
@@ -343,8 +344,16 @@ browser.runtime.onConnect.addListener((port) => {
         await ready;
         if (closed || terminal) return;
         resetTimeout();
-        const m = message as { type?: string; request?: unknown } | null;
-        if (m?.type === 'start' && !epoch && validExportRequest(m.request)) {
+        const m = message as { type?: string; request?: unknown; sequence?: number } | null;
+        if (!Number.isSafeInteger(m?.sequence) || m!.sequence! < 0)
+          throw new Failure('invalid_request');
+        const sequence = m!.sequence!;
+        // Safari may deliver a queued message twice when starting the background.
+        // Number both directions so duplicates cannot start or advance a read twice.
+        if (sequence <= lastSequence) return;
+        if (sequence !== lastSequence + 1) throw new Failure('invalid_request');
+        lastSequence = sequence;
+        if (m?.type === 'start' && sequence === 0 && !epoch && validExportRequest(m.request)) {
           epoch = m.request.sessionEpoch;
           const response = await apiResponse(m.request, controller.signal);
           if (!response.body) throw new Failure('invalid_response');
@@ -352,6 +361,7 @@ browser.runtime.onConnect.addListener((port) => {
           const format = new URLSearchParams(m.request.path.split('?')[1]).get('format');
           port.postMessage({
             type: 'ready',
+            sequence,
             mime:
               format === 'pdf'
                 ? 'application/pdf'
@@ -365,7 +375,7 @@ browser.runtime.onConnect.addListener((port) => {
             const part = await reader.read();
             if (part.done) {
               terminal = true;
-              port.postMessage({ type: 'end' });
+              port.postMessage({ type: 'end', sequence });
               // Let the receiver close after consuming the final message. Safari can
               // deliver onDisconnect before a message queued immediately before it.
               return;
@@ -374,7 +384,7 @@ browser.runtime.onConnect.addListener((port) => {
           }
           const chunk = remainder.slice(0, 32 * 1024);
           remainder = remainder.subarray(chunk.length);
-          if (!closed) port.postMessage({ type: 'chunk', data: base64url(chunk) });
+          if (!closed) port.postMessage({ type: 'chunk', sequence, data: base64url(chunk) });
         } else throw new Failure('invalid_request');
       })
       .catch((error: unknown) => {

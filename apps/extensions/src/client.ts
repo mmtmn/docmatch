@@ -41,6 +41,7 @@ function download(request: APIRequest, signal?: AbortSignal): Promise<Blob> {
     const chunks: BlobPart[] = [];
     let mime = 'application/octet-stream';
     let settled = false;
+    let sequence = 0;
     let timer: ReturnType<typeof setTimeout>;
     const finish = (error?: Error) => {
       if (settled) return;
@@ -67,10 +68,20 @@ function download(request: APIRequest, signal?: AbortSignal): Promise<Blob> {
         data?: string;
         code?: string;
         status?: number;
+        sequence?: number;
       };
+      if (m.type === 'error') {
+        finish(failure(m.code ?? 'connection_failed', m.status));
+        return;
+      }
+      if (!Number.isSafeInteger(m.sequence) || m.sequence! < 0 || m.sequence! > sequence) {
+        finish(failure('invalid_response'));
+        return;
+      }
+      if (m.sequence! < sequence) return;
       if (m.type === 'ready' && typeof m.mime === 'string') {
         mime = m.mime;
-        port.postMessage({ type: 'next' });
+        port.postMessage({ type: 'next', sequence: ++sequence });
       } else if (
         m.type === 'chunk' &&
         typeof m.data === 'string' &&
@@ -82,12 +93,12 @@ function download(request: APIRequest, signal?: AbortSignal): Promise<Blob> {
             c.charCodeAt(0),
           ),
         );
-        port.postMessage({ type: 'next' });
+        port.postMessage({ type: 'next', sequence: ++sequence });
       } else if (m.type === 'end') finish();
       else finish(failure(m.code ?? 'connection_failed', m.status));
     });
     reset();
-    port.postMessage({ type: 'start', request });
+    port.postMessage({ type: 'start', sequence, request });
   });
 }
 
