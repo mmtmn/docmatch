@@ -9,12 +9,12 @@ O resultado foi **100% neste caso**: 18/18 movimentos bancários, 17/17 títulos
 com evidências e 11/11 totais do documento corrigido. Isso não representa uma garantia de
 acurácia para qualquer documento. As sugestões de IA continuam sujeitas à revisão humana.
 
-| Interface | Prévia acelerada (3×) | Vídeo em velocidade normal | Verificação |
+| Interface | GIF | MP4 | Verificação |
 | --- | --- | --- | --- |
-| Site | [GIF](website.gif) | [MP4](website.mp4) | [Relatório](website-score.json), [resposta real](results/website.json) |
-| Terminal | [GIF](terminal.gif) | [MP4](terminal.mp4) | [Relatório](terminal-score.json), [resposta real](results/terminal.json) |
-| APK Android | [GIF](android.gif) | [MP4](android.mp4) | [Relatório](android-score.json), [resposta real](results/android.json) |
-| App iOS | [GIF](ios.gif) | [MP4](ios.mp4) | [Relatório](ios-score.json), [resposta real](results/ios.json) |
+| Site | [Prévia 3×](website.gif) | [Velocidade normal](website.mp4) | [Relatório](website-score.json), [resposta real](results/website.json) |
+| Terminal | [Prévia 3×](terminal.gif) | [Velocidade normal](terminal.mp4) | [Relatório](terminal-score.json), [resposta real](results/terminal.json) |
+| APK Android | [Velocidade normal](android.gif) | [Velocidade normal](android.mp4) | [Relatório](android-score.json), [resposta real](results/android.json) |
+| App iOS | [Prévia 3×](ios.gif) | [Velocidade normal](ios.mp4) | [Relatório](ios-score.json), [resposta real](results/ios.json) |
 
 ### Site
 
@@ -26,7 +26,13 @@ acurácia para qualquer documento. As sugestões de IA continuam sujeitas à rev
 
 ### Android
 
-![APK Android: envio, processamento e revisão](android.gif)
+![APK Android: envio, processamento, download corrigido e revisão](android.gif)
+
+A gravação Android usa a interface atual, com pausas de 2–3 segundos nos passos simples e
+mais tempo nos resultados e na explicação. GIF e MP4 têm o mesmo ritmo, sem acelerar os
+gestos. Esperas de processamento acima de 12 segundos são abreviadas para 8 segundos com
+um aviso visível. O download abre o compartilhamento nativo do Android e o teste verifica
+que o arquivo recebido é um XLSX real. O cartão final fica visível por 5 segundos.
 
 ### iOS
 
@@ -77,15 +83,22 @@ A configuração privada e os brutos das gravações ficam em `scratch/`, fora d
 4. Compile o APK e os testes com a origem correta, por exemplo:
    `(cd apps/android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest -Pdocmatch.apiBaseUrl=http://10.0.2.2:18080)`.
 5. Num emulador isolado, rode
-   `ANDROID_SERIAL=emulator-5556 python tools/demos/record-android.py`.
+   `ANDROID_SERIAL=emulator-5556 DM_DEMO_API=http://localhost:18080 python tools/demos/record-android.py`.
    O script limpa os dados do app de demonstração. Recusa dispositivos físicos e um APK de
    testes cujos assets não correspondam ao gêmeo público. O picker recebe os quatro arquivos
-   pelo harness de teste; upload, modelo e processamento usam a rede real.
+   pelo harness de teste; upload, modelo, processamento e download usam a rede real.
+   Use `http://localhost:8080` em `DM_DEMO_API` e `http://10.0.2.2:8080` no build quando
+   gravar contra `make local`. Ative `DM_LOCAL_LLM_MODE=openrouter DM_LLM_CACHE_MODE=off`
+   ao subir o stack; a gravação exige análise real do modelo.
 6. Capture `GET /v1/runs/{id}` e todos os achados das três execuções com uma sessão local,
-   no formato `{ "run": ..., "findings": [...] }`. Salve em `docs/demos/results/`, rode o
+   no formato `{ "run": ..., "findings": [...] }`. O gravador Android já salva essa resposta
+   em `scratch/master-plan-demo/android-run.json`, sem cookies. Salve em `docs/demos/results/`, rode o
    verificador acima com `--report docs/demos/<client>-score.json` e confira os IDs gravados.
 7. `python tools/demos/package-media.py` gera MP4/GIF e o cartão a partir dos relatórios aprovados.
    O script exige exatamente uma gravação web no diretório de entrada.
+   Para atualizar apenas o Android, use `python tools/demos/package-media.py --only android`;
+   as gravações e os hashes das outras interfaces são preservados. Os tempos dos cortes
+   ficam registrados em `media.json`.
 
 O terminal é capturado por PTY; os frames são renderizados dos caracteres ANSI recebidos.
 A animação e o progresso vêm do aplicativo. Não são uma sequência de telas desenhadas.
