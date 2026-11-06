@@ -22,9 +22,10 @@ processamento → exportação XLSX → saída. O teste está em `tools/terminal
 e faz parte do portão local completo. A instalação npm também foi verificada com prefixo
 e cache vazios, exercitando download e integridade.
 
-A versão 0.1.2 está disponível pelo tarball HTTPS indicado no README e foi instalada no
-host. A publicação no registry npm ainda depende de autenticação do mantenedor; não se
-deve substituir o comando por `npm install -g docmatch` antes dessa publicação.
+A versão 0.1.2 também foi publicada no registry npm com o mesmo tarball verificado.
+A instalação por `npm install -g docmatch`, com prefixo e cache vazios, foi conferida
+contra a versão publicada. Os seis binários hospedados coincidem com os checksums
+fixados no pacote.
 
 ## Verificação a partir de um clone novo
 

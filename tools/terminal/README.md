@@ -1,7 +1,7 @@
 # docmatch no terminal
 
 ```sh
-npm install -g --allow-remote=root https://docmatch.com.br/install/docmatch.tgz
+npm install -g docmatch
 docmatch
 ```
 
@@ -15,9 +15,6 @@ Não há dependências npm nem scripts de pós-instalação. Para rodar o servid
 assistente verifica Docker e orienta a instalação do que faltar. Conectar a uma API
 existente não exige Docker nem compiladores.
 
-`--allow-remote=root` autoriza somente a URL pedida nessa instalação, como exige o npm 12;
-não altera a configuração global do npm. O pacote não executa scripts de instalação.
-
 `docmatch config` altera a conexão; `docmatch workspace` abre os documentos diretamente.
-Para atualizar: `npm install -g --allow-remote=root https://docmatch.com.br/install/docmatch.tgz`. Para remover o launcher:
+Para atualizar: `npm install -g docmatch`. Para remover o launcher:
 `npm uninstall -g docmatch`. Os dados e configurações locais são preservados.
