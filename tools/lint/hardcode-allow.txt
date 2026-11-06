@@ -19,6 +19,8 @@ path:\.env\.example$
 path:.*terraform\.tfvars\.example$
 path:tools/lint/
 path:.*/(Cargo|Package)\.(toml|resolved|swift)$
+# Metadados públicos de distribuição Python (homepage e links do projeto), como os manifestos Cargo.
+path:sdks/python/pyproject\.toml$
 path:.*(package|package-lock|pnpm-lock|go|go\.sum|Cargo\.lock|Gemfile|Podfile)(\.json|\.yaml|\.lock|\.mod|\.sum)?$
 path:.*\.lock$
 path:\.github/
