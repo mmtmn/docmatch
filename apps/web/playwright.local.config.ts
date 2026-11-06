@@ -15,10 +15,19 @@ export default defineConfig({
   use: {
     launchOptions: { env: browserEnv() },
     baseURL,
-    ...(process.env['DM_E2E_CHANNEL'] ? { channel: process.env['DM_E2E_CHANNEL'] } : {}),
     locale: 'pt-BR',
     timezoneId: 'America/Sao_Paulo',
     trace: 'retain-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    {
+      name: 'chromium',
+      use: {
+        ...devices['Desktop Chrome'],
+        ...(process.env['DM_E2E_CHANNEL'] ? { channel: process.env['DM_E2E_CHANNEL'] } : {}),
+      },
+    },
+    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+  ],
 });
