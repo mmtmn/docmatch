@@ -7,6 +7,8 @@ enrolação. Identificadores de código e comentários em código ficam em ingl�
 
 | Documento | Para quê |
 | --- | --- |
+| [desenvolvimento.md](desenvolvimento.md) | Setup local, modelos e comandos avançados. |
+| [auditoria-local.md](auditoria-local.md) | Evidências, correções, scanners e limites da auditoria local de release. |
 | [arquitetura.md](arquitetura.md) | Como o sistema é montado: diagrama, componentes, caminhos de requisição (upload → varredura → execução → relatório), fronteiras de confiança, onde cada dado vive, modelo de evidências, glossário. |
 | [estruturas-algoritmos-padroes.md](estruturas-algoritmos-padroes.md) | Guia de implementação: estruturas, algoritmos, padrões, invariantes e testes. |
 | [personalizacao.md](personalizacao.md) | Caixa de sugestões, aprovação, versões e operações por organização. |
@@ -59,8 +61,7 @@ O verificador de links não tem dependências além do Python 3 da máquina. Ele
 código e links externos (`http`, `mailto`), confere âncoras `#titulo` com a mesma regra de
 *slug* do GitHub, exige definição (`[id]: alvo`) para toda referência `[texto][id]` ou `[id][]`
 no mesmo arquivo e acusa como quebrado um `.md` que não seja UTF-8 válido em vez de abortar.
-Ele ainda não roda no `make ci`: a etapa `lint/links` em `tools/ci/run.sh` é um PR à parte, fora
-de `docs/`; até lá, rode-o antes de abrir qualquer PR que toque um `.md`.
+Ele roda no `make ci`, na etapa `lint/links` de `tools/ci/run.sh`.
 
 ## Como adicionar um documento
 

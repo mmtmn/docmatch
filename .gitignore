@@ -31,6 +31,9 @@ coverage/
 *.out
 *.prof
 bin/
+# The npm entrypoint is source, not a compiled binary.
+!tools/terminal/bin/
+!tools/terminal/bin/docmatch.mjs
 .turbo/
 .astro/
 .next/

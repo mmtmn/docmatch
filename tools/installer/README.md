@@ -1,5 +1,8 @@
 # docmatch: o instalador de uma linha
 
+Para começar pelo menu interativo, use o [pacote npm](../terminal/README.md).
+Esta página reúne opções avançadas e publicação dos binários.
+
 Um comando em Windows, macOS ou Linux e a docmatch sobe nesta máquina, sem chave de provedor e
 sem login, com o gêmeo público da Vantara já conciliado. O mesmo binário (`docmatch`) depois sobe,
 para, mostra o estado e os logs da instalação, se atualiza (`docmatch update`) e se desinstala
@@ -20,7 +23,7 @@ um clone:
 
 ```bash
 git clone git@github.com:mmtmn/docmatch.git && cd docmatch
-go run ./tools/installer          # ou: make -C tools/installer build && tools/installer/bin/docmatch
+go -C tools/installer run .       # ou: make -C tools/installer build && tools/installer/bin/docmatch
 ```
 
 ## O que acontece

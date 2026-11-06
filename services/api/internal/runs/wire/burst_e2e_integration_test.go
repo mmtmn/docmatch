@@ -377,6 +377,10 @@ func (s *spotIMDS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func TestBurstSpotInterruptionRequeuesEndToEnd(t *testing.T) {
+	// Both workers must replay the same event sequence. This fixture deliberately slows the
+	// fake harness to inject a notice mid-run; a real replacement cannot resume its fake cursor.
+	// TestBurstEndToEnd and TestPipelineWithRealHarness separately exercise the real processor.
+	t.Setenv("DM_HARNESS_BIN", "")
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
 	mb := newMainBox(t, ctx)

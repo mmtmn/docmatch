@@ -11,6 +11,11 @@ Obrigado por ajudar a docmatch. Este guia é curto de propósito: o `make ci` di
 4. Abra um PR usando o template: o que mudou, por quê, como testou (cole o resumo do `make ci`), capturas de tela se houver UI, impacto de segurança.
 5. Um PR é mesclado com *squash* em `main`.
 
+Pushes e PRs não iniciam GitHub Actions. Os testes obrigatórios rodam nesta máquina,
+inclusive os quatro SDKs e o launcher npm. As receitas hospedadas só podem ser iniciadas
+manualmente; não são requisito para mesclar. `make -C apps/ios app` valida a interface
+SwiftUI em um Mac com Xcode; no Linux, o portão valida o DocmatchKit.
+
 ## Regras que o CI aplica
 
 - **Nada hardcoded.** URLs, e-mails, IPs, ARNs, contas e chaves vêm do ambiente ou de `config/`. O lint `tools/lint/hardcode.sh` falha a build; exceções justificadas vão em `tools/lint/hardcode-allow.txt`.
@@ -18,8 +23,8 @@ Obrigado por ajudar a docmatch. Este guia é curto de propósito: o `make ci` di
 - **Textos de interface só em pt-BR e só em `packages/locales`.** String literal na UI falha o lint.
 - **Limites de caracteres vêm de `packages/contracts/limits.yaml`.** Cliente e servidor são gerados do mesmo arquivo.
 - **Sem linhas de atribuição a assistentes de IA** em commits ou PRs. O hook `commit-msg` recusa.
-- **Cobertura mínima:** 85% nos pacotes centrais; 95% em auth, tokens e cobrança, com testes de mutação.
-- **Toda consulta SQL passa por `sqlc` e por um orçamento de `EXPLAIN`.** Varredura sequencial em tabela grande falha o CI.
+- **Cobertura mínima da API:** 85% geral nos pacotes incluídos, 95% em créditos/configuração e 90% em autenticação/sessão. O portão combina testes unitários e de fluxos de conta no PostgreSQL; `ci-full` inclui os adaptadores de banco.
+- **SQL parametrizado e isolamento por organização.** Consultas geradas usam `sqlc`; transações de serviços também usam consultas parametrizadas. Testes de RLS e de `EXPLAIN` verificam os caminhos críticos, não todas as consultas possíveis.
 
 ## Ambiente local
 

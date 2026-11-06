@@ -1,0 +1,20 @@
+# Manifesto do winget (textos em pt-BR) do docmatch 0.1.0, gerado pelo tools/installer/release.sh.
+PackageIdentifier: mmtmn.docmatch
+PackageVersion: 0.1.0
+PackageLocale: pt-BR
+Publisher: mmtmn
+PackageName: docmatch
+PackageUrl: https://docmatch.com.br
+License: AGPL-3.0-only
+ShortDescription: Instalador e linha de comando da docmatch, que concilia documentos nesta máquina.
+Description: |-
+  Um comando sobe a docmatch nesta máquina com o Docker, sem chave de provedor e sem login, com o
+  gêmeo público da Vantara já conciliado. Depois, o mesmo docmatch sobe, para, atualiza e remove a
+  instalação.
+Moniker: docmatch
+Tags:
+  - conciliacao
+  - financeiro
+  - docker
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

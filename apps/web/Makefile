@@ -61,7 +61,7 @@ build: deps ## build estático em dist/
 
 ci: lint typecheck test build ## portão rápido (< 6 min)
 
-ci-full: ci e2e-all ## portão de release: ci + e2e em chromium, firefox e webkit (os que abrirem)
+ci-full: ci e2e-all ## portão de release: ci + e2e em chromium, firefox e webkit
 
 dev: ## servidor de desenvolvimento
 	$(PNPM) exec astro dev
@@ -76,24 +76,26 @@ preview: ## serve dist/ como em produção (URLs limpas como no CloudFront)
 # Playwright starts (and stops) tools/serve-dist.mjs itself on a port chosen for this run;
 # reuseExistingServer is off, so a foreign server on the port fails fast instead of being tested.
 define run_e2e
-@browsers="$$(node tools/e2e-preflight.mjs $(1))"; \
-if [ -z "$$browsers" ]; then \
-  echo "AVISO: nenhum navegador do Playwright abre nesta máquina; e2e PULADO (rode: pnpm exec playwright install chromium)."; \
-else \
-  port="$${E2E_PORT:-$$(node tools/free-port.mjs)}"; \
-  echo "e2e em: $$browsers (http://$(E2E_HOST):$$port)"; \
-  DM_E2E_BROWSERS="$$browsers" DM_WEB_E2E_HOST=$(E2E_HOST) DM_WEB_E2E_PORT=$$port $(PNPM) exec playwright test; \
-fi
+@set -e; browsers="$$(node tools/e2e-preflight.mjs $(1))"; \
+expected="$$(echo '$(1)' | tr ' ' ',')"; \
+[[ "$$browsers" == "$$expected" ]] || { echo "Faltam navegadores: esperado $$expected, disponível $$browsers" >&2; exit 1; }; \
+tls_dir="$$(mktemp -d)"; trap 'rm -rf "$$tls_dir"' EXIT; \
+openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=localhost \
+  -addext 'subjectAltName=DNS:localhost,IP:127.0.0.1' \
+  -keyout "$$tls_dir/key.pem" -out "$$tls_dir/cert.pem" >/dev/null 2>&1; \
+port="$${E2E_PORT:-$$(node tools/free-port.mjs)}"; \
+echo "e2e em: $$browsers (https://$(E2E_HOST):$$port)"; \
+DM_E2E_TLS_CERT="$$tls_dir/cert.pem" DM_E2E_TLS_KEY="$$tls_dir/key.pem" \
+  DM_E2E_BROWSERS="$$browsers" DM_WEB_E2E_HOST=$(E2E_HOST) DM_WEB_E2E_PORT=$$port $(PNPM) exec playwright test
 endef
 
 e2e: ## build com a tela de resultados ligada + Playwright (Chromium)
 	PUBLIC_DM_FEATURE_RESULTS=true $(PNPM) exec astro build
 	$(call run_e2e,chromium)
 
-e2e-all: ## como e2e, em todos os navegadores que abrirem (tenta baixar firefox e webkit)
+e2e-all: ## como e2e, exige Chromium, Firefox e WebKit (certificado local temporário)
 	PUBLIC_DM_FEATURE_RESULTS=true $(PNPM) exec astro build
-	@$(PNPM) exec playwright install firefox webkit >/dev/null 2>&1 \
-	  || echo "AVISO: não foi possível baixar firefox/webkit; seguindo com os navegadores que abrirem."
+	@$(PNPM) exec playwright install chromium firefox webkit
 	$(call run_e2e,chromium firefox webkit)
 
 lhci: build ## Lighthouse CI com orçamentos (fora do ci)

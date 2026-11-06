@@ -1,14 +1,10 @@
+# Execução opcional manual. O portão obrigatório é local; push/PR não inicia runner.
 # As telas do app iOS só compilam num Mac: este workflow as compila no runner macOS do GitHub
 # quando apps/ios muda. Ninguém espera por ele; os testes do DocmatchKit rodam localmente (no
 # Linux, num contêiner Swift) antes de cada push.
 name: ios
 
 on:
-  pull_request:
-    paths:
-      - apps/ios/**
-      - packages/locales/**
-      - packages/contracts/gen/Limits.swift
   workflow_dispatch:
 
 concurrency:

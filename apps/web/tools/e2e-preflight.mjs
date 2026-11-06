@@ -1,11 +1,12 @@
 #!/usr/bin/env node
-// Prints the browsers that can actually run a page here (comma-separated). `make e2e` skips the
-// suite, loudly, when none can: browsers need system libraries that we never install with sudo.
+// Prints the browsers that can actually run a page here (comma-separated). The release gate
+// requires every requested browser; system libraries are never installed with sudo here.
 // Launching is not enough (WebKit starts, renders data: URLs, and then crashes its web process on
 // the first HTTP navigation when libraries are missing), so the probe serves a page over HTTP
 // from this process and evaluates inside it.
 import { createServer } from 'node:http';
 import { chromium, firefox, webkit } from '@playwright/test';
+import { browserEnv } from './browser-env.mjs';
 
 const wanted = process.argv.slice(2).length > 0 ? process.argv.slice(2) : ['chromium'];
 const engines = { chromium, firefox, webkit };
@@ -23,7 +24,7 @@ for (const name of wanted) {
   if (!engine) continue;
   let browser = null;
   try {
-    browser = await engine.launch();
+    browser = await engine.launch({ env: browserEnv() });
     const page = await browser.newPage();
     await page.goto(`http://127.0.0.1:${port}/`, { timeout: 15_000 });
     const title = await page.evaluate(() => document.title);

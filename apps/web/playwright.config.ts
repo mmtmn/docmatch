@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { browserEnv } from './tools/browser-env.mjs';
 
 // The suite runs against the production build: tools/serve-dist.mjs serves dist/ in the foreground
 // with the same clean-URL rules as CloudFront (docs/headers.md), so the CSP meta and the real
@@ -6,7 +7,8 @@ import { defineConfig, devices } from '@playwright/test';
 // picks a free port per run through DM_WEB_E2E_PORT).
 const host = process.env['DM_WEB_E2E_HOST'] ?? '127.0.0.1';
 const port = Number(process.env['DM_WEB_E2E_PORT'] ?? 4173);
-const baseURL = `http://${host}:${port}`;
+const localTLS = Boolean(process.env['DM_E2E_TLS_CERT'] && process.env['DM_E2E_TLS_KEY']);
+const baseURL = `${localTLS ? 'https' : 'http'}://${host}:${port}`;
 const browsers = (process.env['DM_E2E_BROWSERS'] ?? 'chromium').split(',').map((b) => b.trim());
 const isCI = Boolean(process.env['CI']);
 
@@ -26,7 +28,9 @@ export default defineConfig({
   timeout: 30_000,
   expect: { timeout: 5_000 },
   use: {
+    launchOptions: { env: browserEnv() },
     baseURL,
+    ignoreHTTPSErrors: localTLS,
     locale: 'pt-BR',
     timezoneId: 'America/Sao_Paulo',
     trace: 'retain-on-failure',
@@ -37,6 +41,7 @@ export default defineConfig({
     // process "exited early" and whatever server happened to listen on the port got tested.
     command: `node tools/serve-dist.mjs --host ${host} --port ${port}`,
     url: baseURL,
+    ignoreHTTPSErrors: localTLS,
     // Never attach to a server this run did not start: a busy port fails fast.
     reuseExistingServer: false,
     timeout: 30_000,

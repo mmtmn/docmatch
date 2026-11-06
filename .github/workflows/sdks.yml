@@ -1,10 +1,8 @@
+# Execução opcional manual. O portão obrigatório é local; push/PR não inicia runner.
 name: sdks
 on:
-  push:
-    branches: [main]
-    paths: ['sdks/**', 'packages/contracts/**', '.github/workflows/sdks.yml']
-  pull_request:
-    paths: ['sdks/**', 'packages/contracts/**', '.github/workflows/sdks.yml']
+  workflow_dispatch:
+
 permissions:
   contents: read
 jobs:

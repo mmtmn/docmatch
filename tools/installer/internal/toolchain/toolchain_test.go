@@ -532,13 +532,13 @@ func TestCommandString(t *testing.T) {
 
 func TestAugmentPath(t *testing.T) {
 	exists := map[string]bool{
-		filepath.Join("/home/ana", ".cargo", "bin"): true, "/snap/bin": true, filepath.Join("/home/ana", ".local", "bin"): true,
+		"/home/ana/.cargo/bin": true, "/snap/bin": true, "/home/ana/.local/bin": true,
 		"/opt/homebrew/opt/node@22/bin": true, "/opt/homebrew/bin": true,
 	}
 	e := env(ubuntu(), "linux")
 	e.Exists = func(p string) bool { return exists[p] }
 	path, added := e.AugmentPath("/usr/bin:/snap/bin", Defaults)
-	cargo, local := filepath.Join("/home/ana", ".cargo", "bin"), filepath.Join("/home/ana", ".local", "bin")
+	cargo, local := "/home/ana/.cargo/bin", "/home/ana/.local/bin"
 	if path != cargo+":/usr/bin:/snap/bin:"+local || strings.Join(added, ",") != cargo+","+local {
 		t.Fatalf("%q %q", path, added)
 	}

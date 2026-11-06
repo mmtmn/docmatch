@@ -6,9 +6,10 @@
 //
 // `astro preview` is deliberately not used: Astro 7 turns it into a background daemon when it
 // detects an agent or a non-TTY stdout, so test runs exited early and left stale servers behind.
-import { createReadStream } from 'node:fs';
+import { createReadStream, readFileSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
+import { createServer as createSecureServer } from 'node:https';
 import { extname, join, posix, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -107,9 +108,9 @@ function send(response, method, status, file, info, path) {
 }
 
 /** Creates the HTTP server for `dir` (absolute or relative to cwd) without listening. */
-export function createDistServer(dir) {
+export function createDistServer(dir, tls) {
   const root = resolve(dir);
-  return createServer(async (request, response) => {
+  const handler = async (request, response) => {
     const method = request.method ?? 'GET';
     if (method !== 'GET' && method !== 'HEAD') {
       response.writeHead(405, { Allow: 'GET, HEAD', 'Content-Type': 'text/plain; charset=utf-8' });
@@ -135,19 +136,24 @@ export function createDistServer(dir) {
     }
     response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
     response.end('404');
-  });
+  };
+  return tls ? createSecureServer(tls, handler) : createServer(handler);
 }
 
 /** Starts serving `dir`; resolves with the server and its URL once it listens. */
-export function startDistServer({ dir, host = DEFAULT_HOST, port = DEFAULT_PORT }) {
-  const server = createDistServer(dir);
+export function startDistServer({ dir, host = DEFAULT_HOST, port = DEFAULT_PORT, tls }) {
+  const server = createDistServer(dir, tls);
   return new Promise((resolvePromise, reject) => {
     server.once('error', reject);
     server.listen(port, host, () => {
       server.off('error', reject);
       const address = server.address();
       const boundPort = typeof address === 'object' && address ? address.port : port;
-      resolvePromise({ server, port: boundPort, url: `http://${host}:${boundPort}` });
+      resolvePromise({
+        server,
+        port: boundPort,
+        url: `${tls ? 'https' : 'http'}://${host}:${boundPort}`,
+      });
     });
   });
 }
@@ -184,6 +190,14 @@ async function main() {
     dir: root,
     host: options.host,
     port: options.port,
+    ...(process.env.DM_E2E_TLS_CERT && process.env.DM_E2E_TLS_KEY
+      ? {
+          tls: {
+            cert: readFileSync(process.env.DM_E2E_TLS_CERT),
+            key: readFileSync(process.env.DM_E2E_TLS_KEY),
+          },
+        }
+      : {}),
   });
   console.log(`serve-dist: ${root} em ${url}`);
   const shutdown = () => {

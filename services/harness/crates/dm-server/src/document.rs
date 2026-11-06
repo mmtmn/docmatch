@@ -43,6 +43,16 @@ pub fn build(run: &Run, index: &SourceIndex) -> Struct {
     let mut fines = 0i64;
     let mut withholding = 0i64;
     let mut rows = Vec::new();
+    // Build once in bank-line order: each title visits only its allocations. Scanning every
+    // allocation for every title made large exports quadratic in the input size.
+    let mut allocations_by_title = vec![Vec::new(); run.dataset.titles.len()];
+    for (li, line) in run.cascade.lines.iter().enumerate() {
+        for allocation in &line.applied {
+            if let Some(entries) = allocations_by_title.get_mut(allocation.title) {
+                entries.push((li, allocation));
+            }
+        }
+    }
     for (ti, title) in run.dataset.titles.iter().enumerate() {
         let ledger = &run.dataset.ledgers[title.ledger];
         let outcome = &run.outcomes[ti];
@@ -53,18 +63,17 @@ pub fn build(run: &Run, index: &SourceIndex) -> Struct {
         let mut tax = 0i64;
         let mut dates = Vec::new();
         let mut bank_rows = Vec::new();
-        for (li, line) in run.cascade.lines.iter().enumerate() {
-            for allocation in line.applied.iter().filter(|a| a.title == ti) {
-                bank_rows.push(run.dataset.lines[li].n);
-                if line.proposed {
-                    proposed = proposed.saturating_add(allocation.principal.centavos());
-                } else {
-                    received = received.saturating_add(allocation.cash.centavos());
-                    applied = applied.saturating_add(allocation.principal.centavos());
-                    extra = extra.saturating_add(allocation.fine.centavos());
-                    tax = tax.saturating_add(allocation.withholding.centavos());
-                    dates.push(run.dataset.lines[li].date);
-                }
+        for &(li, allocation) in &allocations_by_title[ti] {
+            let line = &run.cascade.lines[li];
+            bank_rows.push(run.dataset.lines[li].n);
+            if line.proposed {
+                proposed = proposed.saturating_add(allocation.principal.centavos());
+            } else {
+                received = received.saturating_add(allocation.cash.centavos());
+                applied = applied.saturating_add(allocation.principal.centavos());
+                extra = extra.saturating_add(allocation.fine.centavos());
+                tax = tax.saturating_add(allocation.withholding.centavos());
+                dates.push(run.dataset.lines[li].date);
             }
         }
         let face = title.amount.centavos();

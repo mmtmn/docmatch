@@ -1,11 +1,10 @@
+# Execução opcional manual. O portão obrigatório é local; push/PR não inicia runner.
 # Segunda checagem: repete o mesmo `make ci` que roda localmente antes de cada push.
 # Ninguém espera por este workflow; o portão é local.
 name: ci
 
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}

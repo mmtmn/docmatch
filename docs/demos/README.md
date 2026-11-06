@@ -54,7 +54,7 @@ por mutação confirma que saldo, regra, evidência, achado duplicado e total ad
 
 Requer o stack local, um provedor real configurado em arquivo ignorado pelo Git, saldo de
 QA/local suficiente, Chrome, ffmpeg e Python com `pyte`, Pillow e PyYAML. Use os comandos de
-[desenvolvimento local](../../README.md#começando) e o [instalador](../../tools/installer/README.md).
+[desenvolvimento local](../desenvolvimento.md#começando) e o [instalador](../../tools/installer/README.md).
 A configuração privada e os brutos das gravações ficam em `scratch/`, fora do Git.
 
 1. Compile o terminal: `(cd tools/installer && go build -o ../../output/docmatch .)`.

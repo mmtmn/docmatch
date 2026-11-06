@@ -143,7 +143,12 @@ vuln: tools ## govulncheck ./...
 
 ci: lint test test-pool vuln ## portão rápido: lint + unitários + contas e pool sob demanda (Docker) + govulncheck
 
-ci-full: ci test-integration ## portão de release: ci + integração + orçamento de EXPLAIN
+ci-full: ci test-integration fuzz ## portão de release: ci + integração + orçamento de EXPLAIN + fuzzing
+
+.PHONY: fuzz
+fuzz: ## fuzzing limitado e reproduzível dos IDs públicos e tokens assinados
+	go test ./internal/publicid -run '^$$' -fuzz FuzzPublicIDRoundTrip -fuzztime=10s -parallel=4
+	go test ./internal/crypto -run '^$$' -fuzz FuzzSignedToken -fuzztime=10s -parallel=4
 
 # ---------------------------------------------------------------- execução
 build: ## compila api, worker e migrate em bin/ com git sha nos ldflags

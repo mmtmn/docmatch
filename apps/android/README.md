@@ -64,6 +64,12 @@ make e2e-local DEVICE=connected # o mesmo teste em um emulador/aparelho já inic
 make release     # AAB para o ambiente (ENV=prod), com a origem lida dos outputs do Terraform
 ```
 
+O teste gerenciado usa `.cache/android-test` do checkout para não disputar o emulador do
+desenvolvedor e desativa chamadas pagas de modelo. Os `gradle.lockfile` fixam dependências
+transitivas, incluindo tooling de teste; para atualizá-los, rode
+`./gradlew :app:dependencies :core:dependencies --write-locks` e repita o scanner e o fluxo
+instrumentado. O Trivy desses lockfiles faz parte de `make ci-full` na raiz.
+
 O SDK vem de `sdk.dir` em `local.properties` (fora do git) ou de `ANDROID_HOME`: plataforma 36 e
 build-tools 35. O `e2e-local` usa a imagem `system-images;android-34;aosp_atd;x86_64` (o Gradle
 baixa se faltar) e precisa de KVM.

@@ -83,6 +83,9 @@ func (t Theme) huhTheme() *huh.Theme {
 	return h
 }
 
+// FormTheme shares the installer's palette with the terminal home screen.
+func (t Theme) FormTheme() *huh.Theme { return t.huhTheme() }
+
 // keyMap is Huh's default with the help in pt-BR.
 func keyMap() *huh.KeyMap {
 	k := huh.NewDefaultKeyMap()

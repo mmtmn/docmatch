@@ -10,6 +10,8 @@ ENV ?= prod
 # Dispositivo gerenciado pelo Gradle (app/build.gradle.kts): emulador headless com KVM.
 DEVICE ?= pixel6Api34
 GPU ?= swiftshader_indirect
+# Keep Gradle's generic Pixel AVD separate from the developer's running emulator.
+TEST_ANDROID_HOME ?= $(ROOT)/.cache/android-test
 
 .PHONY: help setup sdk-check tokens lint test build ci ci-full e2e-local release clean
 
@@ -41,8 +43,11 @@ ci: tokens test lint build ## tokens + testes + lint + builds (o que o pre-push 
 ci-full: ci e2e-local ## ci + o fluxo inteiro num emulador contra o make local
 
 e2e-local: sdk-check ## make local + o app num emulador gerenciado: login local, gêmeo da Vantara, conta em dois aparelhos
-	$(ROOT)/tools/dev/local.sh up
-	$(GRADLE) :app:$(DEVICE)DebugAndroidTest \
+	DM_LOCAL_LLM_MODE=off $(ROOT)/tools/dev/local.sh up
+	mkdir -p "$(TEST_ANDROID_HOME)"
+	ANDROID_USER_HOME="$(TEST_ANDROID_HOME)" ANDROID_EMULATOR_HOME="$(TEST_ANDROID_HOME)" \
+	  ANDROID_AVD_HOME="$(TEST_ANDROID_HOME)/avd/gradle-managed" \
+	  $(GRADLE) --no-daemon :app:$(DEVICE)DebugAndroidTest \
 	  -Pandroid.testInstrumentationRunnerArguments.docmatchLocal=1 \
 	  -Pandroid.testoptions.manageddevices.emulator.gpu=$(GPU)
 

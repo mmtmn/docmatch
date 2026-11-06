@@ -985,7 +985,9 @@
         "uso: docmatch [comando] [opções]",
         "",
         "comandos:",
-        "  (nenhum)   instala (ou retoma a instalação) e abre a docmatch",
+        "  (nenhum)   abre o menu: documentos, modelos e configuração",
+        "  config     configura a conexão e a chave da API",
+        "  install    instala ou reconfigura os serviços locais",
         "  up         sobe a instalação",
         "  down       para tudo (--volumes apaga também os dados)",
         "  status     o que está rodando",
@@ -1101,6 +1103,24 @@
       "err_move_aside": "não consegui tirar {path} do caminho",
       "err_not_back": "e o antigo não voltou de {path}",
       "err_later_path": "não dá para agendar a remoção de um caminho com % ou aspas: {path}"
+    },
+    "home": {
+      "description": "Documentos, modelos e configuração — tudo por aqui.",
+      "open": "Abrir documentos nesta pasta",
+      "install": "Configurar nesta máquina (Ollama ou OpenRouter)",
+      "connect": "Conectar a uma API / conta existente",
+      "up": "Iniciar serviços locais",
+      "down": "Parar serviços locais (manter dados)",
+      "doctor": "Verificar instalação",
+      "quit": "Sair",
+      "retry": "Confira a mensagem acima. Você pode ajustar a configuração neste menu.",
+      "terminal_required": "abra docmatch config em um terminal interativo",
+      "api": "Endereço da API",
+      "api_help": "HTTPS para servidores remotos; HTTP somente nesta máquina.",
+      "key": "Chave da API",
+      "key_help": "Deixe vazio somente para o login de desenvolvimento local. A chave fica privada nesta máquina.",
+      "invalid_key": "A chave não pode conter quebras de linha.",
+      "saved": "Conexão salva. Abra os documentos pelo menu principal."
     }
   },
   "billing": {
