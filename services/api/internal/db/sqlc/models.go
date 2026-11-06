@@ -125,6 +125,7 @@ type BillingOrder struct {
 	ExpiresAt       *time.Time
 	PaidAt          *time.Time
 	CreatedAt       time.Time
+	Currency        string
 }
 
 type BlogPost struct {
@@ -269,16 +270,18 @@ type CreditLedgerDefault struct {
 }
 
 type Customization struct {
-	ID        uuid.UUID
-	OrgID     uuid.UUID
-	UserID    *uuid.UUID
-	Request   string
-	Status    string
-	Plan      []byte
-	Result    []byte
-	Credits   int64
-	CreatedAt time.Time
-	AppliedAt *time.Time
+	ID          uuid.UUID
+	OrgID       uuid.UUID
+	UserID      *uuid.UUID
+	Request     string
+	Status      string
+	Plan        []byte
+	Result      []byte
+	Credits     int64
+	CreatedAt   time.Time
+	AppliedAt   *time.Time
+	BaseVersion int32
+	RequestKey  *uuid.UUID
 }
 
 type Feedback struct {
@@ -667,6 +670,7 @@ type TenantTheme struct {
 	Css       *string
 	Version   int32
 	UpdatedAt time.Time
+	Endpoints []byte
 }
 
 type Tool struct {
@@ -762,4 +766,14 @@ type Workflow struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	DeletedAt   *time.Time
+}
+
+type WorkspaceVersion struct {
+	OrgID           uuid.UUID
+	Version         int32
+	Manifest        []byte
+	Endpoints       []byte
+	CustomizationID *uuid.UUID
+	CreatedBy       *uuid.UUID
+	CreatedAt       time.Time
 }

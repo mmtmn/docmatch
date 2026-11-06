@@ -39,6 +39,8 @@ LDFLAGS  := -s -w \
 
 COVER_DIR := coverage
 # Pisos de cobertura (make test): 85% em internal/ e 95% nos pacotes centrais.
+# O portão rápido inclui os testes de integração dos fluxos de conta novos: sua lógica de
+# autorização, cobrança e personalização depende de transações e RLS no PostgreSQL real.
 # Pacotes que só existem para falar com o banco (internal/db, pgstore, sqlc) e
 # o harness de testes são medidos no ci-full, com os testes de integração.
 UNIT_EXCLUDES := -exclude internal/db -exclude internal/db/pgstore -exclude internal/db/sqlc -exclude internal/testdb \
@@ -113,11 +115,15 @@ lint: tools sync-check vet ## gofmt -l, go vet, golangci-lint (gosec, errcheck, 
 	@$(MAKE) --no-print-directory sqlc-check
 
 # -------------------------------------------------------------------- testes
-test: tools ## unitários: go test -race -short com piso de cobertura (85% / 95%)
+test: tools ## unitários + fluxos de conta no PostgreSQL (Docker), com -race e piso de cobertura
 	@mkdir -p $(COVER_DIR)
 	gotestsum --format pkgname -- -race -short -count=1 -covermode=atomic \
 	  -coverpkg=./internal/... -coverprofile=$(COVER_DIR)/unit.out ./...
-	go run ./tools/covercheck -profile $(COVER_DIR)/unit.out $(UNIT_EXCLUDES) $(FLOORS)
+	gotestsum --format pkgname -- -race -tags integration -count=1 -covermode=atomic \
+	  -coverpkg=./internal/... -coverprofile=$(COVER_DIR)/features.out -timeout 5m \
+	  ./internal/apikeys ./internal/billing ./internal/customizations ./internal/auth
+	@awk 'FNR == 1 && NR != 1 { next } { print }' $(COVER_DIR)/unit.out $(COVER_DIR)/features.out > $(COVER_DIR)/fast.out
+	go run ./tools/covercheck -profile $(COVER_DIR)/fast.out $(UNIT_EXCLUDES) $(FLOORS)
 
 test-integration: tools ## integração com testcontainers (Docker) + orçamento de EXPLAIN com ~100k linhas
 	@mkdir -p $(COVER_DIR)
@@ -135,7 +141,7 @@ test-pool: ## pool sob demanda: burstpg no PostgreSQL (Docker) e ponta a ponta c
 vuln: tools ## govulncheck ./...
 	govulncheck ./...
 
-ci: lint test test-pool vuln ## portão rápido (< 6 min): lint + unitários + pool sob demanda (Docker) + govulncheck
+ci: lint test test-pool vuln ## portão rápido: lint + unitários + contas e pool sob demanda (Docker) + govulncheck
 
 ci-full: ci test-integration ## portão de release: ci + integração + orçamento de EXPLAIN
 
