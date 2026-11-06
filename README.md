@@ -20,6 +20,12 @@ para copiar e colar. Requer Node 20+; o assistente verifica os demais requisitos
 
 [Guia do terminal](tools/terminal/README.md) · [Instalação e comandos avançados](tools/installer/README.md)
 
+## SDKs
+
+Para integrar a API ao seu código, confira os SDKs de [Python](sdks/python/README.md),
+[Go](sdks/go/README.md), [Rust](sdks/rust/README.md) e [TypeScript](sdks/typescript/README.md).
+Veja os [comandos de instalação e exemplos](sdks/README.md).
+
 ## Veja funcionando
 
 [Site](docs/demos/website.gif) · [Terminal](docs/demos/terminal.gif) · [Android](docs/demos/android.gif) · [iOS](docs/demos/ios.gif)
