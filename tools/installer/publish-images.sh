@@ -19,13 +19,13 @@
 # --dry-run prints every command and runs none (no Docker needed); a real run refuses a checkout
 # with local changes, since the images are tagged with the commit.
 #
-# While the repository is private the packages are private too: anonymous pulls are denied and the
-# installer compiles the images from the code (or `docker login ghcr.io` with a read:packages token
-# lets it pull). Once the repository is public, make each package public (GitHub > Packages >
-# docmatch-<svc> > Package settings > Change visibility) and `docmatch` (Experimentar) downloads the
-# images, on Intel and on Apple silicon or arm64 Linux, without compiling.
+# Package visibility is separate from repository visibility. New GHCR packages are private by
+# default. Make each package public (GitHub > Packages > docmatch-<svc> > Package settings >
+# Change visibility), then verify anonymous pulls. The installer builds from source whenever the
+# requested image is unavailable; public packages let it download ready images on Intel and ARM.
+# Publishing still requires authentication with write:packages.
 #
-# Uso: tools/installer/publish-images.sh [--version 0.1.0] [--registry ghcr.io/dono]
+# Uso: tools/installer/publish-images.sh [--version 0.2.0] [--registry ghcr.io/dono]
 #        [--platforms linux/amd64,linux/arm64] [--only api,harness,web] [--no-latest] [--dry-run]
 set -euo pipefail
 # Inside a git hook (make ci in pre-push) git exports GIT_DIR: with it, rev-parse --show-toplevel
@@ -152,5 +152,5 @@ if [[ $dry_run -eq 1 ]]; then
   log "dry-run: nada foi compilado nem enviado"
 else
   log "pronto: $registry/docmatch-{${only}}:$revision${version:+ e :$version}"
-  log "com o repositório privado os pacotes são privados; torne-os públicos quando o repositório abrir"
+  log "confira a visibilidade dos pacotes e o pull sem login antes de anunciar as imagens"
 fi
