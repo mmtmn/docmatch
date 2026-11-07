@@ -114,8 +114,9 @@ type Identity struct {
 	Email         string
 	EmailVerified bool
 	// Name is set only when the provider sends one (Apple: first login only).
-	Name         string
-	PrivateEmail bool
+	Name            string
+	PrivateEmail    bool
+	appleCredential *appleCredential
 }
 
 // Challenge is an e-mail login request (magic_links row).
@@ -180,6 +181,14 @@ func (NoSecondFactor) Required(context.Context, account.User) (bool, error) { re
 // Verify implements SecondFactor.
 func (NoSecondFactor) Verify(context.Context, account.User, string) error { return nil }
 
+// AppleTokenStore keeps the revocable token encrypted before a session is issued.
+type AppleTokenStore interface {
+	Save(context.Context, uuid.UUID, string, string) error
+	QueueRevocation(context.Context, string, string) error
+}
+
+type appleCredential struct{ clientID, refreshToken string }
+
 // Deps are the collaborators of the service.
 type Deps struct {
 	Store    Store
@@ -188,8 +197,9 @@ type Deps struct {
 	Limits   *limits.Limits
 	Audit    account.Recorder
 	// Google and Apple are nil when the provider is not configured (503).
-	Google *Provider
-	Apple  *Provider
+	Google      *Provider
+	Apple       *Provider
+	AppleTokens AppleTokenStore
 	// GoogleAudiences are extra client ids accepted for native ID tokens
 	// (the Android and iOS apps), besides Google.ClientID.
 	GoogleAudiences []string
@@ -232,6 +242,9 @@ type Service struct {
 func New(d Deps) (*Service, error) {
 	if d.Store == nil || d.Sessions == nil || d.Keys == nil || d.Audit == nil {
 		return nil, errors.New("auth: Store, Sessions, Keys and Audit are required")
+	}
+	if d.Apple != nil && d.AppleTokens == nil {
+		return nil, errors.New("auth: AppleTokens required with Apple")
 	}
 	if d.PublicBaseURL == nil || d.APIBaseURL == nil {
 		return nil, errors.New("auth: PublicBaseURL and APIBaseURL are required")

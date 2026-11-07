@@ -20,6 +20,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/mmtmn/docmatch/services/api/internal/account"
+	"github.com/mmtmn/docmatch/services/api/internal/applecredentials"
 	"github.com/mmtmn/docmatch/services/api/internal/auth"
 	"github.com/mmtmn/docmatch/services/api/internal/db"
 	"github.com/mmtmn/docmatch/services/api/internal/db/sqlc"
@@ -390,7 +391,10 @@ func (s *Store) RequestDeletion(ctx context.Context, userID uuid.UUID, scheduled
 			return nil
 		}
 		changed = err == nil
-		return err
+		if err != nil {
+			return err
+		}
+		return applecredentials.Detach(ctx, tx, userID)
 	})
 	return changed, err
 }
@@ -442,6 +446,9 @@ func (s *Store) Erase(ctx context.Context, userID uuid.UUID, now time.Time) (acc
 			rep.MembershipsRemoved++
 		}
 		if _, err := q.AuthRevokeUserSessions(ctx, sqlc.AuthRevokeUserSessionsParams{UserID: userID}); err != nil {
+			return err
+		}
+		if err := applecredentials.Detach(ctx, tx, userID); err != nil {
 			return err
 		}
 		if _, err := q.AuthHardDeleteUser(ctx, userID); err != nil {

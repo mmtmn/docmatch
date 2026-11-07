@@ -124,6 +124,11 @@ func (s *Service) completeLogin(ctx context.Context, w http.ResponseWriter, r *h
 	if u.DeletionRequestedAt != nil {
 		return loginResult{}, ErrDeletionPending
 	}
+	if id.appleCredential != nil {
+		if err := s.d.AppleTokens.Save(ctx, u.ID, id.appleCredential.clientID, id.appleCredential.refreshToken); err != nil {
+			return loginResult{}, err
+		}
+	}
 	if id.Name != "" && u.DisplayName == "" {
 		if name, nerr := httpx.ValidateText(id.Name, s.d.Limits.Text.DisplayName, true); nerr == nil && name != "" {
 			if err := s.d.Store.SetDisplayName(ctx, u.ID, name); err != nil {

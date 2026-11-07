@@ -29,6 +29,8 @@ import (
 const (
 	// PurposeKEK wraps the per-tenant data keys (crypto-shredding).
 	PurposeKEK = "docmatch/kek/v1"
+	// PurposeAppleToken protects revocable Apple grants independently of tenant data.
+	PurposeAppleToken = "docmatch/apple-token/v1"
 	// PurposeCookie seals the short-lived OAuth state cookies.
 	PurposeCookie = "docmatch/cookie/v1"
 	// PurposeEmailCode keys the HMAC of the six-digit login codes.

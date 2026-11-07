@@ -45,6 +45,7 @@ public final class SessionModel {
     @ObservationIgnored public let dm: Docmatch
     @ObservationIgnored private let cleanup: @Sendable () -> Void
     @ObservationIgnored private let accountStore: any SecretStore
+    @ObservationIgnored private let appleStore: any SecretStore
     @ObservationIgnored public let projectDrafts: ProjectDraftJournal
 
     public func draftEditor(projectID: String) -> ProjectDraftEditor? {
@@ -77,10 +78,12 @@ public final class SessionModel {
     public init(
         dm: Docmatch, accountStore: any SecretStore = MemorySecretStore(),
         draftStore: any SecretStore = MemorySecretStore(),
+        appleStore: any SecretStore = MemorySecretStore(),
         cleanup: @escaping @Sendable () -> Void = { RunModel.clearExports() }
     ) {
         self.dm = dm
         self.accountStore = accountStore
+        self.appleStore = appleStore
         projectDrafts = ProjectDraftJournal(store: draftStore)
         self.cleanup = cleanup
         // Revoked from another device's account page (or ended on the server): back to sign-in
@@ -144,11 +147,17 @@ public final class SessionModel {
         }
     }
 
-    public func apple(identityToken: String, authorizationCode: String, fullName: String?) async {
+    public func apple(identityToken: String, authorizationCode: String, fullName: String?, appleUserID: String? = nil) async {
+        guard case .signedOut(let current) = state, !current.busy else { return }
+        let attempt = generation
         await signingIn {
             try await self.dm.api.appleNative(
                 identityToken: identityToken, authorizationCode: authorizationCode, fullName: fullName)
             return .signedIn
+        }
+        if attempt == generation, let appleUserID, case .signedIn(let me) = state {
+            appleStore.write(try? JSONEncoder().encode(AppleIdentity(origin: dm.baseURL.absoluteString,
+                userID: me.user.id, appleUserID: appleUserID)))
         }
     }
 
@@ -167,8 +176,37 @@ public final class SessionModel {
         state = .signedOut(current)
     }
 
+    private struct AppleIdentity: Codable {
+        let origin: String
+        let userID: String
+        let appleUserID: String
+    }
+
+    /// Credential-state checks only apply to the identity that signed in with Apple.
+    public var appleUserID: String? {
+        guard case .signedIn(let me) = state, let data = appleStore.read(),
+            let saved = try? JSONDecoder().decode(AppleIdentity.self, from: data),
+            saved.origin == dm.baseURL.absoluteString, saved.userID == me.user.id
+        else { return nil }
+        return saved.appleUserID
+    }
+
+    public func appleCredentialRevoked(_ userID: String) async {
+        guard appleUserID == userID else { return }
+        generation += 1
+        let attempt = generation
+        clearAccounts()
+        state = .loading
+        try? await dm.api.logout()
+        guard attempt == generation else { return }
+        let methods = await dm.api.methods()
+        guard attempt == generation else { return }
+        state = .signedOut(SignedOut(methods: methods, error: dm.texts.t("account.revoked")))
+    }
+
     private func clearAccounts() {
         projectDrafts.clear()
+        appleStore.write(nil)
         accountStore.write(nil)
         accounts = []
         accountID = nil
@@ -208,6 +246,7 @@ public final class SessionModel {
                 current.busy = false
                 state = .signedOut(current)
             case .signedIn:
+                appleStore.write(nil)
                 let next = await load()
                 guard generation == self.generation else { return }
                 state = next

@@ -303,20 +303,25 @@ func (s *Service) appleCallback(w http.ResponseWriter, r *http.Request) {
 	now := s.d.Now()
 	// The code exchange proves the authorization belongs to this client; the
 	// ID token it returns is the one verified (the posted id_token is not trusted).
-	idToken, err := p.Exchange(r.Context(), code, st.Verifier, s.callbackURL(ProviderApple), now)
+	tokens, err := p.exchangeTokens(r.Context(), code, st.Verifier, s.callbackURL(ProviderApple), now)
 	if err != nil {
 		s.finishOAuth(w, r, st, loginResult{}, err)
 		return
 	}
-	id, err := p.Verify(r.Context(), idToken, st.Nonce, now)
+	id, err := p.Verify(r.Context(), tokens.IDToken, st.Nonce, now)
 	if err != nil {
 		s.finishOAuth(w, r, st, loginResult{}, err)
 		return
 	}
+	if tokens.RefreshToken == "" || len(tokens.RefreshToken) > maxAppleRefreshToken {
+		s.finishOAuth(w, r, st, loginResult{}, ErrProvider)
+		return
+	}
+	id.appleCredential = &appleCredential{p.ClientID, tokens.RefreshToken}
 	if id.Name == "" {
 		id.Name = appleUserName(r.PostFormValue("user"))
 	}
-	out, err := s.completeLogin(r.Context(), w, r, id, nil, map[string]any{"platform": st.Platform})
+	out, err := s.completeAppleLogin(r.Context(), w, r, id, nil, map[string]any{"platform": st.Platform})
 	if err != nil {
 		s.logRefused(r, id, err)
 	}
@@ -329,7 +334,7 @@ type appleNativeRequest struct {
 	FullName          string `json:"full_name"`
 }
 
-// appleNative verifies the identity token obtained by the iOS app. There is
+// appleNative verifies the identity token and exchanges the single-use code. There is
 // no browser-bound state here: the token comes straight from Apple to the
 // app, and the audience check binds it to our client ids (the Services ID or
 // one of the app's bundle ids, AppleAudiences). Apple keeps the same subject
@@ -347,7 +352,7 @@ func (s *Service) appleNative(w http.ResponseWriter, r *http.Request, p *Provide
 		apierr.Validation(w, r, apierr.Field{Path: "/identity_token", Code: apierr.FieldRequired})
 		return
 	}
-	id, err := s.verifyAudiences(r.Context(), p, req.IdentityToken, s.d.AppleAudiences)
+	id, err := s.exchangeAppleNative(r.Context(), p, req.IdentityToken, req.AuthorizationCode)
 	if err != nil {
 		apierr.Write(w, r, codeFor(err))
 		return
@@ -357,7 +362,7 @@ func (s *Service) appleNative(w http.ResponseWriter, r *http.Request, p *Provide
 			id.Name = name
 		}
 	}
-	out, err := s.completeLogin(r.Context(), w, r, id, nil, map[string]any{"platform": "ios"})
+	out, err := s.completeAppleLogin(r.Context(), w, r, id, nil, map[string]any{"platform": "ios"})
 	if err != nil {
 		s.logRefused(r, id, err)
 		apierr.Write(w, r, codeFor(err))

@@ -19,7 +19,9 @@ import (
 
 	"github.com/mmtmn/docmatch/services/api/internal/account"
 	"github.com/mmtmn/docmatch/services/api/internal/account/accountpg"
+	"github.com/mmtmn/docmatch/services/api/internal/applecredentials"
 	"github.com/mmtmn/docmatch/services/api/internal/audit"
+	"github.com/mmtmn/docmatch/services/api/internal/auth"
 	"github.com/mmtmn/docmatch/services/api/internal/config"
 	"github.com/mmtmn/docmatch/services/api/internal/credits"
 	"github.com/mmtmn/docmatch/services/api/internal/crypto"
@@ -184,8 +186,18 @@ func accountJobs(cfg *config.Config, log *slog.Logger, pool *pgxpool.Pool, audit
 	if err != nil {
 		return nil, nil, err
 	}
-	register := []func(*river.Workers){emailpg.AddWorkers(deliverer), accountpg.AddWorkers(accountSvc), extensions.AddWorkers(pool), platforms.AddWorkers(platformsSvc)}
+	var revoke applecredentials.Revoker
+	if cfg.Auth.ApplePrivateKey.IsSet() {
+		apple, err := auth.NewApple(cfg.Auth.AppleTeamID, cfg.Auth.AppleClientID, cfg.Auth.AppleKeyID, cfg.Auth.ApplePrivateKey.Reveal(), nil)
+		if err != nil {
+			return nil, nil, err
+		}
+		revoke = apple.RevokeApple
+	}
+	appleGrants := applecredentials.New(pool, keys, revoke, log)
+	register := []func(*river.Workers){emailpg.AddWorkers(deliverer), applecredentials.AddWorkers(appleGrants), accountpg.AddWorkers(accountSvc), extensions.AddWorkers(pool), platforms.AddWorkers(platformsSvc)}
 	periodic := append(emailpg.PeriodicJobs(), accountpg.PeriodicJobs()...)
+	periodic = append(periodic, applecredentials.PeriodicJobs()...)
 	periodic = append(periodic, extensions.PeriodicJobs()...)
 	periodic = append(periodic, platforms.PeriodicJobs()...)
 	return register, periodic, nil

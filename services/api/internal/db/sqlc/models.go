@@ -68,6 +68,16 @@ type ApiUsageDefault struct {
 	CreatedAt  time.Time
 }
 
+type AppleCredential struct {
+	ID            uuid.UUID
+	UserID        *uuid.UUID
+	ClientID      string
+	SealedToken   []byte
+	Attempts      int32
+	NextAttemptAt *time.Time
+	ExpiresAt     *time.Time
+}
+
 type AuditLog struct {
 	ID         uuid.UUID
 	OrgID      *uuid.UUID

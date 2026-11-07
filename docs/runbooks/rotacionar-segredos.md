@@ -44,7 +44,7 @@ aws ssm put-parameter --name "/docmatch/${DM_ENV}/${NAME}" --type SecureString -
 | `OPENROUTER_API_KEY` | harness, worker | painel da OpenRouter: chave nova com limite de gasto mensal | 90 dias | nenhum | confira o limite de gasto na chave nova; revogue a antiga; alarmes de orçamento continuam por conta. |
 | `GOOGLE_OAUTH_CLIENT_SECRET` | api (OIDC) | console do Google: segundo segredo no mesmo cliente | 180 dias | nenhum (o cliente aceita os dois durante a troca) | após verificar um login, desative e depois exclua o antigo no console. |
 | `APPLE_PRIVATE_KEY` + `APPLE_KEY_ID` | api (OIDC) | portal da Apple: chave nova de Sign in with Apple | 180 dias | nenhum | duas chaves ativas são permitidas; grave `APPLE_KEY_ID` e a chave; verifique um login; revogue a antiga. |
-| `DM_SESSION_SECRET` | api | `openssl rand -base64 48` | 180 dias; **imediato** em suspeita | com lista: nenhum; sem lista: todas as sessões caem | é o único jeito de derrubar todas as sessões de uma vez (ver [kill switch](kill-switches.md#sessions)). |
+| `DM_SESSION_SECRET` | api, worker | `openssl rand -base64 48` | rotação planejada; revisar imediatamente em suspeita | também protege chaves dos documentos e tokens Apple | o keyring atual não aceita versões antigas: antes de substituir, reencapsule as chaves de dados e recifre os tokens Apple. Revogar sessões não exige destruir essa chave. |
 | `STRIPE_SECRET_KEY` | api, worker | painel da Stripe: "rolar chave" com período de graça de 24 h | 90 dias | nenhum durante a graça | restrinja a chave aos recursos usados (Checkout, Customers, Events). |
 | `STRIPE_WEBHOOK_SECRET` | api | painel da Stripe: "rolar segredo" do endpoint, graça de até 24 h | 90 dias | nenhum durante a graça | a API aceita lista; grave a nova na frente antes de rolar. |
 | `RESEND_API_KEY` | worker | painel da Resend: chave nova com permissão só de envio no domínio | 90 dias | nenhum | revogue a antiga após um e-mail de teste. |
@@ -63,8 +63,10 @@ Em suspeita de comprometimento, nesta ordem, sem esperar verificação entre os 
 
 1. **Isolar**: kill switch `maintenance` ou, se o atacante pode estar dentro, bloqueio de egresso
    ([kill-switches.md](kill-switches.md#egress)).
-2. `DM_SESSION_SECRET` sem lista (derruba todas as sessões) e `DM_APIKEY_PEPPER` (chaves de API
-   novas obrigatórias).
+2. Revogar as sessões no banco ([procedimento](kill-switches.md#sessions)) e rotacionar
+   `DM_APIKEY_PEPPER` (chaves de API novas obrigatórias). Antes de trocar `DM_SESSION_SECRET`,
+   reencapsular as chaves dos documentos e recifrar os tokens Apple; não há suporte atual a
+   versões antigas desse segredo. Manter o serviço isolado até concluir essa etapa.
 3. Senha do banco e `DM_ORIGIN_SECRET`.
 4. Chaves de provedores: OpenRouter, Stripe (chave e webhook), Resend, R2.
 5. OIDC: Google e Apple.

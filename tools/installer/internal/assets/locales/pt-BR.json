@@ -732,6 +732,8 @@
     "delete_account": "Excluir conta",
     "delete_title": "Excluir a conta?",
     "delete_text": "A conta e todos os dados dela (conciliações, achados, regras e créditos) são excluídos em 7 dias, em todos os aparelhos. Até lá ninguém entra nela, e o suporte ainda pode cancelar o pedido.",
+    "apple_delete_help": "Se a docmatch continuar na lista de apps do seu ID Apple, remova o acesso nos Ajustes. Isso não impede a exclusão da conta.",
+    "apple_delete_link": "Como remover o acesso da Apple",
     "delete_confirm": "Excluir a conta",
     "delete_done": "Exclusão agendada para {date}. Você saiu em todos os aparelhos.",
     "pick_hint": "Toque para selecionar vários arquivos",

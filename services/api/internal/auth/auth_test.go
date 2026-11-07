@@ -88,7 +88,11 @@ func newFakeOIDC(t *testing.T, clientID string) *fakeOIDC {
 		}
 		f.gotSecret = r.PostFormValue("client_secret")
 		if f.appleKey != nil {
-			if _, _, err := crypto.VerifyJWT(r.Context(), f.gotSecret, func(context.Context, string, string) (stdPublicKey, error) { return f.appleKey, nil }); err != nil {
+			_, payload, err := crypto.VerifyJWT(r.Context(), f.gotSecret, func(context.Context, string, string) (stdPublicKey, error) { return f.appleKey, nil })
+			var secretClaims struct {
+				Subject string `json:"sub"`
+			}
+			if err != nil || json.Unmarshal(payload, &secretClaims) != nil || secretClaims.Subject != r.PostFormValue("client_id") {
 				w.WriteHeader(http.StatusUnauthorized)
 				_, _ = w.Write([]byte(`{"error":"invalid_client"}`))
 				return
@@ -96,7 +100,11 @@ func newFakeOIDC(t *testing.T, clientID string) *fakeOIDC {
 		}
 		code := r.PostFormValue("code")
 		claims, ok := f.codes[code]
-		if !ok || r.PostFormValue("grant_type") != "authorization_code" || r.PostFormValue("client_id") != f.clientID {
+		var expectedClient any = f.clientID
+		if f.appleKey != nil {
+			expectedClient = claims["aud"]
+		}
+		if !ok || r.PostFormValue("grant_type") != "authorization_code" || r.PostFormValue("client_id") != expectedClient {
 			w.WriteHeader(http.StatusBadRequest)
 			_, _ = w.Write([]byte(`{"error":"invalid_grant"}`))
 			return
@@ -107,7 +115,7 @@ func newFakeOIDC(t *testing.T, clientID string) *fakeOIDC {
 			return
 		}
 		delete(f.codes, code)
-		_ = json.NewEncoder(w).Encode(map[string]any{"id_token": f.sign(claims), "access_token": "at"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id_token": f.sign(claims), "access_token": "at", "refresh_token": "test-refresh-token"})
 	})
 	f.srv = httptest.NewServer(mux)
 	t.Cleanup(f.srv.Close)
@@ -224,12 +232,15 @@ func newHarnessWith(t *testing.T, mutate func(*Deps)) *harness {
 	h.lockout = ratelimit.NewLockout(ratelimit.DefaultLockoutPolicy(), h.clock)
 	d := Deps{
 		Store: h.store, Sessions: h.sessions, Keys: keys, Audit: h.auditRec,
-		Google:       h.google.provider(ProviderGoogle, true, func(time.Time) (string, error) { return "google-secret", nil }),
-		Apple:        h.apple.provider(ProviderApple, false, appleSecret(h.appleKey, "TEAM", "apple-client", "KEY1", h.apple.srv.URL)),
-		EmailEnabled: true, PublicBaseURL: pub, APIBaseURL: api, Secure: true,
+		Google:      h.google.provider(ProviderGoogle, true, func(time.Time) (string, error) { return "google-secret", nil }),
+		Apple:       h.apple.provider(ProviderApple, false, appleSecret(h.appleKey, "TEAM", "apple-client", "KEY1", h.apple.srv.URL)),
+		AppleTokens: &memoryAppleTokens{}, EmailEnabled: true, PublicBaseURL: pub, APIBaseURL: api, Secure: true,
 		// Generous by default: the tests that exercise the limit install the real policy.
 		Limiter: h.limiter, Lockout: h.lockout, Policy: ratelimit.Policy{Limit: 1000, Period: time.Minute}, Logger: logx.Discard(), Now: h.clock,
 		Country: func(*http.Request) string { return "BR" },
+	}
+	d.Apple.appleClientSecret = func(clientID string, now time.Time) (string, error) {
+		return appleSecret(h.appleKey, "TEAM", clientID, "KEY1", h.apple.srv.URL)(now)
 	}
 	if mutate != nil {
 		mutate(&d)

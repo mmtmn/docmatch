@@ -126,11 +126,15 @@ ssm_run "systemctl restart docmatch-env.service docmatch-api docmatch-worker"
 
 ### `sessions`
 
-- **Para:** todas as sessões de usuário de uma vez. Não é flag: é rotação de `DM_SESSION_SECRET`
-  **sem** lista de versões ([rotacionar-segredos.md](rotacionar-segredos.md)) seguida de
-  `docmatch-api sessions purge`. Usuários veem a tela de login com "Por segurança, entre
-  novamente."
-- **Use em:** suspeita de roubo de sessões em massa, vazamento do segredo.
+- **Para:** sessões de usuário e de extensões já emitidas. Com acesso administrativo ao
+  banco correto, execute `UPDATE sessions SET revoked_at=now() WHERE revoked_at IS NULL;`.
+  Confira a quantidade afetada e teste que uma sessão antiga recebe `401`.
+- Não troque `DM_SESSION_SECRET` apenas para encerrar sessões. No código atual, elas usam
+  tokens opacos armazenados no banco; esse segredo protege chaves de dados, cookies OAuth
+  e tokens Apple. Substituí-lo sem reencapsular os dados torna esses valores ilegíveis.
+  Veja [rotação de segredos](rotacionar-segredos.md).
+- **Use em:** suspeita de roubo de sessões em massa. Se o segredo também vazou, mantenha
+  o serviço isolado enquanto prepara a rotação dos dados cifrados.
 
 ## Interruptores de infraestrutura (camada 3)
 

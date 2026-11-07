@@ -61,6 +61,8 @@ struct AccountView: View {
         .sheet(isPresented: $confirmingDeletion) {
             DmPage {
                 DmHeading(title: texts.t("mobile.delete_title"), subtitle: texts.t("mobile.delete_text"))
+                Text(texts.t("mobile.apple_delete_help")).font(.footnote).foregroundStyle(.secondary)
+                Link(texts.t("mobile.apple_delete_link"), destination: URL(string: "https://support.apple.com/en-us/102571")!)
                 Button(texts.t("mobile.delete_confirm"), role: .destructive) {
                     confirmingDeletion = false
                     Task { await model.deleteAccount() }

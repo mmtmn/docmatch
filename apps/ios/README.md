@@ -119,14 +119,15 @@ Nenhum segredo OAuth entra no app:
 Para o Sign in with Apple, ative a capability no App ID `br.com.docmatch` (e no `.debug`, para
 testar), no mesmo time do Services ID do site, e ponha os bundle ids em `APPLE_NATIVE_CLIENT_IDS`.
 
-Antes de enviar à App Store, falta uma peça no servidor: quando uma conta criada com a Apple é
-excluída, a Apple pede que os tokens sejam revogados (`/auth/revoke`). Para isso a API precisa
-trocar o `authorization_code` do login nativo por um refresh token e guardá-lo cifrado. Hoje ela
-verifica o código, mas não o troca.
+A API troca o código de uso único do login por um refresh token e guarda o token cifrado.
+Ao pedir exclusão, o worker revoga o acesso na Apple. Falhas temporárias têm novas tentativas
+por até 7 dias; não impedem a exclusão dos dados. Contas antigas sem token continuam podendo
+excluir a conta, com link para remover o acesso nos Ajustes da Apple. O app verifica a revogação
+ao abrir/voltar ao primeiro plano e limpa a sessão e os rascunhos quando o acesso foi removido.
+Ver [orientação da Apple](https://developer.apple.com/documentation/technotes/tn3194-handling-account-deletions-and-revoking-tokens-for-sign-in-with-apple).
 
-O `make release` usa `-allowProvisioningUpdates`. Numa máquina de CI, passe também a chave da App
-Store Connect: `APP_STORE_CONNECT_KEY_PATH`, `APP_STORE_CONNECT_KEY_ID` e
-`APP_STORE_CONNECT_ISSUER_ID`.
+O `make release` usa a conta de desenvolvimento configurada no Xcode com
+`-allowProvisioningUpdates`. A publicação nas lojas ainda exige a configuração de distribuição.
 Ele também exige `DM_EXTENSION_CONFIG_FILE` para gerar os recursos Safari de produção.
 `make app` e `make e2e-local` geram os recursos de desenvolvimento automaticamente.
 

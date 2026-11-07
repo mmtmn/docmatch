@@ -376,7 +376,7 @@ func TestAppleNative(t *testing.T) {
 	delete(claims, "nonce")
 	delete(claims, "name")
 	token := h.apple.sign(claims)
-	rec := h.post(AppleCallbackPath, `{"identity_token":"`+token+`","authorization_code":"c","full_name":"Nat Silva"}`)
+	rec := h.post(AppleCallbackPath, `{"identity_token":"`+token+`","authorization_code":"`+h.apple.issueCode(claims, "")+`","full_name":"Nat Silva"}`)
 	if rec.Code != 200 {
 		t.Fatalf("nativo: %d %s", rec.Code, rec.Body.String())
 	}
@@ -398,9 +398,12 @@ func TestAppleNative(t *testing.T) {
 	now := h.now
 	u.SuspendedAt = &now
 	h.store.Users[u.ID] = u
-	rec = h.post(AppleCallbackPath, `{"identity_token":"`+token+`","authorization_code":"c"}`)
+	rec = h.post(AppleCallbackPath, `{"identity_token":"`+token+`","authorization_code":"`+h.apple.issueCode(claims, "")+`"}`)
 	if rec.Code != 403 || decode(t, rec)["code"] != "account_suspended" {
 		t.Fatalf("suspensa: %d %s", rec.Code, rec.Body.String())
+	}
+	if h.svc.d.AppleTokens.(*memoryAppleTokens).queued != 1 {
+		t.Fatal("rejected grant was abandoned")
 	}
 }
 
@@ -409,14 +412,14 @@ func TestAppleNativeAcceptsTheAppBundleAudience(t *testing.T) {
 	h := newHarnessWith(t, func(d *Deps) { d.AppleAudiences = []string{"br.com.docmatch"} })
 	web := h.apple.claims(h.now, "", map[string]any{"sub": "apple-ana", "email": "ana-apple@example.com"})
 	delete(web, "nonce")
-	if rec := h.post(AppleCallbackPath, `{"identity_token":"`+h.apple.sign(web)+`","authorization_code":"c"}`); rec.Code != 200 {
+	if rec := h.post(AppleCallbackPath, `{"identity_token":"`+h.apple.sign(web)+`","authorization_code":"`+h.apple.issueCode(web, "")+`"}`); rec.Code != 200 {
 		t.Fatalf("audiência do Services ID: %d %s", rec.Code, rec.Body.String())
 	}
 	org := h.orgOf("ana-apple@example.com")
 	// The iPhone's token is issued to the bundle id, with the same subject: same account.
 	app := h.apple.claims(h.now, "", map[string]any{"sub": "apple-ana", "email": "ana-apple@example.com", "aud": "br.com.docmatch"})
 	delete(app, "nonce")
-	rec := h.do(req{method: http.MethodPost, path: AppleCallbackPath, body: `{"identity_token":"` + h.apple.sign(app) + `","authorization_code":"c"}`,
+	rec := h.do(req{method: http.MethodPost, path: AppleCallbackPath, body: `{"identity_token":"` + h.apple.sign(app) + `","authorization_code":"` + h.apple.issueCode(app, "") + `"}`,
 		headers: map[string]string{"User-Agent": "docmatch-ios/1.0 (iPhone15,2; iOS 18.1)"}})
 	if rec.Code != 200 || h.orgOf("ana-apple@example.com") != org {
 		t.Fatalf("audiência do app: %d %s", rec.Code, rec.Body.String())

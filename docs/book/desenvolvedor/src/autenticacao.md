@@ -25,3 +25,13 @@ não recebe esse header nem cookies. Os SDKs mantêm essa separação e exigem H
 do endereço local de desenvolvimento.
 
 Se uma chave vazar, revogue-a e substitua-a. Não basta apagar uma mensagem que a continha.
+
+## Entrar com Apple
+
+Os apps enviam o token de identidade e o código de autorização de uso único para a API.
+O servidor confere a assinatura, a audiência e a identidade dos dois antes de abrir a sessão.
+O refresh token fica cifrado no servidor, separado dos documentos e fora das exportações.
+
+O pedido de exclusão inicia a revogação pela fila existente. Falhas temporárias têm novas
+tentativas por até 7 dias e não bloqueiam a exclusão. Contas antigas sem token ainda podem
+ser excluídas; a interface aponta como remover o acesso diretamente na Apple.

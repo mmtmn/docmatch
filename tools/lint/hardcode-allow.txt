@@ -63,3 +63,6 @@ path:services/api/internal/export/fonts/LICENSE\.txt$
 
 # Public development extension IDs, callback destinations and loopback origins. The Chrome key is public.
 path:apps/extensions/local\.config\.json$
+
+# Apple official account-access instructions, shown during deletion for legacy sign-ins.
+literal:https://support\.apple\.com/en-us/102571

@@ -1,3 +1,4 @@
+import AuthenticationServices
 import DocmatchKit
 import SwiftUI
 import UIKit
@@ -30,7 +31,7 @@ struct RootView: View {
             }
         }
         .background(Color(DmColors.bgCanvas)).foregroundStyle(Color(DmColors.textPrimary))
-        .task { await session.refresh() }
+        .task { await session.refresh(); await validateAppleCredential() }
         .onOpenURL { url in
             if ["docmatch-extension-dev", "br.com.docmatch.extension"].contains(url.scheme) {
                 invitationToken = nil
@@ -53,13 +54,26 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 safariAuthorization.resume()
-                Task { await session.validateAccounts() }
+                Task { await session.validateAccounts(); await validateAppleCredential() }
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: ASAuthorizationAppleIDProvider.credentialRevokedNotification)) { _ in
+            Task { await validateAppleCredential() }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
             safariAuthorization.resume()
         }
     }
+    private func validateAppleCredential() async {
+        guard let userID = session.appleUserID else { return }
+        do {
+            let state = try await ASAuthorizationAppleIDProvider().credentialState(forUserID: userID)
+            if state == .revoked || state == .notFound { await session.appleCredentialRevoked(userID) }
+        } catch {
+            // An offline provider check does not end a valid docmatch session.
+        }
+    }
+
 }
 
 private enum AppTab: Hashable { case projects, activity, account }

@@ -15,6 +15,17 @@ recente, para não sobrescrever o trabalho de outra pessoa.
 Ao pedir ajuda, informe o que tentou fazer e o identificador da requisição, quando houver.
 Não envie senha, chave de API nem documentos completos por um canal público.
 
+## Excluir a conta
+
+Peça a exclusão em **Conta**. As sessões terminam e os dados são apagados após o prazo
+mostrado na confirmação. Se você é o último responsável por uma empresa, transfira essa
+função antes; os arquivos dos colegas não são excluídos junto com seu login.
+
+Para quem usa **Entrar com Apple**, a docmatch também pede a remoção do acesso na Apple.
+Se a docmatch continuar aparecendo na lista de apps do ID Apple, siga a
+[orientação para remover o acesso](https://support.apple.com/en-us/102571).
+Isso não impede a exclusão da conta na docmatch.
+
 ## Avisos de disponibilidade
 
 Na página inicial, **Use onde preferir** mostra onde encontrar a docmatch. **Em breve**
