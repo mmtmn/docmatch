@@ -111,6 +111,7 @@ export function ProjectEditor({
   const picker = useRef<HTMLInputElement>(null);
   const replacementTarget = useRef<ProjectDocument | undefined>(undefined);
   const controller = useRef<AbortController | null>(null);
+  const acceptedNavigation = useRef(false);
   const editable = project.capabilities.reconcile && !project.archived_at;
   const locked = busy || saved.status === 'conflict' || Boolean(quote);
   const accountName = org.kind === 'personal' ? t('projects.personal_account') : org.name;
@@ -120,7 +121,9 @@ export function ProjectEditor({
   useEffect(() => () => controller.current?.abort(), []);
   useEffect(() => {
     if (!busy) return;
-    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    const warn = (event: BeforeUnloadEvent) => {
+      if (!acceptedNavigation.current) event.preventDefault();
+    };
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
   }, [busy]);
@@ -144,17 +147,25 @@ export function ProjectEditor({
     return next;
   };
   const perform = async (action: () => Promise<void>) => {
+    acceptedNavigation.current = false;
     setBusy(true);
     setError(null);
     setNotice('');
     try {
       await action();
     } catch (cause) {
+      acceptedNavigation.current = false;
       setError(errorMessage(cause));
     } finally {
       setBusy(false);
       setProgress('');
     }
+  };
+  const navigateAfterAcceptance = (href: string) => {
+    // The server accepted the operation and save() settled before reaching here.
+    // A state update alone would leave the previous unload handler active until React commits.
+    acceptedNavigation.current = true;
+    window.location.assign(href);
   };
   const addFiles = async (files: File[], previous?: ProjectDocument) => {
     if (!files.length || locked || !project.capabilities.upload || project.archived_at) return;
@@ -201,7 +212,7 @@ export function ProjectEditor({
       const current = await saved.save();
       const analysis = await client.estimate(current, reason.trim());
       if (analysis.run) {
-        window.location.assign(links.result(org.id, project.id, analysis.run.id));
+        navigateAfterAcceptance(links.result(org.id, project.id, analysis.run.id));
       } else if (analysis.state === 'expired') {
         setExpired(true);
       } else if (analysis.quote) {
@@ -219,7 +230,7 @@ export function ProjectEditor({
         approved.key,
         reason.trim(),
       );
-      if (analysis.run) window.location.assign(links.result(org.id, project.id, analysis.run.id));
+      if (analysis.run) navigateAfterAcceptance(links.result(org.id, project.id, analysis.run.id));
       else if (analysis.state === 'expired') setExpired(true);
     });
   };
@@ -733,7 +744,7 @@ export function ProjectEditor({
                 ask(t('projects.delete_confirm', { name: project.name }), async () => {
                   const current = await saved.save();
                   await client.remove(current);
-                  window.location.assign(links.list);
+                  navigateAfterAcceptance(links.list);
                 })
               }
             >
