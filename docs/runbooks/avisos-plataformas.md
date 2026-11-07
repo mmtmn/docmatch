@@ -2,7 +2,8 @@
 
 O catálogo em `services/api/internal/platforms/catalog.json` alimenta o site e a API.
 Use `coming_soon` sem URL enquanto não houver destino público; `beta` explica o acesso;
-`available` abre a página oficial. O repositório privado permanece **Em breve**.
+`available` abre a página oficial. O GitHub já aponta para o repositório público; apps e
+extensões mantêm o estado do catálogo até terem seus destinos de distribuição verificados.
 Consulte também as condições dos [logos](../../apps/web/public/platforms/README.md).
 
 Para anunciar uma plataforma, confirme sua página pública e o pacote instalado dela.

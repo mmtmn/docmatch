@@ -55,8 +55,8 @@ na pasta da instalação, e as imagens já compiladas a partir da mesma revisão
 Postgres com pgvector, Mailpit, migrações, harness, API, worker e site, como o `make local`
 (`DM_ENV=dev`, `DM_DEV_LOGIN=1`, modelo desligado por padrão, uploads numa pasta local servida pela API). As
 imagens `docmatch-api`, `docmatch-harness` e `docmatch-web` vêm do registro (GHCR por padrão,
-`ghcr.io/<dono do repositório>`); quando o registro não as tem (hoje, com o repositório privado,
-sempre), o instalador compila a partir do código com os Dockerfiles de `deploy/local`, usando o
+`ghcr.io/<dono do repositório>`). Enquanto as imagens da versão não estiverem publicadas e
+acessíveis, o instalador compila a partir do código com os Dockerfiles de `deploy/local`, usando o
 checkout onde roda ou, sem checkout, um `git clone` do repositório. A primeira compilação leva
 alguns minutos; as seguintes usam o cache do BuildKit.
 
@@ -109,8 +109,7 @@ alguns minutos; as seguintes usam o cache do BuildKit.
    nunca no `/tmp`: o rustup lê um `rust-toolchain.toml` da pasta onde roda e das de cima.
 3. **O código**: o checkout onde o `docmatch` roda, o de `--source`, o de uma instalação anterior
    ou `~/docmatch`. Sem nenhum, a tela de escolhas pergunta onde clonar e a primeira etapa faz um
-   clone completo (`DOCMATCH_REPO` escolhe o endereço; com o repositório privado, use o endereço
-   SSH ou clone você mesmo).
+   clone completo do repositório público (`DOCMATCH_REPO` escolhe outro endereço, se necessário).
 4. **As etapas**: clonar (quando preciso), `make setup-local` (os git hooks e as ferramentas só
    do que o `make local` compila: contratos, API, harness e site; uma barra por subsistema; ao
    retomar a mesma pasta, pula; checkouts antigos sem esse alvo usam `make setup`), `make local`,
@@ -286,7 +285,7 @@ o site.
 `tools/installer/publish-images.sh` compila as três imagens do modo Experimentar (`docmatch-api`,
 `docmatch-harness`, `docmatch-web`, com os Dockerfiles de [deploy/local](../../deploy/local)) para
 linux/amd64 e linux/arm64 com o `docker buildx` e as envia para `ghcr.io/<dono do repositório>`,
-com as tags da revisão (12 caracteres do commit), da versão (`--version 0.1.0`, a mesma do
+com as tags da revisão (12 caracteres do commit), da versão (`--version 0.2.0`, a mesma do
 `release.sh`: o binário de uma versão baixa a própria tag) e `latest`. Cada imagem leva
 `org.opencontainers.image.source` apontando para o repositório, e o GHCR liga o pacote a ele.
 Precisa de `docker login ghcr.io` com um token com `write:packages`, recusa um checkout com
@@ -294,21 +293,22 @@ mudanças locais e, na primeira vez, cria o builder `docmatch-multiarch`; a arqu
 máquina não é roda no QEMU (`docker run --privileged --rm tonistiigi/binfmt --install arm64`).
 `--dry-run` só imprime os comandos (o `make ci` roda assim, sem Docker).
 
-Com o repositório privado, os pacotes também são privados: o pull anônimo é negado e o instalador
-compila as imagens a partir do código (quem tiver acesso pode fazer `docker login ghcr.io` com um
-token `read:packages`). Quando o repositório abrir: rode `publish-images.sh --version <versão>` a
-cada release, torne cada pacote público (GitHub > Packages > docmatch-<serviço> > Package settings >
-Change visibility) e o `docmatch` passa a baixar as imagens prontas, em Intel e em ARM (Apple
-silicon, Linux arm64), sem compilar nada nem clonar o repositório.
+O repositório já é público; a publicação das imagens 0.2.0 ainda aguarda autenticação com
+`write:packages`. A visibilidade do pacote é separada: uma primeira publicação no GHCR é
+privada por padrão. Após publicar, torne cada pacote público (GitHub > Packages >
+docmatch-<serviço> > Package settings > Change visibility) e verifique o pull sem login antes
+de anunciar a disponibilidade. O instalador poderá então baixar as imagens prontas em Intel
+e ARM, sem compilação local. [Referência do GHCR](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
 
-### Gerenciadores de pacotes (o próximo passo quando o repositório abrir)
+### Gerenciadores de pacotes
 
 O `release.sh` gera, a partir do `SHA256SUMS.txt` de cada versão, uma fórmula do Homebrew e um
 manifesto do winget que apontam para as cópias fixas em `<base>/v<versão>/` (moldes em
 [packaging/templates](packaging/templates)). Toda execução os escreve em `<saída>/packaging/` (o
 `--dry-run` também); um release de verdade os copia para `tools/installer/packaging/homebrew/docmatch.rb`
 e `tools/installer/packaging/winget/manifests/...`, para entrar no commit da versão. Nada é
-publicado: com o repositório privado, nenhum dos dois pode apontar para ele. Quando abrir:
+publicado automaticamente: os arquivos da 0.2.0 estão preparados; a distribuição pelos
+gerenciadores exige os passos abaixo:
 
 - **Homebrew**: crie o repositório `homebrew-docmatch` (um tap), copie a fórmula para
   `Formula/docmatch.rb` e a instalação vira `brew install <dono>/docmatch/docmatch`. Com o binário
