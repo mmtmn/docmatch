@@ -131,4 +131,4 @@ Referências: [pgBackRest](https://pgbackrest.org/user-guide.html) e
 
 | Data | Ambiente | Procedimento | Backup/alvo | Resultado e tempo | Responsável |
 | --- | --- | --- | --- | --- | --- |
-| — | — | — | — | — | — |
+| 2026-11-06 | prod | Correção de permissões, backup completo e restauração em cluster temporário isolado no EBS existente | `20261106-223714F` | Backup e arquivamento ok; cópia restaurada em 14,73 s, esquema 33 e 76 tabelas. Ambiente de ensaio removido; aplicação não reiniciada. Esse tempo não mede uma recuperação completa do serviço. | Operação assistida autorizada pelo responsável |
