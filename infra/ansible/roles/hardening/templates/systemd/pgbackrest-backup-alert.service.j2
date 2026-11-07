@@ -1,0 +1,16 @@
+# {{ ansible_managed }}
+[Unit]
+Description=docmatch: report a failed pgBackRest backup
+After=docmatch-env.service
+Requires=docmatch-env.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+# postgres cannot read mail credentials. Keep them in the existing root-readable subset.
+ExecStart=/bin/bash -o pipefail -c '/usr/bin/journalctl --unit=pgbackrest-backup.service --lines=60 --no-pager | /usr/local/sbin/docmatch-alert --subject "pgBackRest: falha no backup" --stdin'
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true

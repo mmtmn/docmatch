@@ -1,17 +1,16 @@
 # Publicar os SDKs Python, Rust e Go
 
-Use este procedimento para a primeira publicação e para novas versões. A versão inicial
-preparada é **0.1.0**. Os builds, testes e uploads são locais; nenhum passo depende de GitHub
+Use este procedimento para a primeira publicação e para novas versões. A versão publicada é **0.2.0**. Os builds, testes e uploads são locais; nenhum passo depende de GitHub
 Actions. O [estado atual](../../sdks/README.md) distingue um pacote preparado de um publicado.
 
-| SDK | Destino | Nome da primeira versão | Conta necessária |
+| SDK | Destino | Versão atual | Conta necessária |
 | --- | --- | --- | --- |
-| Python | PyPI | `docmatch==0.1.0` | PyPI, e-mail verificado e 2FA |
-| Rust | crates.io | `docmatch` `0.1.0` | GitHub conectado ao crates.io, e-mail verificado |
-| Go | GitHub privado | `github.com/mmtmn/docmatch/sdks/go@v0.1.0` | Permissão de push no GitHub existente; acesso de leitura para instalar |
+| Python | PyPI | `docmatch==0.2.0` | PyPI, e-mail verificado e 2FA |
+| Rust | crates.io | `docmatch` `0.2.0` | GitHub conectado ao crates.io, e-mail verificado |
+| Go | GitHub | `github.com/mmtmn/docmatch/sdks/go@v0.2.0` | Permissão de push para publicar; instalação pública |
 
 O npm `docmatch` é o terminal. Estes são clientes da API, destinados a programas que usam
-uma chave criada na conta docmatch. A primeira versão é inicial, com os
+uma chave criada na conta docmatch. Os clientes têm os
 [limites documentados](../../sdks/README.md#transporte); publicar não habilita capacidades novas
 no servidor nem muda a cobrança.
 
@@ -34,10 +33,10 @@ no servidor nem muda a cobrança.
 5. Entre nas contas pelo navegador. Cole os tokens somente nos prompts locais das ferramentas,
    nunca em arquivos rastreados pelo Git, no chat ou como argumentos da linha de comando.
 
-Python e Rust `docmatch` **0.1.0** foram publicados em 6 de novembro de 2026 e verificados
-por instalações novas dos registros. A tag Go **`sdks/go/v0.1.0`** também foi publicada e
-verificada por download autenticado do GitHub. Para outra release, aumente a versão:
-não repita o upload de `0.1.0` nem mova a tag existente.
+Python e Rust `docmatch` **0.2.0** foram publicados em 7 de novembro de 2026.
+A tag Go **`sdks/go/v0.2.0`** está disponível pelo proxy público, sem autenticação.
+Instalações novas dos três registros passaram pelo fluxo de projetos na produção.
+Para outra release, aumente a versão; não repita o upload nem mova tags existentes.
 
 ## Python: PyPI
 
@@ -67,8 +66,8 @@ Quando estiver pronto para tornar a versão pública, execute:
 
 ```sh
 sdks/python/.venv/bin/python -m twine upload --repository pypi --username __token__ \
-  sdks/python/dist/docmatch-0.1.0-py3-none-any.whl \
-  sdks/python/dist/docmatch-0.1.0.tar.gz
+  sdks/python/dist/docmatch-0.2.0-py3-none-any.whl \
+  sdks/python/dist/docmatch-0.2.0.tar.gz
 ```
 
 No prompt de senha, cole o token completo, incluindo `pypi-`. Não use a senha da conta.
@@ -80,11 +79,11 @@ Use um venv novo, fora do checkout, para não importar a cópia local por engano
 
 ```sh
 python3 -m venv /tmp/docmatch-pypi-check
-/tmp/docmatch-pypi-check/bin/python -m pip install --index-url https://pypi.org/simple docmatch==0.1.0
+/tmp/docmatch-pypi-check/bin/python -m pip install --index-url https://pypi.org/simple docmatch==0.2.0
 /tmp/docmatch-pypi-check/bin/python -I -c 'import docmatch; from importlib.metadata import version; print(version("docmatch"), docmatch.__file__)'
 ```
 
-A versão deve ser `0.1.0` e o caminho deve apontar para o venv de verificação. Confira também
+A versão deve ser `0.2.0` e o caminho deve apontar para o venv de verificação. Confira também
 [a página do pacote](https://pypi.org/project/docmatch/). Atualize o estado em `sdks/README.md`
 somente depois de validar o pacote instalado do registro.
 
@@ -129,7 +128,7 @@ Num diretório novo, fora do checkout:
 ```sh
 cargo new --lib /tmp/docmatch-crates-check
 cd /tmp/docmatch-crates-check
-cargo add docmatch@0.1.0
+cargo add docmatch@0.2.0
 cargo check
 ```
 
@@ -143,48 +142,36 @@ Fonte: [publicação de crates](https://doc.rust-lang.org/cargo/reference/publis
 
 Go não tem um upload de pacote nem uma conta de registro separada. A tag do Git identifica
 uma versão imutável. Como o módulo fica em `sdks/go`, o nome correto da tag é
-**`sdks/go/v0.1.0`**; `v0.1.0` sozinho não publica esta subpasta.
+**`sdks/go/v0.2.0`**; `v0.2.0` sozinho não publica esta subpasta.
 
 Da raiz do repo, em `main` atualizado e limpo:
 
 ```sh
 make -C sdks/go ci
-git tag -a sdks/go/v0.1.0 -m "docmatch Go SDK v0.1.0"
-git push origin refs/tags/sdks/go/v0.1.0
+git tag -a sdks/go/v0.2.0 -m "docmatch Go SDK v0.2.0"
+git push origin refs/tags/sdks/go/v0.2.0
 ```
 
-O pre-push do repo roda a CI local. O repositório permanece **privado**: a tag requer
-autenticação GitHub e não está disponível no proxy público nem no pkg.go.dev. Use um helper
-de credenciais Git já configurado ou SSH com acesso ao repositório. Para conferir como consumidor:
+O pre-push do repo roda a CI local. O repositório é público; consumidores não precisam
+de token GitHub nem de `GOPRIVATE`. Para conferir fora do checkout:
 
 ```sh
 mkdir /tmp/docmatch-go-check
 cd /tmp/docmatch-go-check
 go mod init example.com/docmatch-go-check
-GOPRIVATE=github.com/mmtmn/docmatch GOPROXY=direct \
-  go get github.com/mmtmn/docmatch/sdks/go@v0.1.0
+go get github.com/mmtmn/docmatch/sdks/go@v0.2.0
 go list github.com/mmtmn/docmatch/sdks/go
 ```
 
-Se o GitHub já funciona por SSH, mas não por HTTPS, aplique a conversão somente ao comando:
-
-```sh
-GOPRIVATE=github.com/mmtmn/docmatch GOPROXY=direct \
-  GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=url.ssh://git@github.com/.insteadOf \
-  GIT_CONFIG_VALUE_0=https://github.com/ \
-  go get github.com/mmtmn/docmatch/sdks/go@v0.1.0
-```
-
-Não há token Go separado e os comandos acima não gravam credenciais. Atualize o estado em
-`sdks/README.md` após validar a instalação. Nunca mova uma tag já publicada: consumidores
-podem ter preservado o conteúdo e os checksums originais.
+Atualize `sdks/README.md` após validar a instalação. Nunca mova uma tag já publicada:
+consumidores podem ter preservado o conteúdo e os checksums originais.
 
 Fontes: [publicar um módulo](https://go.dev/doc/modules/publishing) e
 [tags de módulos em subpastas](https://go.dev/ref/mod#vcs-version).
 
 ## Se houver um erro na release
 
-Corrija o código, rode os testes, aumente a versão para `0.1.1` e publique uma versão nova.
+Corrija o código, rode os testes, aumente a versão para `0.2.1` e publique uma versão nova.
 Não tente sobrescrever os arquivos de uma versão existente. Para desaconselhar uma release
 com problema, use **yank** no PyPI/crates.io; no Go, publique uma nova versão com a diretiva
 `retract` apropriada. A retirada de recomendação não apaga cópias já baixadas.
@@ -197,3 +184,4 @@ com problema, use **yank** no PyPI/crates.io; no Go, publique uma nova versão c
 | 2026-11-06 | Publicação Python 0.1.0 | Wheel e sdist no PyPI; SHA-256 conferidos, instalação em venv novo e 4 testes aprovados. |
 | 2026-11-06 | Publicação Rust 0.1.0 | Crate no crates.io após verificação do e-mail; dependência baixada e compilada em projeto consumidor novo. |
 | 2026-11-06 | Publicação Go v0.1.0 | Tag `sdks/go/v0.1.0` no commit `64e5375d8fba7b6ff2ed99222d8fbdc5269bc340`; download autenticado do GitHub privado e testes com detector de corridas aprovados. |
+| 2026-11-07 | Publicação Python/Rust/Go 0.2.0 | Instalações novas fora do checkout; Go pelo proxy público. Python criou e conciliou um projeto em produção; os quatro SDKs (incluindo o pacote TypeScript) leram o mesmo resultado e verificaram seu reaproveitamento. |

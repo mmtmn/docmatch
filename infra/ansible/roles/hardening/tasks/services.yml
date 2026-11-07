@@ -21,6 +21,7 @@
     - docmatch-aws-ranges.service
     - docmatch-aws-ranges.timer
     - pgbackrest-backup.service
+    - pgbackrest-backup-alert.service
     - pgbackrest-backup.timer
   notify: Reload systemd
 

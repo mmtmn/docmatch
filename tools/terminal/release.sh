@@ -24,4 +24,4 @@ tarball="$output/package/docmatch-$version.tgz"
 aws s3 cp "$tarball" "s3://$bucket/install/v$version/docmatch.tgz" --content-type application/gzip --cache-control 'public, max-age=31536000, immutable' --no-progress | cat
 aws s3 cp "$tarball" "s3://$bucket/install/docmatch.tgz" --content-type application/gzip --cache-control 'public, max-age=300, must-revalidate' --no-progress | cat
 aws cloudfront create-invalidation --distribution-id "$distribution" --paths /install/docmatch.tgz | cat
-printf 'npm install -g --allow-remote=root %s/docmatch.tgz\n' "$base"
+printf 'npm install -g %s/docmatch.tgz\n' "$base"

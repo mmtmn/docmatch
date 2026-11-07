@@ -141,3 +141,5 @@ uma identidade temporária apenas na cópia. Ele confirma compatibilidade básic
 usar os novos recursos; não autoriza voltar ao servidor antigo depois de aceitar projetos,
 convites ou sessões de extensão. O [guardião de implantação](implantar.md#instalação)
 recusa essa volta para preservar as permissões, sem apagar dados.
+| 2026-11-07 | prod | Backup diferencial antes da implantação e validação posterior | `20261106-223714F_20261107-013259D` | API/worker/harness `525d5d2166da`, esquema 43; contas, saldos e referências originais conferidos sem alteração. | Operação assistida autorizada pelo responsável |
+| 2026-11-07 | prod | Backup diferencial após implantação e reparo do alerta de falha | `20261106-223714F_20261107-021044D` | Backup e arquivamento WAL ok. Alerta separado em unidade root, sem dar credenciais de e-mail ao PostgreSQL; unidades verificadas, nenhum e-mail de teste enviado e aplicação não reiniciada. | Operação assistida autorizada pelo responsável |

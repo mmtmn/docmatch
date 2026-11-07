@@ -12,7 +12,7 @@ Guias: [Usar a docmatch](https://docmatch.com.br/docs/usar/) ·
 ## Terminal
 
 ```sh
-npm install -g docmatch
+npm install -g https://docmatch.com.br/install/docmatch.tgz
 docmatch
 ```
 

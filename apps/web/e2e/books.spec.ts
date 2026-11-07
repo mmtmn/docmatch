@@ -1,6 +1,30 @@
 import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
+test('search waits for its script before accepting the first click', async ({ page }) => {
+  let releaseScript!: () => void;
+  const scriptReady = new Promise<void>((resolve) => {
+    releaseScript = resolve;
+  });
+  await page.route('**/docs/usar/searcher-*.js', async (route) => {
+    await scriptReady;
+    await route.continue();
+  });
+  try {
+    await page.goto('/docs/usar/', { waitUntil: 'commit' });
+    const toggle = page.getByRole('button', { name: 'Abrir ou fechar a busca' });
+    await expect(toggle).toBeVisible();
+    await expect(toggle).toBeDisabled();
+    releaseScript();
+    await expect(toggle).toBeEnabled();
+    await toggle.click();
+    await page.getByRole('searchbox', { name: 'Buscar neste guia' }).fill('créditos');
+    await expect(page.locator('#mdbook-searchresults li').first()).toBeVisible();
+  } finally {
+    releaseScript();
+  }
+});
+
 test('both guides load from the site with strict CSP, deep links and Portuguese search', async ({
   page,
 }) => {
