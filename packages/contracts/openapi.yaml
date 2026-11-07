@@ -4561,7 +4561,7 @@ components:
     Conflict:
       description: Conflito com o estado atual ou chave de idempotência reutilizada.
       x-status: 409
-      x-error-codes: [ conflict, idempotency_key_reused, idempotency_in_progress ]
+      x-error-codes: [ conflict, idempotency_key_reused, idempotency_in_progress, feature_paused ]
       content:
         application/json:
           schema:
@@ -4762,6 +4762,8 @@ components:
           description: Sem cobrança adicional por assento nesta versão.
         can_invite:
           type: boolean
+        features:
+          $ref: "#/components/schemas/AccountFeatures"
       additionalProperties: false
     TeamCreate:
       type: object
@@ -4917,6 +4919,18 @@ components:
         upload:
           type: boolean
       additionalProperties: false
+    AccountFeatures:
+      type: object
+      description: Disponibilidade por conta; não substitui as permissões do participante.
+      required: [projects, invitations, extensions]
+      properties:
+        projects:
+          type: boolean
+        invitations:
+          type: boolean
+        extensions:
+          type: boolean
+      additionalProperties: false
     OrganizationMembership:
       type: object
       required:
@@ -4942,6 +4956,8 @@ components:
           $ref: "#/components/schemas/PlanCode"
         capabilities:
           $ref: "#/components/schemas/AccountCapabilities"
+        features:
+          $ref: "#/components/schemas/AccountFeatures"
       additionalProperties: false
     OrganizationList:
       type: object

@@ -6,7 +6,7 @@ vi.mock('./env', () => ({
   apiBaseUrl: 'https://api.invalid',
 }));
 
-const { confirmText, createRun, exportFile, listFindings, uploadFile, watchRun } =
+const { confirmText, createRun, estimate, exportFile, listFindings, uploadFile, watchRun } =
   await import('./pipeline');
 const { selectAccount, clearAccountSelection } = await import('./accountContext');
 
@@ -33,6 +33,39 @@ describe('pipeline', () => {
     clearAccountSelection();
     vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+
+  it('keeps the quick-run fallback in its original account after the selection changes', async () => {
+    selectAccount('user', 'org_original');
+    const quote = { id: 'qte_test', signature: 'signed' } as import('./pipeline').QuoteView;
+    fetchMock
+      .mockImplementationOnce(() => {
+        selectAccount('user', 'org_other');
+        return Promise.resolve(
+          json(201, {
+            id: 'upl_1',
+            method: 'PUT',
+            url: 'https://api.invalid/storage/object',
+            headers: {},
+          }),
+        );
+      })
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(json(200, { id: 'upl_1', status: 'ready', file_name: 'a.csv' }))
+      .mockResolvedValueOnce(json(200, quote))
+      .mockResolvedValueOnce(json(202, { id: 'run_1' }));
+    const file = await uploadFile(accepted('a.csv', 'x;y\n1;2\n'), undefined, undefined, {
+      orgId: 'org_original',
+    });
+    const options = { rulesText: '', useRules: false, webSearch: false, ruleIds: [] };
+    await estimate([file.id], options, undefined, 'org_original');
+    await createRun(quote, [file.id], options, 'org_original');
+    for (const index of [0, 2, 3, 4])
+      expect(new Headers(fetchMock.mock.calls[index]?.[1]?.headers).get('X-Docmatch-Org')).toBe(
+        'org_original',
+      );
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.invalid/v1/uploads');
+    expect(fetchMock.mock.calls[4]?.[0]).toBe('https://api.invalid/v1/runs');
   });
 
   it('prepares an export in its original account without starting browser navigation', async () => {

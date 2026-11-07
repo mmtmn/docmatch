@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	contracts "github.com/mmtmn/docmatch/packages/contracts/gen"
 	"github.com/mmtmn/docmatch/services/api/internal/httpx"
 	"github.com/mmtmn/docmatch/services/api/internal/publicid"
 	"github.com/mmtmn/docmatch/services/api/internal/runs/apix"
@@ -64,6 +65,26 @@ func (s *Service) Middleware(next http.Handler) http.Handler {
 			return
 		}
 		next.ServeHTTP(w, r.WithContext(session.ContextWithPrincipal(r.Context(), p)))
+	})
+}
+
+// This middleware follows tenancy: the selected account has been authenticated
+// before the rollout check. Existing reads and revocation remain available.
+func (s *Service) RolloutMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, extension := bearer(r)
+		if extension && r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodDelete && r.URL.Path != "/v1/extensions/revoke" && !strings.HasSuffix(r.URL.Path, "/cancel") {
+			p, ok := session.FromContext(r.Context())
+			if !ok {
+				apix.Handle(w, r, apix.ErrUnauthenticated)
+				return
+			}
+			if !s.rollout.Allows(p.OrgID) {
+				apix.Handle(w, r, apix.E(contracts.ErrFeaturePaused, nil))
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
 	})
 }
 

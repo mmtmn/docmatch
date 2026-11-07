@@ -223,7 +223,7 @@ private fun SignedIn(
             composable("projects") {
                 accounts.current?.let { account ->
                     val vm: ProjectsViewModel = viewModel { ProjectsViewModel(dm) }
-                    ProjectsScreen(vm, account) { nav.navigate("project/$it") }
+                    ProjectsScreen(vm, account, { nav.navigate("quick-run") }) { nav.navigate("project/$it") }
                 }
                     ?: run {
                         val vm: NewRunViewModel = viewModel { NewRunViewModel(dm) }
@@ -242,6 +242,10 @@ private fun SignedIn(
                 ) {
                     nav.navigate("project/$id/run/$it")
                 }
+            }
+            composable("quick-run") {
+                val vm: NewRunViewModel = viewModel { NewRunViewModel(dm) }
+                NewRunScreen(vm, tokenExempt) { nav.navigate("run/$it") }
             }
             composable("history") {
                 val vm: HistoryViewModel = viewModel {

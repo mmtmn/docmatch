@@ -61,6 +61,7 @@ export function ProjectsApp() {
             : t('projects.my_profile')}
         </a>
       </nav>
+      {context.org.features?.projects === false && <p role="status">{t('projects.paused')}</p>}
       {projectId ? (
         <ProjectLoader
           key={`${context.org.id}:${projectId}`}
@@ -155,6 +156,11 @@ function ProjectList({ org }: { org: Organization }) {
           {org.kind === 'personal' ? t('projects.personal_account') : org.name}
         </span>
       </header>
+      {org.features?.projects === false && ['owner', 'admin', 'member'].includes(org.role) && (
+        <a className="btn btn--primary" href={`/?account=${encodeURIComponent(org.id)}#conciliar`}>
+          {t('projects.quick_run')}
+        </a>
+      )}
       {org.capabilities.create_project && (
         <form
           className={styles.create}
@@ -197,9 +203,11 @@ function ProjectList({ org }: { org: Organization }) {
         <div className={styles.empty}>
           <h2>{t('projects.empty_title')}</h2>
           <p>
-            {org.capabilities.create_project
-              ? t('projects.empty_body')
-              : t('projects.empty_upload_only')}
+            {org.features?.projects === false
+              ? t('projects.paused')
+              : org.capabilities.create_project
+                ? t('projects.empty_body')
+                : t('projects.empty_upload_only')}
           </p>
         </div>
       ) : (

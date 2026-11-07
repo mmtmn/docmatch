@@ -202,7 +202,7 @@ private struct ActivityList: View {
     }
 }
 
-private struct LegacyNewRunView: View {
+struct LegacyNewRunView: View {
     let model: NewRunModel
     let dm: Docmatch
     let tokenExempt: Bool

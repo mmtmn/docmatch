@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
+	contracts "github.com/mmtmn/docmatch/packages/contracts/gen"
 	"github.com/mmtmn/docmatch/services/api/internal/httpx"
 	"github.com/mmtmn/docmatch/services/api/internal/publicid"
 	"github.com/mmtmn/docmatch/services/api/internal/rules"
@@ -72,6 +73,10 @@ func (s *Service) principal(w http.ResponseWriter, r *http.Request) (apix.Princi
 	p, err := s.auth(r)
 	if err != nil {
 		apix.Handle(w, r, err)
+		return p, uuid.Nil, false
+	}
+	if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodDelete && !s.rollout.Allows(p.OrgID) {
+		apix.Handle(w, r, apix.E(contracts.ErrFeaturePaused, nil))
 		return p, uuid.Nil, false
 	}
 	id := uuid.Nil

@@ -100,51 +100,54 @@ function TeamSettings({ initial, userId }: { initial: Team; userId: string }) {
         <span className={styles.muted}>{t(roleLabels[team.role])}</span>
       </header>
       {error && <p role="alert">{error}</p>}
+      {team.features?.invitations === false && <p role="status">{t('teams.paused')}</p>}
       {notice && (
         <p className={styles.notice} role="status">
           {notice}
         </p>
       )}
       {team.kind === 'personal' ? (
-        <div className={styles.create}>
-          <h2>{t('teams.convert_title')}</h2>
-          <p>{t('teams.convert_body')}</p>
-          <p>{t('teams.no_charge')}</p>
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              ask(
-                t('teams.convert_confirm', { name }),
-                async () => {
-                  await client.convert(name);
-                  window.location.assign(`/equipe?account=${encodeURIComponent(team.id)}`);
-                },
-                false,
-              );
-            }}
-          >
-            <label htmlFor="team-name">{t('teams.name')}</label>
-            <div className={styles.actions}>
-              <input
-                id="team-name"
-                value={name}
-                maxLength={textLimits.company_name}
-                required
-                onChange={(event) => setName(event.target.value)}
-                disabled={busy}
-              />
-              <button
-                className="btn btn--primary"
-                disabled={busy || !name.trim() || team.role !== 'owner'}
-              >
-                {t('teams.convert')}
-              </button>
-            </div>
-          </form>
-          <p>
-            <a href="/conta">{t('teams.profile_plan')}</a>
-          </p>
-        </div>
+        team.features?.invitations !== false && (
+          <div className={styles.create}>
+            <h2>{t('teams.convert_title')}</h2>
+            <p>{t('teams.convert_body')}</p>
+            <p>{t('teams.no_charge')}</p>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                ask(
+                  t('teams.convert_confirm', { name }),
+                  async () => {
+                    await client.convert(name);
+                    window.location.assign(`/equipe?account=${encodeURIComponent(team.id)}`);
+                  },
+                  false,
+                );
+              }}
+            >
+              <label htmlFor="team-name">{t('teams.name')}</label>
+              <div className={styles.actions}>
+                <input
+                  id="team-name"
+                  value={name}
+                  maxLength={textLimits.company_name}
+                  required
+                  onChange={(event) => setName(event.target.value)}
+                  disabled={busy}
+                />
+                <button
+                  className="btn btn--primary"
+                  disabled={busy || !name.trim() || team.role !== 'owner'}
+                >
+                  {t('teams.convert')}
+                </button>
+              </div>
+            </form>
+            <p>
+              <a href="/conta">{t('teams.profile_plan')}</a>
+            </p>
+          </div>
+        )
       ) : (
         <>
           <p className={styles.notice}>{t('teams.no_charge')}</p>
@@ -203,7 +206,9 @@ function TeamSettings({ initial, userId }: { initial: Team; userId: string }) {
                   {t('teams.send_invite')}
                 </button>
                 <p className={styles.muted}>{t('teams.accept_required')}</p>
-                {!team.can_invite && <p>{t('teams.subscription_required')}</p>}
+                {!team.can_invite && team.features?.invitations !== false && (
+                  <p>{t('teams.subscription_required')}</p>
+                )}
               </form>
               <h2>{t('teams.members')}</h2>
               <p className={styles.muted}>

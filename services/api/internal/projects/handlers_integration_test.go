@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/mmtmn/docmatch/services/api/internal/config"
 	"github.com/mmtmn/docmatch/services/api/internal/credits"
 	"github.com/mmtmn/docmatch/services/api/internal/httpx"
 	"github.com/mmtmn/docmatch/services/api/internal/limits"
@@ -93,6 +94,12 @@ func TestProjectHTTPAnalysisRulesAndPrivateResults(t *testing.T) {
 	call(foreign, "POST", path+"/uploads/"+ticket["id"].(string)+"/complete", map[string]any{}, 404)
 	call(owner, "POST", path+"/uploads/not-an-id/complete", map[string]any{}, 404)
 	call(owner, "POST", path+"/uploads/"+ticket["id"].(string)+"/complete", "{broken", 400)
+	s.SetRollout(&config.AccountRollout{})
+	paused := call(owner, "POST", path+"/runs/"+runID+"/approve-quote", map[string]any{}, 409)
+	if paused["code"] != "feature_paused" {
+		t.Fatal(paused)
+	}
+	call(owner, "POST", path+"/runs/"+runID+"/cancel", nil, 200)
 }
 
 func projectHTTP(t *testing.T, s *Service) func(apix.Principal, string, string, any, int) map[string]any {

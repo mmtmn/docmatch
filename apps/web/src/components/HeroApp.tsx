@@ -14,7 +14,7 @@ import { textLimits } from '../lib/limits';
 import { featureResults } from '../lib/env';
 import { t } from '../lib/i18n';
 import { mockQuoteProvider, mockRuleOptions } from '../lib/mock/quote';
-import { uploadFile, type QuoteView } from '../lib/pipeline';
+import { createRun, estimate, uploadFile, type QuoteView } from '../lib/pipeline';
 import { currentUser, signInLocally, type Me } from '../lib/session';
 import { AuthDialog } from './AuthDialog';
 import { RunConfirmation } from './RunConfirmation';
@@ -70,6 +70,50 @@ function LiveHero() {
     const org = list.items.find((item) => item.id === selectedAccount()?.orgId);
     if (!org) throw new Error(t('projects.no_account'));
     const me = await api<Me>('/v1/me', { orgId: org.id });
+    if (org.features?.projects === false) {
+      if (!['owner', 'admin', 'member'].includes(org.role)) throw new Error(t('projects.paused'));
+      const ids: string[] = [];
+      setSavedProjectUrl(null);
+      for (const [i, file] of request.files.entries()) {
+        setProcessing({
+          phase: 'upload',
+          message: t('app.uploading', { done: i + 1, total: request.files.length }),
+        });
+        const uploaded = await uploadFile(
+          file,
+          (name) => setProcessing({ phase: 'scan', message: t('app.scanning', { name }) }),
+          undefined,
+          { orgId: org.id },
+        );
+        ids.push(uploaded.id);
+      }
+      const options = {
+        rulesText: request.rulesText,
+        useRules: request.useRules,
+        webSearch: request.webSearch,
+        ruleIds: request.selectedRules,
+      };
+      setProcessing({ phase: 'estimate', message: t('app.estimating') });
+      const quote = await estimate(ids, options, undefined, org.id);
+      const confirmed = await new Promise<boolean>((resolve) => {
+        answer.current = resolve;
+        setConfirmation({
+          quote,
+          exempt: me.credits?.token_exempt ?? false,
+          context: {
+            account: org.kind === 'personal' ? t('projects.personal_account') : org.name,
+            project: t('projects.quick_run'),
+          },
+        });
+      });
+      if (!confirmed) throw new Error(t('app.cancelled'));
+      setProcessing({ phase: 'start', message: t('app.starting') });
+      const created = await createRun(quote, ids, options, org.id);
+      window.location.assign(
+        `${RESULTS_PATH}?${new URLSearchParams({ account: org.id, run: created.id })}`,
+      );
+      return;
+    }
     const client = projectClient(org.id);
     const files = request.files
       .map((file) => file.id)

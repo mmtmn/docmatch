@@ -18,6 +18,7 @@ import (
 	"github.com/mmtmn/docmatch/services/api/internal/email/emailpg"
 	"github.com/mmtmn/docmatch/services/api/internal/httpx"
 	"github.com/mmtmn/docmatch/services/api/internal/publicid"
+	"github.com/mmtmn/docmatch/services/api/internal/runs/apix"
 	"github.com/mmtmn/docmatch/services/api/internal/session"
 )
 
@@ -81,6 +82,9 @@ func (s *Service) sendInvitation(ctx context.Context, tx pgx.Tx, p session.Princ
 }
 
 func (s *Service) Invite(ctx context.Context, p session.Principal, address, role string) (Invitation, error) {
+	if !s.cfg.Rollouts.Invitations.Allows(p.OrgID) {
+		return Invitation{}, apix.E(contracts.ErrFeaturePaused, nil)
+	}
 	address, err := normalizeEmail(address)
 	if err != nil {
 		return Invitation{}, conflict("invalid_email")
@@ -141,6 +145,9 @@ func (s *Service) Invite(ctx context.Context, p session.Principal, address, role
 }
 
 func (s *Service) Resend(ctx context.Context, p session.Principal, id uuid.UUID) error {
+	if !s.cfg.Rollouts.Invitations.Allows(p.OrgID) {
+		return apix.E(contracts.ErrFeaturePaused, nil)
+	}
 	return db.WithOrgTx(ctx, s.pool, p.OrgID, func(ctx context.Context, tx pgx.Tx) error {
 		if _, _, err := manager(ctx, tx, p); err != nil {
 			return err

@@ -16,6 +16,13 @@ export interface Organization {
   role: 'owner' | 'admin' | 'member' | 'viewer' | 'uploader' | 'reconciler';
   plan: string;
   capabilities: Capabilities;
+  features?: AccountFeatures;
+}
+
+export interface AccountFeatures {
+  projects: boolean;
+  invitations: boolean;
+  extensions: boolean;
 }
 
 export interface Accounts {

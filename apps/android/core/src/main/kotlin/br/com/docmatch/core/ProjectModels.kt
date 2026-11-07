@@ -24,7 +24,11 @@ data class AccountMembership(
     val role: String,
     val plan: String,
     val capabilities: AccountCapabilities,
+    val features: AccountFeatures? = null,
 )
+
+@Serializable
+data class AccountFeatures(val projects: Boolean, val invitations: Boolean, val extensions: Boolean)
 
 @Serializable
 data class AccountMemberships(
@@ -157,6 +161,7 @@ data class TeamInfo(
     val seatPrice: Int,
     @SerialName("can_invite")
     val canInvite: Boolean,
+    val features: AccountFeatures? = null,
 )
 
 @Serializable

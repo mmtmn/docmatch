@@ -26,6 +26,7 @@ const (
 
 // Error codes (errors.yaml, version 1).
 const (
+	ErrFeaturePaused                  ErrorCode = "feature_paused"
 	ErrDisposableEmail                ErrorCode = "disposable_email"
 	ErrUnauthenticated                ErrorCode = "unauthenticated"
 	ErrSessionExpired                 ErrorCode = "session_expired"
@@ -142,6 +143,7 @@ type ErrorSpec struct {
 
 // ErrorCodes lists every code in catalog order.
 var ErrorCodes = []ErrorCode{
+	ErrFeaturePaused,
 	ErrDisposableEmail,
 	ErrUnauthenticated,
 	ErrSessionExpired,
@@ -247,6 +249,7 @@ var ErrorCodes = []ErrorCode{
 
 // ErrorSpecs maps every code to its spec.
 var ErrorSpecs = map[ErrorCode]ErrorSpec{
+	ErrFeaturePaused:                  {Code: ErrFeaturePaused, Status: 409, Category: ErrorCategoryLimits, Message: "Esta função ainda não está disponível nesta conta. O que já foi salvo continua disponível.", Retryable: false},
 	ErrDisposableEmail:                {Code: ErrDisposableEmail, Status: 422, Category: ErrorCategoryAuth, Message: "Use um e-mail permanente. Endereços temporários não são aceitos para criar uma conta.", Retryable: false},
 	ErrUnauthenticated:                {Code: ErrUnauthenticated, Status: 401, Category: ErrorCategoryAuth, Message: "Faça login para continuar.", Retryable: false},
 	ErrSessionExpired:                 {Code: ErrSessionExpired, Status: 401, Category: ErrorCategoryAuth, Message: "Sua sessão expirou. Entre de novo.", Retryable: false},

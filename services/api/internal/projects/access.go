@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	contracts "github.com/mmtmn/docmatch/packages/contracts/gen"
 	"github.com/mmtmn/docmatch/services/api/internal/db"
 	"github.com/mmtmn/docmatch/services/api/internal/publicid"
 	"github.com/mmtmn/docmatch/services/api/internal/rules"
@@ -134,6 +135,9 @@ func (s *Service) Resolve(next apix.Resolver) apix.Resolver {
 				}
 			} else if !v.Capabilities.Reconcile {
 				return apix.ErrForbidden
+			}
+			if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodDelete && !strings.HasSuffix(r.URL.Path, "/cancel") && !s.rollout.Allows(p.OrgID) {
+				return apix.E(contracts.ErrFeaturePaused, nil)
 			}
 			if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/approve-quote") {
 				if s.engine == nil {

@@ -92,7 +92,7 @@ class ProjectsViewModel(private val dm: Docmatch) : ViewModel() {
 }
 
 @Composable
-fun ProjectsScreen(vm: ProjectsViewModel, account: AccountMembership, onOpen: (String) -> Unit) {
+fun ProjectsScreen(vm: ProjectsViewModel, account: AccountMembership, onQuick: () -> Unit, onOpen: (String) -> Unit) {
     val s by vm.state.collectAsState()
     var name by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(Unit) { vm.load() }
@@ -108,6 +108,10 @@ fun ProjectsScreen(vm: ProjectsViewModel, account: AccountMembership, onOpen: (S
         verticalArrangement = Arrangement.spacedBy(DmSize.space2),
     ) {
         item { DmHeading(t("projects.title"), t("projects.intro")) }
+        if (account.features?.projects == false) item {
+            DmNotice(t("projects.paused"))
+            if (account.role in listOf("owner", "admin", "member")) TextButton(onQuick) { Text(t("projects.quick_run")) }
+        }
         if (account.capabilities.createProject)
             item {
                 DmCard {
@@ -142,7 +146,8 @@ fun ProjectsScreen(vm: ProjectsViewModel, account: AccountMembership, onOpen: (S
             item {
                 Text(
                     t(
-                        if (account.capabilities.createProject) "projects.empty_body"
+                        if (account.features?.projects == false) "projects.paused"
+                        else if (account.capabilities.createProject) "projects.empty_body"
                         else "projects.empty_upload_only",
                     ),
                 )

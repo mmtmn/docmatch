@@ -233,14 +233,14 @@ export async function uploadFile(
   file: AcceptedFile,
   onScanning?: (name: string) => void,
   signal?: AbortSignal,
-  destination?: { orgId: string; projectId: string; replacesId?: string },
+  destination?: { orgId: string; projectId?: string; replacesId?: string },
   transport?: { request: typeof api; uploadOrigins: readonly string[] },
 ): Promise<UploadView> {
   const request = transport?.request ?? api;
   const context = { orgId: destination?.orgId ?? selectedAccount()?.orgId ?? null };
   const media = file.family === 'media';
   const sha256 = media ? undefined : await sha256Hex(file.file);
-  const prefix = destination
+  const prefix = destination?.projectId
     ? `/v1/projects/${encodeURIComponent(destination.projectId)}/uploads`
     : '/v1/uploads';
   const ticket = await request<Ticket>(prefix, {
@@ -297,8 +297,10 @@ export function estimate(
   uploadIds: string[],
   opts: RunOptionsInput,
   signal?: AbortSignal,
+  orgId?: string,
 ): Promise<QuoteView> {
   return api<QuoteView>('/v1/runs/estimate', {
+    ...(orgId ? { orgId } : {}),
     body: runBody(uploadIds, opts),
     ...(signal ? { signal } : {}),
   });
@@ -308,8 +310,10 @@ export function createRun(
   quote: QuoteView,
   uploadIds: string[],
   opts: RunOptionsInput,
+  orgId?: string,
 ): Promise<RunView> {
   return api<RunView>('/v1/runs', {
+    ...(orgId ? { orgId } : {}),
     body: { ...runBody(uploadIds, opts), quote_id: quote.id, quote_signature: quote.signature },
     idempotent: true,
   });

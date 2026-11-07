@@ -166,6 +166,7 @@ type Config struct {
 	KillFlags []string
 	// Maintenance makes the API answer 503 to everything except health and version.
 	Maintenance bool
+	Rollouts    Rollouts
 
 	Database Database
 	Storage  Storage
@@ -325,6 +326,11 @@ func LoadFrom(lookup Lookup) (*Config, error) {
 	cfg.VantaraPath = r.optional(VarVantaraPath, "")
 	cfg.KillFlags = r.list(VarKillFlags)
 	cfg.Maintenance = r.boolean(VarMaintenance, false)
+	cfg.Rollouts = Rollouts{
+		Projects:    r.accountRollout(VarRolloutProjects, cfg.IsDev()),
+		Invitations: r.accountRollout(VarRolloutInvitations, cfg.IsDev()),
+		Extensions:  r.accountRollout(VarRolloutExtensions, cfg.IsDev()),
+	}
 
 	cfg.Database.URL = r.secret(VarDatabaseURL, true)
 	if u := cfg.Database.URL.Reveal(); u != "" && !strings.HasPrefix(u, "postgres://") && !strings.HasPrefix(u, "postgresql://") {
@@ -917,7 +923,7 @@ func (r *reader) address(name string) *mail.Address {
 func KnownVars() []string {
 	return append([]string{
 		VarEnv, VarPublicBaseURL, VarAPIBaseURL, VarAPIListen, VarAdminListen, VarOriginSecret, VarOriginSecretHeader, VarVantaraPath,
-		VarKillFlags, VarMaintenance,
+		VarKillFlags, VarMaintenance, VarRolloutProjects, VarRolloutInvitations, VarRolloutExtensions,
 		VarDatabaseURL, VarDBAppRole, VarAWSRegion, VarAWSAccessKeyID, VarAWSSecretKey, VarS3UploadsBucket, VarS3BackupsBucket, VarS3Endpoint,
 		VarR2AccountID, VarR2AccessKeyID, VarR2SecretAccessKey, VarR2MediaBucket, VarR2Endpoint, VarMediaLocalDir,
 		VarHarnessSocket, VarScanQueueURL, VarScannerBin,

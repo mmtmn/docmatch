@@ -195,3 +195,17 @@ variable "create_packer_profile" {
   type        = bool
   default     = true
 }
+
+variable "feature_rollouts" {
+  description = "Account rollout lists: * enables all, none pauses new work, or comma-separated public org_ IDs. Existing data remains readable."
+  type = object({
+    projects    = string
+    invitations = string
+    extensions  = string
+  })
+  default = { projects = "none", invitations = "none", extensions = "none" }
+  validation {
+    condition     = alltrue([for value in values(var.feature_rollouts) : can(regex("^(\\*|none|org_[A-Za-z0-9]+(,org_[A-Za-z0-9]+)*)$", value))])
+    error_message = "Use *, none, or comma-separated public org_ IDs for each rollout."
+  }
+}

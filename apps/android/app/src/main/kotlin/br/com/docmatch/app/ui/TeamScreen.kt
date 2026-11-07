@@ -132,7 +132,8 @@ fun TeamScreen(vm: TeamViewModel, session: SessionViewModel, onBack: () -> Unit)
         item { DmHeading(t("teams.title"), t("teams.no_charge")) }
         s.team?.let { team ->
             item { Text(team.name, style = MaterialTheme.typography.headlineSmall) }
-            if (team.kind == "personal" && team.capabilities.manageAccount)
+            if (team.features?.invitations == false) item { DmNotice(t("teams.paused")) }
+            if (team.kind == "personal" && team.capabilities.manageAccount && team.features?.invitations != false)
                 item {
                     DmHeading(t("teams.convert_title"), t("teams.convert_body"))
                     OutlinedTextField(
@@ -189,7 +190,7 @@ fun TeamScreen(vm: TeamViewModel, session: SessionViewModel, onBack: () -> Unit)
                             ) {
                                 Text(t("teams.send_invite"))
                             }
-                            if (!team.canInvite) Text(t("teams.subscription_required"))
+                            if (!team.canInvite && team.features?.invitations != false) Text(t("teams.subscription_required"))
                             Text(
                                 t(
                                     "teams.members_limit",
@@ -289,7 +290,7 @@ fun TeamScreen(vm: TeamViewModel, session: SessionViewModel, onBack: () -> Unit)
                             if (invite.status in listOf("pending", "expired")) {
                                 TextButton(
                                     { vm.perform(TeamAction.Resend(invite.id)) },
-                                    enabled = !s.busy,
+                                    enabled = !s.busy && team.canInvite,
                                 ) {
                                     Text(t("teams.resend"))
                                 }

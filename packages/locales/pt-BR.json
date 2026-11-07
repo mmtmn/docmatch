@@ -1465,7 +1465,9 @@
     "recovery_mode": "Modo de análise: {mode}",
     "recovery_stored": "Cópia guardada neste dispositivo. As alterações ainda precisam ser salvas na conta.",
     "recovery_unavailable": "Não foi possível guardar a cópia neste dispositivo. Mantenha esta tela aberta e copie seu texto antes de recarregar.",
-    "conflict_recovery": "Suas alterações estão guardadas neste dispositivo. Recarregue o projeto e compare a cópia com a versão da conta antes de aplicar."
+    "conflict_recovery": "Suas alterações estão guardadas neste dispositivo. Recarregue o projeto e compare a cópia com a versão da conta antes de aplicar.",
+    "paused": "Novas alterações em projetos ainda não estão disponíveis nesta conta. Você pode consultar o que já foi salvo.",
+    "quick_run": "Conciliação avulsa"
   },
   "teams": {
     "inbox_title": "Convites recebidos",
@@ -1548,7 +1550,8 @@
     "decline_invitation": "Recusar convite",
     "open_team": "Abrir equipe",
     "declined_message": "Convite recusado. Nenhum acesso foi adicionado.",
-    "open_installed_app": "Abrir no app instalado"
+    "open_installed_app": "Abrir no app instalado",
+    "paused": "Novos convites ainda não estão disponíveis nesta conta. Os participantes atuais mantêm suas permissões."
   },
   "extensions": {
     "export_ready": "Arquivo pronto",
@@ -1589,7 +1592,8 @@
     "native_return": "Volte à extensão para continuar.",
     "native_expired": "O pedido expirou. Entre novamente pela extensão.",
     "native_failed": "Não foi possível abrir a conexão. Volte à extensão e tente novamente.",
-    "native_cancelled": "Conexão cancelada. Você pode tentar novamente pela extensão."
+    "native_cancelled": "Conexão cancelada. Você pode tentar novamente pela extensão.",
+    "paused": "Novas ações da extensão ainda não estão disponíveis nesta conta. Você pode consultar os projetos e resultados salvos."
   },
   "platforms": {
     "title": "Use onde preferir",

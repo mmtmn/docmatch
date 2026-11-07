@@ -91,7 +91,7 @@ func setup(t *testing.T) *fixture {
 			p, _ := session.FromContext(r.Context())
 			apix.WriteJSON(w, 200, map[string]any{"user": p.UserID})
 		}))
-	}}, Middleware: []httpx.Middleware{manager.Middleware, s.Middleware, tenants.Middleware}, OriginExempt: OriginExempt})
+	}}, Middleware: []httpx.Middleware{manager.Middleware, s.Middleware, tenants.Middleware, s.RolloutMiddleware}, OriginExempt: OriginExempt})
 	return f
 }
 func (f *fixture) call(t *testing.T, method, path string, body any, cookie bool, token string, want int) *httptest.ResponseRecorder {

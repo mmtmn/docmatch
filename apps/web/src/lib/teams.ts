@@ -1,5 +1,5 @@
 import { api, ApiError } from './api';
-import type { Capabilities, Organization } from './accounts';
+import type { AccountFeatures, Capabilities, Organization } from './accounts';
 import { t, type MessageKey } from './i18n';
 
 export type SeatRole = 'uploader' | 'reconciler';
@@ -29,6 +29,7 @@ export interface Team {
   member_limit: number;
   seat_price: number;
   can_invite: boolean;
+  features?: AccountFeatures;
 }
 export interface InvitationPreview {
   id: string;

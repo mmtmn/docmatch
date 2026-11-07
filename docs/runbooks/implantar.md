@@ -2,12 +2,12 @@
 
 Quatro operações diferentes, com frequências diferentes:
 
-| Operação | O que muda | Frequência | Indisponibilidade |
-| --- | --- | --- | --- |
-| [A. Release de aplicação](#a-release-de-aplicação) | binários, configuração e migrações | a cada release relevante | breve interrupção durante parada, migração e reinício |
-| [B. Troca de AMI](#b-troca-de-ami) | sistema, endurecimento, pacotes, Postgres | mensal ou por CVE | 3 a 5 minutos, em manutenção |
-| [C. Site](#c-site) | `apps/web` estático e blog | a cada merge em `apps/web` | nenhuma |
-| [D. Terraform](#d-terraform) | rede, IAM, buckets, CloudFront, alarmes, Lambdas | por PR em `infra/` | depende do recurso; o `plan` diz |
+| Operação                                           | O que muda                                       | Frequência                 | Indisponibilidade                                     |
+| -------------------------------------------------- | ------------------------------------------------ | -------------------------- | ----------------------------------------------------- |
+| [A. Release de aplicação](#a-release-de-aplicação) | binários, configuração e migrações               | a cada release relevante   | breve interrupção durante parada, migração e reinício |
+| [B. Troca de AMI](#b-troca-de-ami)                 | sistema, endurecimento, pacotes, Postgres        | mensal ou por CVE          | 3 a 5 minutos, em manutenção                          |
+| [C. Site](#c-site)                                 | `apps/web` estático e blog                       | a cada merge em `apps/web` | nenhuma                                               |
+| [D. Terraform](#d-terraform)                       | rede, IAM, buckets, CloudFront, alarmes, Lambdas | por PR em `infra/`         | depende do recurso; o `plan` diz                      |
 
 Quando tudo muda na mesma release, a ordem é **D → B → A → C**.
 
@@ -21,6 +21,30 @@ Quando tudo muda na mesma release, a ordem é **D → B → A → C**.
   a API valida a configuração ao iniciar e falha se faltar uma variável obrigatória.
 
 ## A. Release de aplicação
+
+### Liberação por conta
+
+`feature_rollouts` no Terraform define `projects`, `invitations` e `extensions`.
+Cada valor aceita `none`, `*` ou IDs públicos `org_...` separados por vírgula.
+Produção e staging começam com `none`; desenvolvimento começa com `*`.
+Os parâmetros correspondentes são `DM_ROLLOUT_PROJECTS`, `DM_ROLLOUT_INVITATIONS`
+e `DM_ROLLOUT_EXTENSIONS`. Uma mudança exige renderizar o ambiente e reiniciar a API.
+Não cria servidores nem aumenta capacidade.
+
+Comece com uma conta de teste. Confira `features` em `GET /v1/me/organizations`,
+execute o roteiro nessa conta e confirme que uma conta fora da lista recebe
+`feature_paused` ao tentar uma nova operação. Depois amplie a lista ou use `*`.
+Para pausar, volte a `none`: consultas, exclusão de projetos, recusa e revogação
+de convites e saída da extensão continuam disponíveis. Execuções já aceitas continuam.
+Os clientes oferecem a conciliação avulsa aos papéis legados que já podiam usá-la.
+Não confunda disponibilidade com permissão: liberar uma conta não concede novos poderes.
+
+Em uma emergência, o mesmo valor pode ser gravado com `aws ssm put-parameter
+--type String --overwrite` no caminho `/docmatch/$DM_ENV/DM_ROLLOUT_...`, seguido
+de `systemctl restart docmatch-env.service docmatch-api` por SSM. Registre o motivo
+e atualize `feature_rollouts` antes do próximo Terraform, para não desfazer a pausa.
+
+### Instalação
 
 A implantação é executada localmente pelo [deploy-app.sh](../../infra/scripts/deploy-app.sh).
 O script compila `linux/arm64`, grava `SHA256SUMS`, envia os arquivos ao bucket de releases
@@ -164,7 +188,7 @@ Recursos com estado (volume de dados, buckets, CMK, zona do Route 53, parâmetro
 
 - [ ] `curl -fsS "$DM_API_BASE_URL/v1/version"` mostra a versão esperada. Na instância, `/readyz` na origem local da API retorna 200 e confirma o banco.
 - [ ] Login com Google e com e-mail funciona no tenant de smoke; uma execução pequena conclui e o
-  relatório abre; o ledger mostra `hold` e `settle` coerentes.
+      relatório abre; o ledger mostra `hold` e `settle` coerentes.
 - [ ] Worker ativo, sem reinícios, e fila consumindo. Confira idade e quantidade de trabalhos pendentes nas métricas e no banco; esta versão não tem `docmatch-api queue stats`.
 - [ ] Logs sem erro novo: `aws logs tail "/docmatch/${DM_ENV}/app" --since 10m --filter-pattern '{ $.level = "error" }'`.
 - [ ] Alarmes em `OK`: `aws cloudwatch describe-alarms --alarm-name-prefix "docmatch-${DM_ENV}" --state-value ALARM` vazio.
@@ -175,5 +199,5 @@ Recursos com estado (volume de dados, buckets, CMK, zona do Route 53, parâmetro
 ## Registro
 
 | Data | Ambiente | Operação | Versão / AMI | Quem | Resultado |
-| --- | --- | --- | --- | --- | --- |
-| — | — | — | — | — | — |
+| ---- | -------- | -------- | ------------ | ---- | --------- |
+| —    | —        | —        | —            | —    | —         |

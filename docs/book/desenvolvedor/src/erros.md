@@ -9,6 +9,7 @@ chaves, URLs assinadas ou documentos no log.
 | `401` | Renovar a sessão pelo fluxo previsto ou pedir novo login; não repetir sem limite. |
 | `403` | Conferir conta, vínculo, projeto e escopos. Não trocar de identidade automaticamente. |
 | `409` | Ler o código: revisão desatualizada exige recarregar; chave de idempotência com outro corpo exige corrigir o pedido. |
+| `feature_paused` (`409`) | A função está pausada nesta conta. Não repetir automaticamente; consultas continuam disponíveis. `features` em `/v1/me/organizations` informa a disponibilidade. |
 | `429` | Respeitar `Retry-After` e reduzir a frequência. |
 | Falha de rede após uma escrita | Consultar o estado; repetir só se a operação oferecer idempotência. |
 | `needs_approval` | Apresentar o novo limite. Nunca aprovar automaticamente por retry. |

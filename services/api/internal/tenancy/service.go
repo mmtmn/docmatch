@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	contracts "github.com/mmtmn/docmatch/packages/contracts/gen"
+	"github.com/mmtmn/docmatch/services/api/internal/config"
 	"github.com/mmtmn/docmatch/services/api/internal/db"
 	"github.com/mmtmn/docmatch/services/api/internal/httpx"
 	"github.com/mmtmn/docmatch/services/api/internal/publicid"
@@ -18,17 +19,22 @@ import (
 	"github.com/mmtmn/docmatch/services/api/internal/session"
 )
 
-type Service struct{ pool *pgxpool.Pool }
+type Service struct {
+	pool     *pgxpool.Pool
+	rollouts config.Rollouts
+}
 
-func New(pool *pgxpool.Pool) *Service { return &Service{pool: pool} }
+func New(pool *pgxpool.Pool) *Service                 { return &Service{pool: pool} }
+func (s *Service) SetRollouts(policy config.Rollouts) { s.rollouts = policy }
 
 type Membership struct {
-	ID           string       `json:"id"`
-	Name         string       `json:"name"`
-	Kind         string       `json:"kind"`
-	Role         string       `json:"role"`
-	Plan         string       `json:"plan"`
-	Capabilities Capabilities `json:"capabilities"`
+	ID           string                 `json:"id"`
+	Name         string                 `json:"name"`
+	Kind         string                 `json:"kind"`
+	Role         string                 `json:"role"`
+	Plan         string                 `json:"plan"`
+	Capabilities Capabilities           `json:"capabilities"`
+	Features     config.AccountFeatures `json:"features"`
 }
 
 // Check is also called inside project mutations. The shared lock makes removal
@@ -66,6 +72,8 @@ func (s *Service) List(ctx context.Context, user uuid.UUID) ([]Membership, error
 			}
 			item.ID = publicid.Encode(publicid.PrefixOrg, id)
 			item.Capabilities = Permissions(item.Role)
+			item.Features = s.rollouts.For(id)
+			item.Capabilities.CreateProject = item.Capabilities.CreateProject && item.Features.Projects
 			out = append(out, item)
 		}
 		return rows.Err()

@@ -20,7 +20,8 @@ struct TeamView: View {
             DmHeading(title: texts.t("teams.title"), subtitle: texts.t("teams.no_charge"))
             if let team = model.team {
                 Text(team.name).font(.title2.bold())
-                if team.kind == "personal" && team.capabilities.manageAccount {
+                if team.features?.invitations == false { DmNotice(message: texts.t("teams.paused")) }
+                if team.kind == "personal" && team.capabilities.manageAccount && team.features?.invitations != false {
                     DmCard {
                         Text(texts.t("teams.convert_title")).font(.headline)
                         Text(texts.t("teams.convert_body"))
@@ -88,7 +89,7 @@ struct TeamView: View {
                     if model.error == nil { email = "" }
                 }
             }.buttonStyle(DmButtonStyle()).disabled(!team.canInvite || !email.contains("@"))
-            if !team.canInvite { Text(texts.t("teams.subscription_required")) }
+            if !team.canInvite && team.features?.invitations != false { Text(texts.t("teams.subscription_required")) }
             Text(
                 texts.t(
                     "teams.members_limit",
@@ -132,7 +133,7 @@ struct TeamView: View {
                 Text(texts.t("teams." + invite.status) + " · " + Labels.accountRole(texts, invite.role))
                 Text(texts.t("teams.expires", ["date": Format.dateTime(invite.expiresAt)])).font(.caption)
                 if ["pending", "expired"].contains(invite.status) {
-                    Button(texts.t("teams.resend")) { Task { await model.perform(.resend(invite.id)) } }
+                    Button(texts.t("teams.resend")) { Task { await model.perform(.resend(invite.id)) } }.disabled(!team.canInvite)
                     Button(texts.t("teams.revoke"), role: .destructive) {
                         ask(.revoke(invite.id), texts.t("teams.revoke_confirm", ["email": invite.email]))
                     }

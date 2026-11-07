@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	contracts "github.com/mmtmn/docmatch/packages/contracts/gen"
+	"github.com/mmtmn/docmatch/services/api/internal/config"
 	"github.com/mmtmn/docmatch/services/api/internal/db"
 	"github.com/mmtmn/docmatch/services/api/internal/httpx"
 	"github.com/mmtmn/docmatch/services/api/internal/publicid"
@@ -27,6 +28,16 @@ type Service struct {
 	auth    apix.Resolver
 	uploads *uploads.Service
 	engine  *Engine
+	rollout *config.AccountRollout
+}
+
+func (s *Service) SetRollout(policy *config.AccountRollout) { s.rollout = policy }
+
+func (s *Service) capabilities(org uuid.UUID, caps tenancy.Capabilities) tenancy.Capabilities {
+	if !s.rollout.Allows(org) {
+		caps.CreateProject, caps.Reconcile, caps.Upload = false, false, false
+	}
+	return caps
 }
 
 func New(pool *pgxpool.Pool, auth apix.Resolver, uploadSvc *uploads.Service) *Service {
@@ -179,7 +190,7 @@ func (s *Service) List(ctx context.Context, p apix.Principal, archived bool, lim
 				return err
 			}
 			v.ID = publicid.Encode(Prefix, id)
-			v.Capabilities = cap
+			v.Capabilities = s.capabilities(p.OrgID, cap)
 			out = append(out, v)
 		}
 		return rows.Err()
@@ -195,6 +206,7 @@ func (s *Service) Get(ctx context.Context, p apix.Principal, id uuid.UUID) (Deta
 			return err
 		}
 		out.Project = v
+		out.Capabilities = s.capabilities(p.OrgID, v.Capabilities)
 		if v.Capabilities.ManageAccount {
 			rows, err := tx.Query(ctx, `SELECT user_id FROM project_members WHERE org_id=$1 AND project_id=$2 ORDER BY user_id`, p.OrgID, id)
 			if err != nil {

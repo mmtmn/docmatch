@@ -24,6 +24,12 @@ public struct AccountCapabilities: Decodable, Sendable, Equatable {
     }
 }
 
+public struct AccountFeatures: Decodable, Sendable, Equatable {
+    public let projects: Bool
+    public let invitations: Bool
+    public let extensions: Bool
+}
+
 public struct AccountMembership: Decodable, Sendable, Equatable, Identifiable {
     public let id: String
     public let name: String
@@ -31,6 +37,7 @@ public struct AccountMembership: Decodable, Sendable, Equatable, Identifiable {
     public let role: String
     public let plan: String
     public let capabilities: AccountCapabilities
+    public let features: AccountFeatures?
     private enum CodingKeys: String, CodingKey {
         case id
         case name
@@ -38,6 +45,7 @@ public struct AccountMembership: Decodable, Sendable, Equatable, Identifiable {
         case role
         case plan
         case capabilities
+        case features
     }
 }
 
@@ -214,6 +222,7 @@ public struct TeamInfo: Decodable, Sendable, Equatable, Identifiable {
     public let memberLimit: Int
     public let seatPrice: Int
     public let canInvite: Bool
+    public let features: AccountFeatures?
     private enum CodingKeys: String, CodingKey {
         case id
         case name
@@ -225,6 +234,7 @@ public struct TeamInfo: Decodable, Sendable, Equatable, Identifiable {
         case memberLimit = "member_limit"
         case seatPrice = "seat_price"
         case canInvite = "can_invite"
+        case features
     }
 }
 

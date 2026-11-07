@@ -3,6 +3,10 @@
 Um projeto reúne documentos, regras e conciliações de um trabalho. Use nomes que ajudem
 a retomar, como “Fechamento de outubro”. Renomear não muda o conteúdo de uma análise.
 
+Se novas alterações estiverem pausadas na sua conta, os projetos e resultados salvos
+continuam disponíveis. A opção **Conciliação avulsa**, quando exibida, mantém o fluxo
+anterior com estimativa e confirmação antes de começar.
+
 Espere a confirmação de salvamento antes de fechar. Um arquivo em envio ainda depende
 da conexão; se o envio for interrompido, pode ser necessário selecioná-lo novamente.
 **Em verificação** significa que ele chegou, mas ainda não está pronto para conciliar.

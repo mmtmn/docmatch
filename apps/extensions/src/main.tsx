@@ -70,6 +70,17 @@ function ProjectPage({
     ])
       .then(([p, profile]) => {
         if (abort.signal.aborted) return;
+        if (org.features?.extensions === false) {
+          p = {
+            ...p,
+            capabilities: {
+              ...p.capabilities,
+              create_project: false,
+              upload: false,
+              reconcile: false,
+            },
+          };
+        }
         setError('');
         setMe(profile);
         // Keep unsaved text on ordinary foreground checks; a role change replaces the view.
@@ -83,7 +94,7 @@ function ProjectPage({
         if (!abort.signal.aborted) setError(explain(cause));
       });
     return () => abort.abort();
-  }, [client, request, projectId, org.id, foreground]);
+  }, [client, request, projectId, org.id, org.features?.extensions, foreground]);
   if (error && (!project || !me))
     return (
       <div role="alert">
@@ -179,8 +190,9 @@ function ProjectList({ org, epoch }: { org: Organization; epoch: string }) {
   return (
     <section className="extension-projects">
       <h1>{t('extensions.projects')}</h1>
+      {org.features?.extensions === false && <p role="status">{t('extensions.paused')}</p>}
       {error && <p role="alert">{error}</p>}
-      {!popup && org.capabilities.create_project && (
+      {!popup && org.capabilities.create_project && org.features?.extensions !== false && (
         <form
           className="extension-create"
           onSubmit={(event) => {

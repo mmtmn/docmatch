@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	contracts "github.com/mmtmn/docmatch/packages/contracts/gen"
 	"github.com/mmtmn/docmatch/services/api/internal/crypto"
 	"github.com/mmtmn/docmatch/services/api/internal/db"
 	"github.com/mmtmn/docmatch/services/api/internal/publicid"
@@ -126,6 +127,9 @@ func (s *Service) respondDigest(ctx context.Context, p session.Principal, digest
 				return err
 			}
 			return event(ctx, tx, actor, "invitation.declined", &id)
+		}
+		if !s.cfg.Rollouts.Invitations.Allows(org) {
+			return apix.E(contracts.ErrFeaturePaused, nil)
 		}
 		if err := s.paid(ctx, tx, org); err != nil {
 			return err

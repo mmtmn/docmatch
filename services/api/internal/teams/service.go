@@ -81,6 +81,9 @@ func (s *Service) paid(ctx context.Context, tx pgx.Tx, org uuid.UUID) error {
 // Convert retains the paid organization's ID, subscription, balance and files.
 // Only an empty personal organization is added when the owner lacks another.
 func (s *Service) Convert(ctx context.Context, p session.Principal, name string) error {
+	if !s.cfg.Rollouts.Invitations.Allows(p.OrgID) {
+		return apix.E(contracts.ErrFeaturePaused, nil)
+	}
 	name, err := httpx.ValidateText(name, contracts.TextCompanyName, true)
 	if err != nil || name == "" {
 		return apix.Validation(apix.FieldError{Path: "/name", Code: "invalid", Max: contracts.TextCompanyName})
@@ -135,6 +138,7 @@ func (s *Service) Convert(ctx context.Context, p session.Principal, name string)
 
 func (s *Service) Get(ctx context.Context, p session.Principal) (View, error) {
 	out := View{ID: publicid.Encode(publicid.PrefixOrg, p.OrgID), Members: []Member{}, Invitations: []Invitation{}, MemberLimit: contracts.IDsAccountMembersMax}
+	out.Features = s.cfg.Rollouts.For(p.OrgID)
 	err := db.WithOrgTx(ctx, s.pool, p.OrgID, func(ctx context.Context, tx pgx.Tx) error {
 		role, err := tenancy.Check(ctx, tx, p.OrgID, p.UserID)
 		if err != nil {
@@ -152,7 +156,7 @@ func (s *Service) Get(ctx context.Context, p session.Principal) (View, error) {
 		if err != nil {
 			return err
 		}
-		out.CanInvite = out.CanInvite && out.Kind == "team"
+		out.CanInvite = out.CanInvite && out.Kind == "team" && s.cfg.Rollouts.Invitations.Allows(p.OrgID)
 		rows, err := tx.Query(ctx, `SELECT u.id,COALESCE(u.display_name,''),u.email,m.role,m.created_at FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.org_id=$1 AND u.deleted_at IS NULL ORDER BY m.role='owner' DESC,u.email`, p.OrgID)
 		if err != nil {
 			return err

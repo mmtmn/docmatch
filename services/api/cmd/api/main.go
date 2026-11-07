@@ -96,6 +96,7 @@ func run() error {
 	keysSvc := apikeys.New(cfg, catalog, pool)
 	workspaceSvc := customizations.New(cfg, catalog, pool)
 	tenants := tenancy.New(pool)
+	tenants.SetRollouts(cfg.Rollouts)
 	teamsSvc, err := teams.New(cfg, pool)
 	if err != nil {
 		return err
@@ -110,6 +111,7 @@ func run() error {
 	}
 	baseResolver := extensionsSvc.Resolve(sessionResolver(pool), keysSvc.Resolve(sessionResolver(pool)))
 	projectsSvc := projects.New(pool, baseResolver, nil)
+	projectsSvc.SetRollout(cfg.Rollouts.Projects)
 	resolve := projectsSvc.Resolve(baseResolver)
 	// Pipeline route groups (uploads, estimates, runs, workflows, rules),
 	// identified by the session the middleware above authenticated.
@@ -138,7 +140,7 @@ func run() error {
 	handler := api.NewHandler(api.Deps{
 		Config: cfg, Logger: log, Limits: limits.Must(), DB: pool,
 		Mount:      append([]func(*httpx.Router){authSvc.Mount, accountSvc.Mount, billingSvc.Mount, keysSvc.Mount, workspaceSvc.Mount, tenants.Mount, projectsSvc.Mount, teamsSvc.Mount, extensionsSvc.Mount, platformsSvc.Mount}, sys.Mount()...),
-		Middleware: []httpx.Middleware{sessions.Middleware, extensionsSvc.Middleware, tenants.Middleware},
+		Middleware: []httpx.Middleware{sessions.Middleware, extensionsSvc.Middleware, tenants.Middleware, extensionsSvc.RolloutMiddleware},
 		OriginExempt: func(r *http.Request) bool {
 			return auth.OriginExempt(r) || extensions.OriginExempt(r) || (cfg.IsDev() && sys.Local.OriginExempt(r))
 		},

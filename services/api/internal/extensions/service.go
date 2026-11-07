@@ -39,6 +39,7 @@ type Service struct {
 	clients  map[string]config.ExtensionClient
 	retryKey []byte
 	limit    httpx.Middleware
+	rollout  *config.AccountRollout
 }
 
 func New(cfg *config.Config, pool *pgxpool.Pool) (*Service, error) {
@@ -54,7 +55,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool) (*Service, error) {
 	limit := ratelimit.Middleware(ratelimit.NewMemory(), func(r *http.Request) (string, ratelimit.Policy, bool) {
 		return "extension:" + edge.ClientIP(r).String(), ratelimit.Policy{Limit: 60, Period: time.Minute}, true
 	})
-	return &Service{pool: pool, clients: clients, retryKey: keys.Key("docmatch/extension-refresh-retry/v1"), limit: limit}, nil
+	return &Service{pool: pool, clients: clients, retryKey: keys.Key("docmatch/extension-refresh-retry/v1"), limit: limit, rollout: cfg.Rollouts.Extensions}, nil
 }
 
 func invalid() error { return apix.ErrUnauthenticated }
@@ -96,6 +97,29 @@ func (s *Service) Authorize(ctx context.Context, p session.Principal, in Authori
 		}
 		if err != nil {
 			return err
+		}
+		if s.rollout != nil && !s.rollout.All {
+			rows, err := tx.Query(ctx, `SELECT m.org_id FROM memberships m JOIN orgs o ON o.id=m.org_id WHERE m.user_id=$1 AND o.deleted_at IS NULL`, p.UserID)
+			if err != nil {
+				return err
+			}
+			eligible := false
+			for rows.Next() {
+				var org uuid.UUID
+				if err := rows.Scan(&org); err != nil {
+					rows.Close()
+					return err
+				}
+				eligible = eligible || s.rollout.Allows(org)
+			}
+			err = rows.Err()
+			rows.Close()
+			if err != nil {
+				return err
+			}
+			if !eligible {
+				return apix.E(contracts.ErrFeaturePaused, nil)
+			}
 		}
 		var count int
 		if err := tx.QueryRow(ctx, `SELECT count(*) FROM extension_codes WHERE user_id=$1 AND created_at>now()-interval '1 minute'`, p.UserID).Scan(&count); err != nil {

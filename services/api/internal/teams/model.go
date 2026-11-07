@@ -4,6 +4,7 @@ package teams
 import (
 	"time"
 
+	"github.com/mmtmn/docmatch/services/api/internal/config"
 	"github.com/mmtmn/docmatch/services/api/internal/tenancy"
 )
 
@@ -31,16 +32,17 @@ type Invitation struct {
 }
 
 type View struct {
-	ID           string               `json:"id"`
-	Name         string               `json:"name"`
-	Kind         string               `json:"kind"`
-	Role         string               `json:"role"`
-	Capabilities tenancy.Capabilities `json:"capabilities"`
-	Members      []Member             `json:"members"`
-	Invitations  []Invitation         `json:"invitations"`
-	MemberLimit  int                  `json:"member_limit"`
-	SeatPrice    int                  `json:"seat_price"`
-	CanInvite    bool                 `json:"can_invite"`
+	ID           string                 `json:"id"`
+	Name         string                 `json:"name"`
+	Kind         string                 `json:"kind"`
+	Role         string                 `json:"role"`
+	Capabilities tenancy.Capabilities   `json:"capabilities"`
+	Members      []Member               `json:"members"`
+	Invitations  []Invitation           `json:"invitations"`
+	MemberLimit  int                    `json:"member_limit"`
+	SeatPrice    int                    `json:"seat_price"`
+	CanInvite    bool                   `json:"can_invite"`
+	Features     config.AccountFeatures `json:"features"`
 }
 
 type Preview struct {

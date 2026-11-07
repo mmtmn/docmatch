@@ -55,6 +55,8 @@ impl ErrorCategory {
 /// Stable error code from errors.yaml, sent in the error envelope.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ErrorCode {
+    /// `feature_paused` (409)
+    FeaturePaused,
     /// `disposable_email` (422)
     DisposableEmail,
     /// `unauthenticated` (401)
@@ -274,6 +276,7 @@ impl std::error::Error for UnknownErrorCode {}
 impl ErrorCode {
     /// Every code, in catalog order.
     pub const ALL: &'static [ErrorCode] = &[
+        ErrorCode::FeaturePaused,
         ErrorCode::DisposableEmail,
         ErrorCode::Unauthenticated,
         ErrorCode::SessionExpired,
@@ -383,6 +386,7 @@ impl ErrorCode {
     /// The snake_case code sent in the error envelope.
     pub const fn as_str(self) -> &'static str {
         match self {
+            ErrorCode::FeaturePaused => "feature_paused",
             ErrorCode::DisposableEmail => "disposable_email",
             ErrorCode::Unauthenticated => "unauthenticated",
             ErrorCode::SessionExpired => "session_expired",
@@ -490,6 +494,7 @@ impl ErrorCode {
     /// HTTP status of the code (500 for `internal_error`).
     pub const fn http_status(self) -> u16 {
         match self {
+            ErrorCode::FeaturePaused => 409,
             ErrorCode::DisposableEmail => 422,
             ErrorCode::Unauthenticated => 401,
             ErrorCode::SessionExpired => 401,
@@ -597,6 +602,7 @@ impl ErrorCode {
     /// Category of the code.
     pub const fn category(self) -> ErrorCategory {
         match self {
+            ErrorCode::FeaturePaused => ErrorCategory::Limits,
             ErrorCode::DisposableEmail => ErrorCategory::Auth,
             ErrorCode::Unauthenticated => ErrorCategory::Auth,
             ErrorCode::SessionExpired => ErrorCategory::Auth,
@@ -704,6 +710,9 @@ impl ErrorCode {
     /// pt-BR message shown to the user.
     pub const fn message(self) -> &'static str {
         match self {
+            ErrorCode::FeaturePaused => {
+                "Esta função ainda não está disponível nesta conta. O que já foi salvo continua disponível."
+            }
             ErrorCode::DisposableEmail => {
                 "Use um e-mail permanente. Endereços temporários não são aceitos para criar uma conta."
             }
@@ -909,6 +918,7 @@ impl ErrorCode {
     /// Parses a snake_case code.
     pub fn parse(code: &str) -> Option<ErrorCode> {
         match code {
+            "feature_paused" => Some(ErrorCode::FeaturePaused),
             "disposable_email" => Some(ErrorCode::DisposableEmail),
             "unauthenticated" => Some(ErrorCode::Unauthenticated),
             "session_expired" => Some(ErrorCode::SessionExpired),

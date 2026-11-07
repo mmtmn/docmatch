@@ -22,12 +22,18 @@ type Capabilities struct {
 	Upload        bool `json:"upload"`
 }
 type Organization struct {
-	ID           string       `json:"id"`
-	Name         string       `json:"name"`
-	Kind         string       `json:"kind"`
-	Role         string       `json:"role"`
-	Plan         string       `json:"plan"`
-	Capabilities Capabilities `json:"capabilities"`
+	ID           string           `json:"id"`
+	Name         string           `json:"name"`
+	Kind         string           `json:"kind"`
+	Role         string           `json:"role"`
+	Plan         string           `json:"plan"`
+	Capabilities Capabilities     `json:"capabilities"`
+	Features     *AccountFeatures `json:"features,omitempty"`
+}
+type AccountFeatures struct {
+	Projects    bool `json:"projects"`
+	Invitations bool `json:"invitations"`
+	Extensions  bool `json:"extensions"`
 }
 type Organizations struct {
 	UserID string         `json:"user_id"`

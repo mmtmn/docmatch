@@ -10,18 +10,32 @@ struct ProjectsView: View {
     let account: AccountMembership
     let session: SessionModel
     @State private var model: ProjectsModel
+    @State private var quickRun: NewRunModel
     @State private var newName = ""
     @State private var newProject: String?
     @Environment(\.texts) private var texts
+    private var tokenExempt: Bool {
+        if case .signedIn(let me) = session.state { return me.credits?.tokenExempt == true }
+        return false
+    }
     init(dm: Docmatch, account: AccountMembership, session: SessionModel) {
         self.session = session
         self.dm = dm
         self.account = account
         _model = State(initialValue: ProjectsModel(dm: dm))
+        _quickRun = State(initialValue: NewRunModel(dm: dm))
     }
     var body: some View {
         DmPage {
             DmHeading(title: texts.t("projects.title"), subtitle: texts.t("projects.intro"))
+            if account.features?.projects == false {
+                DmNotice(message: texts.t("projects.paused"))
+                if ["owner", "admin", "member"].contains(account.role) {
+                    NavigationLink(texts.t("projects.quick_run")) {
+                        LegacyNewRunView(model: quickRun, dm: dm, tokenExempt: tokenExempt)
+                    }
+                }
+            }
             if account.capabilities.createProject {
                 DmCard {
                     TextField(texts.t("projects.name"), text: $newName, prompt: Text(texts.t("projects.name_example")))
@@ -47,7 +61,7 @@ struct ProjectsView: View {
                     })
             ).disabled(model.busy)
             if model.items.isEmpty && !model.busy {
-                Text(texts.t(account.capabilities.createProject ? "projects.empty_body" : "projects.empty_upload_only"))
+                Text(texts.t(account.features?.projects == false ? "projects.paused" : account.capabilities.createProject ? "projects.empty_body" : "projects.empty_upload_only"))
             }
             ForEach(model.items) { project in
                 NavigationLink(value: ProjectLink(id: project.id)) {
