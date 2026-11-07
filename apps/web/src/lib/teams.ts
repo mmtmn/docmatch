@@ -102,3 +102,20 @@ export function respondInvitation(token: string, accept: boolean) {
     body: { token, accept },
   });
 }
+
+export interface InvitationInbox {
+  items: InvitationPreview[];
+  next_cursor?: string;
+}
+export function pendingInvitations(cursor?: string, signal?: AbortSignal) {
+  return api<InvitationInbox>(
+    `/v1/me/invitations${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`,
+    { orgId: null, ...(signal ? { signal } : {}) },
+  );
+}
+export function respondPendingInvitation(id: string, accept: boolean) {
+  return api<{ organization_id: string; accepted: boolean }>(
+    `/v1/me/invitations/${encodeURIComponent(id)}/respond`,
+    { orgId: null, body: { accept } },
+  );
+}

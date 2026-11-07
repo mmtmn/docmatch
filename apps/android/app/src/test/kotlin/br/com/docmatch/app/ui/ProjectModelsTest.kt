@@ -65,6 +65,42 @@ class ProjectModelsTest {
         """{"id":"prj_test","name":"Janeiro","visibility":"private","version":1,"revision":1,"document_count":0,"created_at":"2026-11-06T10:00:00Z","updated_at":"2026-11-06T10:00:00Z","capabilities":{"reconcile":true,"read_results":true,"upload":true},"documents":[]}"""
 
     @Test
+    fun invitationInboxNeedsExplicitResponseAndNeverUsesSelectedCompany() = runBlocking {
+        val preview = """{"id":"inv_a","organization":"Equipe","email_hint":"a***@example.test","role":"uploader","status":"pending","expires_at":"2026-11-13T12:00:00Z","email_matches":true}"""
+        answer("""{"items":[$preview],"next_cursor":"inv_a"}""")
+        val inbox = InvitationInboxViewModel(client().inAccount("org_old"))
+        inbox.load()
+        until { !inbox.state.value.busy }
+        val list = server.takeRequest(1, TimeUnit.SECONDS)!!
+        assertEquals("/v1/me/invitations", list.path)
+        assertNull(list.getHeader("X-Docmatch-Org"))
+        assertEquals(1, inbox.state.value.items.size)
+        assertEquals(1, server.requestCount)
+        val other = preview.replace("inv_a", "inv_b")
+        answer("""{"items":[$other]}""")
+        inbox.load(true)
+        until { !inbox.state.value.busy }
+        assertEquals("/v1/me/invitations?cursor=inv_a", server.takeRequest(1, TimeUnit.SECONDS)!!.path)
+        assertEquals(2, inbox.state.value.items.size)
+        assertNull(inbox.state.value.nextCursor)
+        answer("""{"organization_id":"org_team","accepted":true}""")
+        inbox.respond("inv_a", true)
+        until { !inbox.state.value.busy }
+        val accepted = server.takeRequest(1, TimeUnit.SECONDS)!!
+        assertEquals("/v1/me/invitations/inv_a/respond", accepted.path)
+        assertNull(accepted.getHeader("X-Docmatch-Org"))
+        assertEquals("""{"accept":true}""", accepted.body.readUtf8())
+        assertEquals(listOf("inv_b"), inbox.state.value.items.map { it.id })
+        inbox.respond("inv_a", true)
+        assertEquals(3, server.requestCount)
+        answer("""{"items":[]}""")
+        inbox.load()
+        until { !inbox.state.value.busy }
+        server.takeRequest(1, TimeUnit.SECONDS)
+        assertTrue(inbox.state.value.items.isEmpty())
+    }
+
+    @Test
     fun rememberedAccountRequiresSameIdentityOriginAndMembership() = runBlocking {
         for (scenario in listOf("restart", "identity", "origin", "membership", "logout")) {
             val store = MemorySecretStore()

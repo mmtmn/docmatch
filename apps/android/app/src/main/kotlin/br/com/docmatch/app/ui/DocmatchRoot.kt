@@ -100,6 +100,15 @@ private fun SignedIn(
     val nav = rememberNavController()
     val work by session.projectWork.collectAsState()
     var choosing by remember { mutableStateOf(false) }
+    var inboxOpen by remember { mutableStateOf(false) }
+    if (inboxOpen) {
+        val owner = remember { androidx.lifecycle.ViewModelStore() }
+        DisposableEffect(owner) { onDispose { owner.clear() } }
+        val inbox: InvitationInboxViewModel = viewModel(
+            viewModelStoreOwner = object : androidx.lifecycle.ViewModelStoreOwner { override val viewModelStore = owner },
+        ) { InvitationInboxViewModel(session.dm) }
+        InvitationInboxScreen(inbox, session) { inboxOpen = false }
+    }
     var target by remember { mutableStateOf<AccountMembership?>(null) }
     val tabs =
         listOf(Tab("projects", t("projects.title"), DmIcons.Folder)) +
@@ -114,6 +123,7 @@ private fun SignedIn(
             title = { Text(t("projects.choose_account")) },
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState())) {
+                    TextButton({ choosing = false; inboxOpen = true }) { Text(t("teams.inbox_title")) }
                     accounts.items.forEach { item ->
                         TextButton(
                             {

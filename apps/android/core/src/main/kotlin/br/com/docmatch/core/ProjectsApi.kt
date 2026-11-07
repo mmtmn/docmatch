@@ -281,3 +281,15 @@ suspend fun DocmatchApi.cancelRun(id: String): Run =
         Run.serializer(),
         idempotencyKey = java.util.UUID.randomUUID().toString(),
     )!!
+
+suspend fun DocmatchApi.pendingInvitations(cursor: String? = null): InvitationInbox =
+    transport.call(
+        "GET", "/v1/me/invitations", null, InvitationInbox.serializer(),
+        query = cursor?.let { mapOf("cursor" to it) } ?: emptyMap(),
+    )!!
+
+suspend fun DocmatchApi.respondToPendingInvitation(id: String, accept: Boolean): InvitationResponse =
+    transport.call(
+        "POST", "/v1/me/invitations/${segment(id)}/respond",
+        buildJsonObject { put("accept", accept) }, InvitationResponse.serializer(),
+    )!!

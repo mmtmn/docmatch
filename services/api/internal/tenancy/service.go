@@ -80,7 +80,7 @@ func identityRoute(path string) bool {
 	return path == "/v1/platforms" || path == "/v1/platform-notices" || strings.HasPrefix(path, "/v1/platform-notices/") || strings.HasPrefix(path, "/v1/extensions/") || strings.HasPrefix(path, "/v1/auth/") || path == "/v1/me/organizations" ||
 		path == "/v1/me/sessions" || strings.HasPrefix(path, "/v1/me/sessions/") ||
 		path == "/v1/me/password" || path == "/v1/me/devices" || strings.HasPrefix(path, "/v1/me/devices/") ||
-		path == "/v1/me/invitations" || strings.HasPrefix(path, "/v1/invitations/")
+		path == "/v1/me/invitations" || strings.HasPrefix(path, "/v1/me/invitations/") || strings.HasPrefix(path, "/v1/invitations/")
 }
 
 func (s *Service) Middleware(next http.Handler) http.Handler {

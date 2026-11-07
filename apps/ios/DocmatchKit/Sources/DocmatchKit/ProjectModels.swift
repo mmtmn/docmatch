@@ -277,3 +277,12 @@ public struct ProjectRuleList: Decodable, Sendable, Equatable {
     public let nextCursor: String?
     private enum CodingKeys: String, CodingKey { case items; case nextCursor = "next_cursor" }
 }
+
+public struct InvitationInbox: Decodable, Sendable, Equatable {
+    public let items: [InvitationPreview]
+    public let nextCursor: String?
+    private enum CodingKeys: String, CodingKey {
+        case items
+        case nextCursor = "next_cursor"
+    }
+}

@@ -138,7 +138,9 @@ private struct SignedInView: View {
         }
         .sheet(isPresented: $choosingAccount) {
             NavigationStack {
-                List(session.accounts) { item in
+                List {
+                    NavigationLink(texts.t("teams.inbox_title")) { InvitationInboxView(session: session) }
+                    ForEach(session.accounts) { item in
                     Button {
                         if session.hasUnsavedProjectChanges {
                             proposedAccount = item
@@ -160,6 +162,7 @@ private struct SignedInView: View {
                             }
                         }
                     }.disabled(session.switching || item.id == session.accountID)
+                    }
                 }
                 .navigationTitle(texts.t("projects.choose_account"))
                 .toolbar {

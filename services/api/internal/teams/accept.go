@@ -59,11 +59,15 @@ func (s *Service) Respond(ctx context.Context, p session.Principal, token string
 	if len(token) != 43 {
 		return "", missing()
 	}
+	return s.respondDigest(ctx, p, crypto.Digest(token), accept)
+}
+
+func (s *Service) respondDigest(ctx context.Context, p session.Principal, digest []byte, accept bool) (string, error) {
 	var org uuid.UUID
 	err := db.WithSystemTx(ctx, s.pool, func(ctx context.Context, tx pgx.Tx) error {
 		// Discover the account, then take the same account-first lock order as
 		// revocation and resending. Re-read the hash after taking the lock.
-		if err := tx.QueryRow(ctx, `SELECT org_id FROM team_invitations WHERE token_hash=$1`, crypto.Digest(token)).Scan(&org); errors.Is(err, pgx.ErrNoRows) {
+		if err := tx.QueryRow(ctx, `SELECT org_id FROM team_invitations WHERE token_hash=$1`, digest).Scan(&org); errors.Is(err, pgx.ErrNoRows) {
 			return missing()
 		} else if err != nil {
 			return err
@@ -81,7 +85,7 @@ func (s *Service) Respond(ctx context.Context, p session.Principal, token string
 		var role, status, address string
 		var acceptedBy *uuid.UUID
 		var expired bool
-		err := tx.QueryRow(ctx, `SELECT id,email,role,status,expires_at<=clock_timestamp(),accepted_by FROM team_invitations WHERE token_hash=$1 AND org_id=$2 FOR UPDATE`, crypto.Digest(token), org).Scan(&id, &address, &role, &status, &expired, &acceptedBy)
+		err := tx.QueryRow(ctx, `SELECT id,email,role,status,expires_at<=clock_timestamp(),accepted_by FROM team_invitations WHERE token_hash=$1 AND org_id=$2 FOR UPDATE`, digest, org).Scan(&id, &address, &role, &status, &expired, &acceptedBy)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return missing()
 		}

@@ -66,3 +66,12 @@ extension DocmatchAPI {
         try await http.call("POST", "/v1/projects/\(Self.segment(id))/rules/\(Self.segment(rule))/promote", body: ["to": .string(to)], as: ProjectRule.self, idempotencyKey: idempotencyKey)
     }
 }
+
+extension DocmatchAPI {
+    public func pendingInvitations(cursor: String? = nil) async throws -> InvitationInbox {
+        try await http.raw.call("GET", "/v1/me/invitations", as: InvitationInbox.self, query: cursor.map { [("cursor", $0)] } ?? [])
+    }
+    public func respondToPendingInvitation(_ id: String, accept: Bool) async throws -> InvitationResponse {
+        try await http.raw.call("POST", "/v1/me/invitations/\(Self.segment(id))/respond", body: ["accept": .bool(accept)], as: InvitationResponse.self)
+    }
+}

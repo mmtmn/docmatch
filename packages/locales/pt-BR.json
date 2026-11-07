@@ -1449,6 +1449,15 @@
     "files_attention": "Há arquivos que precisam de atenção. Abra a lista para conferir."
   },
   "teams": {
+    "inbox_title": "Convites recebidos",
+    "inbox_hint": "Convites para o e-mail verificado do seu login. Você escolhe quais aceitar.",
+    "inbox_empty": "Nenhum convite pendente para este login.",
+    "inbox_link": "Convites ({count})",
+    "inbox_accept": "Participar de {name}? Sua conta pessoal continua separada.",
+    "inbox_decline": "Recusar o convite de {name}?",
+    "inbox_verify": "Convites aparecem depois que você verifica o e-mail do seu login.",
+    "inbox_more": "Ver mais convites",
+    "inbox_accepted": "Convite aceito. A equipe já aparece entre suas contas.",
     "title": "Equipe",
     "profile_plan": "Perfil e plano",
     "personal_intro": "Convide pessoas para trabalhar com você.",

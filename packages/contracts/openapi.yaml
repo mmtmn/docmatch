@@ -703,6 +703,83 @@ paths:
         "409":
           $ref: "#/components/responses/Conflict"
 
+  /me/invitations:
+    get:
+      operationId: listPendingInvitations
+      tags:
+        - teams
+      summary: Lista convites pendentes para o e-mail verificado do login
+      description: Não aceita convites nem retorna tokens. Independe da conta selecionada. Até 50 convites por página.
+      security:
+        - cookieSession: []
+      parameters:
+        - name: cursor
+          in: query
+          schema:
+            $ref: "#/components/schemas/InvitationId"
+      responses:
+        "200":
+          description: Convites pendentes, ordenados por ID. next_cursor aparece quando há outra página.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvitationInbox"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /me/invitations/{invitation}/respond:
+    parameters:
+      - name: invitation
+        in: path
+        required: true
+        schema:
+          $ref: "#/components/schemas/InvitationId"
+    post:
+      operationId: answerPendingInvitation
+      tags:
+        - teams
+      summary: Responde a um convite da caixa de entrada
+      description: Requer sessão válida e o e-mail convidado verificado. Não depende da antiga conta selecionada.
+        Repetir um aceite é seguro enquanto o vínculo existe; o link não recria um acesso removido.
+      security:
+        - cookieSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PendingInvitationAnswer"
+      responses:
+        "200":
+          description: Operação concluída.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvitationAnswerResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          description: Créditos insuficientes para reservar o teto.
+          x-error-codes:
+            - insufficient_credits
+            - subscription_required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
   /me/organizations:
     get:
       operationId: listOrganizations
@@ -4723,6 +4800,27 @@ components:
       properties:
         user_id:
           $ref: "#/components/schemas/UserId"
+      additionalProperties: false
+    PendingInvitationAnswer:
+      type: object
+      required:
+        - accept
+      properties:
+        accept:
+          type: boolean
+      additionalProperties: false
+    InvitationInbox:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/InvitationPreview"
+        next_cursor:
+          $ref: "#/components/schemas/InvitationId"
       additionalProperties: false
     InvitationPreviewRequest:
       type: object

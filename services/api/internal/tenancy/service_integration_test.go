@@ -93,7 +93,7 @@ func TestSelectedAccountIsolationAndRevocation(t *testing.T) {
 	}
 	// The identity endpoint still works if a cookie points at a removed account.
 	a.OrgID = b.OrgID
-	for _, path := range []string{"/v1/me/sessions", "/v1/me/sessions/ses_example", "/v1/me/password"} {
+	for _, path := range []string{"/v1/me/sessions", "/v1/me/sessions/ses_example", "/v1/me/password", "/v1/me/invitations", "/v1/me/invitations/inv_example/respond"} {
 		if w := call(a, orgB, path, ""); w.Code != http.StatusOK {
 			t.Fatalf("identity route unavailable after removal: %s = %d", path, w.Code)
 		}

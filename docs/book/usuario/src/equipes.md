@@ -24,6 +24,10 @@ O convite só cria participação depois do aceite. A pessoa entra com o endere�
 verifica o e-mail quando necessário e confirma. Se já usa a docmatch, continua com o mesmo
 login: sua conta pessoal e sua assinatura não são transferidas para a empresa.
 
+Você também encontra **Convites recebidos** no seletor de contas dos apps. No site,
+os convites pendentes aparecem ao lado do seletor. O aceite mantém a conta atual;
+escolha a empresa quando quiser trabalhar nela.
+
 Se o convite abriu com outro e-mail conectado, troque para o endereço convidado. Não
 compartilhe senha e não tente misturar contas. Convites vencidos ou revogados precisam
 ser reenviados pelo responsável.

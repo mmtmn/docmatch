@@ -93,11 +93,11 @@ DM_E2E_TLS_CERT="$$tls_dir/cert.pem" DM_E2E_TLS_KEY="$$tls_dir/key.pem" \
 endef
 
 e2e: ## build com a tela de resultados ligada + Playwright (Chromium)
-	DM_PUBLIC_BASE_URL=https://docmatch.example.invalid PUBLIC_DM_FEATURE_RESULTS=true $(PNPM) exec astro build
+	DM_PUBLIC_BASE_URL=https://docmatch.example.invalid PUBLIC_DM_API_BASE_URL=https://docmatch-api.example.invalid PUBLIC_DM_FEATURE_RESULTS=true $(PNPM) exec astro build
 	$(call run_e2e,chromium)
 
 e2e-all: ## como e2e, exige Chromium, Firefox e WebKit (certificado local temporário)
-	DM_PUBLIC_BASE_URL=https://docmatch.example.invalid PUBLIC_DM_FEATURE_RESULTS=true $(PNPM) exec astro build
+	DM_PUBLIC_BASE_URL=https://docmatch.example.invalid PUBLIC_DM_API_BASE_URL=https://docmatch-api.example.invalid PUBLIC_DM_FEATURE_RESULTS=true $(PNPM) exec astro build
 	@$(PNPM) exec playwright install chromium firefox webkit
 	$(call run_e2e,chromium firefox webkit)
 

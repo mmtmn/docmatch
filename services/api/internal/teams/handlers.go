@@ -16,6 +16,8 @@ import (
 )
 
 func (s *Service) Mount(r *httpx.Router) {
+	r.Handle(http.MethodGet, "/v1/me/invitations", httpx.BodyNone, session.RequireFunc(s.pending))
+	r.Handle(http.MethodPost, "/v1/me/invitations/{invitation}/respond", httpx.BodyJSON, session.RequireFunc(s.respondPending))
 	r.Handle(http.MethodGet, "/v1/team", httpx.BodyNone, session.RequireFunc(s.get))
 	r.Handle(http.MethodPost, "/v1/team", httpx.BodyJSON, session.RequireFunc(s.convert))
 	r.Handle(http.MethodPost, "/v1/team/invitations", httpx.BodyJSON, session.RequireFunc(s.invite))

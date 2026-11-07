@@ -118,3 +118,45 @@ public enum InvitationLink {
         return token
     }
 }
+
+@MainActor @Observable
+public final class InvitationInboxModel {
+    public private(set) var items: [InvitationPreview] = []
+    public private(set) var nextCursor: String?
+    public private(set) var busy = false
+    public private(set) var error: String?
+    public private(set) var notice: String?
+    @ObservationIgnored private let dm: Docmatch
+    public init(dm: Docmatch) { self.dm = dm }
+    public func load(more: Bool = false) async {
+        guard !busy, !more || nextCursor != nil else { return }
+        busy = true
+        error = nil
+        defer { busy = false }
+        do {
+            let page = try await dm.api.pendingInvitations(cursor: more ? nextCursor : nil)
+            if Task.isCancelled { return }
+            items = more ? items + page.items.filter { item in !items.contains { $0.id == item.id } } : page.items
+            nextCursor = page.nextCursor
+        } catch { fail(error) }
+    }
+    @discardableResult public func respond(_ id: String, accept: Bool) async -> Bool {
+        guard !busy, items.contains(where: { $0.id == id && $0.emailMatches && $0.status == "pending" }) else { return false }
+        busy = true
+        error = nil
+        notice = nil
+        defer { busy = false }
+        do {
+            let response = try await dm.api.respondToPendingInvitation(id, accept: accept)
+            if Task.isCancelled { return false }
+            items.removeAll { $0.id == id }
+            notice = dm.texts.t(response.accepted ? "teams.inbox_accepted" : "teams.declined_message")
+            return true
+        } catch { fail(error); return false }
+    }
+    private func fail(_ e: any Error) {
+        if e is CancellationError { return }
+        if let api = e as? ApiError, [401, 403].contains(api.status) { items = []; nextCursor = nil }
+        error = (e as? ApiError)?.message ?? dm.texts.t("errors.unknown")
+    }
+}

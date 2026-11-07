@@ -68,7 +68,20 @@ func TestTeamHTTPInvitationConsentAndMembershipLifecycle(t *testing.T) {
 	call(&owner, "GET", "/v1/team", nil, "", 200)
 	email := guest.UserID.String() + "@example.test"
 	call(&owner, "POST", "/v1/team/invitations", map[string]any{"email": email, "role": "owner"}, origin, 409)
-	call(&owner, "POST", "/v1/team/invitations", map[string]any{"email": email, "role": "uploader"}, origin, 200)
+	invited := call(&owner, "POST", "/v1/team/invitations", map[string]any{"email": email, "role": "uploader"}, origin, 200)
+	inbox := call(&guest, "GET", "/v1/me/invitations", nil, "", 200)
+	if len(inbox["items"].([]any)) != 1 {
+		t.Fatal(inbox)
+	}
+	call(nil, "GET", "/v1/me/invitations", nil, "", 401)
+	call(&guest, "GET", "/v1/me/invitations?cursor=invalid", nil, "", 400)
+	responsePath := "/v1/me/invitations/" + invited["id"].(string) + "/respond"
+	call(nil, "POST", responsePath, `{"accept":true}`, origin, 401)
+	call(&guest, "POST", responsePath, `{}`, origin, 400)
+	call(&guest, "POST", responsePath, `{bad`, origin, 400)
+	call(&guest, "POST", responsePath, `{"accept":true}`, "https://foreign.example", 403)
+	call(&other, "POST", responsePath, `{"accept":true}`, origin, 404)
+	call(&guest, "POST", "/v1/me/invitations/invalid/respond", `{"accept":true}`, origin, 404)
 	token := inviteToken(t, owner.OrgID, email)
 	call(nil, "POST", "/v1/invitations/preview", map[string]any{"token": token}, origin, 200)
 	call(&guest, "GET", "/v1/invitations/respond", nil, "", 405)
@@ -78,6 +91,7 @@ func TestTeamHTTPInvitationConsentAndMembershipLifecycle(t *testing.T) {
 		t.Fatal("preview or rejected request joined account")
 	}
 	call(&other, "POST", "/v1/invitations/respond", map[string]any{"token": token, "accept": true}, origin, 409)
+	call(&guest, "POST", responsePath, `{"accept":true}`, origin, 200)
 	call(&guest, "POST", "/v1/invitations/respond", map[string]any{"token": token, "accept": true}, origin, 200)
 	personal := guest.OrgID
 	guest.OrgID = owner.OrgID
