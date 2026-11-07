@@ -48,9 +48,12 @@ ci-full: ci e2e-local ## ci + o fluxo inteiro num emulador contra o make local
 e2e-local: sdk-check ## make local + o app num emulador gerenciado: login local, gêmeo da Vantara, conta em dois aparelhos
 	DM_LOCAL_LLM_MODE=off $(ROOT)/tools/dev/local.sh up
 	mkdir -p "$(TEST_ANDROID_HOME)"
-	ANDROID_USER_HOME="$(TEST_ANDROID_HOME)" ANDROID_EMULATOR_HOME="$(TEST_ANDROID_HOME)" \
+	@set -eu; eval "$$($(ROOT)/tools/dev/env.sh $(ROOT)/.env --defaults)"; \
+	  url="$$(node -e 'const u = new URL(process.env.DM_API_BASE_URL); if (u.protocol !== "http:" || !["localhost", "127.0.0.1", "[::1]"].includes(u.hostname) || u.username || u.password) throw new Error("Local API required"); u.hostname = "10.0.2.2"; console.log(u.origin)')"; \
+	  ANDROID_USER_HOME="$(TEST_ANDROID_HOME)" ANDROID_EMULATOR_HOME="$(TEST_ANDROID_HOME)" \
 	  ANDROID_AVD_HOME="$(TEST_ANDROID_HOME)/avd/gradle-managed" \
 	  $(GRADLE) --no-daemon :app:$(DEVICE)DebugAndroidTest \
+	  -Pdocmatch.apiBaseUrl="$$url" \
 	  -Pandroid.testInstrumentationRunnerArguments.docmatchLocal=1 \
 	  -Pandroid.testoptions.manageddevices.emulator.gpu=$(GPU)
 
