@@ -26,17 +26,36 @@ function expectedFindings(): number {
   return (section.match(/^ {2}- \{ code: F\d+/gm) ?? []).length;
 }
 
-test('reconciles the twin with no key and no sign-in step', async ({ page }) => {
+test('saves the twin in a project and reopens the same result without another run', async ({
+  page,
+}) => {
   page.on('dialog', (dialog) => {
     throw new Error(`Unexpected browser dialog: ${dialog.type()}`);
   });
-  await page.goto('/app');
-  await expect(page.locator('astro-island[client="load"][ssr]')).toHaveCount(0);
+  let runCreates = 0;
+  page.on('request', (request) => {
+    if (
+      request.method() === 'POST' &&
+      /^\/v1\/projects\/[^/]+\/runs$/.test(new URL(request.url()).pathname)
+    )
+      runCreates++;
+  });
+  await page.goto('/login');
+  await page.getByRole('button', { name: m.auth.dev_sign_in, exact: true }).click();
+  await page
+    .getByRole('textbox', { name: m.projects.name, exact: true })
+    .fill(`Fechamento ${test.info().project.name} ${Date.now()}`);
+  await page.getByRole('button', { name: m.projects.new, exact: true }).click();
+  await page.waitForURL((url) => url.pathname === '/app' && url.searchParams.has('project'));
+  const projectURL = page.url();
   await page.locator('input[type="file"]').setInputFiles(inputs.map((name) => join(twin, name)));
-  await page.getByRole('button', { name: m.form.submit }).click();
+  await page.getByRole('button', { name: m.projects.reconcile, exact: true }).click();
 
   await page.getByRole('button', { name: m.app.confirm_start }).click({ timeout: 120_000 });
-  await page.waitForURL(/\/resultados\?run=/, { timeout: 120_000 });
+  await page.waitForURL((url) => url.pathname === '/resultados' && url.searchParams.has('run'), {
+    timeout: 120_000,
+  });
+  const runURL = page.url();
   await page.getByText(m.results.all_heading, { exact: true }).click({ timeout: 150_000 });
   const rows = page.getByTestId('finding-row');
   await expect(rows.first()).toBeVisible({ timeout: 150_000 });
@@ -50,6 +69,13 @@ test('reconciles the twin with no key and no sign-in step', async ({ page }) => 
   }
   await dialog.getByRole('button', { name: m.results.accept }).click();
   await expect(dialog.getByText(m.results.feedback_saved)).toBeVisible();
+
+  // A fresh page reload reads the saved project and opens the valid result.
+  await page.goto(projectURL);
+  await page.reload();
+  await page.getByRole('button', { name: m.projects.reconcile, exact: true }).click();
+  await page.waitForURL(runURL);
+  expect(runCreates).toBe(1);
 
   await page.goto('/conta');
   await expect(page.getByText('dev@docmatch.test')).toBeVisible();
