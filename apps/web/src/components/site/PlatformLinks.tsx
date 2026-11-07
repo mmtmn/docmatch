@@ -32,10 +32,11 @@ export function PlatformLinks({
   const [dialog, setDialog] = useState<{ platform: Platform; opener: HTMLButtonElement } | null>(
     null,
   );
+  const Container = compact ? 'div' : 'section';
   return (
-    <section
+    <Container
       className={compact ? styles.compact : styles.section}
-      aria-label={t('platforms.title')}
+      aria-label={compact ? undefined : t('platforms.title')}
     >
       {!compact && <h2>{t('platforms.title')}</h2>}
       <ul className={styles.links}>
@@ -107,7 +108,7 @@ export function PlatformLinks({
           close={() => setDialog(null)}
         />
       )}
-    </section>
+    </Container>
   );
 }
 function NoticeDialog({

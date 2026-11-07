@@ -46,8 +46,13 @@ export function ProjectsApp() {
         </a>
       </section>
     );
-  if (error) return <p role="alert">{error}</p>;
-  if (!context) return <p role="status">{t('mobile.loading')}</p>;
+  if (error || !context)
+    return (
+      <section className={styles.empty}>
+        <h1>{t('projects.title')}</h1>
+        {error ? <p role="alert">{error}</p> : <p role="status">{t('mobile.loading')}</p>}
+      </section>
+    );
   return (
     <section className={`${styles.page} ${projectId ? styles.detailPage : ''}`}>
       <nav className={styles.navigation} aria-label={t('projects.navigation')}>

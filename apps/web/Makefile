@@ -89,17 +89,21 @@ openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=localhost \
 port="$${E2E_PORT:-$$(node tools/free-port.mjs)}"; \
 echo "e2e em: $$browsers (https://$(E2E_HOST):$$port)"; \
 DM_E2E_TLS_CERT="$$tls_dir/cert.pem" DM_E2E_TLS_KEY="$$tls_dir/key.pem" \
-  DM_E2E_BROWSERS="$$browsers" DM_WEB_E2E_HOST=$(E2E_HOST) DM_WEB_E2E_PORT=$$port $(PNPM) exec playwright test
+  DM_E2E_SUITE=$(2) DM_E2E_BROWSERS="$$browsers" DM_WEB_E2E_HOST=$(E2E_HOST) DM_WEB_E2E_PORT=$$port $(PNPM) exec playwright test
 endef
 
 e2e: ## build com a tela de resultados ligada + Playwright (Chromium)
+	DM_PUBLIC_BASE_URL=https://docmatch.example.invalid PUBLIC_DM_API_BASE_URL= PUBLIC_DM_FEATURE_RESULTS=true $(PNPM) exec astro build
+	$(call run_e2e,chromium,demo)
 	DM_PUBLIC_BASE_URL=https://docmatch.example.invalid PUBLIC_DM_API_BASE_URL=https://docmatch-api.example.invalid PUBLIC_DM_FEATURE_RESULTS=true $(PNPM) exec astro build
-	$(call run_e2e,chromium)
+	$(call run_e2e,chromium,live)
 
 e2e-all: ## como e2e, exige Chromium, Firefox e WebKit (certificado local temporário)
-	DM_PUBLIC_BASE_URL=https://docmatch.example.invalid PUBLIC_DM_API_BASE_URL=https://docmatch-api.example.invalid PUBLIC_DM_FEATURE_RESULTS=true $(PNPM) exec astro build
 	@$(PNPM) exec playwright install chromium firefox webkit
-	$(call run_e2e,chromium firefox webkit)
+	DM_PUBLIC_BASE_URL=https://docmatch.example.invalid PUBLIC_DM_API_BASE_URL= PUBLIC_DM_FEATURE_RESULTS=true $(PNPM) exec astro build
+	$(call run_e2e,chromium firefox webkit,demo)
+	DM_PUBLIC_BASE_URL=https://docmatch.example.invalid PUBLIC_DM_API_BASE_URL=https://docmatch-api.example.invalid PUBLIC_DM_FEATURE_RESULTS=true $(PNPM) exec astro build
+	$(call run_e2e,chromium firefox webkit,live)
 
 lhci: build ## Lighthouse CI com orçamentos (fora do ci)
 	$(PNPM) exec lhci autorun --config=lighthouserc.cjs

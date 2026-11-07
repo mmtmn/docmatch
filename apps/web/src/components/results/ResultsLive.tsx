@@ -204,6 +204,10 @@ export function ResultsLive() {
 
   return (
     <>
+      {state.kind !== 'done' &&
+        (state.kind !== 'running' || state.run?.status !== 'needs_approval') && (
+          <h1>{t('results.title')}</h1>
+        )}
       {context && (
         <p>
           <a

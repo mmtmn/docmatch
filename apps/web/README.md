@@ -113,7 +113,9 @@ orçamento, então `lighthouserc.cjs` lê o JSON e aplica `maxNumericValue`).
 - `vitest` (jsdom): i18n, limites, plugins Vite, formatação, prechecagem de arquivos, rascunho
   (fake-indexeddb, inclusive cota cheia e janela privada), autosize, viewport, DropZone, Switch,
   InfoTip, RulePicker, RulesBox, RunButton, HeroForm, resultado, CSV, security.txt, i18n-check.
-- `playwright` (contra `tools/serve-dist.mjs` servindo o build com a flag de resultados):
+- `playwright` (contra `tools/serve-dist.mjs`, nos três navegadores): dois builds separados
+  verificam a demonstração sem API e os fluxos de conta com a API simulada. Nenhum teste é
+  omitido: `make e2e-all` executa os dois grupos. A conciliação real usa `make e2e-local`.
   matriz de viewports, teclado virtual, CSP sem violações, rascunho sobrevivendo ao reload,
   seletor de regras por teclado, axe-core com zero violações em `/`, `/app`, `/termos`,
   `/privacidade`, `/contato`,

@@ -2,6 +2,18 @@ import { AxeBuilder } from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 import { m } from './messages';
 
+for (const path of ['/app', '/resultados']) {
+  test(`account pages retain their heading when no data can load: ${path}`, async ({ page }) => {
+    await page.route('**/v1/**', (route) => route.abort('failed'));
+    await page.goto(path);
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    if (path === '/app') await expect(page.getByRole('alert')).toBeVisible();
+    else await expect(page.getByText(m.results.live_missing)).toBeVisible();
+    const result = await new AxeBuilder({ page }).analyze();
+    expect(result.violations.map((violation) => violation.id)).toEqual([]);
+  });
+}
+
 for (const viewport of [
   { width: 1440, height: 1000 },
   { width: 390, height: 844 },
