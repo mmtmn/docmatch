@@ -363,7 +363,28 @@ Publicar artefatos identificados pelo commit e testar instalação real antes de
 Fazer duas rodadas pequenas de testes de uso com responsáveis, pessoas que só enviam e
 conciliadores, incluindo pessoas pouco técnicas e quem trabalha para várias empresas.
 São testes qualitativos para encontrar problemas, não prova estatística de um percentual.
-Usar protótipos antes da implementação e os clientes reais depois.
+A implementação já está disponível; as rodadas com pessoas reais ainda não ocorreram.
+O roteiro a seguir fica pronto para executar assim que os participantes forem definidos.
+
+**Preparação:** usar somente arquivos sintéticos de `testdata/golden/vantara-twin`, contas
+separadas de teste e as três funções. Incluir alguém pouco técnico e alguém que trabalhe com
+mais de uma empresa. Reservar cerca de 30 minutos por pessoa; pedir consentimento antes de
+qualquer gravação. Identificar notas por códigos, sem guardar senhas, e-mails ou documentos reais.
+
+| Tarefa apresentada à pessoa | O que observar |
+| --- | --- |
+| “Crie um fechamento, adicione os arquivos e encontre-o novamente depois de sair.” | Nome, confirmação de salvamento e caminho de volta ficam claros? |
+| “Confira o resultado. Abra-o de novo sem mudar os arquivos.” | Entende que o resultado foi reaproveitado e que não houve nova cobrança? |
+| “Convide esta conta de teste para apenas adicionar documentos.” | Entende a diferença entre convite pendente e acesso aceito? |
+| “Aceite o convite mantendo sua conta pessoal e envie um documento à empresa.” | Identifica a conta de destino e os limites de sua função? |
+| “Mude para acesso completo, concilie e depois remova o participante.” | Entende a mudança de permissão, a estimativa e a revogação? |
+| “Faça uma dessas tarefas no celular ou na extensão e encontre uma dúvida no guia.” | O botão permanece acessível, os arquivos expandem e o guia ajuda sem orientação? |
+
+Na primeira rodada, observar sem ensinar os cliques; anotar onde a pessoa hesita e o que
+esperava encontrar. Corrigir os problemas que impeçam a tarefa ou confundam conta, permissão
+ou custo. Repetir na segunda rodada com a versão corrigida e, quando possível, outras pessoas.
+Registrar por tarefa: versão/dispositivo, função, tempo, conclusão sem ajuda/com ajuda/não
+concluída, erro de conta e comentário. Não preencher resultados a partir dos testes automáticos.
 
 Roteiro de aceitação compartilhado:
 
