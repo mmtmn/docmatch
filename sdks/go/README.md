@@ -27,7 +27,7 @@ login de desenvolvimento. O terminal operacional usa este cliente. Veja [contrat
 A tag de release deste módulo é **`sdks/go/v0.1.0`**, pois ele mora numa subpasta do repositório.
 Não é necessário criar conta ou token num registro Go. Veja o [guia de publicação](../../docs/runbooks/publicar-sdks.md).
 
-## Projetos (código da próxima versão)
+## Projetos (0.2.0)
 
 Crie com `client.CreateProject(ctx, "Fechamento mensal")` e guarde o ID. `client.Project("prj_ID")` mantém os envios,
 regras e resultados no mesmo projeto. A estimativa devolve a conciliação existente quando

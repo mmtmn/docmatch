@@ -18,7 +18,7 @@ const xlsx = await client.export(result.id, 'xlsx');
 
 Todas as operações aceitam `AbortSignal`. Veja [erros, custos e limites](../README.md).
 
-## Projetos (código da próxima versão)
+## Projetos (0.2.0)
 
 Crie com `await client.createProject("Fechamento mensal")` e guarde o ID. `client.project("prj_ID")` mantém os envios,
 regras e resultados no mesmo projeto. A estimativa devolve a conciliação existente quando

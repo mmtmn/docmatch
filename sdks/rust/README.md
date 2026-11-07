@@ -24,7 +24,7 @@ Cancelar a future cancela a espera. Veja
 [contrato e limites](https://github.com/mmtmn/docmatch/blob/main/sdks/README.md) e
 [instruções de publicação](https://github.com/mmtmn/docmatch/blob/main/docs/runbooks/publicar-sdks.md).
 
-## Projetos (código da próxima versão)
+## Projetos (0.2.0)
 
 Crie com `client.create_project("Fechamento mensal").await?` e guarde o ID. `client.project("prj_ID")?` mantém os envios,
 regras e resultados no mesmo projeto. A estimativa devolve a conciliação existente quando
