@@ -10,6 +10,7 @@ export interface ProjectDraftScope {
 }
 export interface ProjectDraft {
   id: string;
+  revision: string;
   baseVersion: number;
   patch: Pick<ProjectPatch, 'name' | 'settings'>;
   savedAt: number;
@@ -17,7 +18,7 @@ export interface ProjectDraft {
 export interface ProjectDraftStore {
   save(baseVersion: number, patch: ProjectDraft['patch']): Promise<boolean>;
   list(): Promise<ProjectDraft[]>;
-  remove(id?: string): Promise<boolean>;
+  remove(id?: string, revision?: string): Promise<boolean>;
 }
 export const PROJECT_DRAFT_DB = 'docmatch-project-edits';
 export const PROJECT_DRAFT_TTL = 30 * 24 * 60 * 60 * 1000;
@@ -28,6 +29,7 @@ let localEpoch = 0;
 
 interface RecordData {
   id: string;
+  revision: string;
   scope: string;
   key: CryptoKey;
   iv: Uint8Array<ArrayBuffer>;
@@ -175,8 +177,9 @@ export function createProjectDraftStore(
             'decrypt',
           ]);
           const iv = crypto.getRandomValues(new Uint8Array(12));
+          const revision = crypto.randomUUID();
           const cipher = await crypto.subtle.encrypt(
-            { name: 'AES-GCM', iv, additionalData: encode.encode(id) },
+            { name: 'AES-GCM', iv, additionalData: encode.encode(JSON.stringify([id, revision])) },
             key,
             payload,
           );
@@ -191,6 +194,7 @@ export function createProjectDraftStore(
               return false;
             store.put({
               id,
+              revision,
               scope: scopeKey,
               key,
               iv,
@@ -217,7 +221,11 @@ export function createProjectDraftStore(
           for (const record of records) {
             try {
               const plaintext = await crypto.subtle.decrypt(
-                { name: 'AES-GCM', iv: record.iv, additionalData: encode.encode(record.id) },
+                {
+                  name: 'AES-GCM',
+                  iv: record.iv,
+                  additionalData: encode.encode(JSON.stringify([record.id, record.revision])),
+                },
                 record.key,
                 record.cipher,
               );
@@ -230,7 +238,12 @@ export function createProjectDraftStore(
                 Number.isSafeInteger(payload.baseVersion) &&
                 payload.baseVersion > 0
               )
-                drafts.push({ ...payload, id: record.id, savedAt: record.savedAt });
+                drafts.push({
+                  ...payload,
+                  id: record.id,
+                  revision: record.revision,
+                  savedAt: record.savedAt,
+                });
             } catch {
               // A damaged record cannot become an edit or prevent opening the project.
             }
@@ -241,12 +254,15 @@ export function createProjectDraftStore(
         }
       });
     },
-    remove(target = id) {
+    remove(target = id, revision) {
       return serialize(async () => {
         try {
           return await transaction(async (store) => {
             const record = (await request(store.get(target))) as RecordData | undefined;
             if (record && record.scope !== scopeKey) return false;
+            // Another open editor may have changed its copy since recovery was reviewed.
+            if (record && target !== id && (!revision || record.revision !== revision))
+              return false;
             if (record) store.delete(target);
             return true;
           });

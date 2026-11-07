@@ -35,6 +35,20 @@ async function records(factory: IDBFactory) {
 }
 
 describe('encrypted project recovery copies', () => {
+  it('does not discard edits made in another tab after the recovery copy was reviewed', async () => {
+    const indexedDB = new IDBFactory();
+    const editing = createProjectDraftStore(scope, { indexedDB });
+    const recovering = createProjectDraftStore(scope, { indexedDB });
+    await editing.save(1, { name: 'Earlier copy' });
+    const [reviewed] = await recovering.list();
+    await editing.save(1, { name: 'Newer unsaved edit' });
+    expect(await recovering.remove(reviewed!.id, reviewed!.revision)).toBe(false);
+    const [latest] = await recovering.list();
+    expect(latest!.patch.name).toBe('Newer unsaved edit');
+    expect(await recovering.remove(latest!.id, latest!.revision)).toBe(true);
+    expect(await editing.list()).toEqual([]);
+  });
+
   it('survives reopening, stores no plaintext and uses a non-extractable key', async () => {
     const indexedDB = new IDBFactory();
     const store = createProjectDraftStore(scope, { indexedDB, now: () => 100 });

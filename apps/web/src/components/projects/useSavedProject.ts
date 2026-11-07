@@ -14,7 +14,7 @@ export function useSavedProject(
   const [error, setError] = useState<Error | null>(null);
   const pending = useRef<ProjectPatch>({});
   const inFlight = useRef<ProjectPatch>({});
-  const recoveredIds = useRef(new Set<string>());
+  const recoveredIds = useRef(new Map<string, string>());
   const [drafts, setDrafts] = useState<ProjectDraft[]>([]);
   const [localSaved, setLocalSaved] = useState(false);
   const [recoveryFailed, setRecoveryFailed] = useState(false);
@@ -68,10 +68,10 @@ export function useSavedProject(
           inFlight.current = {};
           preserve();
           if (recovery) {
-            for (const id of recoveredIds.current) {
-              void recovery.remove(id).then((ok) => {
-                if (ok && active.current)
-                  setDrafts((items) => items.filter((item) => item.id !== id));
+            for (const [id, revision] of recoveredIds.current) {
+              void recovery.remove(id, revision).then(async () => {
+                const items = await recovery.list();
+                if (active.current) setDrafts(items);
               });
             }
             recoveredIds.current.clear();
@@ -110,7 +110,7 @@ export function useSavedProject(
   const restore = useCallback(
     (draft: ProjectDraft) => {
       // The caller presents the local/server versions and confirms before reaching this action.
-      recoveredIds.current.add(draft.id);
+      recoveredIds.current.set(draft.id, draft.revision);
       change(draft.patch);
       return save();
     },
@@ -118,9 +118,10 @@ export function useSavedProject(
   );
   const discard = useCallback(
     async (draft: ProjectDraft) => {
-      if (await recovery?.remove(draft.id))
-        setDrafts((items) => items.filter((item) => item.id !== draft.id));
-      else setRecoveryFailed(true);
+      if (!recovery) return;
+      const removed = await recovery.remove(draft.id, draft.revision);
+      setDrafts(await recovery.list());
+      if (!removed) setRecoveryFailed(true);
     },
     [recovery],
   );

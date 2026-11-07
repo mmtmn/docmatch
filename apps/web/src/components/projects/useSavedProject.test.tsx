@@ -143,7 +143,13 @@ describe('project edit recovery', () => {
   });
 
   it('lists recovery copies without making server writes and removes one only after explicit successful restore', async () => {
-    const draft = { id: 'draft-a', baseVersion: 1, savedAt: 100, patch: { name: 'Recovered' } };
+    const draft = {
+      id: 'draft-a',
+      revision: 'revision-1',
+      baseVersion: 1,
+      savedAt: 100,
+      patch: { name: 'Recovered' },
+    };
     const journal = {
       save: vi.fn().mockResolvedValue(true),
       list: vi.fn().mockResolvedValue([draft]),
@@ -157,16 +163,23 @@ describe('project edit recovery', () => {
     });
     expect(result.current.drafts).toEqual([draft]);
     expect(update).not.toHaveBeenCalled();
+    journal.list.mockResolvedValue([]);
     await act(async () => {
       await result.current.restore(draft);
     });
     expect(update).toHaveBeenCalledWith(initial, draft.patch);
-    expect(journal.remove).toHaveBeenCalledWith('draft-a');
+    expect(journal.remove).toHaveBeenCalledWith('draft-a', 'revision-1');
     expect(result.current.drafts).toEqual([]);
   });
 
   it('retains recovery copies when a version conflict rejects restoring them', async () => {
-    const draft = { id: 'draft-a', baseVersion: 1, savedAt: 100, patch: { name: 'Recovered' } };
+    const draft = {
+      id: 'draft-a',
+      revision: 'revision-1',
+      baseVersion: 1,
+      savedAt: 100,
+      patch: { name: 'Recovered' },
+    };
     const journal = {
       save: vi.fn().mockResolvedValue(true),
       list: vi.fn().mockResolvedValue([draft]),
