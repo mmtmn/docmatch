@@ -172,6 +172,10 @@ export function ResultsScreen({
       else return;
       setExportStatus(t('results.export_done', { name: `docmatch-${results.runId}.${format}` }));
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        setExportStatus(null);
+        return;
+      }
       setExportFailed(true);
       setExportStatus(err instanceof Error ? err.message : t('errors.unknown'));
     } finally {

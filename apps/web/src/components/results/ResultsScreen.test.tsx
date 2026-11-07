@@ -224,6 +224,19 @@ describe('ResultsScreen', () => {
     await userEvent.click(screen.getByText(t('results.other_formats')));
     expect(screen.getByRole('button', { name: t('results.download_findings_xlsx') })).toBeVisible();
   });
+  it('cancelling the system save sheet neither reports success nor an export failure', async () => {
+    const onExport = vi.fn().mockRejectedValue(new DOMException('Cancelled', 'AbortError'));
+    render(<ResultsScreen results={results} onExport={onExport} />);
+    const download = screen.getByRole('button', { name: t('results.download_corrected') });
+    await userEvent.click(download);
+    expect(onExport).toHaveBeenCalledWith('xlsx');
+    expect(download).toBeEnabled();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByText(t('results.export_preparing'))).toBeNull();
+    expect(
+      screen.queryByText(t('results.export_done', { name: `docmatch-${results.runId}.xlsx` })),
+    ).toBeNull();
+  });
   it('downloads a clearly labeled findings CSV in the offline demo', async () => {
     const createObjectURL = vi.fn().mockReturnValue('blob:x');
     Object.defineProperty(URL, 'createObjectURL', { value: createObjectURL, configurable: true });

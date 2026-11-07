@@ -13,7 +13,7 @@ SIMULATOR ?= generic/platform=iOS Simulator
 TEST_SIMULATOR ?= platform=iOS Simulator,name=iPhone 16 Pro
 LOCAL_API_URL ?= http://localhost:8080
 
-.PHONY: help setup tokens lint test ci ci-full app e2e-local release clean
+.PHONY: help setup tokens lint test ci ci-full app e2e-local e2e-safari release clean
 
 help: ## lista os alvos
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -58,6 +58,14 @@ e2e-local: ## projeto salvo no simulador contra a API local já iniciada (Keycha
 	xcodegen generate --quiet
 	xcodebuild -project Docmatch.xcodeproj -scheme Docmatch -configuration Debug -destination '$(TEST_SIMULATOR)' \
 	  -only-testing:DocmatchUITests/ProjectFlowTests DOCMATCH_API_BASE_URL='$(LOCAL_API_URL)' \
+	  CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO test -quiet
+
+e2e-safari: ## fluxo completo da extensão no simulador dedicado (Safari em inglês)
+	@[[ "$(LOCAL_API_URL)" == http://localhost:* || "$(LOCAL_API_URL)" == http://127.0.0.1:* ]] || { echo "e2e-safari exige API local" >&2; exit 1; }
+	$(MAKE) -C ../extensions build
+	xcodegen generate --quiet
+	xcodebuild -project Docmatch.xcodeproj -scheme Docmatch -configuration Debug -destination '$(TEST_SIMULATOR)' \
+	  -only-testing:DocmatchUITests/SafariExtensionFlowTests DOCMATCH_API_BASE_URL='$(LOCAL_API_URL)' \
 	  CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO test -quiet
 
 release: ## no Mac: arquivo de release para a origem do ambiente (outputs do Terraform; DOCMATCH_API_BASE_URL sobrepõe)

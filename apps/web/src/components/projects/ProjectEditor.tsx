@@ -362,6 +362,7 @@ export function ProjectEditor({
                   multiple
                   className="visually-hidden"
                   tabIndex={-1}
+                  aria-hidden="true"
                   aria-label={t('projects.add_documents')}
                   disabled={locked}
                   onChange={(event) => {

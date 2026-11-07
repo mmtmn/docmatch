@@ -1,5 +1,6 @@
 import DocmatchKit
 import SwiftUI
+import UIKit
 
 /// One identity, with a separate navigation tree for each selected account and permission.
 struct RootView: View {
@@ -50,7 +51,13 @@ struct RootView: View {
             }.padding(24).presentationDetents([.medium])
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { Task { await session.validateAccounts() } }
+            if phase == .active {
+                safariAuthorization.resume()
+                Task { await session.validateAccounts() }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            safariAuthorization.resume()
         }
     }
 }

@@ -6,7 +6,8 @@ vi.mock('./env', () => ({
   apiBaseUrl: 'https://api.invalid',
 }));
 
-const { confirmText, createRun, listFindings, uploadFile, watchRun } = await import('./pipeline');
+const { confirmText, createRun, exportFile, listFindings, uploadFile, watchRun } =
+  await import('./pipeline');
 const { selectAccount, clearAccountSelection } = await import('./accountContext');
 
 function json(status: number, body: unknown): Response {
@@ -32,6 +33,27 @@ describe('pipeline', () => {
     clearAccountSelection();
     vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+
+  it('prepares an export in its original account without starting browser navigation', async () => {
+    selectAccount('user', 'org_other');
+    const type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    const response = new Response('spreadsheet bytes', { headers: { 'Content-Type': type } });
+    // The test runner's Node Response and DOM File use different Blob realms.
+    vi.spyOn(response, 'blob').mockResolvedValue(new Blob(['spreadsheet bytes'], { type }));
+    fetchMock.mockResolvedValueOnce(response);
+    const file = await exportFile('run_saved', 'xlsx', {
+      orgId: 'org_original',
+      projectId: 'prj_saved',
+    });
+    expect(file.name).toBe('docmatch-run_saved.xlsx');
+    expect(await file.text()).toBe('spreadsheet bytes');
+    expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get('X-Docmatch-Org')).toBe(
+      'org_original',
+    );
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      'https://api.invalid/v1/projects/prj_saved/runs/run_saved/export?format=xlsx',
+    );
   });
 
   it('reads SSE across split CRLF and UTF-8 chunks in the original account', async () => {

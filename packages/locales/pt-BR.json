@@ -1523,6 +1523,10 @@
     "open_installed_app": "Abrir no app instalado"
   },
   "extensions": {
+    "export_ready": "Arquivo pronto",
+    "export_save_hint": "Na próxima tela, escolha Salvar em Arquivos para guardar uma cópia.",
+    "save_file": "Salvar arquivo",
+    "export_unavailable": "Este Safari não permite salvar o arquivo pela extensão. Abra este resultado no site para baixar.",
     "authorize_title": "Conectar extensão",
     "invalid_request": "Este pedido de conexão não é válido. Abra a extensão e tente entrar novamente.",
     "permissions": "Permitir enviar documentos aos seus projetos, conciliar após aprovar o custo e consultar ou baixar resultados. As permissões de cada conta continuam valendo.",

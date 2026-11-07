@@ -5,8 +5,8 @@ conciliar, acompanhar o processamento, consultar evidências e baixar resultados
 A conta escolhida define permissões e saldo. Arquivos e opções começam recolhidos;
 o botão de conciliar permanece no rodapé. Sem alterações, o resultado anterior é reaberto.
 
-**Em desenvolvimento:** o fluxo completo passou localmente em Chrome e Firefox. O Safari
-já tem a ponte nativa integrada ao app macOS e ao app iOS; a validação completa está em curso.
+**Em desenvolvimento:** o fluxo completo passou localmente em Chrome, Firefox e Safari
+(macOS e simulador iOS): conexão, envio, conciliação, exportação e reabertura do resultado.
 Os pacotes locais ainda não são publicações nas lojas.
 
 ## Começar localmente
@@ -35,6 +35,7 @@ Entre e confirme **Conectar extensão** no site. No Safari, **Continuar no app**
 pedido de conexão; depois da confirmação, volte à extensão. Escolha a conta e abra um
 projeto. Fechar a página não interrompe a conciliação nem encerra a sessão. Para sair,
 use **Sair da extensão**, ou revogue o dispositivo em **Meu perfil → Dispositivos**.
+No iPhone, após preparar o download, toque em **Salvar arquivo → Salvar em Arquivos**.
 
 ## Verificar
 
@@ -50,6 +51,12 @@ Para Firefox, instale `tools/requirements-e2e.txt` num ambiente Python e execute
 `make -C apps/extensions e2e-firefox PYTHON=/caminho/do/ambiente/bin/python`.
 `FIREFOX_BINARY` permite indicar a instalação do Firefox. Os testes usam dados sintéticos
 do repositório; capturas e downloads ficam em `.cache/extensions-e2e`.
+
+No simulador iOS dedicado, habilite a extensão e coloque os dois CSVs de
+`docs/book/examples` em **Arquivos → No Meu iPhone → Downloads**. Com o site local em
+`http://localhost:14321`, execute `make -C apps/ios e2e-safari LOCAL_API_URL=http://localhost:18080
+TEST_SIMULATOR="platform=iOS Simulator,id=SEU_SIMULADOR"` (uma linha). O teste usa os controles
+do Safari em inglês; percorre o seletor de arquivos, salva o XLSX e reabre o resultado.
 
 ## Preparar uma publicação
 

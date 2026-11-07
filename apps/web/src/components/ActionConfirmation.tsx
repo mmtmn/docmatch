@@ -6,9 +6,13 @@ import styles from './projects/ProjectsApp.module.css';
 export function ActionConfirmation({
   message,
   onAnswer,
+  confirmLabel = t('common.confirm'),
+  description,
 }: {
   message: string;
   onAnswer: (confirmed: boolean) => void;
+  confirmLabel?: string;
+  description?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const id = useId();
@@ -29,6 +33,7 @@ export function ActionConfirmation({
       ref={ref}
       className={styles.dialog}
       aria-labelledby={id}
+      aria-describedby={description ? `${id}-description` : undefined}
       aria-modal="true"
       onKeyDown={trapDialogFocus}
       onCancel={(event) => {
@@ -37,12 +42,13 @@ export function ActionConfirmation({
       }}
     >
       <h2 id={id}>{message}</h2>
+      {description && <p id={`${id}-description`}>{description}</p>}
       <div className={styles.actions}>
         <button className="btn btn--ghost" type="button" onClick={() => onAnswer(false)}>
           {t('common.cancel')}
         </button>
         <button className="btn btn--primary" type="button" onClick={() => onAnswer(true)}>
-          {t('common.confirm')}
+          {confirmLabel}
         </button>
       </div>
     </dialog>

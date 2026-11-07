@@ -411,21 +411,31 @@ export function exportUrl(runId: string, format: 'csv' | 'xlsx' | 'pdf'): string
   return apiUrl(`/v1/runs/${encodeURIComponent(runId)}/export?format=${format}`);
 }
 
-/** Download through the authenticated client, retaining session refresh and API errors. */
+/** Fetch through the authenticated client, retaining session refresh and API errors. */
+export async function exportFile(
+  runId: string,
+  format: 'csv' | 'xlsx' | 'pdf',
+  destination?: RunDestination,
+  request: typeof api = api,
+): Promise<File> {
+  const blob = await request<Blob>(`${runPath(runId, destination)}/export?format=${format}`, {
+    ...(destination ? { orgId: destination.orgId } : {}),
+    responseType: 'blob',
+  });
+  return new File([blob], `docmatch-${runId}.${format}`, { type: blob.type });
+}
+
 export async function downloadExport(
   runId: string,
   format: 'csv' | 'xlsx' | 'pdf',
   destination?: RunDestination,
   request: typeof api = api,
 ): Promise<void> {
-  const blob = await request<Blob>(`${runPath(runId, destination)}/export?format=${format}`, {
-    ...(destination ? { orgId: destination.orgId } : {}),
-    responseType: 'blob',
-  });
-  const url = URL.createObjectURL(blob);
+  const file = await exportFile(runId, format, destination, request);
+  const url = URL.createObjectURL(file);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `docmatch-${runId}.${format}`;
+  link.download = file.name;
   document.body.append(link);
   link.click();
   link.remove();

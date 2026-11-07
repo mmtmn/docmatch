@@ -11,6 +11,14 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         guard let item = context.inputItems.first as? NSExtensionItem,
             let message = item.userInfo?[SFExtensionMessageKey] as? [String: String]
         else { return }
+        if message["action"] == "platform" {
+            #if os(iOS)
+                result = ["os": "ios"]
+            #else
+                result = ["os": "macos"]
+            #endif
+            return
+        }
         // Safari supplies this identity; JavaScript cannot choose another profile.
         let profile = (item.userInfo?[SFExtensionProfileKey] as? UUID)?.uuidString ?? "default"
         do {

@@ -12,18 +12,42 @@ final class SafariAuthorization: NSObject, ObservableObject, ASWebAuthentication
     @Published var status = NativeTexts.text("native_intro")
     @Published var presented = false
     private var session: ASWebAuthenticationSession?
+    private var deferredURL: URL?
+
+    #if os(iOS)
+        private var activeWindow: UIWindow? {
+            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+                .filter { $0.activationState == .foregroundActive }
+                .flatMap(\.windows).first(where: \.isKeyWindow)
+        }
+    #endif
+
+    func resume() {
+        if let deferredURL { open(deferredURL) }
+    }
 
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
         #if os(macOS)
             NSApp.windows.first(where: { $0.isVisible }) ?? NSWindow()
         #else
-            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-                .flatMap(\.windows).first(where: \.isKeyWindow) ?? UIWindow()
+            activeWindow ?? UIWindow()
         #endif
     }
 
     func open(_ url: URL) {
-        presented = true
+        #if os(iOS)
+            // A Safari deep link arrives before the scene becomes active. Starting
+            // authentication then supplies an invalid presentation context (error 3).
+            guard UIApplication.shared.applicationState == .active, activeWindow != nil else {
+                deferredURL = url
+                return
+            }
+            deferredURL = nil
+            presented = false
+        #endif
+        #if os(macOS)
+            presented = true
+        #endif
         do {
             let config = try NativeConfiguration.load()
             let store = try config.store()
@@ -35,6 +59,7 @@ final class SafariAuthorization: NSObject, ObservableObject, ASWebAuthentication
                 let pending = try store.forState(state)
                 try store.complete(pending.id, callback: url)
                 status = NativeTexts.text("native_return")
+                presented = true
                 return
             }
             let id = try config.requestID(url)
@@ -60,13 +85,15 @@ final class SafariAuthorization: NSObject, ObservableObject, ASWebAuthentication
                     callback, error in
                     Task { @MainActor in
                         self.session = nil
+                        self.presented = true
                         do {
                             if let callback {
                                 try store.complete(id, callback: callback)
                             } else {
                                 try store.cancel(id, profile: pending.profile)
                             }
-                            self.status = NativeTexts.text(error == nil ? "native_return" : "native_cancelled")
+                            let cancelled = (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin
+                            self.status = NativeTexts.text(error == nil ? "native_return" : cancelled ? "native_cancelled" : "native_failed")
                         } catch { self.status = NativeTexts.text("native_expired") }
                     }
                 }
@@ -75,8 +102,12 @@ final class SafariAuthorization: NSObject, ObservableObject, ASWebAuthentication
                 if !auth.start() {
                     session = nil
                     status = NativeTexts.text("native_failed")
+                    presented = true
                 }
             #endif
-        } catch { status = NativeTexts.text("native_expired") }
+        } catch {
+            status = NativeTexts.text("native_expired")
+            presented = true
+        }
     }
 }

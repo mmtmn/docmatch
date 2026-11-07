@@ -7,6 +7,7 @@ import {
   approveRun,
   cancelRun,
   downloadExport,
+  exportFile,
   getRun,
   listFindings,
   sendFeedback,
@@ -20,6 +21,8 @@ import { ActionConfirmation } from '../../web/src/components/ActionConfirmation'
 import { ProcessingScene } from '../../web/src/components/ProcessingScene';
 import { t } from './i18n';
 import type { boundRequest } from './client';
+import { config } from './config';
+import { browser } from './browser';
 
 type State =
   | { kind: 'loading' }
@@ -47,6 +50,18 @@ export function ProjectResults({
   const [cancel, setCancel] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [preparedExport, setPreparedExport] = useState<File | null>(null);
+  const exportAnswer = useRef<{ resolve: () => void; reject: (error: unknown) => void } | null>(
+    null,
+  );
+  const sharing = useRef(false);
+  useEffect(
+    () => () => {
+      exportAnswer.current?.reject(new DOMException('Export closed', 'AbortError'));
+      exportAnswer.current = null;
+    },
+    [],
+  );
   const lock = useRef(false);
   const destination = useMemo(
     () => ({ orgId: org.id, projectId: project.id }),
@@ -113,6 +128,23 @@ export function ProjectResults({
   );
   const exportResult = useCallback(
     async (format: 'csv' | 'xlsx' | 'pdf') => {
+      const platform =
+        config.browser === 'safari'
+          ? ((await browser.runtime.sendNativeMessage?.('docmatch', { action: 'platform' })) as
+              { os?: string } | undefined)
+          : undefined;
+      if (platform?.os === 'ios') {
+        const file = await exportFile(runId, format, destination, request);
+        if (!navigator.canShare?.({ files: [file] }))
+          throw new Error(t('extensions.export_unavailable'));
+        // Network work completes first. A fresh, explicit tap supplies the user
+        // activation that Safari requires to open its Save to Files share sheet.
+        await new Promise<void>((resolve, reject) => {
+          exportAnswer.current = { resolve, reject };
+          setPreparedExport(file);
+        });
+        return;
+      }
       await downloadExport(runId, format, destination, request);
     },
     [runId, destination, request],
@@ -141,6 +173,35 @@ export function ProjectResults({
         <a href={backHref}>{t('projects.back_project')}</a> · {context.account} · {context.project}
       </p>
       {error && <p role="alert">{error}</p>}
+      {preparedExport && (
+        <ActionConfirmation
+          message={t('extensions.export_ready')}
+          description={t('extensions.export_save_hint')}
+          confirmLabel={t('extensions.save_file')}
+          onAnswer={(accepted) => {
+            if (sharing.current) return;
+            const answer = exportAnswer.current;
+            if (!accepted) {
+              exportAnswer.current = null;
+              setPreparedExport(null);
+              answer?.reject(new DOMException('Export cancelled', 'AbortError'));
+              return;
+            }
+            sharing.current = true;
+            void navigator
+              .share({ files: [preparedExport] })
+              .then(
+                () => answer?.resolve(),
+                (cause: unknown) => answer?.reject(cause),
+              )
+              .finally(() => {
+                sharing.current = false;
+                exportAnswer.current = null;
+                setPreparedExport(null);
+              });
+          }}
+        />
+      )}
       {state.kind === 'loading' && <p role="status">{t('results.live_loading')}</p>}
       {state.kind === 'error' && (
         <div role="alert">
