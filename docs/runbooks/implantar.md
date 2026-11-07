@@ -91,6 +91,15 @@ ocupadas exigem avaliar bloqueios e a estratégia de criação. Apenas o primeir
 quando a migração 1 ainda não está registrada, eleva temporariamente o papel do banco com
 os serviços parados; a rotina de saída retira essa permissão mesmo em caso de falha.
 
+**Compatibilidade de permissões:** a release inclui `release-compatibility.json` nos
+checksums. Antes de substituir os binários, o instalador de aplicação recusa versões
+antigas sem suporte ao contexto de conta quando já existem projetos, convites, sessões
+de extensão ou participantes com as novas permissões. Desligar uma flag não torna o
+servidor antigo seguro: ele não conhece essas restrições. Nesse caso, volte para uma
+release compatível ou faça uma correção adiante; não apague trabalho nem remova pessoas
+para liberar o downgrade. Na primeira implantação, ensaie a volta antes de habilitar
+as novas operações.
+
 **Rollback:** use o SHA de uma release anterior já publicada, após conferir a compatibilidade
 com o esquema atual. O script reinstala seus arquivos e reinicia os serviços; não remove
 migrações nem dados aceitos. Repita as verificações de versão, permissões e fila.
