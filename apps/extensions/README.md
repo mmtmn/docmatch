@@ -5,9 +5,16 @@ conciliar, acompanhar o processamento, consultar evidências e baixar resultados
 A conta escolhida define permissões e saldo. Arquivos e opções começam recolhidos;
 o botão de conciliar permanece no rodapé. Sem alterações, o resultado anterior é reaberto.
 
-**Em desenvolvimento:** o fluxo completo passou localmente em Chrome, Firefox e Safari
-(macOS e simulador iOS): conexão, envio, conciliação, exportação e reabertura do resultado.
-Os pacotes locais ainda não são publicações nas lojas.
+**Prévia disponível:** Chrome, Firefox e Safari macOS passaram pelo fluxo completo em
+produção: conexão, envio, conciliação, evidências, exportação e reabertura do mesmo resultado
+sem nova execução. O simulador iOS passou pelo fluxo local. As prévias podem usar as contas
+docmatch, respeitando as permissões e o saldo; ainda não são publicações nas lojas.
+
+Baixe os ZIPs de prévia na [release 0.2.0](https://github.com/mmtmn/docmatch/releases/tag/v0.2.0).
+No Chrome, carregue a pasta extraída em modo de desenvolvedor; no Firefox, carregue seu
+`manifest.json` temporariamente. O ZIP Safari contém recursos web e exige o app nativo
+compilado com Xcode, conforme abaixo. O README anexado à release registra a limitação de
+contas que existia na publicação inicial; essa restrição foi retirada após os testes.
 
 ## Começar localmente
 
