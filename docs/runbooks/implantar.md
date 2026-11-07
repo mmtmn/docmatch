@@ -151,8 +151,15 @@ infra/scripts/deploy-app.sh --env "$DM_ENV" --release "$PREVIOUS_RELEASE" --skip
    ```bash
    ssm_run "systemctl is-active docmatch-env postgresql docmatch-harness docmatch-worker docmatch-api caddy crowdsec falco"
    ssm_run "lynis audit system --quick --no-colors --cronjob >/dev/null; grep -E '^hardening_index' /var/log/lynis-report.dat"
-   ssm_run "aide --init --config=/etc/aide/aide.conf >/dev/null; mv /var/lib/aide/aide.db.new /var/lib/aide/aide.db"
+   ssm_run "aide --check --config=/etc/aide/aide.conf"
    ```
+
+   Revise as diferenças antes de atualizar a base do AIDE. Compare binários com o manifesto
+   da release e arquivos de configuração com a mudança aprovada; preserve diferenças sem
+   explicação para investigação. Não substitua a base automaticamente ao implantar.
+   Confira as regras incluídas pela configuração instalada. A versão 0.18 usada nesta imagem
+   monta `aide.conf.d` por `@@x_include`; instruções de versões antigas com `aide.wrapper`
+   não se aplicam automaticamente.
 
 **Rollback:** `terraform apply` com o `ami_id` anterior; mesmos passos.
 
