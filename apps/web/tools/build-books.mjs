@@ -265,8 +265,14 @@ try {
       if (name.startsWith('searcher-')) {
         if (!content.includes("searchbar.addEventListener('keyup'"))
           throw new Error('mdBook changed search events; review paste support');
+        if (!content.includes('initSearchInteractions(window.search);'))
+          throw new Error('mdBook changed search initialization; review the ready state');
         content = content
           .replace("searchbar.addEventListener('keyup'", "searchbar.addEventListener('input'")
+          .replace(
+            'initSearchInteractions(window.search);',
+            'initSearchInteractions(window.search);\n    searchicon.disabled = false;',
+          )
           .replace(
             "tmp.setAttribute('style', 'position: absolute; opacity: 0;');",
             "tmp.className = 'dm-focus-helper';",
@@ -303,7 +309,7 @@ try {
         .replace('<body>', '<body>\n<a class="dm-skip" href="#mdbook-main">Ir para o conteúdo</a>')
         .replace(
           '<main>',
-          `<main id="mdbook-main" tabindex="-1"><p class="dm-edition">Edição em preparação · Projetos e equipes. A disponibilidade varia por cliente.</p><noscript><details class="dm-static-toc"><summary>Índice</summary>${toc.replaceAll(' target="_parent"', '')}</details></noscript>`,
+          `<main id="mdbook-main" tabindex="-1"><p class="dm-edition">Edição 0.2.0 · Projetos e equipes. A disponibilidade varia por cliente.</p><noscript><details class="dm-static-toc"><summary>Índice</summary>${toc.replaceAll(' target="_parent"', '')}</details></noscript>`,
         )
         .replace(
           '<div class="right-buttons">',
@@ -317,7 +323,8 @@ try {
           'id="mdbook-searchresults-header"',
           'id="mdbook-searchresults-header" role="status" aria-live="polite"',
         )
-        .replace('id="mdbook-searchbar"', 'id="mdbook-searchbar" aria-label="Buscar neste guia"');
+        .replace('id="mdbook-searchbar"', 'id="mdbook-searchbar" aria-label="Buscar neste guia"')
+        .replace('id="mdbook-search-toggle"', 'id="mdbook-search-toggle" disabled');
       if (name === 'toc.html') html = html.replace('href="#mdbook-main"', 'href="#mdbook-sidebar"');
       await writeFile(path.join(output, name), strictCSP(html));
     }
