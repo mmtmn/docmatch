@@ -1,6 +1,30 @@
 import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
+test('platform actions wait for hydration before accepting the first click', async ({ page }) => {
+  let releaseScript!: () => void;
+  const scriptReady = new Promise<void>((resolve) => {
+    releaseScript = resolve;
+  });
+  await page.route('**/_astro/PlatformLinks.*.js', async (route) => {
+    await scriptReady;
+    await route.continue();
+  });
+  try {
+    await page.goto('/', { waitUntil: 'commit' });
+    const section = page.getByRole('region', { name: 'Use onde preferir' }).first();
+    const platform = section.getByRole('button', { name: 'iOS Em breve', exact: true });
+    await expect(platform).toBeVisible();
+    await expect(platform).toBeDisabled();
+    releaseScript();
+    await expect(platform).toBeEnabled();
+    await platform.click();
+    await expect(section.getByRole('status')).toContainText('Quer receber um aviso por e-mail?');
+  } finally {
+    releaseScript();
+  }
+});
+
 for (const width of [1280, 390]) {
   test(`platform notice asks for consent and restores focus at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });
@@ -27,6 +51,7 @@ for (const width of [1280, 390]) {
     await page.goto('/');
     const section = page.getByRole('region', { name: 'Use onde preferir' }).first();
     const platform = section.getByRole('button', { name: 'iOS Em breve', exact: true });
+    await expect(platform).toBeEnabled();
     await platform.focus();
     await platform.press('Enter');
     await expect(platform).toBeFocused();

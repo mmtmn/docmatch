@@ -1,10 +1,14 @@
-import { useEffect, useId, useRef, useState, type SubmitEvent } from 'react';
+import { useEffect, useId, useRef, useState, useSyncExternalStore, type SubmitEvent } from 'react';
 import type { Platform } from '../../lib/platformCatalog';
 import { api, ApiError } from '../../lib/api';
 import { limits, textLimits } from '../../lib/limits';
 import { trapDialogFocus } from '../../lib/dialog';
 import { t } from '../../lib/i18n';
 import styles from './PlatformLinks.module.css';
+
+const subscribeToHydration = () => () => {};
+const clientReady = () => true;
+const serverReady = () => false;
 
 function PlatformIcon({ id }: { id: Platform['id'] }) {
   if (id === 'android')
@@ -28,6 +32,7 @@ export function PlatformLinks({
   items: Platform[];
   compact?: boolean;
 }) {
+  const ready = useSyncExternalStore(subscribeToHydration, clientReady, serverReady);
   const [notice, setNotice] = useState<Platform | null>(null);
   const [dialog, setDialog] = useState<{ platform: Platform; opener: HTMLButtonElement } | null>(
     null,
@@ -56,6 +61,7 @@ export function PlatformLinks({
                 <button
                   type="button"
                   className={styles.platform}
+                  disabled={!ready}
                   onClick={(event) =>
                     item.status === 'beta'
                       ? setDialog({ platform: item, opener: event.currentTarget })
