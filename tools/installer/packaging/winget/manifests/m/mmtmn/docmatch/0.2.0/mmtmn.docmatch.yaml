@@ -1,0 +1,6 @@
+# Manifesto do winget (versão) do docmatch 0.2.0, gerado pelo tools/installer/release.sh.
+PackageIdentifier: mmtmn.docmatch
+PackageVersion: 0.2.0
+DefaultLocale: pt-BR
+ManifestType: version
+ManifestVersion: 1.6.0

@@ -3,6 +3,7 @@
 Description=docmatch: pgBackRest backup to S3 (full on {{ hardening_pgbackrest_full_day }}, differential otherwise)
 After=postgresql@{{ hardening_pg_version }}-{{ hardening_pg_cluster }}.service docmatch-pg-init.service docmatch-env.service
 Requires=postgresql@{{ hardening_pg_version }}-{{ hardening_pg_cluster }}.service docmatch-env.service
+OnFailure=pgbackrest-backup-alert.service
 
 [Service]
 Type=oneshot

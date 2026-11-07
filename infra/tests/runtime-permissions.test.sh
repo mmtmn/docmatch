@@ -69,4 +69,18 @@ STUB
 chmod 0755 /usr/local/bin/docmatch-pgbackrest
 runuser -u postgres -- /usr/local/sbin/docmatch-pgbackrest-backup
 if runuser -u bystander -- test -x /usr/local/sbin/docmatch-pgbackrest-backup; then exit 1; fi
+# A failed backup must retain its error and fail the unit, so OnFailure can notify without
+# giving postgres access to the application's email credentials.
+cat > /usr/local/bin/docmatch-pgbackrest <<'STUB'
+#!/usr/bin/env bash
+echo 'synthetic backup failure' >&2
+exit 42
+STUB
+if runuser -u postgres -- /usr/local/sbin/docmatch-pgbackrest-backup > /tmp/backup-failure 2>&1; then
+  echo 'failed backup incorrectly succeeded' >&2; exit 1
+fi
+grep -q '^synthetic backup failure$' /tmp/backup-failure
+if grep -q 'sendmail\|Permission denied' /tmp/backup-failure; then
+  echo 'backup tried to send mail as postgres' >&2; exit 1
+fi
 echo 'runtime-permissions.test: isolated service subsets and backup execution passed'
