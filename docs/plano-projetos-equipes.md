@@ -1,5 +1,27 @@
 # Plano de projetos equipes extensões e documentação
 
+## Situação em 7 de novembro de 2026
+
+A [release 0.2.0](https://github.com/mmtmn/docmatch/releases/tag/v0.2.0) reúne os pacotes e
+comandos de instalação. O plano abaixo conserva os critérios usados na implementação.
+
+| Entrega | Situação verificada |
+| --- | --- |
+| Projetos, equipes e duas permissões | Habilitados em produção. Migração, aceite de convite, isolamento, mudança de função e revogação ensaiados em cópia isolada; conversão de conta e preservação de projetos/créditos verificadas também em produção. |
+| Ação fixa e arquivos expansíveis | Implementados na web, nos apps e nas extensões; testes de navegação, telas pequenas e acessibilidade passaram. |
+| Python, Rust e Go | 0.2.0 publicada e instalada fora do checkout; projetos e reaproveitamento de resultados verificados contra produção. Go é público. |
+| Terminal e TypeScript | Terminal 0.2.0 disponível pelo site; TypeScript anexado à release. Publicação npm e imagens GHCR aguardam autenticação. |
+| Chrome, Firefox e Safari | Prévias preparadas; acesso de extensão em produção ainda limitado às contas de teste. Chrome/Firefox passaram pelo fluxo completo. Safari conectou e criou projeto; o envio final aguarda interação local com o seletor de arquivos do macOS. |
+| Android e iOS | Testes locais passaram; AAB e archive de produção preparados sem assinatura de distribuição. Lojas e validação real com Apple ainda pendentes; nenhuma chave App Store Connect utilizada. |
+| Site e livros | Links de plataformas e aviso com consentimento implementados; dois livros publicados, com busca e capítulos verificados nos três motores de navegador. |
+| AWS e backups | API/worker/harness implantados, esquema 43; restauração, backup diferencial e arquivamento contínuo verificados. Capacidade mantida; somente os custos S3 de backup autorizados. |
+
+Ainda faltam contas e submissões às lojas, autenticação npm/GHCR, conclusão do teste Safari,
+ampliação das extensões e duas rodadas de usabilidade com participantes reais. Automação não
+substitui essas rodadas. Os resultados de restauração estão no [registro operacional](runbooks/restaurar-backup.md#ensaiar-e-registrar).
+
+## Plano e critérios
+
 A próxima etapa transforma conciliações avulsas em trabalho que pode ser retomado e
 compartilhado. A ordem recomendada é **contas e permissões → projetos → equipes →
 paridade mobile e SDKs → extensões → distribuição pública**. O livro e a área de
@@ -341,7 +363,28 @@ Publicar artefatos identificados pelo commit e testar instalação real antes de
 Fazer duas rodadas pequenas de testes de uso com responsáveis, pessoas que só enviam e
 conciliadores, incluindo pessoas pouco técnicas e quem trabalha para várias empresas.
 São testes qualitativos para encontrar problemas, não prova estatística de um percentual.
-Usar protótipos antes da implementação e os clientes reais depois.
+A implementação já está disponível; as rodadas com pessoas reais ainda não ocorreram.
+O roteiro a seguir fica pronto para executar assim que os participantes forem definidos.
+
+**Preparação:** usar somente arquivos sintéticos de `testdata/golden/vantara-twin`, contas
+separadas de teste e as três funções. Incluir alguém pouco técnico e alguém que trabalhe com
+mais de uma empresa. Reservar cerca de 30 minutos por pessoa; pedir consentimento antes de
+qualquer gravação. Identificar notas por códigos, sem guardar senhas, e-mails ou documentos reais.
+
+| Tarefa apresentada à pessoa | O que observar |
+| --- | --- |
+| “Crie um fechamento, adicione os arquivos e encontre-o novamente depois de sair.” | Nome, confirmação de salvamento e caminho de volta ficam claros? |
+| “Confira o resultado. Abra-o de novo sem mudar os arquivos.” | Entende que o resultado foi reaproveitado e que não houve nova cobrança? |
+| “Convide esta conta de teste para apenas adicionar documentos.” | Entende a diferença entre convite pendente e acesso aceito? |
+| “Aceite o convite mantendo sua conta pessoal e envie um documento à empresa.” | Identifica a conta de destino e os limites de sua função? |
+| “Mude para acesso completo, concilie e depois remova o participante.” | Entende a mudança de permissão, a estimativa e a revogação? |
+| “Faça uma dessas tarefas no celular ou na extensão e encontre uma dúvida no guia.” | O botão permanece acessível, os arquivos expandem e o guia ajuda sem orientação? |
+
+Na primeira rodada, observar sem ensinar os cliques; anotar onde a pessoa hesita e o que
+esperava encontrar. Corrigir os problemas que impeçam a tarefa ou confundam conta, permissão
+ou custo. Repetir na segunda rodada com a versão corrigida e, quando possível, outras pessoas.
+Registrar por tarefa: versão/dispositivo, função, tempo, conclusão sem ajuda/com ajuda/não
+concluída, erro de conta e comentário. Não preencher resultados a partir dos testes automáticos.
 
 Roteiro de aceitação compartilhado:
 

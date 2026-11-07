@@ -6,7 +6,7 @@ achados paginados e baixam XLSX, CSV e PDF. Não há telemetria.
 
 Python e Rust **0.2.0** estão publicados no [PyPI](https://pypi.org/project/docmatch/0.2.0/)
 e no [crates.io](https://crates.io/crates/docmatch/0.2.0). Go **v0.2.0** está publicado
-no GitHub com a tag **`sdks/go/v0.1.0`**. O repositório é público; Go não exige
+no GitHub com a tag **`sdks/go/v0.2.0`**. O repositório é público; Go não exige
 uma conta adicional nem configuração de acesso privado.
 
 O SDK TypeScript `@docmatch/sdk` ainda não foi publicado no npm. O pacote npm `docmatch`
