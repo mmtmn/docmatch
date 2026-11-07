@@ -18,7 +18,7 @@ comandos de instalação. O plano abaixo conserva os critérios usados na implem
 
 Ainda faltam contas e submissões às lojas, autenticação npm/GHCR, conclusão do teste Safari,
 ampliação das extensões e duas rodadas de usabilidade com participantes reais. Automação não
-substitui essas rodadas. Os resultados de restauração estão no [registro operacional](runbooks/restaurar-backup.md#registro).
+substitui essas rodadas. Os resultados de restauração estão no [registro operacional](runbooks/restaurar-backup.md#ensaiar-e-registrar).
 
 ## Plano e critérios
 
