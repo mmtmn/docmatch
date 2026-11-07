@@ -209,3 +209,30 @@ variable "feature_rollouts" {
     error_message = "Use *, none, or comma-separated public org_ IDs for each rollout."
   }
 }
+
+
+variable "extension_clients" {
+  description = "Registered public extension IDs and exact callback URLs; empty disables connection. No client secrets."
+  type = list(object({
+    id            = string
+    name          = string
+    redirect_uris = list(string)
+  }))
+  default = []
+  validation {
+    condition = length(var.extension_clients) <= 20 && length(base64encode(jsonencode(var.extension_clients))) <= 5332 && alltrue([
+      for client in var.extension_clients : can(regex("^[a-z][a-z0-9_-]{2,63}$", client.id)) && length(client.name) > 0 && length(client.name) <= 80 && length(client.redirect_uris) > 0 && length(client.redirect_uris) <= 4
+    ]) && length(distinct([for client in var.extension_clients : client.id])) == length(var.extension_clients)
+    error_message = "Use at most 20 unique public clients, each with a name and 1–4 exact callback URLs, within the Standard parameter size limit."
+  }
+}
+
+variable "apple_native_client_ids" {
+  description = "iOS bundle identifiers authorized by the existing Sign in with Apple configuration."
+  type        = list(string)
+  default     = []
+  validation {
+    condition     = length(join(",", var.apple_native_client_ids)) <= 4000 && alltrue([for id in var.apple_native_client_ids : can(regex("^[A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)+$", id))])
+    error_message = "Use explicit bundle identifiers, without spaces or wildcards."
+  }
+}

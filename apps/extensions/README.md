@@ -64,6 +64,24 @@ O build exige `DM_EXTENSION_CONFIG_FILE`, com o formato da configuração local,
 HTTPS e os IDs/retornos registrados para cada loja. Gere com `pnpm --dir apps/extensions build`.
 O retorno Safari de produção é `br.com.docmatch.extension://auth`; o App Group e a assinatura
 separam produção e desenvolvimento. A compilação Release nativa rejeita configuração local.
+Use **Firefox 140 ou mais recente**: o manifesto declara autenticação, identificação e
+informações financeiras para o consentimento nativo. A extensão só envia os arquivos que
+a pessoa seleciona e as operações da conta; não lê o histórico nem o conteúdo de páginas.
+Veja a [orientação da Mozilla](https://extensionworkshop.com/documentation/develop/firefox-builtin-data-consent/).
+
+O Chrome Web Store fornece o ID e a chave pública ao criar o rascunho da publicação.
+Copie-os para a configuração e registre o retorno correspondente na API antes de publicar;
+um pacote de prévia sem publicação pode usar outro ID. O build verifica se chave, ID e
+retorno combinam. No Firefox, use o ID explícito do manifesto e confira o retorno com
+`browser.identity.getRedirectURL("callback")` no pacote instalado.
+[Referência do Chrome](https://developer.chrome.com/docs/extensions/reference/manifest/key) ·
+[Referência do Firefox](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/identity/getRedirectURL).
+
+No Terraform, `extension_clients` registra os mesmos clientes públicos em
+`DM_EXTENSION_CLIENTS`; `feature_rollouts.extensions` controla as contas da liberação.
+Esses valores usam parâmetros Standard existentes no serviço SSM, sem novos servidores.
+`apple_native_client_ids` lista os bundle IDs já habilitados no Sign in with Apple.
+
 Nunca envie `dist/local` às lojas. Depois de gerar o pacote de produção, arquive os apps Apple
 em Release com o time e os perfis correspondentes.
 

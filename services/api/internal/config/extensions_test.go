@@ -7,7 +7,7 @@ import (
 )
 
 func TestExtensionClientsRequireExactRegisteredDestinations(t *testing.T) {
-	good := []ExtensionClient{{ID: "chrome-dev", Name: "Chrome local", RedirectURIs: []string{"https://abcdefghijklmnop.chromiumapp.org/", "docmatch-extension-dev://auth"}}}
+	good := []ExtensionClient{{ID: "chrome-dev", Name: "Chrome local", RedirectURIs: []string{"https://abcdefghijklmnop.chromiumapp.org/", "docmatch-extension-dev://auth", "br.com.docmatch.extension://auth"}}}
 	raw, _ := json.Marshal(good)
 	env := validEnv()
 	env[VarExtensionClients] = string(raw)
@@ -24,6 +24,9 @@ func TestExtensionClientsRequireExactRegisteredDestinations(t *testing.T) {
 		`[{"id":"one","name":"X","redirect_uris":["https://a:password@example.com/"]}]`,
 		`[{"id":"one","name":"X","redirect_uris":["https://%/"]}]`,
 		`[{"id":"one","name":"X","redirect_uris":["docmatch-extension://other"]}]`,
+		`[{"id":"one","name":"X","redirect_uris":["br.com.docmatch.extension://other"]}]`,
+		`[{"id":"one","name":"X","redirect_uris":["br.com.docmatch.extension://auth:80"]}]`,
+		`[{"id":"one","name":"X","redirect_uris":["br.com.docmatch.extension://auth/extra"]}]`,
 		`[{"id":"one","name":"X","redirect_uris":["https://example.com/#fragment"]}]`,
 		`[{"id":"one","name":"X","redirect_uris":["https://example.com/"]},{"id":"one","name":"Y","redirect_uris":["https://example.com/"]}]`,
 		`[` + strings.Repeat(`{"id":"one","name":"X","redirect_uris":["https://example.com/"]},`, 20) + `{}]`,

@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isIP } from 'node:net';
+import { createHash } from 'node:crypto';
 import YAML from 'yaml';
 import { validateLimits } from '../../web/vite/limits-schema.ts';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -71,7 +72,38 @@ const sharedViews = {
 };
 for (const browser of ['chrome', 'firefox', 'safari']) {
   const browserConfig = settings[browser];
-  if (!browserConfig?.clientID) throw new Error(`Falta clientID de ${browser}`);
+  if (!/^[a-z][a-z0-9_-]{2,63}$/.test(browserConfig?.clientID ?? ''))
+    throw new Error(`clientID inválido de ${browser}`);
+  if (browser !== 'safari') {
+    const redirect = new URL(browserConfig.redirectURI);
+    if (
+      redirect.protocol !== 'https:' ||
+      redirect.username ||
+      redirect.password ||
+      redirect.search ||
+      redirect.hash
+    )
+      throw new Error(`Retorno de ${browser} inválido.`);
+  }
+  if (browser === 'chrome') {
+    if (
+      !/^[a-p]{32}$/.test(browserConfig.id ?? '') ||
+      browserConfig.redirectURI !== `https://${browserConfig.id}.chromiumapp.org/callback`
+    )
+      throw new Error('ID ou retorno do Chrome inválido.');
+    if (browserConfig.key) {
+      const id = [
+        ...createHash('sha256')
+          .update(Buffer.from(browserConfig.key, 'base64'))
+          .digest('hex')
+          .slice(0, 32),
+      ]
+        .map((digit) => String.fromCharCode(97 + Number.parseInt(digit, 16)))
+        .join('');
+      if (id !== browserConfig.id)
+        throw new Error('A chave pública do Chrome não corresponde ao ID registrado.');
+    }
+  }
   if (browser === 'safari') {
     const expected = local ? 'docmatch-extension-dev://auth' : 'br.com.docmatch.extension://auth';
     if (browserConfig.redirectURI !== expected)
@@ -145,7 +177,13 @@ for (const browser of ['chrome', 'firefox', 'safari']) {
   if (browser === 'firefox') {
     if (!browserConfig.id) throw new Error('Falta o ID do Firefox.');
     manifest.browser_specific_settings = {
-      gecko: { id: browserConfig.id, strict_min_version: '115.0' },
+      gecko: {
+        id: browserConfig.id,
+        strict_min_version: '140.0',
+        data_collection_permissions: {
+          required: ['authenticationInfo', 'personallyIdentifyingInfo', 'financialAndPaymentInfo'],
+        },
+      },
     };
   }
   await fs.copyFile(

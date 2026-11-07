@@ -38,7 +38,7 @@ func (r *reader) extensionClients() []ExtensionClient {
 				valid = false
 				continue
 			}
-			nativeReturn := (u.Scheme == "docmatch-extension" || u.Scheme == "docmatch-extension-dev") && u.Host == "auth" && u.Path == ""
+			nativeReturn := (u.Scheme == "br.com.docmatch.extension" || u.Scheme == "docmatch-extension" || u.Scheme == "docmatch-extension-dev") && u.Host == "auth" && u.Path == ""
 			if u.Scheme != "https" && !nativeReturn {
 				valid = false
 			}
