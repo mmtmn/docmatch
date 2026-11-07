@@ -44,7 +44,7 @@ for (const width of [1280, 390]) {
       settings: { use_rules: false, web_search: false },
       documents: [],
     };
-    const writes: { path: string; account?: string; body: unknown }[] = [];
+    const writes: { path: string; account: string | undefined; body: unknown }[] = [];
     await page.route('**/v1/**', async (route) => {
       const request = route.request(),
         path = new URL(request.url()).pathname;
