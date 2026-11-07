@@ -31,6 +31,7 @@ COPY packages/design-tokens packages/design-tokens
 COPY packages/contracts/limits.yaml packages/contracts/openapi.yaml packages/contracts/
 COPY config/pricing.yaml config/
 COPY docs/book docs/book
+COPY services/api/internal/platforms/catalog.json services/api/internal/platforms/catalog.json
 COPY sdks/python/examples/project.py sdks/python/examples/project.py
 COPY sdks/go/examples/project/main.go sdks/go/examples/project/main.go
 COPY sdks/rust/examples/project.rs sdks/rust/examples/project.rs

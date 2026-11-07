@@ -658,6 +658,13 @@
           ]
         },
         {
+          "title": "Avisos de disponibilidade",
+          "paragraphs": [
+            "Se você pedir um aviso de uma plataforma, usamos seu e-mail apenas para confirmar o pedido e avisar quando ela estiver disponível. O pedido não cria conta nem inscreve você em notícias. Abrir o link do e-mail não confirma o pedido: é preciso usar o botão da página.",
+            "Você pode cancelar pelo link recebido. Pedidos não confirmados ou cancelados são apagados em até 7 dias. Pedidos confirmados são mantidos por até 1 ano ou por 30 dias após o aviso, o que ocorrer primeiro. Registros com hashes para limitar abuso ficam por 31 dias; o endereço IP não é guardado nesses registros."
+          ]
+        },
+        {
           "title": "10. Encarregado",
           "paragraphs": [
             "O contato do encarregado de proteção de dados e o canal de segurança estão publicados em security.txt."
@@ -1551,5 +1558,37 @@
     "native_expired": "O pedido expirou. Entre novamente pela extensão.",
     "native_failed": "Não foi possível abrir a conexão. Volte à extensão e tente novamente.",
     "native_cancelled": "Conexão cancelada. Você pode tentar novamente pela extensão."
+  },
+  "platforms": {
+    "title": "Use onde preferir",
+    "soon": "Em breve",
+    "beta": "Beta",
+    "question": "{name} · Em breve. Quer receber um aviso por e-mail?",
+    "notify": "Avisar-me",
+    "dismiss": "Fechar aviso",
+    "dialog_title": "Avise-me sobre {name}",
+    "beta_title": "Experimente {name}",
+    "beta_help": "Esta versão está em testes. Confira as condições de acesso no destino oficial.",
+    "open_beta": "Ver versão beta",
+    "email": "Seu e-mail",
+    "consent": "Quero receber um aviso quando a docmatch estiver disponível em {name}.",
+    "privacy": "Você confirma o endereço por e-mail e pode cancelar quando quiser. Este pedido não cria conta nem inscreve você em notícias.",
+    "send": "Enviar confirmação",
+    "sending": "Enviando…",
+    "sent": "Confira seu e-mail para confirmar o pedido. Se já confirmou este aviso, está tudo certo. Não chegou? Veja o spam ou tente mais tarde.",
+    "failed": "Não foi possível enviar agora. Tente de novo em instantes.",
+    "try_later": "Os avisos atingiram o limite de envio por enquanto. Tente novamente mais tarde.",
+    "consent_title": "Avisos da docmatch",
+    "loading": "Carregando…",
+    "invalid": "Este link não é válido. Abra novamente o link que recebeu por e-mail.",
+    "confirm_help": "Confirme que deseja receber um único aviso desta plataforma quando estiver disponível. Sua conta e outras preferências continuam como estão.",
+    "cancel_help": "Confirme que deseja cancelar este pedido de aviso. Sua conta e outros pedidos continuam como estão.",
+    "confirm": "Confirmar meu aviso",
+    "cancel": "Cancelar meu aviso",
+    "confirmed": "Pedido confirmado. Vamos avisar quando esta plataforma estiver disponível.",
+    "cancelled": "Pedido cancelado. Você não receberá novos avisos deste pedido.",
+    "link_error": "Não foi possível concluir. O link pode ter vencido ou sido substituído. Tente de novo ou faça um novo pedido no site.",
+    "android_attribution": "Android é uma marca do Google LLC. O robô Android é reproduzido ou modificado de trabalho criado e compartilhado pelo Google, conforme a licença",
+    "android_license": "Creative Commons 3.0"
   }
 }

@@ -15,4 +15,14 @@ recente, para não sobrescrever o trabalho de outra pessoa.
 Ao pedir ajuda, informe o que tentou fazer e o identificador da requisição, quando houver.
 Não envie senha, chave de API nem documentos completos por um canal público.
 
+## Avisos de disponibilidade
+
+Na página inicial, **Use onde preferir** mostra onde encontrar a docmatch. **Em breve**
+significa que o destino ainda não está aberto ao público. Escolha **Avisar-me**, informe
+seu e-mail e confirme o pedido pelo botão da mensagem recebida. Apenas abrir o link não confirma.
+
+Você recebe somente o aviso da plataforma escolhida. Isso não cria uma conta nem altera
+sua assinatura. Para desistir, abra o link de cancelamento desse mesmo e-mail e confirme.
+O pedido confirmado vale por até um ano; depois disso, faça outro pedido se ainda quiser o aviso.
+
 <!-- support-links -->

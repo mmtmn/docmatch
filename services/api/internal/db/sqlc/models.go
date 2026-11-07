@@ -500,6 +500,31 @@ type Plan struct {
 	UpdatedAt time.Time
 }
 
+type PlatformNotice struct {
+	ID                    uuid.UUID
+	Platform              string
+	Email                 string
+	Status                string
+	ConfirmationHash      []byte
+	ConfirmationExpiresAt *time.Time
+	ConfirmationOutbox    *uuid.UUID
+	ConsentVersion        string
+	ConfirmedAt           *time.Time
+	UnsubscribedAt        *time.Time
+	NotificationQueuedAt  *time.Time
+	NotificationOutbox    *uuid.UUID
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+	ExpiresAt             time.Time
+}
+
+type PlatformNoticeSend struct {
+	ID        uuid.UUID
+	EmailHash []byte
+	IpHash    []byte
+	CreatedAt time.Time
+}
+
 type Project struct {
 	ID         uuid.UUID
 	OrgID      uuid.UUID

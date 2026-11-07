@@ -31,6 +31,7 @@ import (
 	"github.com/mmtmn/docmatch/services/api/internal/jobs"
 	"github.com/mmtmn/docmatch/services/api/internal/jobs/jobargs"
 	"github.com/mmtmn/docmatch/services/api/internal/logx"
+	"github.com/mmtmn/docmatch/services/api/internal/platforms"
 	"github.com/mmtmn/docmatch/services/api/internal/runs/wire"
 	"github.com/mmtmn/docmatch/services/api/internal/session"
 	"github.com/mmtmn/docmatch/services/api/internal/session/sessionpg"
@@ -179,8 +180,13 @@ func accountJobs(cfg *config.Config, log *slog.Logger, pool *pgxpool.Pool, audit
 	if err != nil {
 		return nil, nil, err
 	}
-	register := []func(*river.Workers){emailpg.AddWorkers(deliverer), accountpg.AddWorkers(accountSvc), extensions.AddWorkers(pool)}
+	platformsSvc, err := platforms.New(cfg, pool)
+	if err != nil {
+		return nil, nil, err
+	}
+	register := []func(*river.Workers){emailpg.AddWorkers(deliverer), accountpg.AddWorkers(accountSvc), extensions.AddWorkers(pool), platforms.AddWorkers(platformsSvc)}
 	periodic := append(emailpg.PeriodicJobs(), accountpg.PeriodicJobs()...)
 	periodic = append(periodic, extensions.PeriodicJobs()...)
+	periodic = append(periodic, platforms.PeriodicJobs()...)
 	return register, periodic, nil
 }

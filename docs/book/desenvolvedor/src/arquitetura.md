@@ -1,5 +1,10 @@
 # Arquitetura e operação
 
+O site e a API compartilham o catálogo de plataformas. Os avisos de disponibilidade usam
+confirmação por e-mail, cancelamento explícito e a mesma fila transacional do produto.
+Eles não criam contas nem alteram assinaturas; o catálogo só deve anunciar destinos públicos
+verificados. Os limites de envio preservam o orçamento operacional existente.
+
 O site e os livros são arquivos estáticos. Web, apps, extensões e SDKs conversam com a
 mesma API. O banco guarda contas, permissões, projetos e o estado dos trabalhos; o
 armazenamento de objetos guarda arquivos e exportações pelo prazo definido.

@@ -80,6 +80,121 @@ tags:
     description: Planos, saúde e versão. Sem autenticação.
 
 paths:
+  /platforms:
+    get:
+      operationId: listPlatforms
+      tags: [public]
+      summary: Disponibilidade e destinos oficiais
+      description: Catálogo compartilhado com o site; apenas destinos oficiais publicados aparecem como disponíveis.
+      security: []
+      responses:
+        "200":
+          description: Catálogo público; não anuncia destinos ainda não publicados.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, name, status, url]
+                      properties:
+                        id: {type: string, enum: [android, ios, github, chrome, firefox, safari]}
+                        name: {type: string}
+                        status: {type: string, enum: [coming_soon, beta, available]}
+                        url: {type: string, description: "Vazia enquanto indisponível; depois, destino HTTPS oficial."}
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /platform-notices:
+    post:
+      operationId: requestPlatformNotice
+      tags: [public]
+      summary: Pede confirmação de um aviso por e-mail
+      description: Não cria conta. A resposta não revela pedidos anteriores. Exige consentimento e confirmação posterior; limites por endereço, IP e orçamento global usam a fila existente.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [platform, email, consent]
+              properties:
+                platform: {type: string, enum: [android, ios, github, chrome, firefox, safari]}
+                email: {type: string, format: email, maxLength: 254, x-limit: text.email}
+                consent: {type: boolean, const: true}
+      responses:
+        "202":
+          description: Pedido recebido; pode já ter sido confirmado ou estar em espera por limite de reenvio.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [accepted]
+                properties:
+                  accepted: {type: boolean, const: true}
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          description: Limite de requisições ou orçamento de e-mail atingido.
+        "503":
+          description: Envio de e-mail indisponível.
+  /platform-notices/confirm:
+    post:
+      operationId: confirmPlatformNotice
+      tags: [public]
+      summary: Confirma o endereço para um único aviso
+      description: Só o botão da página faz este POST. Abrir o link não confirma; o token vale 24 horas e o reenvio o substitui. Repetir a confirmação válida não duplica avisos.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [token]
+              properties:
+                token: {type: string, pattern: '^[A-Za-z0-9_-]{43}$'}
+      responses:
+        "200":
+          description: Pedido confirmado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [platform, status]
+                properties:
+                  platform: {type: string}
+                  status: {type: string, const: confirmed}
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /platform-notices/unsubscribe:
+    post:
+      operationId: unsubscribePlatformNotice
+      tags: [public]
+      summary: Cancela um pedido de aviso
+      description: Token de cancelamento separado da confirmação. Cancela também o aviso ainda na fila; não altera contas, outros pedidos nem mensagens já enviadas.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [token]
+              properties:
+                token: {type: string, pattern: '^[A-Za-z0-9_-]{43,256}$'}
+      responses:
+        "204":
+          description: Pedido cancelado ou já removido.
+        "400":
+          $ref: "#/components/responses/BadRequest"
   /extensions/clients/{client}:
     get:
       operationId: getExtensionClient

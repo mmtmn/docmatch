@@ -38,6 +38,7 @@ import (
 	"github.com/mmtmn/docmatch/services/api/internal/jobs/jobargs"
 	"github.com/mmtmn/docmatch/services/api/internal/limits"
 	"github.com/mmtmn/docmatch/services/api/internal/logx"
+	"github.com/mmtmn/docmatch/services/api/internal/platforms"
 	"github.com/mmtmn/docmatch/services/api/internal/projects"
 	"github.com/mmtmn/docmatch/services/api/internal/ratelimit"
 	"github.com/mmtmn/docmatch/services/api/internal/runs/apix"
@@ -103,6 +104,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	platformsSvc, err := platforms.New(cfg, pool)
+	if err != nil {
+		return err
+	}
 	baseResolver := extensionsSvc.Resolve(sessionResolver(pool), keysSvc.Resolve(sessionResolver(pool)))
 	projectsSvc := projects.New(pool, baseResolver, nil)
 	resolve := projectsSvc.Resolve(baseResolver)
@@ -132,7 +137,7 @@ func run() error {
 	projectsSvc.SetEngine(projects.Engine{Config: cfg, Estimates: sys.Estimates, Runs: sys.Runs, Rules: sys.Rules, Uploads: sys.Uploads})
 	handler := api.NewHandler(api.Deps{
 		Config: cfg, Logger: log, Limits: limits.Must(), DB: pool,
-		Mount:      append([]func(*httpx.Router){authSvc.Mount, accountSvc.Mount, billingSvc.Mount, keysSvc.Mount, workspaceSvc.Mount, tenants.Mount, projectsSvc.Mount, teamsSvc.Mount, extensionsSvc.Mount}, sys.Mount()...),
+		Mount:      append([]func(*httpx.Router){authSvc.Mount, accountSvc.Mount, billingSvc.Mount, keysSvc.Mount, workspaceSvc.Mount, tenants.Mount, projectsSvc.Mount, teamsSvc.Mount, extensionsSvc.Mount, platformsSvc.Mount}, sys.Mount()...),
 		Middleware: []httpx.Middleware{sessions.Middleware, extensionsSvc.Middleware, tenants.Middleware},
 		OriginExempt: func(r *http.Request) bool {
 			return auth.OriginExempt(r) || extensions.OriginExempt(r) || (cfg.IsDev() && sys.Local.OriginExempt(r))

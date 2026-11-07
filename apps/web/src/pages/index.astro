@@ -1,4 +1,6 @@
 ---
+import { PlatformLinks } from '../components/site/PlatformLinks';
+import { platforms } from '../lib/platformCatalog';
 import { HeroApp } from '../components/HeroApp';
 import BlogLatest from '../components/site/BlogLatest.astro';
 import Faq from '../components/site/Faq.astro';
@@ -23,6 +25,7 @@ import { t } from '../lib/i18n';
     </section>
   </div>
   <main id="conteudo">
+    <PlatformLinks items={platforms} client:load />
     <HowItWorks />
     <Plans />
     <Security />

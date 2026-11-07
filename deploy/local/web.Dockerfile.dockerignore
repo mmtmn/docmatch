@@ -19,6 +19,7 @@ packages/*/node_modules
 !packages/contracts/openapi.yaml
 !config/pricing.yaml
 !docs/book
+!services/api/internal/platforms/catalog.json
 !sdks/python/examples/project.py
 !sdks/rust/examples/project.rs
 !sdks/typescript/examples/project.mjs
