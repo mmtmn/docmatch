@@ -16,6 +16,7 @@ describe('extension authorization parameters', () => {
       { state: '' },
       { code_challenge_method: 'plain' },
       { redirect_uri: 'javascript:alert(1)' },
+      { redirect_uri: 'unregistered-app://auth' },
       { redirect_uri: 'https://other.example.invalid/#fragment' },
       { redirect_uri: 'https://a:pass@other.example.invalid/' },
       { redirect_uri: 'invalid' },
@@ -24,6 +25,24 @@ describe('extension authorization parameters', () => {
       expect(
         readExtensionAuthorization(new URLSearchParams({ ...valid, ...change }).toString()),
       ).toBeNull();
+    }
+  });
+  it('accepts the production Safari callback and keeps its destination bound to the request', async () => {
+    const request = {
+      ...valid,
+      client_id: 'safari',
+      redirect_uri: 'br.com.docmatch.extension://auth',
+    };
+    expect(readExtensionAuthorization(new URLSearchParams(request).toString())).toEqual(request);
+    const callback = `${request.redirect_uri}?code=${'c'.repeat(43)}&state=${request.state}`;
+    mocks.api.mockResolvedValue({ redirect_uri: callback });
+    expect(await authorizeExtension(request)).toBe(callback);
+    for (const target of [
+      callback.replace('br.com.docmatch.extension:', 'docmatch-extension-dev:'),
+      callback.replace('://auth?', '://other?'),
+    ]) {
+      mocks.api.mockResolvedValue({ redirect_uri: target });
+      await expect(authorizeExtension(request)).rejects.toThrow();
     }
   });
   it('checks the callback destination and state before navigating', async () => {

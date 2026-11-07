@@ -28,7 +28,12 @@ export function readExtensionAuthorization(search: string): ExtensionAuthorizati
   try {
     const target = new URL(redirect_uri);
     if (
-      !['https:', 'docmatch-extension:', 'docmatch-extension-dev:'].includes(target.protocol) ||
+      ![
+        'https:',
+        'br.com.docmatch.extension:',
+        'docmatch-extension:',
+        'docmatch-extension-dev:',
+      ].includes(target.protocol) ||
       !target.host ||
       target.username ||
       target.password ||
