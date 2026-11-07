@@ -133,6 +133,7 @@ test-unit: ## testes sem AWS: função de borda do CloudFront (node --test) e re
 	@command -v node >/dev/null || { echo "erro: node não encontrado (>= 20, para node --test)"; exit 1; }
 	@node --test "$(INFRA_DIR)/tests/viewer-request.test.mjs"
 	@bash "$(INFRA_DIR)/tests/render-env.test.sh"
+	@bash "$(INFRA_DIR)/tests/runtime-permissions.test.sh"
 
 trivy: ## trivy config (misconfigurações em Terraform) com .trivyignore.yaml como linha de base
 	@cd "$(INFRA_DIR)" && trivy config --quiet --exit-code 1 --severity LOW,MEDIUM,HIGH,CRITICAL \
