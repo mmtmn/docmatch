@@ -20,6 +20,7 @@ type Settings struct {
 }
 
 type Project struct {
+	ImportedRunID string               `json:"imported_run_id,omitempty"`
 	ID            string               `json:"id"`
 	Name          string               `json:"name"`
 	Visibility    string               `json:"visibility"`

@@ -19,6 +19,7 @@ func (s *Service) Mount(r *httpx.Router) {
 	r.HandleFunc(http.MethodGet, "/v1/projects/activity", httpx.BodyNone, s.accountActivity)
 	r.HandleFunc("GET", "/v1/projects", httpx.BodyNone, s.list)
 	r.HandleFunc("POST", "/v1/projects", httpx.BodyJSON, s.create)
+	r.HandleFunc("POST", "/v1/projects/from-run", httpx.BodyJSON, s.importRun)
 	r.HandleFunc("GET", "/v1/projects/{project}", httpx.BodyNone, s.get)
 	r.HandleFunc("PATCH", "/v1/projects/{project}", httpx.BodyJSON, s.update)
 	r.HandleFunc("DELETE", "/v1/projects/{project}", httpx.BodyNone, s.remove)

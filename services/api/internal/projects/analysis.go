@@ -81,9 +81,10 @@ func (s *Service) CheckAnalysisAccess(ctx context.Context, p apix.Principal, req
 }
 
 type analysisSource struct {
-	Hash string `json:"hash"`
-	Kind string `json:"kind"`
-	Role string `json:"role"`
+	Hash  string          `json:"hash"`
+	Kind  string          `json:"kind"`
+	Role  string          `json:"role"`
+	Hints *estimate.Hints `json:"hints,omitempty"`
 }
 type analysisRule struct {
 	ID        uuid.UUID        `json:"id"`
@@ -93,7 +94,12 @@ type analysisRule struct {
 	AppliesTo *rules.AppliesTo `json:"applies_to"`
 }
 
-func signature(sources []analysisSource, settings Settings, resolved []rules.Rule) (string, error) {
+type analysisExtras struct {
+	WorkflowID string `json:"workflow_id,omitempty"`
+	Escalation bool   `json:"escalation,omitempty"`
+}
+
+func signature(sources []analysisSource, settings Settings, resolved []rules.Rule, extras ...analysisExtras) (string, error) {
 	// Sort by content, preserving intentional duplicates. IDs and display order
 	// are not evidence of a new analysis; rule usage statistics are not either.
 	sort.Slice(sources, func(i, j int) bool {
@@ -104,7 +110,12 @@ func signature(sources []analysisSource, settings Settings, resolved []rules.Rul
 		if a.Kind != b.Kind {
 			return a.Kind < b.Kind
 		}
-		return a.Role < b.Role
+		if a.Role != b.Role {
+			return a.Role < b.Role
+		}
+		ah, _ := json.Marshal(a.Hints)
+		bh, _ := json.Marshal(b.Hints)
+		return string(ah) < string(bh)
 	})
 	ruleVersions := make([]analysisRule, 0, len(resolved))
 	for _, r := range resolved {
@@ -112,12 +123,17 @@ func signature(sources []analysisSource, settings Settings, resolved []rules.Rul
 	}
 	sort.Slice(ruleVersions, func(i, j int) bool { return ruleVersions[i].ID.String() < ruleVersions[j].ID.String() })
 	settings.RuleIDs = nil // effective rules above, not their visual selection order
+	var extra *analysisExtras
+	if len(extras) > 0 && (extras[0].WorkflowID != "" || extras[0].Escalation) {
+		extra = &extras[0]
+	}
 	data, err := json.Marshal(struct {
 		Version  int              `json:"version"`
 		Sources  []analysisSource `json:"sources"`
 		Settings Settings         `json:"settings"`
 		Rules    []analysisRule   `json:"rules"`
-	}{1, sources, settings, ruleVersions})
+		Extra    *analysisExtras  `json:"extra,omitempty"`
+	}{1, sources, settings, ruleVersions, extra})
 	if err != nil {
 		return "", err
 	}
@@ -136,6 +152,25 @@ func (s *Service) snapshot(ctx context.Context, tx pgx.Tx, p apix.Principal, id 
 	settings := *v.Settings
 	useRules := settings.UseRules
 	req := estimate.Request{Sources: []estimate.SourceRef{}, RulesText: settings.RulesText, ProjectID: v.ID, ProjectRevision: v.Revision, Options: &estimate.Options{UseRules: &useRules, RuleIDs: settings.RuleIDs, LlmMode: settings.LLMMode, WebSearch: settings.WebSearch, Lane: lane}}
+	prior, _, err := importedInputs(ctx, tx, p.OrgID, id)
+	if err != nil {
+		return req, nil, err
+	}
+	hints := map[string]*estimate.Hints{}
+	extra := analysisExtras{}
+	if prior != nil {
+		req.WorkflowID = prior.Request.WorkflowID
+		extra.WorkflowID = req.WorkflowID
+		if prior.Request.Options != nil {
+			req.Options.Escalation = prior.Request.Options.Escalation
+			extra.Escalation = req.Options.Escalation
+		}
+		for _, sources := range [][]estimate.SourceRef{prior.Request.Sources, prior.Request.MediaSources} {
+			for _, source := range sources {
+				hints[source.UploadID] = source.Hints
+			}
+		}
+	}
 	rows, err := tx.Query(ctx, `SELECT u.id,u.sha256,u.kind,COALESCE(NULLIF(d.role,''),u.role,''),
  u.status='clean' AND u.deleted_at IS NULL AND (u.expires_at IS NULL OR u.expires_at>now())
  FROM project_documents d JOIN uploads u ON u.org_id=d.org_id AND u.id=d.upload_id
@@ -158,12 +193,16 @@ func (s *Service) snapshot(ctx context.Context, tx pgx.Tx, p apix.Principal, id 
 			return req, nil, apix.E(contracts.ErrUploadNotReady, nil).With(map[string]any{"upload_id": publicid.Encode("upl", upload)})
 		}
 		source := estimate.SourceRef{UploadID: publicid.Encode("upl", upload), Role: role}
+		source.Hints = hints[source.UploadID]
+		if len(source.Hints.Map()) == 0 {
+			source.Hints = nil
+		}
 		if kind == string(uploads.KindMedia) {
 			req.MediaSources = append(req.MediaSources, source)
 		} else {
 			req.Sources = append(req.Sources, source)
 		}
-		content = append(content, analysisSource{hex.EncodeToString(hash), kind, role})
+		content = append(content, analysisSource{Hash: hex.EncodeToString(hash), Kind: kind, Role: role, Hints: source.Hints})
 	}
 	err = rows.Err()
 	rows.Close()
@@ -182,7 +221,7 @@ func (s *Service) snapshot(ctx context.Context, tx pgx.Tx, p apix.Principal, id 
 	if err != nil {
 		return req, nil, err
 	}
-	digest, err := signature(content, settings, resolved)
+	digest, err := signature(content, settings, resolved, extra)
 	if err != nil {
 		return req, nil, err
 	}
@@ -217,10 +256,11 @@ type AnalysisRequest struct {
 	QuoteSignature  string `json:"quote_signature,omitempty"`
 }
 type Analysis struct {
-	State    string          `json:"state"`
-	Revision int64           `json:"revision"`
-	Quote    *estimate.Quote `json:"quote,omitempty"`
-	Run      *runs.View      `json:"run,omitempty"`
+	Historical bool            `json:"historical,omitempty"`
+	State      string          `json:"state"`
+	Revision   int64           `json:"revision"`
+	Quote      *estimate.Quote `json:"quote,omitempty"`
+	Run        *runs.View      `json:"run,omitempty"`
 }
 
 func (s *Service) paid(ctx context.Context, tx pgx.Tx, p apix.Principal) error {
@@ -243,14 +283,63 @@ func (s *Service) Analyze(ctx context.Context, p apix.Principal, id uuid.UUID, i
 	}
 	var out Analysis
 	err := db.WithOrgUnit(ctx, s.pool, p.OrgID, func(ctx context.Context, tx pgx.Tx) error {
-		req, snapshot, err := s.snapshot(ctx, tx, p, id, in.Revision, in.Lane)
+		project, _, err := access(ctx, tx, p, id, true)
 		if err != nil {
 			return err
 		}
-		out.Revision = snapshot.Revision
+		if project.Revision != in.Revision {
+			return conflict()
+		}
+		var historical *runs.Run
+		var baseline *string
+		if project.ImportedRunID != "" {
+			historicalID, err := publicid.Decode("run", project.ImportedRunID)
+			if err != nil {
+				return err
+			}
+			old, err := s.engine.Runs.Get(ctx, p.OrgID, historicalID)
+			if err != nil {
+				return err
+			}
+			if old.Status == runs.StatusCompleted {
+				historical = &old
+			}
+			_, baseline, err = importedInputs(ctx, tx, p.OrgID, id)
+			if err != nil {
+				return err
+			}
+		}
+		out.Revision = project.Revision
+		historicalExpired := false
+		req, snapshot, snapshotErr := s.snapshot(ctx, tx, p, id, in.Revision, in.Lane)
+		if historical != nil && project.Revision == 1 && (baseline == nil || snapshotErr != nil && importUnavailable(snapshotErr)) {
+			// Legacy sources/rules can have expired. Reading the saved original
+			// never requires recreating unavailable evidence or buying another run.
+			out.Historical = true
+			if historical.ExpiresAt != nil && !historical.ExpiresAt.After(s.engine.Runs.Now()) {
+				historicalExpired = true
+				if strings.TrimSpace(in.ReprocessReason) == "" {
+					out.State = "expired"
+					return nil
+				}
+			} else {
+				view := s.engine.Runs.View(ctx, *historical)
+				out.Run = &view
+				out.State = "unchanged"
+				return nil
+			}
+		}
+		if snapshotErr != nil {
+			return snapshotErr
+		}
 		previous, expired, err := s.existing(ctx, tx, p, snapshot)
 		if err != nil {
 			return err
+		}
+		if previous == nil && historical != nil && (historicalExpired || baseline != nil && *baseline == snapshot.Signature) {
+			previous = historical
+			expired = historical.ExpiresAt != nil && !historical.ExpiresAt.After(s.engine.Runs.Now())
+			out.Historical = true
 		}
 		if previous != nil && !expired {
 			view := s.engine.Runs.View(ctx, *previous)
@@ -271,6 +360,7 @@ func (s *Service) Analyze(ctx context.Context, p apix.Principal, id uuid.UUID, i
 		if expired {
 			snapshot.ReprocessReason = strings.TrimSpace(in.ReprocessReason)
 		}
+		out.Historical = false
 		if err := s.paid(ctx, tx, p); err != nil {
 			return err
 		}

@@ -123,6 +123,7 @@ export interface RunSummary {
 }
 
 export interface RunView {
+  can_save_as_project?: boolean;
   id: string;
   project_id?: string;
   status: 'queued' | 'running' | 'needs_approval' | 'completed' | 'failed' | 'cancelled';

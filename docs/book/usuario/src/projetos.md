@@ -3,6 +3,12 @@
 Um projeto reúne documentos, regras e conciliações de um trabalho. Use nomes que ajudem
 a retomar, como “Fechamento de outubro”. Renomear não muda o conteúdo de uma análise.
 
+Uma conciliação antiga também pode virar projeto: abra **Atividade**, escolha
+**Salvar como projeto**, confira a conta e dê um nome. O projeto começa privado.
+Salvar e abrir o resultado original não executa nem cobra outra análise; os prazos
+dos arquivos continuam iguais. As versões antigas de algumas regras podem não estar
+disponíveis. Confira as opções antes de mudar os documentos e conciliar novamente.
+
 Se novas alterações estiverem pausadas na sua conta, os projetos e resultados salvos
 continuam disponíveis. A opção **Conciliação avulsa**, quando exibida, mantém o fluxo
 anterior com estimativa e confirmação antes de começar.

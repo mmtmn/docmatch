@@ -82,6 +82,7 @@ public struct ProjectSettings: Codable, Sendable, Equatable {
 }
 
 public struct SavedProject: Decodable, Sendable, Equatable, Identifiable {
+    public let importedRunID: String?
     public let id: String
     public let name: String
     public let visibility: String
@@ -96,6 +97,7 @@ public struct SavedProject: Decodable, Sendable, Equatable, Identifiable {
     public let documents: [ProjectDocument]?
     public let sharedWith: [String]?
     private enum CodingKeys: String, CodingKey {
+        case importedRunID = "imported_run_id"
         case id
         case name
         case visibility
@@ -149,11 +151,13 @@ public struct ProjectList: Decodable, Sendable, Equatable {
 }
 
 public struct ProjectAnalysis: Decodable, Sendable, Equatable {
+    public let historical: Bool?
     public let state: String
     public let revision: Int64
     public let run: Run?
     public let quote: Quote?
     private enum CodingKeys: String, CodingKey {
+        case historical
         case state
         case revision
         case run

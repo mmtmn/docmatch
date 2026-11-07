@@ -47,3 +47,7 @@ UPDATE uploads SET status = $3, scan_result = $4, scanned_at = now() WHERE org_i
 
 -- name: CountRecentUploads :one
 SELECT count(*) FROM uploads WHERE org_id = $1 AND created_at > $2;
+
+-- name: GetRunWithProject :one
+SELECT sqlc.embed(r),pr.project_id FROM runs r LEFT JOIN project_runs pr ON pr.org_id=r.org_id AND pr.run_id=r.id
+WHERE r.org_id=$1 AND r.id=$2;

@@ -9,7 +9,7 @@ RETURNING *;
 SELECT * FROM runs WHERE id = $1;
 
 -- name: ListRunsPage :many
-SELECT r.* FROM runs r
+SELECT sqlc.embed(r),linked.project_id FROM runs r LEFT JOIN project_runs linked ON linked.org_id=r.org_id AND linked.run_id=r.id
 WHERE r.org_id = $1
   AND (NOT sqlc.arg(project_only)::boolean OR EXISTS(SELECT 1 FROM project_runs pr WHERE pr.org_id=r.org_id AND pr.run_id=r.id))
   AND NOT EXISTS(SELECT 1 FROM project_runs pr JOIN projects p ON p.org_id=pr.org_id AND p.id=pr.project_id WHERE pr.org_id=r.org_id AND pr.run_id=r.id AND p.deleted_at IS NOT NULL)

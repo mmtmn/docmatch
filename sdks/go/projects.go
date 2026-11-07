@@ -47,6 +47,7 @@ type ProjectSettings struct {
 	LLMMode   string   `json:"llm_mode,omitempty"`
 }
 type Project struct {
+	ImportedRunID string            `json:"imported_run_id,omitempty"`
 	ID            string            `json:"id"`
 	Name          string            `json:"name"`
 	Visibility    string            `json:"visibility"`
@@ -80,10 +81,11 @@ type ProjectPatch struct {
 	Settings *ProjectSettings `json:"settings,omitempty"`
 }
 type ProjectAnalysis struct {
-	State    string `json:"state"`
-	Revision int64  `json:"revision"`
-	Quote    *Quote `json:"quote,omitempty"`
-	Run      *Run   `json:"run,omitempty"`
+	Historical bool   `json:"historical,omitempty"`
+	State      string `json:"state"`
+	Revision   int64  `json:"revision"`
+	Quote      *Quote `json:"quote,omitempty"`
+	Run        *Run   `json:"run,omitempty"`
 }
 type ProjectRule struct {
 	ID         string          `json:"id"`
@@ -112,6 +114,13 @@ func (c *Client) Organizations(ctx context.Context) (Organizations, error) {
 func (c *Client) ListProjects(ctx context.Context, archived bool, cursor string) (Page[Project], error) {
 	var out Page[Project]
 	err := c.Do(ctx, "GET", Operations["listProjects"].Path+"?archived="+strconv.FormatBool(archived)+"&cursor="+url.QueryEscape(cursor), nil, &out)
+	return out, err
+}
+
+// ImportRunAsProject saves a historical run without starting or charging another run.
+func (c *Client) ImportRunAsProject(ctx context.Context, runID, name string) (Project, error) {
+	var out Project
+	err := c.Do(ctx, "POST", Operations["importRunAsProject"].Path, map[string]string{"run_id": runID, "name": name}, &out)
 	return out, err
 }
 func (c *Client) CreateProject(ctx context.Context, name string) (Project, error) {

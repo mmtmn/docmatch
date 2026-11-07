@@ -70,6 +70,10 @@ class AsyncClient:
     async def list_projects(self, *, archived=False, cursor="") -> dict:
         return await self.request("GET", OPERATIONS["listProjects"]["path"] + "?archived=" + str(archived).lower() + "&cursor=" + quote(cursor, safe=""))
 
+    async def import_run_as_project(self, run_id: str, name: str) -> dict:
+        """Save a terminal historical run without another reconciliation or charge."""
+        return await self.request("POST", OPERATIONS["importRunAsProject"]["path"], {"run_id": run_id, "name": name})
+
     async def create_project(self, name: str) -> dict:
         return await self.request("POST", OPERATIONS["createProject"]["path"], {"name": name})
 
@@ -190,6 +194,10 @@ class Client:
 
     def list_projects(self, *, archived=False, cursor="") -> dict:
         return self.request("GET", OPERATIONS["listProjects"]["path"] + "?archived=" + str(archived).lower() + "&cursor=" + quote(cursor, safe=""))
+
+    def import_run_as_project(self, run_id: str, name: str) -> dict:
+        """Save a terminal historical run without another reconciliation or charge."""
+        return self.request("POST", OPERATIONS["importRunAsProject"]["path"], {"run_id": run_id, "name": name})
 
     def create_project(self, name: str) -> dict:
         return self.request("POST", OPERATIONS["createProject"]["path"], {"name": name})

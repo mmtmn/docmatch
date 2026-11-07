@@ -878,6 +878,51 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+  /projects/from-run:
+    parameters:
+      - $ref: "#/components/parameters/OrgContext"
+    post:
+      security:
+        - cookieSession: []
+        - apiKey: []
+        - extensionSession: []
+      operationId: importRunAsProject
+      tags: [ projects ]
+      summary: Salva uma conciliação anterior como projeto privado
+      description: Preserva arquivos, resultado e retenção sem nova execução ou cobrança. Repetir retorna o mesmo projeto. Chaves exigem projects:write e runs:read. Versões antigas de regras não são reconstruídas; o projeto informa essa origem.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ run_id, name ]
+              properties:
+                run_id:
+                  $ref: "#/components/schemas/RunId"
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 120
+                  x-limit: text.project_name
+              additionalProperties: false
+      responses:
+        "200":
+          description: Projeto criado ou retomado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
   /projects/{project}:
     parameters:
       - $ref: "#/components/parameters/OrgContext"
@@ -5016,6 +5061,9 @@ components:
         - archived_at
         - capabilities
       properties:
+        imported_run_id:
+          $ref: "#/components/schemas/RunId"
+          description: Resultado original preservado ao salvar o histórico; suas versões efetivas de regras podem não estar disponíveis.
         id:
           $ref: "#/components/schemas/ProjectId"
         name:
@@ -5241,6 +5289,9 @@ components:
         - state
         - revision
       properties:
+        historical:
+          type: boolean
+          description: O resultado é o original importado, sem nova análise; não representa uma reconstrução das regras antigas.
         state:
           type: string
           enum:
@@ -5276,6 +5327,9 @@ components:
         - capabilities
         - documents
       properties:
+        imported_run_id:
+          $ref: "#/components/schemas/RunId"
+          description: Resultado original preservado ao salvar o histórico; suas versões efetivas de regras podem não estar disponíveis.
         id:
           $ref: "#/components/schemas/ProjectId"
         name:
@@ -6387,6 +6441,9 @@ components:
       type: object
       required: [ id, status, lane, sources, credits, created_at, expires_at ]
       properties:
+        can_save_as_project:
+          type: boolean
+          description: Na atividade da conta, indica se a pessoa pode salvar esta conciliação anterior como projeto. A permissão é revalidada ao salvar.
         project_id:
           $ref: "#/components/schemas/ProjectId"
         id:

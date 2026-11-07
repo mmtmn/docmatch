@@ -78,14 +78,15 @@ func (s *Store) GetRun(ctx context.Context, orgID, id uuid.UUID) (runs.Run, bool
 	var out runs.Run
 	found := false
 	err := s.org(ctx, orgID, func(ctx context.Context, q *sqlc.Queries, _ pgx.Tx) error {
-		row, err := q.GetRun(ctx, sqlc.GetRunParams{OrgID: orgID, ID: id})
+		row, err := q.GetRunWithProject(ctx, sqlc.GetRunWithProjectParams{OrgID: orgID, ID: id})
 		if isNoRows(err) {
 			return nil
 		}
 		if err != nil {
 			return err
 		}
-		out, err = toRun(row)
+		out, err = toRun(row.Run)
+		out.ProjectID = row.ProjectID
 		found = err == nil
 		return err
 	})
@@ -106,7 +107,8 @@ func (s *Store) ListRuns(ctx context.Context, orgID uuid.UUID, f runs.ListFilter
 			return err
 		}
 		for _, r := range rows {
-			run, err := toRun(r)
+			run, err := toRun(r.Run)
+			run.ProjectID = r.ProjectID
 			if err != nil {
 				return err
 			}

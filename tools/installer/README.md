@@ -348,7 +348,7 @@ uma API remota, forneça `DOCMATCH_API_KEY` pelo ambiente. Sem chave, o login au
   e `p` PDF. Setas percorrem os achados; `n` volta aos arquivos do mesmo projeto.
 - `--no-animation`, `NO_COLOR` e `--plain` continuam disponíveis. Sem TTY, informe os arquivos
   com `--new-project "Nome"` ou `--saved-project ID` e `--yes` para autorizar explicitamente
-  o limite da estimativa. `--list-projects` lista os IDs; `--upload-only` somente salva arquivos. Resultados ficam em
+  o limite da estimativa. `--save-run run_ID --new-project "Nome"` apenas guarda uma conciliação antiga em projeto privado, sem executar ou cobrar outra. `--list-projects` lista os IDs; `--upload-only` somente salva arquivos. Resultados ficam em
   `docmatch-output` ou em `--output PASTA`, com permissões privadas.
 
 O seletor cobre CSV, TXT, PDF, XLSX e JSON, até 40 arquivos e 50 MB por arquivo antes dos

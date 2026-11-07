@@ -701,7 +701,7 @@ func (q *Queries) ListRunEventsAfter(ctx context.Context, arg ListRunEventsAfter
 }
 
 const listRunsPage = `-- name: ListRunsPage :many
-SELECT r.id, r.org_id, r.workflow_id, r.user_id, r.api_key_id, r.quote_id, r.hold_id, r.lane, r.status, r.credits_held, r.credits_settled, r.error_code, r.stats, r.started_at, r.finished_at, r.created_at, r.updated_at, r.estimated_credits, r.credits_spent, r.credits_refunded, r.last_seq, r.inputs, r.progress, r.summary, r.error, r.pending_quote_id, r.cancel_requested, r.expires_at FROM runs r
+SELECT r.id, r.org_id, r.workflow_id, r.user_id, r.api_key_id, r.quote_id, r.hold_id, r.lane, r.status, r.credits_held, r.credits_settled, r.error_code, r.stats, r.started_at, r.finished_at, r.created_at, r.updated_at, r.estimated_credits, r.credits_spent, r.credits_refunded, r.last_seq, r.inputs, r.progress, r.summary, r.error, r.pending_quote_id, r.cancel_requested, r.expires_at,linked.project_id FROM runs r LEFT JOIN project_runs linked ON linked.org_id=r.org_id AND linked.run_id=r.id
 WHERE r.org_id = $1
   AND (NOT $4::boolean OR EXISTS(SELECT 1 FROM project_runs pr WHERE pr.org_id=r.org_id AND pr.run_id=r.id))
   AND NOT EXISTS(SELECT 1 FROM project_runs pr JOIN projects p ON p.org_id=pr.org_id AND p.id=pr.project_id WHERE pr.org_id=r.org_id AND pr.run_id=r.id AND p.deleted_at IS NOT NULL)
@@ -727,7 +727,12 @@ type ListRunsPageParams struct {
 	VisibleTo   *uuid.UUID
 }
 
-func (q *Queries) ListRunsPage(ctx context.Context, arg ListRunsPageParams) ([]Run, error) {
+type ListRunsPageRow struct {
+	Run       Run
+	ProjectID *uuid.UUID
+}
+
+func (q *Queries) ListRunsPage(ctx context.Context, arg ListRunsPageParams) ([]ListRunsPageRow, error) {
 	rows, err := q.db.Query(ctx, listRunsPage,
 		arg.OrgID,
 		arg.Limit,
@@ -742,38 +747,39 @@ func (q *Queries) ListRunsPage(ctx context.Context, arg ListRunsPageParams) ([]R
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Run{}
+	items := []ListRunsPageRow{}
 	for rows.Next() {
-		var i Run
+		var i ListRunsPageRow
 		if err := rows.Scan(
-			&i.ID,
-			&i.OrgID,
-			&i.WorkflowID,
-			&i.UserID,
-			&i.ApiKeyID,
-			&i.QuoteID,
-			&i.HoldID,
-			&i.Lane,
-			&i.Status,
-			&i.CreditsHeld,
-			&i.CreditsSettled,
-			&i.ErrorCode,
-			&i.Stats,
-			&i.StartedAt,
-			&i.FinishedAt,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.EstimatedCredits,
-			&i.CreditsSpent,
-			&i.CreditsRefunded,
-			&i.LastSeq,
-			&i.Inputs,
-			&i.Progress,
-			&i.Summary,
-			&i.Error,
-			&i.PendingQuoteID,
-			&i.CancelRequested,
-			&i.ExpiresAt,
+			&i.Run.ID,
+			&i.Run.OrgID,
+			&i.Run.WorkflowID,
+			&i.Run.UserID,
+			&i.Run.ApiKeyID,
+			&i.Run.QuoteID,
+			&i.Run.HoldID,
+			&i.Run.Lane,
+			&i.Run.Status,
+			&i.Run.CreditsHeld,
+			&i.Run.CreditsSettled,
+			&i.Run.ErrorCode,
+			&i.Run.Stats,
+			&i.Run.StartedAt,
+			&i.Run.FinishedAt,
+			&i.Run.CreatedAt,
+			&i.Run.UpdatedAt,
+			&i.Run.EstimatedCredits,
+			&i.Run.CreditsSpent,
+			&i.Run.CreditsRefunded,
+			&i.Run.LastSeq,
+			&i.Run.Inputs,
+			&i.Run.Progress,
+			&i.Run.Summary,
+			&i.Run.Error,
+			&i.Run.PendingQuoteID,
+			&i.Run.CancelRequested,
+			&i.Run.ExpiresAt,
+			&i.ProjectID,
 		); err != nil {
 			return nil, err
 		}

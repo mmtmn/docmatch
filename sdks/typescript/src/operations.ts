@@ -12,6 +12,10 @@ export const operations = {
     "method": "POST",
     "path": "/v1/projects"
   },
+  "importRunAsProject": {
+    "method": "POST",
+    "path": "/v1/projects/from-run"
+  },
   "getProject": {
     "method": "GET",
     "path": "/v1/projects/{project}"

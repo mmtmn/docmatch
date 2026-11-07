@@ -263,6 +263,58 @@ func (q *Queries) GetRun(ctx context.Context, arg GetRunParams) (Run, error) {
 	return i, err
 }
 
+const getRunWithProject = `-- name: GetRunWithProject :one
+SELECT r.id, r.org_id, r.workflow_id, r.user_id, r.api_key_id, r.quote_id, r.hold_id, r.lane, r.status, r.credits_held, r.credits_settled, r.error_code, r.stats, r.started_at, r.finished_at, r.created_at, r.updated_at, r.estimated_credits, r.credits_spent, r.credits_refunded, r.last_seq, r.inputs, r.progress, r.summary, r.error, r.pending_quote_id, r.cancel_requested, r.expires_at,pr.project_id FROM runs r LEFT JOIN project_runs pr ON pr.org_id=r.org_id AND pr.run_id=r.id
+WHERE r.org_id=$1 AND r.id=$2
+`
+
+type GetRunWithProjectParams struct {
+	OrgID uuid.UUID
+	ID    uuid.UUID
+}
+
+type GetRunWithProjectRow struct {
+	Run       Run
+	ProjectID *uuid.UUID
+}
+
+func (q *Queries) GetRunWithProject(ctx context.Context, arg GetRunWithProjectParams) (GetRunWithProjectRow, error) {
+	row := q.db.QueryRow(ctx, getRunWithProject, arg.OrgID, arg.ID)
+	var i GetRunWithProjectRow
+	err := row.Scan(
+		&i.Run.ID,
+		&i.Run.OrgID,
+		&i.Run.WorkflowID,
+		&i.Run.UserID,
+		&i.Run.ApiKeyID,
+		&i.Run.QuoteID,
+		&i.Run.HoldID,
+		&i.Run.Lane,
+		&i.Run.Status,
+		&i.Run.CreditsHeld,
+		&i.Run.CreditsSettled,
+		&i.Run.ErrorCode,
+		&i.Run.Stats,
+		&i.Run.StartedAt,
+		&i.Run.FinishedAt,
+		&i.Run.CreatedAt,
+		&i.Run.UpdatedAt,
+		&i.Run.EstimatedCredits,
+		&i.Run.CreditsSpent,
+		&i.Run.CreditsRefunded,
+		&i.Run.LastSeq,
+		&i.Run.Inputs,
+		&i.Run.Progress,
+		&i.Run.Summary,
+		&i.Run.Error,
+		&i.Run.PendingQuoteID,
+		&i.Run.CancelRequested,
+		&i.Run.ExpiresAt,
+		&i.ProjectID,
+	)
+	return i, err
+}
+
 const getUpload = `-- name: GetUpload :one
 SELECT id, org_id, user_id, run_id, file_name, content_type, size_bytes, sha256, storage_key, status, scan_result, created_at, scanned_at, deleted_at, kind, store, role, detected_mime, rejected_reason, duration_ms, ticket_expires_at, completed_at, expires_at FROM uploads WHERE org_id = $1 AND id = $2 AND deleted_at IS NULL
 `

@@ -1159,6 +1159,7 @@
     },
     "projects": {
       "key_account": "Conta vinculada à chave API",
+      "import_usage": "Use --save-run ID com --new-project \"Nome\", sem arquivos, --saved-project, --list-projects ou --upload-only. A operação apenas salva o histórico, sem conciliar.",
       "choose_one": "Use --saved-project ou --new-project, apenas um deles.",
       "key_bound": "A chave de API já pertence a uma conta. Use a chave dessa conta, sem --account.",
       "account": "Escolha a conta",
@@ -1301,6 +1302,12 @@
     "open": "Personalizar"
   },
   "projects": {
+    "import_action": "Salvar como projeto",
+    "import_name": "Conciliação de {date}",
+    "import_explanation": "Salva os arquivos e o resultado em um projeto privado na conta {account}, sem executar ou cobrar outra conciliação. Os prazos dos arquivos continuam os mesmos.",
+    "imported_notice": "Este projeto veio de uma conciliação anterior. O resultado original foi preservado; as versões de todas as regras usadas nele podem não estar disponíveis. Confira as opções antes de conciliar alterações.",
+    "imported_result": "Ver resultado original",
+    "event_imported": "Conciliação salva como projeto",
     "choose_account": "Escolher conta",
     "personal_account": "Conta pessoal",
     "upload_only": "Apenas adicionar documentos",

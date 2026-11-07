@@ -123,6 +123,7 @@ type RunError struct {
 
 // Run is the stored record.
 type Run struct {
+	ProjectID        *uuid.UUID // association may be added after a legacy run, without changing its inputs
 	ID               uuid.UUID
 	OrgID            uuid.UUID
 	WorkflowID       *uuid.UUID
@@ -233,22 +234,23 @@ type Credits struct {
 
 // View is openapi Run.
 type View struct {
-	ID           string          `json:"id"`
-	ProjectID    string          `json:"project_id,omitempty"`
-	Status       Status          `json:"status"`
-	WorkflowID   *string         `json:"workflow_id"`
-	Lane         string          `json:"lane"`
-	Sources      []uploads.View  `json:"sources"`
-	Quote        *estimate.Quote `json:"quote,omitempty"`
-	PendingQuote *estimate.Quote `json:"pending_quote,omitempty"`
-	Credits      Credits         `json:"credits"`
-	Progress     *Progress       `json:"progress,omitempty"`
-	Summary      *Summary        `json:"summary,omitempty"`
-	Error        *RunError       `json:"error,omitempty"`
-	CreatedAt    string          `json:"created_at"`
-	StartedAt    *string         `json:"started_at,omitempty"`
-	FinishedAt   *string         `json:"finished_at,omitempty"`
-	ExpiresAt    string          `json:"expires_at"`
+	CanSaveAsProject bool            `json:"can_save_as_project,omitempty"`
+	ID               string          `json:"id"`
+	ProjectID        string          `json:"project_id,omitempty"`
+	Status           Status          `json:"status"`
+	WorkflowID       *string         `json:"workflow_id"`
+	Lane             string          `json:"lane"`
+	Sources          []uploads.View  `json:"sources"`
+	Quote            *estimate.Quote `json:"quote,omitempty"`
+	PendingQuote     *estimate.Quote `json:"pending_quote,omitempty"`
+	Credits          Credits         `json:"credits"`
+	Progress         *Progress       `json:"progress,omitempty"`
+	Summary          *Summary        `json:"summary,omitempty"`
+	Error            *RunError       `json:"error,omitempty"`
+	CreatedAt        string          `json:"created_at"`
+	StartedAt        *string         `json:"started_at,omitempty"`
+	FinishedAt       *string         `json:"finished_at,omitempty"`
+	ExpiresAt        string          `json:"expires_at"`
 }
 
 func rfc3339(t *time.Time) *string {
@@ -272,7 +274,9 @@ func (r Run) View(sources []uploads.View, quote, pending *estimate.Quote) View {
 	if r.ExpiresAt != nil {
 		v.ExpiresAt = r.ExpiresAt.UTC().Format(time.RFC3339)
 	}
-	if r.Inputs.Project != nil {
+	if r.ProjectID != nil {
+		v.ProjectID = apix.Encode("prj", *r.ProjectID)
+	} else if r.Inputs.Project != nil {
 		v.ProjectID = apix.Encode("prj", r.Inputs.Project.ID)
 	}
 	if v.Sources == nil {

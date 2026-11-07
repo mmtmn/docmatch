@@ -6,6 +6,7 @@ import { t, type MessageKey } from '../../lib/i18n';
 import type { RunView } from '../../lib/pipeline';
 import { projectResultUrl, type Page } from '../../lib/projects';
 import { errorMessage, projectDate } from '../../lib/display';
+import { SaveRunAsProject } from './SaveRunAsProject';
 import styles from './ProjectsApp.module.css';
 
 const labels: Record<RunView['status'], MessageKey> = {
@@ -112,6 +113,9 @@ export function ActivityApp() {
                   </small>
                 )}
               </a>
+              {run.can_save_as_project && org.features?.projects !== false && (
+                <SaveRunAsProject org={org} run={run} />
+              )}
             </li>
           ))}
         </ul>

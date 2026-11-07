@@ -104,6 +104,8 @@ export class Client {
   listProjects({ archived = false, cursor = '', signal }: { archived?: boolean; cursor?: string; signal?: AbortSignal } = {}): Promise<Page<Project>> {
     return this.request('GET', operations.listProjects.path + `?archived=${archived}&cursor=${encodeURIComponent(cursor)}`, undefined, signal);
   }
+  /** Save a terminal historical run without another reconciliation or charge. */
+  importRunAsProject(runId: string, name: string, signal?: AbortSignal): Promise<Project> { return this.request('POST', operations.importRunAsProject.path, { run_id: runId, name }, signal); }
   createProject(name: string, signal?: AbortSignal): Promise<Project> { return this.request('POST', operations.createProject.path, { name }, signal); }
   input(ids: string[], rulesText?: string): Input {
     return {

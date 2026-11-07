@@ -251,7 +251,7 @@ private fun SignedIn(
                 val vm: HistoryViewModel = viewModel {
                     HistoryViewModel(dm, projects = accounts.current != null)
                 }
-                HistoryScreen(vm) { run ->
+                HistoryScreen(vm, accountName = accounts.current?.name ?: "", onSaved = { nav.navigate("project/$it") }) { run ->
                     nav.navigate(
                         run.projectId?.let { "project/$it/run/${run.id}" } ?: "run/${run.id}",
                     )

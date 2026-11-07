@@ -138,7 +138,7 @@ private struct SignedInView: View {
                 .tabItem { Label(texts.t("projects.title"), systemImage: "folder") }.tag(AppTab.projects)
                 if canRead {
                     NavigationStack {
-                        ActivityList(model: history, dm: session.currentDM)
+                        ActivityList(model: history, dm: session.currentDM, session: session)
                     }
                     .tabItem { Label(texts.t("projects.activity"), systemImage: "list.bullet") }.tag(AppTab.activity)
                 }
@@ -207,11 +207,16 @@ private struct SignedInView: View {
 private struct ActivityList: View {
     let model: HistoryModel
     let dm: Docmatch
+    let session: SessionModel
     @State private var result: ActivityRunLink?
+    @State private var savedProject: String?
     var body: some View {
-        HistoryView(model: model) { result = ActivityRunLink(id: $0.id, projectID: $0.projectId) }
+        HistoryView(model: model, accountName: session.currentAccount?.name ?? "", onSaved: { savedProject = $0 }) { result = ActivityRunLink(id: $0.id, projectID: $0.projectId) }
             .navigationDestination(isPresented: Binding(get: { result != nil }, set: { if !$0 { result = nil } })) {
                 if let result { RunView(dm: result.projectID.map { dm.inProject($0) } ?? dm, runId: result.id) }
+            }
+            .navigationDestination(isPresented: Binding(get: { savedProject != nil }, set: { if !$0 { savedProject = nil } })) {
+                if let savedProject { ProjectView(dm: dm, id: savedProject, accountName: session.currentAccount?.name ?? "", session: session) }
             }
     }
 }

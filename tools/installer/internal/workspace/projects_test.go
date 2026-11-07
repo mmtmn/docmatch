@@ -2,6 +2,7 @@ package workspace
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -91,5 +92,34 @@ func TestAPIKeyCannotSelectAnotherAccount(t *testing.T) {
 	err := Run(t.Context(), Options{API: server.URL, Key: "key", AccountID: "org_other", ProjectID: "prj_saved", Plain: true, Out: &output})
 	if err == nil || requests.Load() != 0 {
 		t.Fatalf("redirected key: %v, %d", err, requests.Load())
+	}
+}
+
+func TestSaveHistoricalRunStopsAfterImportWithoutReadingFilesOrRunning(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/projects/from-run" || r.Header.Get("Authorization") != "Bearer test-key" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		var body map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Error(err)
+		}
+		if body["run_id"] != "run_old" || body["name"] != "November" {
+			t.Error(body)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprint(w, `{"id":"prj_saved","name":"November","imported_run_id":"run_old"}`)
+	}))
+	defer server.Close()
+	var output bytes.Buffer
+	err := Run(t.Context(), Options{API: server.URL, Key: "test-key", SaveRunID: "run_old", NewProject: "November", Dir: "/does-not-exist", Plain: true, Out: &output})
+	if err != nil || requests.Load() != 1 || !strings.Contains(output.String(), "prj_saved") {
+		t.Fatal(err, requests.Load(), output.String())
+	}
+	err = Run(t.Context(), Options{API: server.URL, Key: "test-key", SaveRunID: "run_old", NewProject: "November", Files: []string{"private.csv"}, Plain: true, Out: &output})
+	if err == nil || requests.Load() != 1 {
+		t.Fatal("ambiguous import touched network", err, requests.Load())
 	}
 }

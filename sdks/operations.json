@@ -1,5 +1,5 @@
 {
-  "schema_sha256": "8156451d667dcfc285f461a608bdc258248adb32e3386ad51bd932f8639e1fbc",
+  "schema_sha256": "3cb19ee4786532ed4111a7f6dfc1aa4b7856d1c262a452d851547932ac5ab55d",
   "operations": {
     "listOrganizations": {
       "method": "GET",
@@ -12,6 +12,10 @@
     "createProject": {
       "method": "POST",
       "path": "/v1/projects"
+    },
+    "importRunAsProject": {
+      "method": "POST",
+      "path": "/v1/projects/from-run"
     },
     "getProject": {
       "method": "GET",

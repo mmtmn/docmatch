@@ -3,6 +3,7 @@ pub const OPERATIONS: &[(&str, &str, &str)] = &[
     ("listOrganizations", "GET", "/v1/me/organizations"),
     ("listProjects", "GET", "/v1/projects"),
     ("createProject", "POST", "/v1/projects"),
+    ("importRunAsProject", "POST", "/v1/projects/from-run"),
     ("getProject", "GET", "/v1/projects/{project}"),
     ("updateProject", "PATCH", "/v1/projects/{project}"),
     ("deleteProject", "DELETE", "/v1/projects/{project}"),

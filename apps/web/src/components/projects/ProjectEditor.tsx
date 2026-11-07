@@ -41,6 +41,7 @@ const documentLabels: Record<ProjectDocument['status'], MessageKey> = {
 };
 const eventLabels: Record<string, MessageKey> = {
   'project.created': 'projects.event_created',
+  'project.imported': 'projects.event_imported',
   'project.updated': 'projects.event_updated',
   'project.archived': 'projects.event_archived',
   'project.restored': 'projects.event_restored',
@@ -331,6 +332,14 @@ export function ProjectEditor({
         <p role="status" className={styles.notice}>
           {progress || notice}
         </p>
+      )}
+      {project.imported_run_id && (
+        <aside className={styles.notice}>
+          <p>{t('projects.imported_notice')}</p>
+          <a href={links.result(org.id, project.id, project.imported_run_id)}>
+            {t('projects.imported_result')}
+          </a>
+        </aside>
       )}
       {!project.capabilities.read_results && (
         <p className={styles.notice}>{t('projects.upload_permission')}</p>

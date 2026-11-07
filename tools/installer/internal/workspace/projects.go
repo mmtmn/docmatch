@@ -22,6 +22,9 @@ type destination struct {
 // Resolve the destination once, before reading a file. API keys never select another account.
 func chooseDestination(ctx context.Context, c *dm.Client, o Options) (destination, error) {
 	target := destination{client: c, account: text.T("projects.key_account")}
+	if o.SaveRunID != "" && (strings.TrimSpace(o.NewProject) == "" || o.ProjectID != "" || o.ListProjects || o.UploadOnly || len(o.Files) > 0) {
+		return target, errors.New(text.T("projects.import_usage"))
+	}
 	if o.ProjectID != "" && o.NewProject != "" {
 		return target, errors.New(text.T("projects.choose_one"))
 	}
@@ -62,6 +65,14 @@ func chooseDestination(ctx context.Context, c *dm.Client, o Options) (destinatio
 			return target, errors.New(text.T("projects.account_missing"))
 		}
 		target.client = c.WithAccount(selected)
+	}
+	if o.SaveRunID != "" {
+		saved, err := target.client.ImportRunAsProject(ctx, o.SaveRunID, strings.TrimSpace(o.NewProject))
+		if err != nil {
+			return target, err
+		}
+		_, err = fmt.Fprintf(o.Out, "%s\t%s\n", Safe(saved.ID), Safe(saved.Name))
+		return target, err
 	}
 	if o.ListProjects {
 		cursor := ""

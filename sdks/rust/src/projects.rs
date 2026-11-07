@@ -17,6 +17,7 @@ pub struct Capabilities {
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Project {
+    pub imported_run_id: Option<String>,
     pub id: String,
     pub name: String,
     pub visibility: String,
@@ -50,6 +51,8 @@ pub struct ProjectDocument {
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ProjectAnalysis {
+    #[serde(default)]
+    pub historical: bool,
     pub state: String,
     pub revision: i64,
     pub quote: Option<Quote>,
@@ -111,6 +114,17 @@ impl Client {
                     cursor_path(&route("listProjects", "")?, cursor)
                 ),
                 None,
+            )
+            .await?,
+        )?)
+    }
+    /// Save a terminal historical run without another reconciliation or charge.
+    pub async fn import_run_as_project(&self, run_id: &str, name: &str) -> Result<Project, Error> {
+        Ok(serde_json::from_value(
+            self.request(
+                Method::POST,
+                &route("importRunAsProject", "")?,
+                Some(&json!({"run_id":run_id,"name":name})),
             )
             .await?,
         )?)

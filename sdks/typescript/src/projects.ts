@@ -9,12 +9,14 @@ export interface ProjectDocument {
  replaces_id?: string; pending_replacement_id?: string; created_at: string; expires_at: string | null; removed_at: string | null;
 }
 export interface Project {
+ imported_run_id?: string;
  id: string; name: string; visibility: 'private' | 'team'; version: number; revision: number;
  document_count: number; settings?: ProjectSettings; capabilities: Capabilities;
  created_at: string; updated_at: string; archived_at: string | null; documents?: ProjectDocument[]; shared_with?: string[];
 }
 export interface ProjectPatch { name?: string; archived?: boolean; settings?: ProjectSettings }
 export interface ProjectAnalysis {
+ historical?: boolean;
  state: 'ready' | 'unchanged' | 'queued' | 'running' | 'needs_approval' | 'expired' | 'failed' | 'cancelled';
  revision: number; quote?: Quote; run?: Run;
 }

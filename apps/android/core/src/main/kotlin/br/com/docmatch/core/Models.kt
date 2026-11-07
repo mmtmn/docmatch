@@ -161,6 +161,7 @@ data class Run(
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("finished_at") val finishedAt: String? = null,
     @SerialName("project_id") val projectId: String? = null,
+    @SerialName("can_save_as_project") val canSaveAsProject: Boolean = false,
 )
 
 @Serializable

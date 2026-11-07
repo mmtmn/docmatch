@@ -355,6 +355,10 @@ fun ProjectScreen(
                     if (s.localSaved && s.save in listOf(ProjectSaveState.OFFLINE, ProjectSaveState.CONFLICT))
                         DmNotice(t("projects.recovery_stored"))
                     if (s.recoveryFailed) DmNotice(t("projects.recovery_unavailable"), true)
+                    project.importedRunId?.let { imported ->
+                        DmNotice(t("projects.imported_notice"))
+                        TextButton({ onRun(imported) }) { Text(t("projects.imported_result")) }
+                    }
                     if (!project.capabilities.readResults) DmNotice(t("projects.upload_permission"))
                 }
                 if (s.drafts.isNotEmpty()) item {
@@ -715,6 +719,7 @@ private fun projectEvent(action: String): String =
     t(
         "projects." +
             (mapOf(
+                "project.imported" to "event_imported",
                 "project.created" to "event_created",
                 "project.updated" to "event_updated",
                 "project.archived" to "event_archived",

@@ -68,7 +68,9 @@ func (s *Service) accountActivity(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		for _, run := range rows {
-			items = append(items, s.engine.Runs.View(ctx, run))
+			view := s.engine.Runs.View(ctx, run)
+			view.CanSaveAsProject = s.rollout.Allows(p.OrgID) && caps.CreateProject && role != "reconciler" && run.ProjectID == nil && run.Inputs.Project == nil && run.Status.Terminal() && (caps.ManageAccount || run.UserID != nil && *run.UserID == *p.UserID)
+			items = append(items, view)
 		}
 		return nil
 	})

@@ -144,6 +144,10 @@ struct ProjectView: View {
                 } else if model.saveState == .offline {
                     Button(texts.t("projects.retry_save")) { Task { await model.flush() } }
                 }
+                if let imported = project.importedRunID {
+                    DmNotice(message: texts.t("projects.imported_notice"))
+                    NavigationLink { RunView(dm: model.dm.inProject(project.id), runId: imported) } label: { Text(texts.t("projects.imported_result")) }
+                }
                 if !project.capabilities.readResults { DmNotice(message: texts.t("projects.upload_permission")) }
                 Picker(texts.t("projects.sections"), selection: $section) {
                     Text(texts.t("projects.documents")).tag("documents")
@@ -462,7 +466,7 @@ struct ProjectView: View {
     }
     private func eventLabel(_ action: String) -> String {
         let labels = [
-            "project.created": "event_created", "project.updated": "event_updated",
+            "project.imported": "event_imported", "project.created": "event_created", "project.updated": "event_updated",
             "project.sharing_changed": "event_shared", "document.added": "event_document",
             "document.removed": "event_removed", "document.replaced": "event_replaced", "run.created": "event_run",
         ]

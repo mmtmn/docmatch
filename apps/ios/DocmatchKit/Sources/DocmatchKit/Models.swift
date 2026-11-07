@@ -319,6 +319,7 @@ public struct RunError: Decodable, Sendable, Equatable {
 }
 
 public struct Run: Decodable, Sendable, Equatable, Identifiable {
+    public let canSaveAsProject: Bool
     public let id: String
     public let projectId: String?
     public let status: String
@@ -333,6 +334,7 @@ public struct Run: Decodable, Sendable, Equatable, Identifiable {
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        canSaveAsProject = try c.value(.canSaveAsProject, false)
         id = try c.decode(String.self, forKey: .id)
         projectId = try c.decodeIfPresent(String.self, forKey: .projectId)
         status = try c.decode(String.self, forKey: .status)
@@ -347,6 +349,7 @@ public struct Run: Decodable, Sendable, Equatable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case id, status, sources, progress, summary, error
+        case canSaveAsProject = "can_save_as_project"
         case projectId = "project_id"
         case pendingQuote = "pending_quote"
         case createdAt = "created_at"

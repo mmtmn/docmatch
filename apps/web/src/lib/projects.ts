@@ -10,6 +10,7 @@ export interface ProjectSettings {
   llm_mode?: string;
 }
 export interface Project {
+  imported_run_id?: string;
   id: string;
   name: string;
   visibility: 'private' | 'team';
@@ -58,6 +59,7 @@ export interface Page<T> {
   next_cursor?: string | null;
 }
 export interface ProjectAnalysis {
+  historical?: boolean;
   state: 'ready' | 'unchanged' | 'queued' | 'running' | 'needs_approval' | 'expired';
   revision: number;
   quote?: QuoteView;
@@ -77,6 +79,12 @@ export function projectClient(orgId: string, request: typeof api = api) {
         `/v1/projects?archived=${archived}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
         { orgId, ...(signal ? { signal } : {}) },
       ),
+    importRun: (runId: string, name: string, signal?: AbortSignal) =>
+      request<Project>('/v1/projects/from-run', {
+        orgId,
+        body: { run_id: runId, name },
+        ...(signal ? { signal } : {}),
+      }),
     create: (name: string) => request<Project>('/v1/projects', { orgId, body: { name } }),
     get: (id: string, signal?: AbortSignal) =>
       request<ProjectDetail>(path(id), { orgId, ...(signal ? { signal } : {}) }),

@@ -27,6 +27,10 @@ suspend fun DocmatchApi.projects(cursor: String? = null, archived: Boolean = fal
             },
     )!!
 
+/** Saving history does not create another run or reserve credits. */
+suspend fun DocmatchApi.importRunAsProject(runId: String, name: String): SavedProject =
+    http.call("POST", "/v1/projects/from-run", buildJsonObject { put("run_id", runId); put("name", name) }, SavedProject.serializer())!!
+
 suspend fun DocmatchApi.createProject(name: String): SavedProject =
     http.call(
         "POST",

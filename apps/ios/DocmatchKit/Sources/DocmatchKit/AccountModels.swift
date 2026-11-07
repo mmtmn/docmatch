@@ -18,6 +18,10 @@ public final class HistoryModel {
 
     public init(dm: Docmatch, projects: Bool = false) { self.dm = dm; self.projects = projects }
 
+    public func saveAsProject(_ runID: String, name: String) async throws -> SavedProject {
+        try await dm.api.importRunAsProject(runID, name: name)
+    }
+
     /// Reloads the first page (every time the tab is shown); what is on screen stays meanwhile.
     public func refresh() async {
         if case .ready = state {} else { state = .loading }

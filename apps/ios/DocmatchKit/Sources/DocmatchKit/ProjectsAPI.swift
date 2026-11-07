@@ -9,6 +9,10 @@ extension DocmatchAPI {
         if let cursor { query.append(("cursor", cursor)) }
         return try await http.call("GET", "/v1/projects", as: ProjectList.self, query: query)
     }
+    public func importRunAsProject(_ runID: String, name: String) async throws -> SavedProject {
+        try await http.call("POST", "/v1/projects/from-run", body: ["run_id": .string(runID), "name": .string(name)], as: SavedProject.self)
+    }
+
     public func createProject(name: String) async throws -> SavedProject { try await http.call("POST", "/v1/projects", body: ["name": .string(name)], as: SavedProject.self) }
     public func project(_ id: String) async throws -> SavedProject { try await http.call("GET", projectPath(id), as: SavedProject.self) }
     public func updateProject(_ id: String, version: Int64, name: String? = nil, archived: Bool? = nil, settings: ProjectSettings? = nil) async throws -> SavedProject {

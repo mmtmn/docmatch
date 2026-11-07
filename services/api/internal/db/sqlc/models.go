@@ -573,6 +573,13 @@ type ProjectEvent struct {
 	CreatedAt time.Time
 }
 
+type ProjectImport struct {
+	OrgID             uuid.UUID
+	ProjectID         uuid.UUID
+	RunID             uuid.UUID
+	BaselineSignature *string
+}
+
 type ProjectMember struct {
 	OrgID     uuid.UUID
 	ProjectID uuid.UUID

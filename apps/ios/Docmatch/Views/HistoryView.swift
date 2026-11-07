@@ -5,11 +5,20 @@ import SwiftUI
 struct HistoryView: View {
     let model: HistoryModel
     let onOpen: (Run) -> Void
+    let accountName: String
+    let onSaved: (String) -> Void
+    @State private var importing: Run?
+    @State private var importName = ""
+    @State private var importBusy = false
+    @State private var importError: String?
+    @State private var importTask: Task<Void, Never>?
     @Environment(\.texts) private var texts
 
-    init(model: HistoryModel, onOpen: @escaping (Run) -> Void) {
+    init(model: HistoryModel, accountName: String = "", onSaved: @escaping (String) -> Void = { _ in }, onOpen: @escaping (Run) -> Void) {
         self.model = model
         self.onOpen = onOpen
+        self.accountName = accountName
+        self.onSaved = onSaved
     }
 
     var body: some View {
@@ -44,6 +53,13 @@ struct HistoryView: View {
                                 }
                             }
                         }.buttonStyle(.plain)
+                        if run.canSaveAsProject {
+                            Button(texts.t("projects.import_action")) {
+                                importName = texts.t("projects.import_name", ["date": Format.dateTime(run.createdAt)])
+                                importError = nil
+                                importing = run
+                            }.buttonStyle(DmButtonStyle(.secondary))
+                        }
                     }
                     if let notice { DmNotice(message: notice, error: true) }
                     if next != nil {
@@ -55,5 +71,32 @@ struct HistoryView: View {
         }
         .dmNavigation(texts.t("mobile.tab_history"))
         .task { await model.refresh() }
+        .onDisappear { importTask?.cancel() }
+        .sheet(item: $importing) { run in
+            NavigationStack {
+                DmPage {
+                    DmHeading(title: texts.t("projects.import_action"), subtitle: texts.t("projects.import_explanation", ["account": accountName]))
+                    TextField(texts.t("projects.name"), text: $importName).textFieldStyle(.roundedBorder).disabled(importBusy)
+                    if let importError { DmNotice(message: importError, error: true) }
+                    Button(texts.t(importBusy ? "projects.saving" : "projects.import_action")) {
+                        importBusy = true
+                        importError = nil
+                        importTask = Task {
+                            do {
+                                let project = try await model.saveAsProject(run.id, name: importName)
+                                guard !Task.isCancelled else { return }
+                                importing = nil
+                                onSaved(project.id)
+                            } catch {
+                                guard !Task.isCancelled else { return }
+                                importError = (error as? ApiError)?.message ?? texts.t("errors.unknown")
+                            }
+                            importBusy = false
+                        }
+                    }.buttonStyle(DmButtonStyle(.primary)).disabled(importBusy || importName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    Button(texts.t("common.cancel")) { importing = nil }.buttonStyle(DmButtonStyle(.secondary)).disabled(importBusy)
+                }
+            }.presentationDetents([.medium, .large]).interactiveDismissDisabled(importBusy)
+        }
     }
 }

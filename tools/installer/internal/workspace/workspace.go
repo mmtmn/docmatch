@@ -23,13 +23,13 @@ import (
 )
 
 type Options struct {
-	API, Key, Dir, Output            string
-	ProjectID, NewProject, AccountID string
-	ListProjects, UploadOnly         bool
-	Files                            []string
-	Plain, Yes, NoAnimation          bool
-	In                               io.Reader
-	Out                              io.Writer
+	API, Key, Dir, Output                       string
+	ProjectID, NewProject, AccountID, SaveRunID string
+	ListProjects, UploadOnly                    bool
+	Files                                       []string
+	Plain, Yes, NoAnimation                     bool
+	In                                          io.Reader
+	Out                                         io.Writer
 }
 type model struct {
 	ctx           context.Context
@@ -125,7 +125,7 @@ func Run(ctx context.Context, opts Options) error {
 	if err != nil {
 		return err
 	}
-	if opts.ListProjects {
+	if opts.ListProjects || opts.SaveRunID != "" {
 		return nil
 	}
 	if opts.Plain {

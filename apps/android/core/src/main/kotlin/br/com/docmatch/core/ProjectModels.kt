@@ -71,6 +71,8 @@ data class SavedProject(
     val documents: List<ProjectDocument>? = null,
     @SerialName("shared_with")
     val sharedWith: List<String>? = null,
+    @SerialName("imported_run_id")
+    val importedRunId: String? = null,
 )
 
 @Serializable
@@ -109,6 +111,7 @@ data class ProjectAnalysis(
     val revision: Long,
     val run: Run? = null,
     val quote: Quote? = null,
+    val historical: Boolean = false,
 )
 
 @Serializable

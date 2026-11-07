@@ -98,9 +98,10 @@ func access(ctx context.Context, tx pgx.Tx, p apix.Principal, id uuid.UUID, edit
 	}
 	var out Project
 	var data []byte
-	err = tx.QueryRow(ctx, `SELECT name,visibility,version,revision,settings,owner_id,created_at,updated_at,archived_at
+	var imported *uuid.UUID
+	err = tx.QueryRow(ctx, `SELECT name,visibility,version,revision,settings,owner_id,created_at,updated_at,archived_at,(SELECT run_id FROM project_imports i WHERE i.org_id=projects.org_id AND i.project_id=projects.id)
  FROM projects WHERE org_id=$1 AND id=$2 AND deleted_at IS NULL FOR UPDATE`, p.OrgID, id).
-		Scan(&out.Name, &out.Visibility, &out.Version, &out.Revision, &data, &out.OwnerID, &out.CreatedAt, &out.UpdatedAt, &out.ArchivedAt)
+		Scan(&out.Name, &out.Visibility, &out.Version, &out.Revision, &data, &out.OwnerID, &out.CreatedAt, &out.UpdatedAt, &out.ArchivedAt, &imported)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Project{}, "", missing()
 	}
@@ -122,6 +123,9 @@ func access(ctx context.Context, tx pgx.Tx, p apix.Principal, id uuid.UUID, edit
 		return Project{}, "", apix.ErrForbidden
 	}
 	out.ID = publicid.Encode(Prefix, id)
+	if imported != nil && out.Capabilities.ReadResults {
+		out.ImportedRunID = publicid.Encode("run", *imported)
+	}
 	if out.Capabilities.ReadResults {
 		out.Settings = &Settings{}
 		if err = json.Unmarshal(data, out.Settings); err != nil {
