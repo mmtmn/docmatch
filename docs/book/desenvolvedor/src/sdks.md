@@ -16,9 +16,8 @@ os exemplos desta edição.
 | [Rust](rust.md) | `cargo add docmatch@0.1.0` | Executar o exemplo do workspace `sdks/rust`. |
 | [TypeScript](typescript.md) | Ainda não publicado como `@docmatch/sdk`. | Compilar `sdks/typescript`. |
 
-O repositório GitHub ainda é privado. Para Go, use seu acesso autorizado ao GitHub e
-`GOPRIVATE=github.com/mmtmn/docmatch`; o proxy público não fornece essa versão privada.
-Não exponha tokens em URLs de instalação. O pacote npm `docmatch` é o terminal,
+O repositório GitHub é público. Go não exige uma conta adicional nem configuração
+de acesso privado. Não exponha tokens em URLs de instalação. O pacote npm `docmatch` é o terminal,
 não o SDK TypeScript.
 
 Os quatro exemplos a seguir vêm diretamente dos arquivos testados dos SDKs. Eles consultam

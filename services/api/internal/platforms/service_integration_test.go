@@ -338,7 +338,7 @@ func TestResendInvalidatesOldTokenAndBoundsEmail(t *testing.T) {
 		t.Fatal("per-IP cap ignored")
 	}
 	for i := range DailyMailLimit {
-		err := s.Subscribe(ctx, "github", fmt.Sprintf("budget%d@example.test", i), fmt.Sprintf("192.0.2.%d", i+10), true)
+		err := s.Subscribe(ctx, "chrome", fmt.Sprintf("budget%d@example.test", i), fmt.Sprintf("192.0.2.%d", i+10), true)
 		if i < DailyMailLimit-7 {
 			must(t, err)
 		}
@@ -346,7 +346,7 @@ func TestResendInvalidatesOldTokenAndBoundsEmail(t *testing.T) {
 	if count(t, `SELECT count(*) FROM platform_notice_sends`) != DailyMailLimit {
 		t.Fatal("global cap ignored")
 	}
-	if err := s.Subscribe(ctx, "github", "last@example.test", "192.0.2.200", true); err == nil {
+	if err := s.Subscribe(ctx, "chrome", "last@example.test", "192.0.2.200", true); err == nil {
 		t.Fatal("global cap not reported")
 	}
 }

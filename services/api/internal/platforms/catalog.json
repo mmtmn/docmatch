@@ -1,7 +1,7 @@
 [
   {"id":"android","name":"Android","status":"coming_soon","url":""},
   {"id":"ios","name":"iOS","status":"coming_soon","url":""},
-  {"id":"github","name":"GitHub","status":"coming_soon","url":""},
+  {"id":"github","name":"GitHub","status":"available","url":"https://github.com/mmtmn/docmatch"},
   {"id":"chrome","name":"Chrome","status":"coming_soon","url":""},
   {"id":"firefox","name":"Firefox","status":"coming_soon","url":""},
   {"id":"safari","name":"Safari","status":"coming_soon","url":""}
