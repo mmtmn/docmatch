@@ -22,9 +22,9 @@ upload, verificação e correção de uma release. Os testes e builds de publica
 | Python | [docmatch](python/README.md) | `python -m pip install docmatch==0.1.0` dentro de um venv |
 | Rust | [docmatch](rust/README.md) | `cargo add docmatch@0.1.0` |
 
-## Projetos na próxima versão
+## Projetos na versão 0.2.0 em preparação
 
-O código desta branch acrescenta projetos aos quatro SDKs. As versões `0.1.0` publicadas
+A versão 0.2.0 acrescenta projetos aos quatro SDKs. As versões `0.1.0` publicadas
 continuam intactas; os novos métodos só devem ser usados após a implantação da API e a
 publicação da nova versão.
 

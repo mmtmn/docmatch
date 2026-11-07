@@ -3,7 +3,7 @@ requires = ["hatchling>=1.27,<2"]
 build-backend = "hatchling.build"
 [project]
 name = "docmatch"
-version = "0.1.0"
+version = "0.2.0"
 description = "Cliente oficial da API docmatch"
 readme = "README.md"
 requires-python = ">=3.10"
