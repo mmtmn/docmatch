@@ -65,6 +65,43 @@ class ProjectModelsTest {
         """{"id":"prj_test","name":"Janeiro","visibility":"private","version":1,"revision":1,"document_count":0,"created_at":"2026-11-06T10:00:00Z","updated_at":"2026-11-06T10:00:00Z","capabilities":{"reconcile":true,"read_results":true,"upload":true},"documents":[]}"""
 
     @Test
+    fun rememberedAccountRequiresSameIdentityOriginAndMembership() = runBlocking {
+        for (scenario in listOf("restart", "identity", "origin", "membership", "logout")) {
+            val store = MemorySecretStore()
+            answer(both)
+            answer(me)
+            val session = SessionViewModel(client(), store)
+            until { session.state.value is SessionState.SignedIn }
+            repeat(2) { server.takeRequest(1, TimeUnit.SECONDS) }
+            answer(both)
+            answer(me)
+            session.selectAccount("org_company")
+            until { session.accounts.value.selected == "org_company" }
+            repeat(2) { server.takeRequest(1, TimeUnit.SECONDS) }
+            if (scenario == "logout") {
+                answer("{}")
+                session.signedOut()
+                until { session.state.value is SessionState.SignedOut }
+                server.takeRequest(1, TimeUnit.SECONDS)
+                assertNull(store.read())
+            }
+            val available = when (scenario) {
+                "identity" -> both.replace("usr_1", "usr_2")
+                "membership" -> onlyPersonal
+                else -> both
+            }
+            answer(available)
+            answer(me)
+            val origin = if (scenario == "origin") server.url("/").toString().replace("localhost", "127.0.0.1") else server.url("/").toString()
+            val reopened = SessionViewModel(Docmatch(origin, MemorySecretStore(), "test", "{}"), store)
+            until { reopened.state.value is SessionState.SignedIn }
+            assertEquals(scenario, if (scenario == "restart") "org_company" else "org_personal", reopened.accounts.value.selected)
+            assertNull(server.takeRequest(1, TimeUnit.SECONDS)?.getHeader("X-Docmatch-Org"))
+            assertEquals(reopened.accounts.value.selected, server.takeRequest(1, TimeUnit.SECONDS)?.getHeader("X-Docmatch-Org"))
+        }
+    }
+
+    @Test
     fun switchingBindsNewRequestsAndRemovalReturnsToPersonal() = runBlocking {
         answer(both)
         answer(me)

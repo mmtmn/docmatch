@@ -6,8 +6,31 @@ export interface AccountSelection {
 }
 
 const KEY = 'docmatch:account:v1';
+const REMEMBERED_KEY = 'docmatch:account:last:v1';
 export const ACCOUNT_CHANGED_EVENT = 'docmatch:account-changed';
 let selection: AccountSelection | null = null;
+
+/** A closed browser can resume its last account after the server identifies the user.
+ * Existing tabs keep their own destination and never adopt another tab's storage event. */
+export function rememberedAccount(userId: string): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const value: unknown = JSON.parse(window.localStorage.getItem(REMEMBERED_KEY) ?? 'null');
+    if (
+      value &&
+      typeof value === 'object' &&
+      'userId' in value &&
+      'orgId' in value &&
+      value.userId === userId &&
+      typeof value.orgId === 'string' &&
+      /^org_[0-9A-Z]{26}$/.test(value.orgId)
+    )
+      return value.orgId;
+  } catch {
+    /* Storage may be unavailable. */
+  }
+  return null;
+}
 
 export function selectedAccount(): AccountSelection | null {
   if (typeof window === 'undefined') return null;
@@ -36,6 +59,7 @@ export function selectAccount(userId: string, orgId: string): void {
   if (typeof window === 'undefined') return;
   try {
     window.sessionStorage.setItem(KEY, JSON.stringify(selection));
+    window.localStorage.setItem(REMEMBERED_KEY, JSON.stringify(selection));
   } catch {
     /* Memory fallback. */
   }
@@ -47,6 +71,7 @@ export function clearAccountSelection(): void {
   if (typeof window === 'undefined') return;
   try {
     window.sessionStorage.removeItem(KEY);
+    window.localStorage.removeItem(REMEMBERED_KEY);
   } catch {
     /* Memory fallback. */
   }

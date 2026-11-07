@@ -44,10 +44,35 @@ public final class SessionModel {
     public var currentDM: Docmatch { accountID.map { dm.inAccount($0) } ?? dm }
     @ObservationIgnored public let dm: Docmatch
     @ObservationIgnored private let cleanup: @Sendable () -> Void
+    @ObservationIgnored private let accountStore: any SecretStore
+
+    private struct RememberedAccount: Codable {
+        let origin: String
+        let userID: String
+        let accountID: String
+    }
+
+    private func rememberedAccount(for userID: String) -> String? {
+        guard let data = accountStore.read(),
+            let saved = try? JSONDecoder().decode(RememberedAccount.self, from: data),
+            saved.origin == dm.baseURL.absoluteString, saved.userID == userID
+        else { return nil }
+        return saved.accountID
+    }
+
+    private func rememberAccount() {
+        guard let identityID, let accountID else { return }
+        accountStore.write(try? JSONEncoder().encode(RememberedAccount(
+            origin: dm.baseURL.absoluteString, userID: identityID, accountID: accountID)))
+    }
 
     /// `cleanup` removes what a session leaves on the device (exported reports) when it ends.
-    public init(dm: Docmatch, cleanup: @escaping @Sendable () -> Void = { RunModel.clearExports() }) {
+    public init(
+        dm: Docmatch, accountStore: any SecretStore = MemorySecretStore(),
+        cleanup: @escaping @Sendable () -> Void = { RunModel.clearExports() }
+    ) {
         self.dm = dm
+        self.accountStore = accountStore
         self.cleanup = cleanup
         // Revoked from another device's account page (or ended on the server): back to sign-in
         // with the API's own message, wherever the user was.
@@ -134,6 +159,7 @@ public final class SessionModel {
     }
 
     private func clearAccounts() {
+        accountStore.write(nil)
         accounts = []
         accountID = nil
         identityID = nil
@@ -209,6 +235,7 @@ public final class SessionModel {
             cleanup()
             accounts = available.items
             accountID = id
+            rememberAccount()
             hasUnsavedProjectChanges = false
             state = .signedIn(me)
         } catch {
@@ -246,19 +273,27 @@ public final class SessionModel {
                 let available = try await dm.api.organizations()
                 guard generation == self.generation else { return state }
                 if identityID != available.userId {
-                    accountID = nil
+                    accountID = rememberedAccount(for: available.userId)
                     cleanup()
                 }
                 identityID = available.userId
                 accounts = available.items
-                if !accounts.contains(where: { $0.id == accountID }) { accountID = accounts.first?.id }
+                if !accounts.contains(where: { $0.id == accountID }) {
+                    accountID = accounts.first { $0.kind == "personal" }?.id ?? accounts.first?.id
+                }
             } catch let e as ApiError where e.status == 404 {
                 guard generation == self.generation else { return state }
                 // Older deployments can still serve their original personal-account flow.
                 accounts = []
                 accountID = nil
             }
-            if let me = try await currentDM.api.me() { return .signedIn(me) }
+            if let me = try await currentDM.api.me() {
+                guard generation == self.generation else { return state }
+                rememberAccount()
+                return .signedIn(me)
+            }
+            guard generation == self.generation else { return state }
+            clearAccounts()
             return .signedOut(SignedOut(methods: await dm.api.methods()))
         } catch {
             let message = (error as? ApiError)?.message ?? dm.texts.t("errors.unknown")

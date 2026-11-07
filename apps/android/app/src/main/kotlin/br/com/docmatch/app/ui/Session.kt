@@ -7,7 +7,13 @@ import br.com.docmatch.core.ApiException
 import br.com.docmatch.core.AuthMethods
 import br.com.docmatch.core.Docmatch
 import br.com.docmatch.core.Me
+import br.com.docmatch.core.MemorySecretStore
+import br.com.docmatch.core.SecretStore
 import br.com.docmatch.core.organizations
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.io.DataInputStream
+import java.io.DataOutputStream
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -44,7 +50,11 @@ data class ProjectWork(val dirty: Boolean = false, val busy: Boolean = false)
  * Who is signed in on this device. Every sign-in lands on the same account as on the site.
  * [cleanup] removes what the session left on the device (exported reports) whenever it ends.
  */
-class SessionViewModel(val dm: Docmatch, private val cleanup: () -> Unit = {}) : ViewModel() {
+class SessionViewModel(
+    val dm: Docmatch,
+    private val accountStore: SecretStore = MemorySecretStore(),
+    private val cleanup: () -> Unit = {},
+) : ViewModel() {
     private val _state = MutableStateFlow<SessionState>(SessionState.Loading)
     val state: StateFlow<SessionState> = _state
 
@@ -61,8 +71,33 @@ class SessionViewModel(val dm: Docmatch, private val cleanup: () -> Unit = {}) :
 
     private var generation = 0
 
+    private fun rememberedAccount(userId: String): String? =
+        runCatching {
+            val bytes = accountStore.read() ?: return null
+            DataInputStream(ByteArrayInputStream(bytes)).use { input ->
+                val origin = input.readUTF()
+                val identity = input.readUTF()
+                val account = input.readUTF()
+                account.takeIf { origin == dm.baseUrl && identity == userId && input.available() == 0 }
+            }
+        }.getOrNull()
+
+    private fun rememberAccount() {
+        val current = _accounts.value
+        val userId = current.userId ?: return
+        val account = current.selected ?: return
+        val bytes = ByteArrayOutputStream()
+        DataOutputStream(bytes).use {
+            it.writeUTF(dm.baseUrl)
+            it.writeUTF(userId)
+            it.writeUTF(account)
+        }
+        accountStore.write(bytes.toByteArray())
+    }
+
     private fun clearAccounts() {
         generation += 1
+        accountStore.write(null)
         _accounts.value = AccountSelection()
         _projectWork.value = ProjectWork()
         cleanup()
@@ -186,6 +221,7 @@ class SessionViewModel(val dm: Docmatch, private val cleanup: () -> Unit = {}) :
                         cleanup()
                         _projectWork.value = ProjectWork()
                         _accounts.value = AccountSelection(available.items, id, available.userId)
+                        rememberAccount()
                         _state.value = SessionState.SignedIn(me)
                     }
                 }
@@ -238,7 +274,12 @@ class SessionViewModel(val dm: Docmatch, private val cleanup: () -> Unit = {}) :
                             available.items.any { it.id == before.selected }
                     )
                         before.selected
-                    else available.items.firstOrNull()?.id
+                    else {
+                        val remembered = rememberedAccount(available.userId)
+                        available.items.firstOrNull { it.id == remembered }?.id
+                            ?: available.items.firstOrNull { it.kind == "personal" }?.id
+                            ?: available.items.firstOrNull()?.id
+                    }
                 if (before.userId != available.userId || before.selected != selected) {
                     cleanup()
                     _projectWork.value = ProjectWork()
@@ -249,8 +290,18 @@ class SessionViewModel(val dm: Docmatch, private val cleanup: () -> Unit = {}) :
                 if (e.status != 404) throw e
                 _accounts.value = AccountSelection()
             }
-            currentDM.api.me()?.let { SessionState.SignedIn(it) }
-                ?: SessionState.SignedOut(dm.api.methods())
+            val me = currentDM.api.me()
+            if (generation != this.generation) return state.value
+            if (me != null) {
+                rememberAccount()
+                SessionState.SignedIn(me)
+            } else {
+                accountStore.write(null)
+                _accounts.value = AccountSelection()
+                _projectWork.value = ProjectWork()
+                cleanup()
+                SessionState.SignedOut(dm.api.methods())
+            }
         } catch (e: ApiException) {
             SessionState.SignedOut(dm.api.methods(), error = e.message)
         }

@@ -22,6 +22,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import br.com.docmatch.app.Exports
+import br.com.docmatch.app.KeystoreSecretStore
 import br.com.docmatch.core.AccountMembership
 import br.com.docmatch.core.Docmatch
 import br.com.docmatch.core.InvitationLink
@@ -34,7 +35,7 @@ fun DocmatchRoot(dm: Docmatch, invitationUrl: String? = null, onInvitationClosed
         DocmatchTheme {
             val app = LocalContext.current.applicationContext
             val session: SessionViewModel = viewModel {
-                SessionViewModel(dm) { Exports.clear(app) }
+                SessionViewModel(dm, KeystoreSecretStore(app, "selected-account-v1")) { Exports.clear(app) }
             }
             val token =
                 remember(invitationUrl) {

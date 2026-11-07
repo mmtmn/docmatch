@@ -19,7 +19,8 @@ struct DocmatchApp: App {
                 baseURL: config.apiBaseURL, store: KeychainSecretStore(), userAgent: userAgent, textsJSON: json,
                 aliasLoopback: config.aliasLoopback)
             texts = dm.texts
-            _session = State(initialValue: SessionModel(dm: dm))
+            _session = State(initialValue: SessionModel(
+                dm: dm, accountStore: KeychainSecretStore(account: "selected-account-v1")))
         } catch {
             fatalError("pt-BR.json inválido no pacote do app: \(error)")
         }

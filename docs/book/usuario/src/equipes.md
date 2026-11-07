@@ -4,6 +4,10 @@ Seu login pode participar de uma conta pessoal e de várias empresas. O seletor 
 mostra onde você está trabalhando. Cada conta mantém seus projetos, participantes e saldo.
 Confira esse nome antes de enviar arquivos ou aprovar uma conciliação.
 
+A docmatch lembra a última conta neste navegador ou aparelho. Ao voltar, confirma se você
+ainda tem acesso. Abas já abertas mantêm sua própria escolha. Sair do login apaga essa
+preferência; ela nunca passa para outra pessoa que entre no mesmo aparelho.
+
 O responsável abre **Equipe**, informa o e-mail da pessoa e escolhe a permissão.
 Projetos privados precisam ser compartilhados explicitamente.
 

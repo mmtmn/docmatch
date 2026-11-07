@@ -1,5 +1,5 @@
 import { api } from './api';
-import { selectAccount, selectedAccount } from './accountContext';
+import { rememberedAccount, selectAccount, selectedAccount } from './accountContext';
 
 export interface Capabilities {
   manage_account: boolean;
@@ -41,7 +41,11 @@ export async function accounts(signal?: AbortSignal): Promise<Accounts> {
       ? list.items.find((item) => item.id === previous.orgId)
       : undefined;
   const initial =
-    linked ?? selected ?? list.items.find((item) => item.kind === 'personal') ?? list.items[0];
+    linked ??
+    selected ??
+    list.items.find((item) => item.id === rememberedAccount(list.user_id)) ??
+    list.items.find((item) => item.kind === 'personal') ??
+    list.items[0];
   if (initial && (!selected || previous?.orgId !== initial.id)) {
     selectAccount(list.user_id, initial.id);
   }
