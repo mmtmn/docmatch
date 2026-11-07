@@ -22,7 +22,7 @@ import (
 
 func devStatuses(missing ...string) []toolchain.Status {
 	versions := map[string]string{"git": "2.43.0", "make": "4.3", "cc": "13.3.0", "go": "1.22.2; o Go baixa o go1.27.3 do go.mod sozinho (GOTOOLCHAIN=auto)",
-		"rust": "1.93.0 (o rustup segue o rust-toolchain.toml)", "node": "22.23.4", "pnpm": "11.5.3", "docker": "Compose 2.40.3", "openssl": "3.0.13", "curl": "8.5.0"}
+		"rust": "1.93.1 (o rustup segue o rust-toolchain.toml)", "node": "22.23.4", "pnpm": "11.5.3", "docker": "Compose 2.40.3", "openssl": "3.0.13", "curl": "8.5.0"}
 	out := make([]toolchain.Status, 0, len(versions))
 	for _, id := range []string{"git", "make", "cc", "go", "rust", "node", "pnpm", "docker", "openssl", "curl"} {
 		s := toolchain.Status{ID: id, Name: toolchain.Name(id), Detail: versions[id]}

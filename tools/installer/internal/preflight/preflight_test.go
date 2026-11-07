@@ -21,7 +21,7 @@ func fake() Env {
 		LookPath:  func(name string) (string, error) { return "/usr/bin/" + name, nil },
 		Output: func(_ context.Context, name string, _ ...string) (string, error) {
 			return map[string]string{"git": "git version 2.43.0", "go": "go version go1.27.3 linux/amd64", "node": "v22.23.4",
-				"pnpm": "11.5.3", "cargo": "cargo 1.93.0", "make": "GNU Make 4.3", "openssl": "OpenSSL 3.0.13", "curl": "curl 8.5.0"}[name], nil
+				"pnpm": "11.5.3", "cargo": "cargo 1.93.1", "make": "GNU Make 4.3", "openssl": "OpenSSL 3.0.13", "curl": "curl 8.5.0"}[name], nil
 		},
 		DockerOutput: func(_ context.Context, args ...string) (string, error) {
 			switch strings.Join(args, " ") {

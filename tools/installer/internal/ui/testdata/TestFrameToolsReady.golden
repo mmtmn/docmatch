@@ -7,7 +7,7 @@
   ✓ make            4.3
   ✓ compilador C    13.3.0
   ✓ Go              1.22.2; o Go baixa o go1.27.3 do go.mod sozinho (GOTOOLCHAIN=auto)
-  ✓ Rust            1.93.0 (o rustup segue o rust-toolchain.toml)
+  ✓ Rust            1.93.1 (o rustup segue o rust-toolchain.toml)
   ✓ Node            22.23.4
   ✓ pnpm            11.5.3
   ✓ Docker          Compose 2.40.3
