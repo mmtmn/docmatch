@@ -133,6 +133,7 @@ Referências: [pgBackRest](https://pgbackrest.org/user-guide.html) e
 | --- | --- | --- | --- | --- | --- |
 | 2026-11-06 | prod | Correção de permissões, backup completo e restauração em cluster temporário isolado no EBS existente | `20261106-223714F` | Backup e arquivamento ok; cópia restaurada em 14,73 s, esquema 33 e 76 tabelas. Ambiente de ensaio removido; aplicação não reiniciada. Esse tempo não mede uma recuperação completa do serviço. | Operação assistida autorizada pelo responsável |
 | 2026-11-07 | cópia isolada de prod | Migrações 34–43 e teste do binário anterior `dfc5c5c819b6` | `20261106-223714F` | Restauração em 14,69 s; migrações concluídas, sem alterar os dados originais conferidos. Login, leitura de conta/execuções e logout passaram no binário anterior. Sem worker ou rede externa; cópia e processos removidos. | Operação assistida autorizada pelo responsável |
+| 2026-11-07 | cópia isolada de prod | API ARM64 candidata `e5ac1f6`, após migrações 34–43 | `20261106-223714F` | Restauração em 14,78 s; criação/reabertura de projeto, recusa de edição antiga, isolamento entre contas, aceite de convite, troca de permissão e remoção de participante passaram. Conta pessoal preservada. Sem worker ou e-mail externo; arquivos e processos temporários removidos. | Operação assistida autorizada pelo responsável |
 
 O segundo ensaio comparou entradas e estados das execuções, vencimentos dos uploads,
 vínculos de conta e saldos/reservas de créditos antes e depois das migrações. O login usou
