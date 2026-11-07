@@ -4,17 +4,16 @@ Os clientes de Python, Go, Rust e TypeScript enviam documentos, pedem estimativa
 acompanham execuções, leem achados e baixam resultados. Os exemplos desta edição usam
 os novos métodos de **projetos**.
 
-**Publicação atual:** Python e Rust 0.1.0 estão nos registros; Go v0.1.0 está na tag
-`sdks/go/v0.1.0`. Esses pacotes ainda não contêm os métodos novos apresentados aqui.
-Enquanto a próxima versão não for publicada, use o checkout autorizado para executar
-os exemplos desta edição.
+**Publicação atual:** Python, Go e Rust 0.2.0 incluem os métodos de projetos desta edição.
+As versões 0.1.0 continuam disponíveis. TypeScript está pronto no repositório;
+a publicação como `@docmatch/sdk` no npm ainda está pendente.
 
-| Cliente | Instalação da versão publicada | Projetos nesta edição |
-| --- | --- | --- |
-| [Python](python.md) | `python -m pip install docmatch==0.1.0` | Instalar a pasta `sdks/python` do checkout. |
-| [Go](go.md) | `go get github.com/mmtmn/docmatch/sdks/go@v0.1.0` | Executar dentro do módulo `sdks/go`. |
-| [Rust](rust.md) | `cargo add docmatch@0.1.0` | Executar o exemplo do workspace `sdks/rust`. |
-| [TypeScript](typescript.md) | Ainda não publicado como `@docmatch/sdk`. | Compilar `sdks/typescript`. |
+| Cliente | Instalação |
+| --- | --- |
+| [Python](python.md) | `python -m pip install docmatch==0.2.0` em um ambiente virtual. |
+| [Go](go.md) | `go get github.com/mmtmn/docmatch/sdks/go@v0.2.0` |
+| [Rust](rust.md) | `cargo add docmatch@0.2.0` |
+| [TypeScript](typescript.md) | `pnpm --dir sdks/typescript build` e `pnpm --dir sdks/typescript pack` |
 
 O repositório GitHub é público. Go não exige uma conta adicional nem configuração
 de acesso privado. Não exponha tokens em URLs de instalação. O pacote npm `docmatch` é o terminal,
