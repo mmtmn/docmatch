@@ -1,5 +1,6 @@
 import { browser } from './browser';
 import { config } from './config';
+import { clearProjectDrafts } from '../../web/src/lib/projectDrafts';
 import {
   callbackCode,
   pkceChallenge,
@@ -263,6 +264,7 @@ async function signOut() {
   return serialized(async () => {
     const current = await state();
     await save({ epoch: crypto.randomUUID() });
+    await clearProjectDrafts();
     await clearPending(
       (await browser.storage.local.get(pendingKey))[pendingKey] as Pending | undefined,
     );

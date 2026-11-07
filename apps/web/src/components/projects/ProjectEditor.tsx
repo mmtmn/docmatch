@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Organization } from '../../lib/accounts';
 import { formatBytes } from '../../lib/format';
 import { t, type MessageKey } from '../../lib/i18n';
@@ -18,6 +18,9 @@ import { ActionConfirmation } from '../ActionConfirmation';
 import { ProjectRules } from './ProjectRules';
 import { ProjectSharing } from './ProjectSharing';
 import { useSavedProject } from './useSavedProject';
+import { createProjectDraftStore } from '../../lib/projectDrafts';
+import { apiBaseUrl } from '../../lib/env';
+import { ProjectRecovery } from './ProjectRecovery';
 import { errorMessage, projectDate } from '../../lib/display';
 import styles from './ProjectsApp.module.css';
 
@@ -56,6 +59,7 @@ export function ProjectEditor({
   upload = uploadFile,
   links = { list: '/app', result: projectResultUrl },
   manageSharing = true,
+  draftOrigin = apiBaseUrl ?? '',
 }: {
   initial: ProjectDetail;
   org: Organization;
@@ -64,8 +68,21 @@ export function ProjectEditor({
   upload?: typeof uploadFile;
   links?: { list: string; result: typeof projectResultUrl };
   manageSharing?: boolean;
+  draftOrigin?: string;
 }) {
-  const saved = useSavedProject(initial, client);
+  const recovery = useMemo(
+    () =>
+      initial.capabilities.reconcile
+        ? createProjectDraftStore({
+            origin: draftOrigin,
+            userId: me.user.id,
+            orgId: org.id,
+            projectId: initial.id,
+          })
+        : undefined,
+    [draftOrigin, initial.capabilities.reconcile, initial.id, me.user.id, org.id],
+  );
+  const saved = useSavedProject(initial, client, recovery);
   const { project } = saved;
   const [name, setName] = useState(initial.name);
   const [settings, setSettings] = useState(
@@ -252,9 +269,47 @@ export function ProjectEditor({
                 : t('projects.unsaved')}
         </div>
       </header>
+      {editable && (
+        <ProjectRecovery
+          project={project}
+          drafts={saved.drafts}
+          disabled={locked || saved.status !== 'saved'}
+          onRestore={(draft) =>
+            ask(t('projects.recovery_confirm'), async () => {
+              const fresh = await client.get(project.id);
+              if (fresh.version !== project.version) {
+                saved.replace(fresh);
+                setName(fresh.name);
+                setSettings(fresh.settings ?? { use_rules: true, web_search: false });
+                throw new Error(t('projects.recovery_refresh'));
+              }
+              if (draft.patch.name !== undefined) setName(draft.patch.name);
+              if (draft.patch.settings) setSettings(draft.patch.settings);
+              await saved.restore(draft);
+            })
+          }
+          onDiscard={(draft) =>
+            ask(t('projects.recovery_discard_confirm'), () => saved.discard(draft))
+          }
+        />
+      )}
+      {saved.recoveryFailed && (
+        <p className={styles.notice} role="status">
+          {t('projects.recovery_unavailable')}
+        </p>
+      )}
+      {saved.localSaved && saved.status === 'offline' && (
+        <p className={styles.notice} role="status">
+          {t('projects.recovery_stored')}
+        </p>
+      )}
       {saved.error && (
         <div className={styles.notice} role="alert">
-          <p>{saved.status === 'conflict' ? t('projects.conflict_help') : saved.error.message}</p>
+          <p>
+            {saved.status === 'conflict'
+              ? t(saved.localSaved ? 'projects.conflict_recovery' : 'projects.conflict_help')
+              : saved.error.message}
+          </p>
           <button
             type="button"
             className="btn btn--ghost"

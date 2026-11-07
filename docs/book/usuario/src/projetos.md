@@ -7,6 +7,13 @@ Espere a confirmação de salvamento antes de fechar. Um arquivo em envio ainda 
 da conexão; se o envio for interrompido, pode ser necessário selecioná-lo novamente.
 **Em verificação** significa que ele chegou, mas ainda não está pronto para conciliar.
 
+No site e nas extensões, alterações de nome e regras também recebem uma cópia cifrada
+neste dispositivo, separada por pessoa, conta e projeto. Se a conexão cair, aguarde o
+aviso de que a cópia foi guardada. Ao voltar, abra **Alterações deste dispositivo**, compare
+com a versão da conta e escolha se quer aplicar ou descartar. Nada é aplicado sozinho.
+Essas cópias duram até 30 dias e são removidas ao sair da conta. Se o navegador não conseguir
+guardá-las, mantenha a tela aberta e copie seu texto antes de recarregar.
+
 Ao voltar, escolha a mesma conta e abra o projeto. Os documentos começam recolhidos
 para deixar a tela leve. Expanda a lista para conferir todos, remover ou substituir um
 arquivo. A lista rola sem levar o botão de conciliação embora.

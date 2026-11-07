@@ -4,6 +4,7 @@ import { t } from './i18n';
 import { api, ApiError } from './api';
 import { clearAccountSelection, selectedAccount } from './accountContext';
 import { accounts, type Organization } from './accounts';
+import { clearProjectDrafts } from './projectDrafts';
 
 export interface Me {
   user: {
@@ -67,6 +68,7 @@ export async function startGoogleLogin(redirectTo: string): Promise<void> {
 
 export async function logout(): Promise<void> {
   await api<void>('/v1/auth/logout', { method: 'POST', noRefresh: true });
+  await clearProjectDrafts();
   sessionChanged();
 }
 

@@ -106,3 +106,103 @@ describe('server-confirmed project saving', () => {
     expect(update).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('project edit recovery', () => {
+  it('keeps pending edits in the journal when an earlier request completes', async () => {
+    const first = deferred<ProjectDetail>();
+    const update = vi
+      .fn()
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce({ ...initial, version: 3, name: 'Final' });
+    const journal = {
+      save: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockResolvedValue([]),
+      remove: vi.fn().mockResolvedValue(true),
+    };
+    const client = { ...projectClient('org_1'), update };
+    const { result } = renderHook(() => useSavedProject(initial, client, journal));
+    act(() => result.current.change({ name: 'First' }));
+    let request!: Promise<ProjectDetail>;
+    await act(async () => {
+      request = result.current.save();
+      await Promise.resolve();
+    });
+    act(() => result.current.change({ name: 'Final' }));
+    expect(journal.save).toHaveBeenLastCalledWith(1, { name: 'Final' });
+    await act(async () => {
+      first.resolve({ ...initial, version: 2, name: 'First' });
+      await request;
+    });
+    expect(journal.save).toHaveBeenLastCalledWith(2, { name: 'Final' });
+    expect(journal.remove).not.toHaveBeenCalled();
+    await act(async () => {
+      await result.current.save();
+    });
+    expect(journal.remove).toHaveBeenCalledWith();
+    expect(result.current.status).toBe('saved');
+  });
+
+  it('lists recovery copies without making server writes and removes one only after explicit successful restore', async () => {
+    const draft = { id: 'draft-a', baseVersion: 1, savedAt: 100, patch: { name: 'Recovered' } };
+    const journal = {
+      save: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockResolvedValue([draft]),
+      remove: vi.fn().mockResolvedValue(true),
+    };
+    const update = vi.fn().mockResolvedValue({ ...initial, version: 2, name: 'Recovered' });
+    const client = { ...projectClient('org_1'), update };
+    const { result } = renderHook(() => useSavedProject(initial, client, journal));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(result.current.drafts).toEqual([draft]);
+    expect(update).not.toHaveBeenCalled();
+    await act(async () => {
+      await result.current.restore(draft);
+    });
+    expect(update).toHaveBeenCalledWith(initial, draft.patch);
+    expect(journal.remove).toHaveBeenCalledWith('draft-a');
+    expect(result.current.drafts).toEqual([]);
+  });
+
+  it('retains recovery copies when a version conflict rejects restoring them', async () => {
+    const draft = { id: 'draft-a', baseVersion: 1, savedAt: 100, patch: { name: 'Recovered' } };
+    const journal = {
+      save: vi.fn().mockResolvedValue(true),
+      list: vi.fn().mockResolvedValue([draft]),
+      remove: vi.fn().mockResolvedValue(true),
+    };
+    const client = {
+      ...projectClient('org_1'),
+      update: vi.fn().mockRejectedValue(new ApiError(409, 'project_changed', 'Changed')),
+    };
+    const { result } = renderHook(() => useSavedProject(initial, client, journal));
+    await act(async () => {
+      await expect(result.current.restore(draft)).rejects.toThrow('Changed');
+    });
+    expect(result.current.drafts).toEqual([draft]);
+    expect(journal.remove).not.toHaveBeenCalled();
+    expect(result.current.status).toBe('conflict');
+    expect(result.current.localSaved).toBe(true);
+  });
+
+  it('reports a failed local copy without claiming that the server saved the edit', async () => {
+    const journal = {
+      save: vi.fn().mockResolvedValue(false),
+      list: vi.fn().mockResolvedValue([]),
+      remove: vi.fn().mockResolvedValue(true),
+    };
+    const client = {
+      ...projectClient('org_1'),
+      update: vi.fn().mockRejectedValue(new ApiError(0, 'network', 'Offline')),
+    };
+    const { result } = renderHook(() => useSavedProject(initial, client, journal));
+    await act(async () => {
+      result.current.change({ name: 'Unsaved' });
+      await expect(result.current.save()).rejects.toThrow('Offline');
+    });
+    expect(result.current.status).toBe('offline');
+    expect(result.current.recoveryFailed).toBe(true);
+    expect(result.current.localSaved).toBe(false);
+  });
+});

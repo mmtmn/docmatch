@@ -114,6 +114,7 @@ function ProjectPage({
       me={me}
       client={client}
       manageSharing={false}
+      draftOrigin={config.apiURL}
       links={{ list: workspaceURL(org.id), result: workspaceURL }}
       upload={(file, scanning, signal, destination) =>
         uploadFile(file, scanning, signal, destination, {

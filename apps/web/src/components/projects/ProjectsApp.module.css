@@ -385,3 +385,40 @@
     display: none;
   }
 }
+
+.recovery {
+  margin-block: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+}
+.recovery summary {
+  cursor: pointer;
+}
+.recovery section + section {
+  margin-block-start: var(--space-6);
+}
+.recovery h2,
+.recovery h3 {
+  font-size: inherit;
+}
+.recoveryComparison {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+.recoveryComparison p {
+  overflow-wrap: anywhere;
+}
+.recoveryComparison pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 12rem;
+  overflow: auto;
+  font: inherit;
+}
+@media (max-width: 600px) {
+  .recoveryComparison {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
