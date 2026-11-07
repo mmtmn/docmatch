@@ -11,13 +11,13 @@ comandos de instalação. O plano abaixo conserva os critérios usados na implem
 | Ação fixa e arquivos expansíveis | Implementados na web, nos apps e nas extensões; testes de navegação, telas pequenas e acessibilidade passaram. |
 | Python, Rust e Go | 0.2.0 publicada e instalada fora do checkout; projetos e reaproveitamento de resultados verificados contra produção. Go é público. |
 | Terminal e TypeScript | Terminal 0.2.0 disponível pelo site; TypeScript anexado à release. Publicação npm e imagens GHCR aguardam autenticação. |
-| Chrome, Firefox e Safari | Prévias preparadas; acesso de extensão em produção ainda limitado às contas de teste. Chrome/Firefox passaram pelo fluxo completo. Safari conectou e criou projeto; o envio final aguarda interação local com o seletor de arquivos do macOS. |
+| Chrome, Firefox e Safari | Fluxo completo verificado nos três navegadores em produção, incluindo evidências, download e reabertura sem nova execução ou reserva. Acesso das prévias liberado às contas docmatch, respeitando permissões e saldo; publicação nas lojas ainda pendente. |
 | Android e iOS | Testes locais passaram; AAB e archive de produção preparados sem assinatura de distribuição. Lojas e validação real com Apple ainda pendentes; nenhuma chave App Store Connect utilizada. |
 | Site e livros | Links de plataformas e aviso com consentimento implementados; dois livros publicados, com busca e capítulos verificados nos três motores de navegador. |
 | AWS e backups | API/worker/harness implantados, esquema 43; restauração, backup diferencial e arquivamento contínuo verificados. Capacidade mantida; somente os custos S3 de backup autorizados. |
 
-Ainda faltam contas e submissões às lojas, autenticação npm/GHCR, conclusão do teste Safari,
-ampliação das extensões e duas rodadas de usabilidade com participantes reais. Automação não
+Ainda faltam contas e submissões às lojas, autenticação npm/GHCR, validação com Apple real
+e duas rodadas de usabilidade com participantes reais. Automação não
 substitui essas rodadas. Os resultados de restauração estão no [registro operacional](runbooks/restaurar-backup.md#ensaiar-e-registrar).
 
 ## Plano e critérios
