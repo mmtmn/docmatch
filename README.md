@@ -36,7 +36,6 @@ Veja os [comandos de instalação e exemplos](sdks/README.md).
 As quatro gravações usam o gêmeo público Vantara: **100% dos itens avaliados**, com dados,
 achados, evidências e totais conferidos. [GIFs e relatórios](docs/demos/README.md).
 A nota vale para esse caso de teste; sugestões de IA continuam sujeitas à revisão humana.
-O vídeo iOS mostra a interface atual no simulador, com os arquivos públicos do mesmo caso.
 
 ## O que você recebe
 
