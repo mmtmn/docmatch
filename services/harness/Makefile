@@ -70,9 +70,14 @@ serve: ## servidor gRPC do harness no socket de DM_HARNESS_SOCKET (fontes local:
 # Sai como docmatch-harness, o nome da unidade systemd.
 RELEASE_TARGET ?= aarch64-unknown-linux-musl
 RELEASE_DIR ?= $(abspath ../../dist/release)
+RELEASE_BUILDER ?= cargo
 release: ## dm-server linux/arm64 estático em RELEASE_DIR como docmatch-harness (infra/scripts/deploy-app.sh)
 	@rustup target list --installed | grep -qx '$(RELEASE_TARGET)' || rustup target add $(RELEASE_TARGET)
-	CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=rust-lld CARGO_PROFILE_RELEASE_STRIP=symbols \
-	  $(CARGO) build --release --locked -p dm-server --target $(RELEASE_TARGET)
+	@if [[ "$(RELEASE_BUILDER)" == zigbuild ]]; then \
+	  CARGO_PROFILE_RELEASE_STRIP=symbols $(CARGO) zigbuild --release --locked -p dm-server --target $(RELEASE_TARGET); \
+	elif [[ "$(RELEASE_BUILDER)" == cargo ]]; then \
+	  CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=rust-lld CARGO_PROFILE_RELEASE_STRIP=symbols \
+	    $(CARGO) build --release --locked -p dm-server --target $(RELEASE_TARGET); \
+	else echo "RELEASE_BUILDER precisa ser cargo ou zigbuild" >&2; exit 1; fi
 	@mkdir -p $(RELEASE_DIR)
 	install -m 0755 $(CARGO_TARGET_DIR)/$(RELEASE_TARGET)/release/dm-server $(RELEASE_DIR)/docmatch-harness

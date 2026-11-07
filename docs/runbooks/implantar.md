@@ -51,6 +51,12 @@ O script compila `linux/arm64`, grava `SHA256SUMS`, envia os arquivos ao bucket 
 existente e instala por SSM `AWS-RunShellScript`. Não depende de um workflow automático,
 não gera atestado SLSA e não cria capacidade AWS.
 
+No macOS, o compilador Rust precisa do alvo `aarch64-unknown-linux-musl` e de um
+compilador C para Linux. A alternativa testada usa Rust 1.93.1, `cargo-zigbuild`
+0.24.1 e Zig 0.17.1: com essas ferramentas no `PATH`, use
+`RELEASE_BUILDER=zigbuild infra/scripts/deploy-app.sh --env prod --dry-run`.
+O build continua nesta máquina; não instale ferramentas de compilação no servidor.
+
 1. Use o commit revisado e com verificações concluídas. Confira a identidade AWS, o ambiente,
    o backup recuperável e a release anterior. Os outputs do Terraform precisam estar
    disponíveis; não aplique mudanças de infraestrutura apenas para contornar outputs vazios.
