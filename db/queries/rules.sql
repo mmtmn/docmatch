@@ -7,19 +7,19 @@ VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
 -- name: GetRule :one
-SELECT * FROM rules WHERE org_id = $1 AND id = $2 AND deleted_at IS NULL;
+SELECT * FROM rules WHERE org_id = $1 AND id = $2 AND deleted_at IS NULL AND (scope='global' AND project_id IS NULL OR project_id IS NOT DISTINCT FROM sqlc.narg(project_id)::uuid);
 
 -- name: SearchRules :many
 SELECT sqlc.embed(rules), similarity(rules.title, sqlc.arg(term)::text)::real AS score
 FROM rules
-WHERE rules.org_id = $1 AND rules.deleted_at IS NULL
+WHERE rules.org_id = $1 AND rules.deleted_at IS NULL AND project_id IS NULL
   AND (rules.title % sqlc.arg(term)::text OR rules.title ILIKE '%' || sqlc.arg(term)::text || '%')
 ORDER BY similarity(rules.title, sqlc.arg(term)::text) DESC, rules.last_used_at DESC NULLS LAST
 LIMIT sqlc.arg(max_rows);
 
 -- name: ListRecentlyUsedRules :many
 SELECT * FROM rules
-WHERE org_id = $1 AND deleted_at IS NULL
+WHERE org_id = $1 AND deleted_at IS NULL AND project_id IS NULL
 ORDER BY last_used_at DESC NULLS LAST, created_at DESC
 LIMIT $2;
 
@@ -28,11 +28,11 @@ UPDATE rules SET last_used_at = now(), use_count = use_count + 1 WHERE org_id = 
 
 -- name: UpdateRule :one
 UPDATE rules SET title = $3, body = $4, compiled_sql = $5, enabled = $6
-WHERE org_id = $1 AND id = $2 AND deleted_at IS NULL
+WHERE org_id = $1 AND id = $2 AND deleted_at IS NULL AND project_id IS NULL
 RETURNING *;
 
 -- name: SoftDeleteRule :execrows
-UPDATE rules SET deleted_at = now() WHERE org_id = $1 AND id = $2 AND deleted_at IS NULL;
+UPDATE rules SET deleted_at = now() WHERE org_id = $1 AND id = $2 AND deleted_at IS NULL AND project_id IS NULL;
 
 -- name: InsertRuleUse :one
 INSERT INTO rule_uses (org_id, rule_id, run_id, matched, false_positives, amount_explained)

@@ -55,6 +55,7 @@ import br.com.docmatch.contracts.Limits
 import br.com.docmatch.core.ApiException
 import br.com.docmatch.core.Decision
 import br.com.docmatch.core.Docmatch
+import br.com.docmatch.core.cancelRun
 import br.com.docmatch.core.Evidence
 import br.com.docmatch.core.Finding
 import br.com.docmatch.core.Format
@@ -98,7 +99,7 @@ class RunViewModel(private val dm: Docmatch, private val runId: String) : ViewMo
      * leaving, so a run left open in another tab does not poll in the background.
      */
     suspend fun follow() {
-        if (_state.value is RunState.Done) return
+        if (_state.value is RunState.Done) { validateAccess(); return }
         if (_state.value !is RunState.Running) _state.value = RunState.Loading
         _state.value =
             try {
@@ -106,6 +107,7 @@ class RunViewModel(private val dm: Docmatch, private val runId: String) : ViewMo
                 when (run.status) {
                     RunStatus.COMPLETED -> RunState.Done(run, dm.api.findings(run.id).sortedWith(compareBy<Finding> { findingPriority(it.severity) }.thenByDescending { it.amountAtRisk }.thenBy { it.id }))
                     RunStatus.NEEDS_APPROVAL -> RunState.NeedsApproval(run)
+                    RunStatus.CANCELLED -> RunState.Failed(dm.texts.t("mobile.status_cancelled"))
                     else -> RunState.Failed(dm.texts.t("results.live_failed", mapOf("message" to (run.error?.message ?: dm.texts.t("errors.unknown")))))
                 }
             } catch (e: ApiException) {
@@ -113,6 +115,20 @@ class RunViewModel(private val dm: Docmatch, private val runId: String) : ViewMo
             }
     }
 
+    fun validateAccess() {
+        if (_state.value !is RunState.Done) return
+        viewModelScope.launch { try { dm.api.run(runId) } catch(e: ApiException) { forgetIfDenied(e) } }
+    }
+    private fun forgetIfDenied(e: ApiException): Boolean {
+        if (e.status !in listOf(401,403,404)) return false
+        _state.value = RunState.Failed(e.message); _notice.value = null; return true
+    }
+    fun cancel() {
+        viewModelScope.launch {
+            try { dm.api.cancelRun(runId); _state.value = RunState.Failed(dm.texts.t("mobile.status_cancelled")) }
+            catch(e: ApiException) { if (!forgetIfDenied(e)) _notice.value = e.message }
+        }
+    }
     fun retry() {
         _state.value = RunState.Loading
         _attempt.update { it + 1 }
@@ -130,6 +146,7 @@ class RunViewModel(private val dm: Docmatch, private val runId: String) : ViewMo
                 _state.value = RunState.Running(null)
                 _attempt.update { it + 1 }
             } catch (e: ApiException) {
+                if (forgetIfDenied(e)) return@launch
                 _state.value = parked.copy(busy = false)
                 _notice.value = e.message
             }
@@ -148,6 +165,7 @@ class RunViewModel(private val dm: Docmatch, private val runId: String) : ViewMo
                 }
                 _notice.value = dm.texts.t("mobile.finding_decided")
             } catch (e: ApiException) {
+                if (forgetIfDenied(e)) return@launch
                 _notice.value = e.message
             }
         }
@@ -168,6 +186,7 @@ class RunViewModel(private val dm: Docmatch, private val runId: String) : ViewMo
                 context.startActivity(Intent.createChooser(send, dm.texts.t("mobile.export")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
+                if (e is ApiException && forgetIfDenied(e)) { Exports.clear(context); return@launch }
                 _notice.value = dm.texts.t("mobile.export_failed", mapOf("message" to (e.message ?: dm.texts.t("errors.unknown"))))
             }
         }
@@ -183,6 +202,10 @@ fun RunScreen(vm: RunViewModel, onNewRun: () -> Unit) {
     var open by rememberSaveable { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val texts = LocalTexts.current
+    var cancelling by remember { mutableStateOf(false) }
+    OnResume(vm::validateAccess)
+    LaunchedEffect(state) { if (state is RunState.Failed) { open = null; Exports.clear(context) } }
+    if (cancelling) ProjectConfirmation(t("projects.run_cancel_confirm"), { cancelling = false }) { cancelling = false; vm.cancel() }
 
     // Polls only while this screen is in composition (and again on retry or after an approval).
     LaunchedEffect(attempt) { vm.follow() }
@@ -193,6 +216,8 @@ fun RunScreen(vm: RunViewModel, onNewRun: () -> Unit) {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
                 ProcessingScene(s.step?.let { stepLabel(it) } ?: t("mobile.run_waiting"))
                 Text(t("mobile.processing_keep_open"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                TextButton({ cancelling = true }) { Text(t("projects.cancel_run")) }
+                notice?.let { DmNotice(it,true) }
             }
         is RunState.NeedsApproval ->
             Column(Modifier.fillMaxSize().padding(DmSize.space3), verticalArrangement = Arrangement.spacedBy(DmSize.space2)) {
@@ -201,6 +226,7 @@ fun RunScreen(vm: RunViewModel, onNewRun: () -> Unit) {
                     Text(t("mobile.approve_text", mapOf("expected" to q.expectedCredits, "cap" to q.capCredits)))
                     DmPrimaryButton(onClick = vm::approve, enabled = !s.busy, modifier = Modifier.fillMaxWidth()) { Text(t("mobile.approve")) }
                 } ?: Text(t("mobile.status_needs_approval"))
+                TextButton({ cancelling = true },enabled = !s.busy) { Text(t("projects.cancel_run")) }
                 notice?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive }) }
             }
         is RunState.Failed -> ErrorState(s.message, vm::retry)

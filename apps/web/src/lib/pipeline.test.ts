@@ -6,7 +6,9 @@ vi.mock('./env', () => ({
   apiBaseUrl: 'https://api.invalid',
 }));
 
-const { confirmText, createRun, listFindings, uploadFile } = await import('./pipeline');
+const { confirmText, createRun, estimate, exportFile, listFindings, uploadFile, watchRun } =
+  await import('./pipeline');
+const { selectAccount, clearAccountSelection } = await import('./accountContext');
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -28,8 +30,157 @@ describe('pipeline', () => {
     vi.useFakeTimers();
   });
   afterEach(() => {
+    clearAccountSelection();
     vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+
+  it('keeps the quick-run fallback in its original account after the selection changes', async () => {
+    selectAccount('user', 'org_original');
+    const quote = { id: 'qte_test', signature: 'signed' } as import('./pipeline').QuoteView;
+    fetchMock
+      .mockImplementationOnce(() => {
+        selectAccount('user', 'org_other');
+        return Promise.resolve(
+          json(201, {
+            id: 'upl_1',
+            method: 'PUT',
+            url: 'https://api.invalid/storage/object',
+            headers: {},
+          }),
+        );
+      })
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(json(200, { id: 'upl_1', status: 'ready', file_name: 'a.csv' }))
+      .mockResolvedValueOnce(json(200, quote))
+      .mockResolvedValueOnce(json(202, { id: 'run_1' }));
+    const file = await uploadFile(accepted('a.csv', 'x;y\n1;2\n'), undefined, undefined, {
+      orgId: 'org_original',
+    });
+    const options = { rulesText: '', useRules: false, webSearch: false, ruleIds: [] };
+    await estimate([file.id], options, undefined, 'org_original');
+    await createRun(quote, [file.id], options, 'org_original');
+    for (const index of [0, 2, 3, 4])
+      expect(new Headers(fetchMock.mock.calls[index]?.[1]?.headers).get('X-Docmatch-Org')).toBe(
+        'org_original',
+      );
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.invalid/v1/uploads');
+    expect(fetchMock.mock.calls[4]?.[0]).toBe('https://api.invalid/v1/runs');
+  });
+
+  it('prepares an export in its original account without starting browser navigation', async () => {
+    selectAccount('user', 'org_other');
+    const type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    const response = new Response('spreadsheet bytes', { headers: { 'Content-Type': type } });
+    // The test runner's Node Response and DOM File use different Blob realms.
+    vi.spyOn(response, 'blob').mockResolvedValue(new Blob(['spreadsheet bytes'], { type }));
+    fetchMock.mockResolvedValueOnce(response);
+    const file = await exportFile('run_saved', 'xlsx', {
+      orgId: 'org_original',
+      projectId: 'prj_saved',
+    });
+    expect(file.name).toBe('docmatch-run_saved.xlsx');
+    expect(await file.text()).toBe('spreadsheet bytes');
+    expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get('X-Docmatch-Org')).toBe(
+      'org_original',
+    );
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      'https://api.invalid/v1/projects/prj_saved/runs/run_saved/export?format=xlsx',
+    );
+  });
+
+  it('reads SSE across split CRLF and UTF-8 chunks in the original account', async () => {
+    let source!: ReadableStreamDefaultController<Uint8Array>;
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        source = controller;
+      },
+    });
+    fetchMock.mockResolvedValueOnce(
+      new Response(stream, { headers: { 'Content-Type': 'text/event-stream' } }),
+    );
+    selectAccount('user', 'org_original');
+    const events = vi.fn();
+    const close = watchRun('run_1', events);
+    selectAccount('user', 'org_other');
+    const message = new TextEncoder().encode(
+      'event: progress\r\ndata: {"message":"Conciliação"}\r\n\r\n',
+    );
+    // Every byte in its own chunk exercises both line-ending and multibyte boundaries.
+    for (const byte of message) source.enqueue(new Uint8Array([byte]));
+    await vi.waitFor(() =>
+      expect(events).toHaveBeenCalledWith({ event: 'progress', data: { message: 'Conciliação' } }),
+    );
+    expect(
+      (fetchMock.mock.calls[0]?.[1]?.headers as Record<string, string>)['X-Docmatch-Org'],
+    ).toBe('org_original');
+    expect((fetchMock.mock.calls[0]?.[1]?.headers as Record<string, string>)['Accept']).toBe(
+      'text/event-stream',
+    );
+    close();
+    source.enqueue(new TextEncoder().encode('event: completed\ndata: {}\n\n'));
+    source.close();
+    await Promise.resolve();
+    expect(events).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps project upload completion in its original destination after account selection changes', async () => {
+    fetchMock
+      .mockImplementationOnce(async () => {
+        await Promise.resolve();
+        selectAccount('user', 'org_other');
+        return json(201, {
+          id: 'upl_project',
+          method: 'PUT',
+          url: 'https://store.invalid/object',
+          headers: {},
+        });
+      })
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(json(200, { id: 'upl_project', file_name: 'a.csv', status: 'ready' }));
+    await uploadFile(accepted('a.csv', 'x;y\n1;2\n'), undefined, undefined, {
+      orgId: 'org_original',
+      projectId: 'prj_1',
+    });
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.invalid/v1/projects/prj_1/uploads');
+    expect(fetchMock.mock.calls[2]?.[0]).toBe(
+      'https://api.invalid/v1/projects/prj_1/uploads/upl_project/complete',
+    );
+    expect(
+      (fetchMock.mock.calls[2]?.[1]?.headers as Record<string, string>)['X-Docmatch-Org'],
+    ).toBe('org_original');
+  });
+
+  it('uses an injected project transport and rejects an unregistered storage origin before sending bytes', async () => {
+    const ticket = {
+      id: 'upl_extension',
+      method: 'PUT',
+      url: 'https://storage.invalid/object',
+      headers: {},
+    };
+    const request = vi
+      .fn<typeof import('./api').api>()
+      .mockResolvedValueOnce(ticket)
+      .mockResolvedValueOnce({ id: ticket.id, status: 'ready', file_name: 'a.csv' });
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+    const transport = {
+      request: request as typeof import('./api').api,
+      uploadOrigins: ['https://storage.invalid'],
+    };
+    const destination = { orgId: 'org_extension', projectId: 'prj_extension' };
+    await uploadFile(accepted('a.csv', 'x;y\n1;2\n'), undefined, undefined, destination, transport);
+    expect(request.mock.calls.map((call) => call[0])).toEqual([
+      '/v1/projects/prj_extension/uploads',
+      '/v1/projects/prj_extension/uploads/upl_extension/complete',
+    ]);
+    expect(request.mock.calls.every((call) => call[1]?.orgId === destination.orgId)).toBe(true);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ credentials: 'omit', redirect: 'error' });
+    request.mockResolvedValueOnce({ ...ticket, url: 'https://unregistered.invalid/object' });
+    await expect(
+      uploadFile(accepted('a.csv', 'x;y\n1;2\n'), undefined, undefined, destination, transport),
+    ).rejects.toMatchObject({ code: 'upload_destination_invalid' });
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 
   it('uploads through the presigned form without cookies and waits for the scan', async () => {

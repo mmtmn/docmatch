@@ -34,6 +34,8 @@ var (
 	ErrExportNotReady      = errors.New("account: export not ready")
 	ErrExportTooLarge      = errors.New("account: export exceeds the size limit")
 	ErrRateLimited         = errors.New("account: too many export requests")
+	ErrForbidden           = errors.New("account: forbidden")
+	ErrOwnerTransfer       = errors.New("account: transfer team ownership before deleting your login")
 )
 
 // Roles (memberships.role).
@@ -237,7 +239,7 @@ type Store interface {
 	Erase(ctx context.Context, userID uuid.UUID, now time.Time) (EraseReport, error)
 
 	CreateExport(ctx context.Context, userID, orgID uuid.UUID) (Export, error)
-	LatestExport(ctx context.Context, userID uuid.UUID) (Export, bool, error)
+	LatestExport(ctx context.Context, userID, orgID uuid.UUID) (Export, bool, error)
 	ExportByID(ctx context.Context, id uuid.UUID) (Export, bool, error)
 	ExportArchive(ctx context.Context, id uuid.UUID) ([]byte, bool, error)
 	CompleteExport(ctx context.Context, id uuid.UUID, archive []byte, expiresAt time.Time) error

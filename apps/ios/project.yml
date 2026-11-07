@@ -18,17 +18,38 @@ settings:
     MARKETING_VERSION: "1.0.0"
     CURRENT_PROJECT_VERSION: "1"
     ENABLE_USER_SCRIPT_SANDBOXING: YES
+    DOCMATCH_APP_GROUP: group.br.com.docmatch.extensions
+    DOCMATCH_EXTENSION_SCHEME: br.com.docmatch.extension
+  configs:
+    Debug:
+      DOCMATCH_APP_GROUP: group.br.com.docmatch.extensions.local
+      DOCMATCH_EXTENSION_SCHEME: docmatch-extension-dev
 targets:
   Docmatch:
     type: application
     platform: iOS
+    preBuildScripts:
+      - name: Check Safari release configuration
+        script: |
+          if [ "$CONFIGURATION" = Release ] && [ "$(plutil -extract local raw -o - "$SRCROOT/../extensions/safari/Web/docmatch-native.json")" != false ]; then
+            echo "error: Generate the production extension resources before archiving."
+            exit 1
+          fi
+        inputFiles: ["$(SRCROOT)/../extensions/safari/Web/docmatch-native.json"]
+        basedOnDependencyAnalysis: false
     sources:
       - path: Docmatch
+      - path: ../extensions/safari/Sources/DocmatchSafariCore
+      - path: ../extensions/safari/SharedUI
+      - path: ../extensions/safari/Web/docmatch-native.json
+        buildPhase: resources
       # The same pt-BR texts as the site and Android, read at runtime by DocmatchKit's Texts.
       - path: ../../packages/locales/pt-BR.json
         buildPhase: resources
     dependencies:
       - package: DocmatchKit
+      - target: DocmatchSafariExtension
+        embed: true
     # A shared scheme, so `xcodebuild -scheme Docmatch` (make app, the ios workflow) finds it.
     scheme:
       testTargets:
@@ -51,6 +72,30 @@ targets:
         Release:
           DOCMATCH_API_BASE_URL: ""
           DOCMATCH_ALIAS_LOOPBACK: "NO"
+  DocmatchSafariExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: ../extensions/safari/Extension
+        excludes: [App.entitlements]
+      - path: ../extensions/safari/Sources/DocmatchSafariCore
+      - path: ../extensions/safari/Web
+        excludes: [assets]
+        buildPhase: resources
+      - path: ../extensions/safari/Web/assets
+        type: folder
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: br.com.docmatch.SafariExtension
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE: ../extensions/safari/Extension/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Docmatch/SafariExtension.entitlements
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SKIP_INSTALL: YES
+      configs:
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: br.com.docmatch.debug.SafariExtension
   DocmatchUITests:
     type: bundle.ui-testing
     platform: iOS

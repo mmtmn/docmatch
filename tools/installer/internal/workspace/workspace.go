@@ -19,18 +19,22 @@ import (
 	"github.com/muesli/termenv"
 
 	dm "github.com/mmtmn/docmatch/sdks/go"
+	"github.com/mmtmn/docmatch/tools/installer/internal/text"
 )
 
 type Options struct {
-	API, Key, Dir, Output   string
-	Files                   []string
-	Plain, Yes, NoAnimation bool
-	In                      io.Reader
-	Out                     io.Writer
+	API, Key, Dir, Output                       string
+	ProjectID, NewProject, AccountID, SaveRunID string
+	ListProjects, UploadOnly                    bool
+	Files                                       []string
+	Plain, Yes, NoAnimation                     bool
+	In                                          io.Reader
+	Out                                         io.Writer
 }
 type model struct {
 	ctx           context.Context
-	c             *dm.Client
+	destination   destination
+	analysis      dm.ProjectAnalysis
 	opts          Options
 	dir           string
 	entries       []os.DirEntry
@@ -42,23 +46,18 @@ type model struct {
 	stage         string
 	message       string
 	quote         dm.Quote
-	request       dm.Input
 	run           dm.Run
 	findings      []dm.Finding
 	err           error
 	width, height int
 	paths         []string
 	uploadIndex   int
-	ids           []string
 }
 type connected struct{ err error }
-type uploaded struct {
-	upload dm.Upload
-	err    error
-}
+type uploaded struct{ err error }
 type quoted struct {
-	quote dm.Quote
-	err   error
+	analysis dm.ProjectAnalysis
+	err      error
 }
 type started struct {
 	run dm.Run
@@ -122,9 +121,17 @@ func Run(ctx context.Context, opts Options) error {
 	if opts.Output == "" {
 		opts.Output = filepath.Join(opts.Dir, "docmatch-output")
 	}
-	if opts.Plain {
-		return plain(ctx, c, opts)
+	target, err := chooseDestination(ctx, c, opts)
+	if err != nil {
+		return err
 	}
+	if opts.ListProjects || opts.SaveRunID != "" {
+		return nil
+	}
+	if opts.Plain {
+		return plain(ctx, target, opts)
+	}
+	opts.UploadOnly = opts.UploadOnly || !target.saved.Capabilities.Reconcile
 	// Bind colors to this interactive output; respect NO_COLOR in the CLI's plain path.
 	lipgloss.SetDefaultRenderer(lipgloss.NewRenderer(opts.Out))
 	if os.Getenv("COLORTERM") == "truecolor" || os.Getenv("COLORTERM") == "24bit" {
@@ -139,7 +146,7 @@ func Run(ctx context.Context, opts Options) error {
 	spin := spinner.New()
 	spin.Spinner = spinner.Dot
 	spin.Style = brand
-	m := &model{ctx: ctx, c: c, opts: opts, dir: opts.Dir, selected: map[string]bool{}, input: input, spinner: spin, stage: "connecting", width: 100, height: 30}
+	m := &model{ctx: ctx, destination: target, opts: opts, dir: opts.Dir, selected: map[string]bool{}, input: input, spinner: spin, stage: "connecting", width: 100, height: 30}
 	m.readDir()
 	m.add(opts.Files)
 	p := tea.NewProgram(m, tea.WithContext(ctx), tea.WithInput(opts.In), tea.WithOutput(opts.Out), tea.WithAltScreen())
@@ -147,13 +154,7 @@ func Run(ctx context.Context, opts Options) error {
 	return err
 }
 func (m *model) Init() tea.Cmd {
-	connect := func() tea.Msg {
-		var err error
-		if m.opts.Key == "" {
-			err = m.c.DevLogin(m.ctx)
-		}
-		return connected{err}
-	}
+	connect := func() tea.Msg { return connected{} }
 	if m.opts.NoAnimation {
 		return connect
 	}
@@ -169,8 +170,8 @@ func (m *model) upload() tea.Cmd {
 		if err != nil {
 			return uploaded{err: err}
 		}
-		u, err := m.c.Upload(m.ctx, filepath.Base(path), MIME(path), data)
-		return uploaded{u, err}
+		_, err = m.destination.project.Upload(m.ctx, filepath.Base(path), MIME(path), data, "")
+		return uploaded{err: err}
 	}
 }
 func (m *model) poll() tea.Cmd {
@@ -200,21 +201,33 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.fail(v.err)
 			break
 		}
-		m.ids = append(m.ids, v.upload.ID)
 		m.uploadIndex++
 		if m.uploadIndex < len(m.paths) {
 			return m, m.upload()
 		}
 		m.stage = "estimating"
 		m.message = "Calculando a estimativa…"
-		m.request = m.c.Input(m.ids...)
-		return m, func() tea.Msg { q, e := m.c.Estimate(m.ctx, m.request); return quoted{q, e} }
+		if m.opts.UploadOnly {
+			m.selected = map[string]bool{}
+			m.stage = "select"
+			m.message = text.T("projects.uploaded")
+			return m, nil
+		}
+		return m, func() tea.Msg { q, e := estimateProject(m.ctx, m.destination.project); return quoted{q, e} }
 	case quoted:
 		if v.err != nil {
 			m.fail(v.err)
 			break
 		}
-		m.quote = v.quote
+		m.analysis = v.analysis
+		if v.analysis.Run != nil {
+			return m, func() tea.Msg { return started{run: *v.analysis.Run} }
+		}
+		if v.analysis.Quote == nil {
+			m.fail(fmt.Errorf("%s", text.T("projects.no_quote")))
+			break
+		}
+		m.quote = *v.analysis.Quote
 		m.stage = "confirm"
 		m.message = "Confira o limite antes de iniciar. Nenhuma execução começa sem aprovação."
 		if m.opts.Yes {
@@ -230,7 +243,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.message = "Execução iniciada · aguardando processamento"
 		return m, m.poll()
 	case pollTick:
-		return m, func() tea.Msg { r, e := m.c.GetRun(m.ctx, m.run.ID); return polled{r, e} }
+		return m, func() tea.Msg { r, e := m.destination.project.GetRun(m.ctx, m.run.ID); return polled{r, e} }
 	case polled:
 		if v.err != nil {
 			m.fail(v.err)
@@ -242,7 +255,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch v.run.Status {
 		case "completed":
-			return m, func() tea.Msg { f, e := m.c.Findings(m.ctx, m.run.ID); return finished{f, e} }
+			return m, func() tea.Msg { f, e := m.destination.project.Findings(m.ctx, m.run.ID); return finished{f, e} }
 		case "failed", "cancelled", "needs_approval":
 			m.fail(fmt.Errorf("execução %s. Consulte o resultado antes de tentar novamente", v.run.Status))
 		default:
@@ -314,7 +327,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				format := map[string]string{"x": "xlsx", "c": "csv", "p": "pdf"}[v.String()]
 				m.message = "Preparando download…"
 				return m, func() tea.Msg {
-					data, e := m.c.Export(m.ctx, m.run.ID, format)
+					data, e := m.destination.project.Export(m.ctx, m.run.ID, format)
 					path := filepath.Join(m.opts.Output, m.run.ID+"."+format)
 					if e == nil {
 						e = os.MkdirAll(m.opts.Output, 0o700)
@@ -373,13 +386,16 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.editing = true
 			return m, m.input.Focus()
 		case "r":
+			if len(m.selected) == 0 && !m.opts.UploadOnly {
+				m.stage = "estimating"
+				return m, func() tea.Msg { q, e := estimateProject(m.ctx, m.destination.project); return quoted{q, e} }
+			}
 			if len(m.selected) > 0 && len(m.selected) <= 40 {
 				m.paths = nil
 				for p := range m.selected {
 					m.paths = append(m.paths, p)
 				}
 				sort.Strings(m.paths)
-				m.ids = nil
 				m.uploadIndex = 0
 				m.err = nil
 				m.stage = "uploading"
@@ -400,12 +416,23 @@ func (m *model) toggle(e os.DirEntry) {
 func (m *model) start() tea.Cmd {
 	m.stage = "starting"
 	m.message = "Iniciando com a estimativa aprovada…"
-	return func() tea.Msg { r, e := m.c.Run(m.ctx, m.quote, m.request); return started{r, e} }
+	return func() tea.Msg {
+		analysis, err := m.destination.project.Reconcile(m.ctx, m.analysis.Revision, &m.quote, "")
+		if err != nil {
+			return started{err: err}
+		}
+		if analysis.Run == nil {
+			return started{err: fmt.Errorf("%s", text.T("projects.no_quote"))}
+		}
+		return started{run: *analysis.Run}
+	}
 }
 func (m *model) View() string {
 	var b strings.Builder
 	b.WriteString(brand.Render("docmatch  /  workspace") + "\n" + muted.Render("Seus arquivos → evidências → dados corrigidos") + "\n\n")
 	b.WriteString(muted.Render("API "+Safe(m.opts.API)) + "\n")
+	b.WriteString(Safe(m.destination.account) + " · " + Safe(m.destination.saved.Name) + "\n")
+	b.WriteString(muted.Render(text.T("projects.resume", "id", Safe(m.destination.saved.ID))) + "\n")
 	if m.err != nil {
 		b.WriteString("\n! " + Safe(m.err.Error()) + "\n")
 	}
@@ -435,7 +462,7 @@ func (m *model) View() string {
 		if m.editing {
 			b.WriteString("\n" + m.input.View() + "\nEnter adiciona · Esc volta\n")
 		} else {
-			b.WriteString(muted.Render("↑↓ navegar · Espaço selecionar · a todos · d limpar\nEnter abrir · ← pasta anterior · Tab colar/arrastar arquivos\nr processar · q sair") + "\n")
+			b.WriteString(muted.Render("↑↓ navegar · Espaço selecionar · a todos · d limpar\nEnter abrir · ← pasta anterior · Tab colar/arrastar arquivos\nr enviar / conciliar ou ver resultado · q sair") + "\n")
 		}
 	case "confirm":
 		fmt.Fprintf(&b, "\n%s\n\nEstimativa: %d tokens · limite: %d tokens\n\n%s\n", brand.Render("Aprovar esta execução?"), m.quote.ExpectedCredits, m.quote.CapCredits, "s / y confirmar · n voltar")
@@ -449,7 +476,7 @@ func (m *model) View() string {
 		}
 		_ = json.Unmarshal(m.run.Summary, &summary)
 		fmt.Fprintf(&b, "\n%d registros · %d movimentos · %d achados\n", len(summary.Reconciliation.Receivables), len(summary.Reconciliation.BankEntries), len(m.findings))
-		b.WriteString(muted.Render("x baixar XLSX corrigido · c CSV · p relatório PDF\n↑↓ percorrer achados · n nova execução · q sair") + "\n\n")
+		b.WriteString(muted.Render("x baixar XLSX corrigido · c CSV · p relatório PDF\n↑↓ percorrer achados · n voltar ao projeto · q sair") + "\n\n")
 		for i := m.cursor; i < min(len(m.findings), m.cursor+max(2, m.height-17)); i++ {
 			f := m.findings[i]
 			fmt.Fprintf(&b, "%s  %s\n", brand.Render(Safe(f.Code)), Safe(f.Title))
@@ -469,46 +496,49 @@ func (m *model) View() string {
 	b.WriteString("\n" + muted.Render(Safe(m.message)) + "\n")
 	return lipgloss.NewStyle().Padding(1, 2).Width(max(30, m.width-4)).Render(b.String())
 }
-func plain(ctx context.Context, c *dm.Client, o Options) error {
-	if len(o.Files) == 0 {
-		return fmt.Errorf("informe arquivos após workspace ou use um terminal interativo")
-	}
-	if !o.Yes {
-		return fmt.Errorf("use a interface para aprovar a estimativa, ou --yes para autorizar o limite retornado pela API")
-	}
-	if o.Key == "" {
-		if err := c.DevLogin(ctx); err != nil {
-			return err
-		}
-	}
-	var ids []string
+func plain(ctx context.Context, target destination, o Options) error {
+	_, _ = fmt.Fprintf(o.Out, "%s · %s\n%s\n", Safe(target.account), Safe(target.saved.Name), text.T("projects.resume", "id", Safe(target.saved.ID)))
 	for i, path := range o.Files {
 		p, err := Validate(path)
 		if err != nil {
 			return err
 		}
 		_, _ = fmt.Fprintf(o.Out, "Enviando %d/%d: %s\n", i+1, len(o.Files), Safe(filepath.Base(p)))
-		data, err := os.ReadFile(p) // #nosec G304 -- intentional local file selection, validated by Validate before upload.
+		data, err := os.ReadFile(p) // #nosec G304 -- explicit local selection validated above.
 		if err != nil {
 			return err
 		}
-		u, err := c.Upload(ctx, filepath.Base(p), MIME(p), data)
+		if _, err = target.project.Upload(ctx, filepath.Base(p), MIME(p), data, ""); err != nil {
+			return err
+		}
+	}
+	if o.UploadOnly || !target.saved.Capabilities.Reconcile {
+		_, _ = fmt.Fprintln(o.Out, text.T("projects.uploaded"))
+		return nil
+	}
+	analysis, err := estimateProject(ctx, target.project)
+	if err != nil {
+		return err
+	}
+	if analysis.Run == nil {
+		if analysis.Quote == nil {
+			return fmt.Errorf("%s", text.T("projects.no_quote"))
+		}
+		_, _ = fmt.Fprintf(o.Out, "Estimativa %d tokens; limite: %d\n", analysis.Quote.ExpectedCredits, analysis.Quote.CapCredits)
+		if !o.Yes {
+			return fmt.Errorf("%s", text.T("projects.approval_required"))
+		}
+		analysis, err = target.project.Reconcile(ctx, analysis.Revision, analysis.Quote, "")
 		if err != nil {
 			return err
 		}
-		ids = append(ids, u.ID)
+	} else {
+		_, _ = fmt.Fprintln(o.Out, text.T("projects.reused"))
 	}
-	input := c.Input(ids...)
-	quote, err := c.Estimate(ctx, input)
-	if err != nil {
-		return err
+	if analysis.Run == nil {
+		return fmt.Errorf("%s", text.T("projects.no_quote"))
 	}
-	_, _ = fmt.Fprintf(o.Out, "Estimativa %d tokens; limite aprovado com --yes: %d\n", quote.ExpectedCredits, quote.CapCredits)
-	run, err := c.Run(ctx, quote, input)
-	if err != nil {
-		return err
-	}
-	run, err = c.Wait(ctx, run.ID, func(r dm.Run) {
+	run, err := target.project.Wait(ctx, analysis.Run.ID, func(r dm.Run) {
 		if r.Progress != nil {
 			_, _ = fmt.Fprintln(o.Out, Safe(r.Progress.Message))
 		}
@@ -516,7 +546,7 @@ func plain(ctx context.Context, c *dm.Client, o Options) error {
 	if err != nil {
 		return err
 	}
-	data, err := c.Export(ctx, run.ID, "xlsx")
+	data, err := target.project.Export(ctx, run.ID, "xlsx")
 	if err != nil {
 		return err
 	}

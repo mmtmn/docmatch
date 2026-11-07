@@ -1,6 +1,7 @@
 // The run pipeline from the browser: upload each file through its presigned ticket, follow the
 // security scan, ask for the estimate, start the run and read its findings.
 import { api, ApiError } from './api';
+import { selectedAccount } from './accountContext';
 import { apiUrl } from './env';
 import { formatDuration } from './format';
 import { t } from './i18n';
@@ -122,9 +123,14 @@ export interface RunSummary {
 }
 
 export interface RunView {
+  can_save_as_project?: boolean;
   id: string;
+  project_id?: string;
   status: 'queued' | 'running' | 'needs_approval' | 'completed' | 'failed' | 'cancelled';
   sources: UploadView[];
+  created_at?: string;
+  expires_at?: string;
+  pending_quote?: QuoteView;
   summary?: RunSummary;
   error?: { code: string; message: string };
 }
@@ -175,8 +181,23 @@ async function sha256Hex(file: File): Promise<string> {
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-async function putObject(ticket: Ticket, file: File, signal?: AbortSignal): Promise<void> {
+async function putObject(
+  ticket: Ticket,
+  file: File,
+  signal?: AbortSignal,
+  allowedOrigins?: readonly string[],
+): Promise<void> {
   // Presigned requests are authorized by their signature, never by cookies.
+  if (allowedOrigins) {
+    const target = new URL(ticket.url);
+    if (
+      !allowedOrigins.includes(target.origin) ||
+      target.username ||
+      target.password ||
+      target.hash
+    )
+      throw new ApiError(0, 'upload_destination_invalid', t('errors.network'));
+  }
   let res: Response;
   try {
     if (ticket.method === 'POST') {
@@ -187,6 +208,7 @@ async function putObject(ticket: Ticket, file: File, signal?: AbortSignal): Prom
         method: 'POST',
         body: form,
         credentials: 'omit',
+        redirect: 'error',
         ...(signal ? { signal } : {}),
       });
     } else {
@@ -195,6 +217,7 @@ async function putObject(ticket: Ticket, file: File, signal?: AbortSignal): Prom
         headers: ticket.headers,
         body: file,
         credentials: 'omit',
+        redirect: 'error',
         ...(signal ? { signal } : {}),
       });
     }
@@ -211,22 +234,32 @@ export async function uploadFile(
   file: AcceptedFile,
   onScanning?: (name: string) => void,
   signal?: AbortSignal,
+  destination?: { orgId: string; projectId?: string; replacesId?: string },
+  transport?: { request: typeof api; uploadOrigins: readonly string[] },
 ): Promise<UploadView> {
+  const request = transport?.request ?? api;
+  const context = { orgId: destination?.orgId ?? selectedAccount()?.orgId ?? null };
   const media = file.family === 'media';
   const sha256 = media ? undefined : await sha256Hex(file.file);
-  const ticket = await api<Ticket>('/v1/uploads', {
+  const prefix = destination?.projectId
+    ? `/v1/projects/${encodeURIComponent(destination.projectId)}/uploads`
+    : '/v1/uploads';
+  const ticket = await request<Ticket>(prefix, {
+    ...context,
     body: {
       kind: media ? 'media' : 'document',
       file_name: file.name,
       size_bytes: file.size,
       mime: uploadMime(file.kind, file.name, file.file.type),
       ...(sha256 ? { sha256 } : {}),
+      ...(destination?.replacesId ? { replaces_id: destination.replacesId } : {}),
     },
     ...(signal ? { signal } : {}),
   });
-  await putObject(ticket, file.file, signal);
-  const path = `/v1/uploads/${encodeURIComponent(ticket.id)}/complete`;
-  let view = await api<UploadView>(path, {
+  await putObject(ticket, file.file, signal, transport?.uploadOrigins);
+  const path = `${prefix}/${encodeURIComponent(ticket.id)}/complete`;
+  let view = await request<UploadView>(path, {
+    ...context,
     body: sha256 ? { sha256 } : {},
     ...(signal ? { signal } : {}),
   });
@@ -237,7 +270,7 @@ export async function uploadFile(
   ) {
     onScanning?.(file.name);
     await sleep(SCAN_POLL_MS, signal);
-    view = await api<UploadView>(path, { body: {}, ...(signal ? { signal } : {}) });
+    view = await request<UploadView>(path, { ...context, body: {}, ...(signal ? { signal } : {}) });
   }
   if (view.status !== 'ready') {
     throw new ApiError(
@@ -265,8 +298,10 @@ export function estimate(
   uploadIds: string[],
   opts: RunOptionsInput,
   signal?: AbortSignal,
+  orgId?: string,
 ): Promise<QuoteView> {
   return api<QuoteView>('/v1/runs/estimate', {
+    ...(orgId ? { orgId } : {}),
     body: runBody(uploadIds, opts),
     ...(signal ? { signal } : {}),
   });
@@ -276,27 +311,81 @@ export function createRun(
   quote: QuoteView,
   uploadIds: string[],
   opts: RunOptionsInput,
+  orgId?: string,
 ): Promise<RunView> {
   return api<RunView>('/v1/runs', {
+    ...(orgId ? { orgId } : {}),
     body: { ...runBody(uploadIds, opts), quote_id: quote.id, quote_signature: quote.signature },
     idempotent: true,
   });
 }
 
-export function getRun(id: string, signal?: AbortSignal): Promise<RunView> {
-  return api<RunView>(`/v1/runs/${encodeURIComponent(id)}`, signal ? { signal } : {});
+export interface RunDestination {
+  orgId: string;
+  projectId?: string;
+}
+
+function runPath(id: string, destination?: RunDestination): string {
+  const prefix = destination?.projectId
+    ? `/v1/projects/${encodeURIComponent(destination.projectId)}/runs`
+    : '/v1/runs';
+  return `${prefix}/${encodeURIComponent(id)}`;
+}
+
+export function getRun(
+  id: string,
+  signal?: AbortSignal,
+  destination?: RunDestination,
+  request: typeof api = api,
+): Promise<RunView> {
+  return request<RunView>(runPath(id, destination), {
+    ...(destination ? { orgId: destination.orgId } : {}),
+    ...(signal ? { signal } : {}),
+  });
+}
+
+export function approveRun(
+  id: string,
+  quote: QuoteView,
+  key: string,
+  destination?: RunDestination,
+  request: typeof api = api,
+): Promise<RunView> {
+  return request<RunView>(`${runPath(id, destination)}/approve-quote`, {
+    ...(destination ? { orgId: destination.orgId } : {}),
+    body: { quote_id: quote.id, quote_signature: quote.signature },
+    idempotencyKey: key,
+  });
+}
+
+export function cancelRun(
+  id: string,
+  destination?: RunDestination,
+  request: typeof api = api,
+): Promise<RunView> {
+  return request<RunView>(`${runPath(id, destination)}/cancel`, {
+    ...(destination ? { orgId: destination.orgId } : {}),
+    method: 'POST',
+    idempotent: true,
+  });
 }
 
 /** Every finding of a run (pages of 100). */
-export async function listFindings(id: string, signal?: AbortSignal): Promise<FindingView[]> {
+export async function listFindings(
+  id: string,
+  signal?: AbortSignal,
+  destination?: RunDestination,
+  request: typeof api = api,
+): Promise<FindingView[]> {
+  const orgId = destination?.orgId ?? selectedAccount()?.orgId ?? null;
   const out: FindingView[] = [];
   let cursor: string | undefined;
   for (let page = 0; page < 50; page++) {
     const q = new URLSearchParams({ limit: '100' });
     if (cursor) q.set('cursor', cursor);
-    const res = await api<{ items: FindingView[]; next_cursor?: string }>(
-      `/v1/runs/${encodeURIComponent(id)}/findings?${q.toString()}`,
-      signal ? { signal } : {},
+    const res = await request<{ items: FindingView[]; next_cursor?: string }>(
+      `${runPath(id, destination)}/findings?${q.toString()}`,
+      { orgId, ...(signal ? { signal } : {}) },
     );
     out.push(...res.items);
     if (!res.next_cursor) break;
@@ -310,10 +399,13 @@ export function sendFeedback(
   findingId: string,
   status: string,
   note?: string,
+  destination?: RunDestination,
+  request: typeof api = api,
 ): Promise<unknown> {
-  return api(
-    `/v1/runs/${encodeURIComponent(runId)}/findings/${encodeURIComponent(findingId)}/feedback`,
+  return request(
+    `${runPath(runId, destination)}/findings/${encodeURIComponent(findingId)}/feedback`,
     {
+      ...(destination ? { orgId: destination.orgId } : {}),
       body: { status, ...(note ? { note } : {}) },
       idempotent: true,
     },
@@ -324,15 +416,31 @@ export function exportUrl(runId: string, format: 'csv' | 'xlsx' | 'pdf'): string
   return apiUrl(`/v1/runs/${encodeURIComponent(runId)}/export?format=${format}`);
 }
 
-/** Download through the authenticated client, retaining session refresh and API errors. */
-export async function downloadExport(runId: string, format: 'csv' | 'xlsx' | 'pdf'): Promise<void> {
-  const blob = await api<Blob>(`/v1/runs/${encodeURIComponent(runId)}/export?format=${format}`, {
+/** Fetch through the authenticated client, retaining session refresh and API errors. */
+export async function exportFile(
+  runId: string,
+  format: 'csv' | 'xlsx' | 'pdf',
+  destination?: RunDestination,
+  request: typeof api = api,
+): Promise<File> {
+  const blob = await request<Blob>(`${runPath(runId, destination)}/export?format=${format}`, {
+    ...(destination ? { orgId: destination.orgId } : {}),
     responseType: 'blob',
   });
-  const url = URL.createObjectURL(blob);
+  return new File([blob], `docmatch-${runId}.${format}`, { type: blob.type });
+}
+
+export async function downloadExport(
+  runId: string,
+  format: 'csv' | 'xlsx' | 'pdf',
+  destination?: RunDestination,
+  request: typeof api = api,
+): Promise<void> {
+  const file = await exportFile(runId, format, destination, request);
+  const url = URL.createObjectURL(file);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `docmatch-${runId}.${format}`;
+  link.download = file.name;
   document.body.append(link);
   link.click();
   link.remove();
@@ -345,34 +453,55 @@ export interface RunEvent {
   data: unknown;
 }
 
-/** Follows the run's SSE stream (cookies sent); returns the closer. */
+/** Fetch supports the explicit account header; native EventSource cannot send it. */
 export function watchRun(
   runId: string,
   onEvent: (e: RunEvent) => void,
   onError?: () => void,
+  destination?: RunDestination,
 ): () => void {
-  const url = apiUrl(`/v1/runs/${encodeURIComponent(runId)}/events`);
-  if (!url || typeof EventSource === 'undefined') return () => {};
-  const source = new EventSource(url, { withCredentials: true });
-  for (const name of [
-    'stage_started',
-    'progress',
-    'finding',
-    'match',
-    'needs_approval',
-    'completed',
-    'failed',
-  ]) {
-    source.addEventListener(name, (msg) => {
-      let data: unknown;
-      try {
-        data = JSON.parse((msg as MessageEvent<string>).data);
-      } catch {
-        data = undefined;
-      }
-      onEvent({ event: name, data });
+  const controller = new AbortController();
+  const orgId = destination?.orgId ?? selectedAccount()?.orgId ?? null;
+  void (async () => {
+    const stream = await api<ReadableStream<Uint8Array>>(`${runPath(runId, destination)}/events`, {
+      orgId,
+      responseType: 'stream',
+      signal: controller.signal,
     });
-  }
-  source.onerror = () => onError?.();
-  return () => source.close();
+    if (!stream) return;
+    const reader = stream.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    try {
+      while (!controller.signal.aborted) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer = (buffer + decoder.decode(value, { stream: true })).replace(/\r\n/g, '\n');
+        let end = buffer.indexOf('\n\n');
+        while (end >= 0) {
+          const frame = buffer.slice(0, end);
+          buffer = buffer.slice(end + 2);
+          let event = '';
+          const data: string[] = [];
+          for (const line of frame.split('\n')) {
+            if (line.startsWith('event:')) event = line.slice(6).trim();
+            if (line.startsWith('data:')) data.push(line.slice(5).trimStart());
+          }
+          if (event && data.length && !controller.signal.aborted) {
+            try {
+              onEvent({ event, data: JSON.parse(data.join('\n')) as unknown });
+            } catch {
+              /* Ignore an incomplete or malformed event; polling still recovers state. */
+            }
+          }
+          end = buffer.indexOf('\n\n');
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  })().catch(() => {
+    if (!controller.signal.aborted) onError?.();
+  });
+  return () => controller.abort();
 }

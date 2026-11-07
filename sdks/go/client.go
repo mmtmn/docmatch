@@ -22,6 +22,7 @@ import (
 )
 
 type Client struct {
+	orgID        string
 	BaseURL      string
 	Key          string
 	Lane         string
@@ -29,10 +30,11 @@ type Client struct {
 	PollInterval time.Duration
 }
 type Error struct {
-	Status    int    `json:"-"`
-	Code      string `json:"code"`
-	Message   string `json:"message"`
-	RequestID string `json:"request_id"`
+	Status    int             `json:"-"`
+	Code      string          `json:"code"`
+	Message   string          `json:"message"`
+	RequestID string          `json:"request_id"`
+	Details   json.RawMessage `json:"details,omitempty"`
 }
 
 func (e *Error) Error() string { return fmt.Sprintf("%s (%d %s)", e.Message, e.Status, e.Code) }
@@ -45,7 +47,7 @@ func New(baseURL, key string) (*Client, error) {
 		return nil, errors.New("HTTPS required outside loopback")
 	}
 	jar, _ := cookiejar.New(nil)
-	return &Client{strings.TrimRight(baseURL, "/"), key, "api_batch", &http.Client{Jar: jar, Timeout: 60 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, time.Second}, nil
+	return &Client{BaseURL: strings.TrimRight(baseURL, "/"), Key: key, Lane: "api_batch", HTTP: &http.Client{Jar: jar, Timeout: 60 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, PollInterval: time.Second}, nil
 }
 func loopback(host string) bool { return host == "localhost" || host == "127.0.0.1" || host == "::1" }
 func key() string {
@@ -102,13 +104,16 @@ func (c *Client) request(ctx context.Context, method, path string, body any) ([]
 		}
 	}
 	idem := key()
-	retry := method == "GET" || (method == "POST" && path == "/v1/runs")
+	retry := method == "GET" || (method == "POST" && (path == "/v1/runs" || strings.HasPrefix(path, "/v1/projects/") && strings.HasSuffix(path, "/runs")))
 	for attempt := 0; ; attempt++ {
 		req, err := http.NewRequestWithContext(ctx, method, c.BaseURL+path, bytes.NewReader(data))
 		if err != nil {
 			return nil, err
 		}
 		req.Header.Set("Accept", "application/json")
+		if c.orgID != "" && !strings.HasPrefix(path, "/v1/auth/") {
+			req.Header.Set("X-Docmatch-Org", c.orgID)
+		}
 		if body != nil {
 			req.Header.Set("Content-Type", "application/json")
 		}
@@ -171,7 +176,8 @@ type Quote struct {
 	CapCredits      int64  `json:"cap_credits"`
 }
 type Run struct {
-	Sources []struct {
+	ProjectID string `json:"project_id,omitempty"`
+	Sources   []struct {
 		ID       string `json:"id"`
 		FileName string `json:"file_name"`
 	} `json:"sources"`
@@ -237,8 +243,11 @@ func (c *Client) GetRun(ctx context.Context, id string) (Run, error) {
 	return r, err
 }
 func (c *Client) Wait(ctx context.Context, id string, onProgress func(Run)) (Run, error) {
+	return c.wait(ctx, id, onProgress, c.GetRun)
+}
+func (c *Client) wait(ctx context.Context, id string, onProgress func(Run), get func(context.Context, string) (Run, error)) (Run, error) {
 	for {
-		r, err := c.GetRun(ctx, id)
+		r, err := get(ctx, id)
 		if err != nil {
 			return r, err
 		}
@@ -257,6 +266,9 @@ func (c *Client) Wait(ctx context.Context, id string, onProgress func(Run)) (Run
 	}
 }
 func (c *Client) Findings(ctx context.Context, id string) ([]Finding, error) {
+	return c.findings(ctx, strings.ReplaceAll(Operations["listFindings"].Path, "{id}", url.PathEscape(id)))
+}
+func (c *Client) findings(ctx context.Context, prefix string) ([]Finding, error) {
 	all := []Finding{}
 	cursor := ""
 	for page := 0; page < 1000; page++ {
@@ -264,7 +276,7 @@ func (c *Client) Findings(ctx context.Context, id string) ([]Finding, error) {
 			Items []Finding `json:"items"`
 			Next  string    `json:"next_cursor"`
 		}
-		path := strings.ReplaceAll(Operations["listFindings"].Path, "{id}", url.PathEscape(id)) + "?limit=100&cursor=" + url.QueryEscape(cursor)
+		path := prefix + "?limit=100&cursor=" + url.QueryEscape(cursor)
 		if err := c.Do(ctx, "GET", path, nil, &data); err != nil {
 			return nil, err
 		}
@@ -286,6 +298,9 @@ func (c *Client) Export(ctx context.Context, id, format string) ([]byte, error) 
 	return c.request(ctx, "GET", strings.ReplaceAll(Operations["exportRun"].Path, "{id}", url.PathEscape(id))+"?format="+format, nil)
 }
 func (c *Client) Upload(ctx context.Context, name, mime string, data []byte) (Upload, error) {
+	return c.upload(ctx, Operations["createUpload"].Path, name, mime, data, "", "")
+}
+func (c *Client) upload(ctx context.Context, prefix, name, mime string, data []byte, role, replaces string) (Upload, error) {
 	var out Upload
 	sum := sha256.Sum256(data)
 	digest := hex.EncodeToString(sum[:])
@@ -296,7 +311,14 @@ func (c *Client) Upload(ctx context.Context, name, mime string, data []byte) (Up
 		Fields  map[string]string `json:"fields"`
 		Headers map[string]string `json:"headers"`
 	}
-	if err := c.Do(ctx, "POST", Operations["createUpload"].Path, map[string]any{"kind": "document", "file_name": name, "mime": mime, "size_bytes": len(data), "sha256": digest}, &ticket); err != nil {
+	bodyFields := map[string]any{"kind": "document", "file_name": name, "mime": mime, "size_bytes": len(data), "sha256": digest}
+	if role != "" {
+		bodyFields["role"] = role
+	}
+	if replaces != "" {
+		bodyFields["replaces_id"] = replaces
+	}
+	if err := c.Do(ctx, "POST", prefix, bodyFields, &ticket); err != nil {
 		return out, err
 	}
 	u, err := url.Parse(ticket.URL)
@@ -343,7 +365,7 @@ func (c *Client) Upload(ctx context.Context, name, mime string, data []byte) (Up
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		return out, &Error{Status: res.StatusCode, Code: "upload_failed"}
 	}
-	path := strings.ReplaceAll(Operations["completeUpload"].Path, "{id}", url.PathEscape(ticket.ID))
+	path := prefix + "/" + url.PathEscape(ticket.ID) + "/complete"
 	for polls := 0; polls < 120; polls++ {
 		if err := c.Do(ctx, "POST", path, map[string]string{"sha256": digest}, &out); err != nil {
 			return out, err

@@ -47,8 +47,9 @@ const MIME = {
 
 /** The same rewrite as the CloudFront function in docs/headers.md (keep the two in sync). */
 export function rewriteUri(uri) {
+  if (/^\/docs\/(usar|desenvolver)\/$/.test(uri)) return `${uri}index.html`;
   if (uri.endsWith('/')) return uri === '/' ? '/index.html' : `${uri.slice(0, -1)}.html`;
-  if (!uri.includes('.')) return `${uri}.html`;
+  if (!uri.slice(uri.lastIndexOf('/')).includes('.')) return `${uri}.html`;
   return uri;
 }
 
@@ -121,6 +122,12 @@ export function createDistServer(dir, tls) {
     if (target === null) {
       response.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
       response.end('400');
+      return;
+    }
+    const requested = new URL(request.url ?? '/', 'http://localhost');
+    if (/^\/docs\/(usar|desenvolver)$/.test(requested.pathname)) {
+      response.writeHead(301, { Location: `${requested.pathname}/${requested.search}` });
+      response.end();
       return;
     }
     const info = await fileStat(target.file);

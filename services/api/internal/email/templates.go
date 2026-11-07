@@ -9,10 +9,12 @@ import (
 
 // Template tags.
 const (
-	TagLogin       = "login"
-	TagExportReady = "export_ready"
-	TagDeletion    = "deletion_scheduled"
-	TagRunFinished = "run_finished"
+	TagLogin                = "login"
+	TagExportReady          = "export_ready"
+	TagDeletion             = "deletion_scheduled"
+	TagRunFinished          = "run_finished"
+	TagPlatformConfirmation = "platform_confirmation"
+	TagPlatformReady        = "platform_ready"
 )
 
 // LoginData fills the login e-mail.

@@ -52,7 +52,7 @@ type Querier interface {
 	// Chaves de dados por locatário (internal/crypto + internal/account). Dentro
 	// de WithOrgTx; o worker de exclusão usa modo sistema.
 	AuthInsertTenantKey(ctx context.Context, arg AuthInsertTenantKeyParams) (TenantKey, error)
-	AuthLatestExport(ctx context.Context, userID uuid.UUID) (AuthLatestExportRow, error)
+	AuthLatestExport(ctx context.Context, arg AuthLatestExportParams) (AuthLatestExportRow, error)
 	AuthListUserSessions(ctx context.Context, userID uuid.UUID) ([]Session, error)
 	AuthListUsersDueForErasure(ctx context.Context, arg AuthListUsersDueForErasureParams) ([]uuid.UUID, error)
 	AuthMarkExportFailed(ctx context.Context, arg AuthMarkExportFailedParams) (int64, error)
@@ -181,6 +181,7 @@ type Querier interface {
 	GetRule(ctx context.Context, arg GetRuleParams) (Rule, error)
 	GetRun(ctx context.Context, arg GetRunParams) (Run, error)
 	GetRunSystem(ctx context.Context, id uuid.UUID) (Run, error)
+	GetRunWithProject(ctx context.Context, arg GetRunWithProjectParams) (GetRunWithProjectRow, error)
 	GetSession(ctx context.Context, id uuid.UUID) (Session, error)
 	GetSessionByRefreshHash(ctx context.Context, refreshHash []byte) (Session, error)
 	GetStripeEvent(ctx context.Context, id string) (StripeEvent, error)
@@ -269,8 +270,8 @@ type Querier interface {
 	ListRulesByIDs(ctx context.Context, arg ListRulesByIDsParams) ([]Rule, error)
 	ListRunEventsAfter(ctx context.Context, arg ListRunEventsAfterParams) ([]RunEvent, error)
 	ListRunUploads(ctx context.Context, arg ListRunUploadsParams) ([]Upload, error)
-	ListRunsPage(ctx context.Context, arg ListRunsPageParams) ([]Run, error)
-	ListTrustedRules(ctx context.Context, orgID uuid.UUID) ([]Rule, error)
+	ListRunsPage(ctx context.Context, arg ListRunsPageParams) ([]ListRunsPageRow, error)
+	ListTrustedRules(ctx context.Context, arg ListTrustedRulesParams) ([]Rule, error)
 	ListUnprocessedStripeEvents(ctx context.Context, limit int32) ([]StripeEvent, error)
 	ListUploadsByIDs(ctx context.Context, arg ListUploadsByIDsParams) ([]Upload, error)
 	// Lista as organizações de um usuário (atravessa locatários: modo sistema).

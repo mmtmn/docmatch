@@ -1,0 +1,103 @@
+.extension-popup {
+  width: 360px;
+  padding: 1.25rem;
+}
+.extension-workspace {
+  max-width: var(--content-width);
+  margin: auto;
+  padding: 1.5rem var(--gutter) 3rem;
+}
+.extension-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+.extension-header strong {
+  font-size: 1.5rem;
+  margin-right: auto;
+}
+.extension-header small {
+  color: var(--color-muted);
+}
+.extension-account {
+  display: grid;
+  gap: 0.5rem;
+  margin-block: 1rem 1.5rem;
+  max-width: 24rem;
+}
+.extension-account select {
+  font: inherit;
+  min-height: var(--tap);
+  border-radius: var(--radius-2);
+  padding: 0.65rem;
+  color: var(--color-fg);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  width: 100%;
+}
+.extension-account select:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+.extension-projects,
+.extension-connect,
+.extension-results {
+  display: grid;
+  gap: 1rem;
+}
+.extension-create {
+  display: grid;
+  gap: 0.5rem;
+  margin-block: 1rem;
+}
+.extension-create > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.extension-create input {
+  flex: 1 1 12rem;
+}
+.extension-archive {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: var(--tap);
+}
+.extension-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+.extension-list a {
+  color: var(--color-fg);
+  text-decoration: none;
+  display: grid;
+  gap: 0.5rem;
+  padding: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  overflow-wrap: anywhere;
+}
+.extension-list a:hover {
+  background: var(--color-surface);
+}
+.extension-list span {
+  color: var(--color-muted);
+  font-size: var(--fs-sm);
+}
+.extension-processing {
+  min-height: 24rem;
+}
+.extension-popup .btn {
+  width: 100%;
+}
+.extension-header .btn {
+  width: auto;
+}
+[role='alert'] {
+  color: var(--color-danger);
+}

@@ -18,6 +18,7 @@ final class FlowTests: XCTestCase {
             let signedIn = (req.value(forHTTPHeaderField: "Cookie") ?? "").contains("dm_session=")
             switch (method, path) {
             case ("GET", "/v1/auth/methods"): return fakeReply(200, #"{"email":true,"dev":true}"#, [])
+            case ("GET", "/v1/me/organizations"): return signedIn ? fakeReply(200, organizationsJSON) : fakeReply(401, unauthenticated)
             case ("GET", "/v1/me"):
                 return signedIn
                     ? fakeReply(200, #"{"user":{"id":"usr_1","email":"dev@docmatch.test"},"org":{"id":"org_1"},"credits":{"available":10000}}"#, [])
@@ -114,6 +115,7 @@ final class FlowTests: XCTestCase {
         XCTAssertEqual(wrong.challengeId, "chl_1", "o código errado não fecha o desafio")
 
         server.enqueue(200, sessionJSON, setCookie: [sessionCookie(), refreshCookie(), deviceCookie()])
+        server.enqueue(200, organizationsJSON)
         server.enqueue(200, #"{"user":{"id":"usr_1","email":"ana@example.com"},"org":{"id":"org_1"}}"#)
         await session.verifyCode("123456")
         guard case .signedIn(let me) = session.state else { return XCTFail("\(session.state)") }
@@ -126,6 +128,7 @@ final class FlowTests: XCTestCase {
         let dm = try newClient(server)
         server.enqueue(200, sessionJSON, setCookie: [sessionCookie(), refreshCookie(), deviceCookie()])
         try await dm.api.devLogin()
+        server.enqueue(200, organizationsJSON)
         server.enqueue(200, #"{"user":{"id":"usr_1","email":"ana@example.com"},"org":{"id":"org_1"}}"#)
         let session = SessionModel(dm: dm)
         await session.refresh()

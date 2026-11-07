@@ -13,7 +13,7 @@ GPU ?= swiftshader_indirect
 # Keep Gradle's generic Pixel AVD separate from the developer's running emulator.
 TEST_ANDROID_HOME ?= $(ROOT)/.cache/android-test
 
-.PHONY: help setup sdk-check tokens lint test build ci ci-full e2e-local release clean
+.PHONY: help setup sdk-check tokens lint test ui-test build ci ci-full e2e-local release clean
 
 help: ## lista os alvos
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -38,16 +38,22 @@ lint: sdk-check ## Android lint do app (avisos viram erro onde importa: abortOnE
 build: sdk-check ## APK de debug, APK dos testes instrumentados e o release minificado (R8)
 	$(GRADLE) :app:assembleDebug :app:assembleDebugAndroidTest :app:assembleRelease -Pdocmatch.apiBaseUrl=https://api.docmatch.invalid
 
-ci: tokens test lint build ## tokens + testes + lint + builds (o que o pre-push roda)
+ui-test: sdk-check ## modelos de tela: troca de conta, retomada e conflitos
+	$(GRADLE) :app:testDebugUnitTest
+
+ci: tokens test ui-test lint build ## tokens + testes + lint + builds (o que o pre-push roda)
 
 ci-full: ci e2e-local ## ci + o fluxo inteiro num emulador contra o make local
 
 e2e-local: sdk-check ## make local + o app num emulador gerenciado: login local, gêmeo da Vantara, conta em dois aparelhos
 	DM_LOCAL_LLM_MODE=off $(ROOT)/tools/dev/local.sh up
 	mkdir -p "$(TEST_ANDROID_HOME)"
-	ANDROID_USER_HOME="$(TEST_ANDROID_HOME)" ANDROID_EMULATOR_HOME="$(TEST_ANDROID_HOME)" \
+	@set -eu; eval "$$($(ROOT)/tools/dev/env.sh $(ROOT)/.env --defaults)"; \
+	  url="$$(node -e 'const u = new URL(process.env.DM_API_BASE_URL); if (u.protocol !== "http:" || !["localhost", "127.0.0.1", "[::1]"].includes(u.hostname) || u.username || u.password) throw new Error("Local API required"); u.hostname = "10.0.2.2"; console.log(u.origin)')"; \
+	  ANDROID_USER_HOME="$(TEST_ANDROID_HOME)" ANDROID_EMULATOR_HOME="$(TEST_ANDROID_HOME)" \
 	  ANDROID_AVD_HOME="$(TEST_ANDROID_HOME)/avd/gradle-managed" \
 	  $(GRADLE) --no-daemon :app:$(DEVICE)DebugAndroidTest \
+	  -Pdocmatch.apiBaseUrl="$$url" \
 	  -Pandroid.testInstrumentationRunnerArguments.docmatchLocal=1 \
 	  -Pandroid.testoptions.manageddevices.emulator.gpu=$(GPU)
 

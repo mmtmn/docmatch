@@ -1,0 +1,5 @@
+.build/
+.swiftpm/
+Web/
+*.xcodeproj/
+build/

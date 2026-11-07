@@ -27,6 +27,7 @@ export interface ErrorSpec {
 
 /** Error catalog (errors.yaml, version 1), keyed by stable snake_case code. */
 export const ERRORS = {
+  feature_paused: { status: 409, category: 'limits', message: 'Esta função ainda não está disponível nesta conta. O que já foi salvo continua disponível.', retryable: false },
   disposable_email: { status: 422, category: 'auth', message: 'Use um e-mail permanente. Endereços temporários não são aceitos para criar uma conta.', retryable: false },
   unauthenticated: { status: 401, category: 'auth', message: 'Faça login para continuar.', retryable: false },
   session_expired: { status: 401, category: 'auth', message: 'Sua sessão expirou. Entre de novo.', retryable: false },

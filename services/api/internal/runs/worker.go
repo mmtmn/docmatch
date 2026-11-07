@@ -62,7 +62,12 @@ func (s *Service) Execute(ctx context.Context, orgID, runID uuid.UUID, lastAttem
 	if err != nil || !ok {
 		return s.failOnSetup(ctx, &r, fmt.Errorf("orçamento %s: %w", r.QuoteID, errors.Join(err, errors.New("não encontrado"))), contracts.ErrInternalError)
 	}
-	resolved, err := s.d.Rules.Resolve(ctx, orgID, r.Inputs.Request.UseRules(), v.RuleIDs)
+	var resolved []rules.Rule
+	if r.Inputs.Project != nil {
+		resolved = r.Inputs.Project.Rules
+	} else {
+		resolved, err = s.d.Rules.Resolve(ctx, orgID, r.Inputs.Request.UseRules(), v.RuleIDs)
+	}
 	if err != nil {
 		return s.failOnSetup(ctx, &r, err, contracts.ErrRuleNotFound)
 	}

@@ -15,6 +15,8 @@ export const LIMITS = {
     saved_rule_body: 2000,
     rule_picker_search: 100,
     workflow_name: 80,
+    project_name: 120,
+    reprocess_reason: 500,
     display_name: 80,
     company_name: 120,
     email: 254,
@@ -54,6 +56,9 @@ export const LIMITS = {
   ids: {
     idempotency_key_max: 128,
     api_key_scopes_max: 10,
+    project_members_max: 100,
+    project_rules_max: 50,
+    account_members_max: 100,
     files_per_run_hard_max: 100,
     source_warnings_per_run: 100,
     media_files_per_run_hard_max: 50000,
@@ -73,6 +78,8 @@ export type LimitKey =
   | 'text.saved_rule_body'
   | 'text.rule_picker_search'
   | 'text.workflow_name'
+  | 'text.project_name'
+  | 'text.reprocess_reason'
   | 'text.display_name'
   | 'text.company_name'
   | 'text.email'
@@ -103,6 +110,9 @@ export type LimitKey =
   | 'http.sse_idle_timeout_s'
   | 'ids.idempotency_key_max'
   | 'ids.api_key_scopes_max'
+  | 'ids.project_members_max'
+  | 'ids.project_rules_max'
+  | 'ids.account_members_max'
   | 'ids.files_per_run_hard_max'
   | 'ids.source_warnings_per_run'
   | 'ids.media_files_per_run_hard_max';
@@ -115,6 +125,8 @@ export const LIMIT_BY_KEY: Readonly<Record<LimitKey, number>> = {
   'text.saved_rule_body': 2000,
   'text.rule_picker_search': 100,
   'text.workflow_name': 80,
+  'text.project_name': 120,
+  'text.reprocess_reason': 500,
   'text.display_name': 80,
   'text.company_name': 120,
   'text.email': 254,
@@ -145,6 +157,9 @@ export const LIMIT_BY_KEY: Readonly<Record<LimitKey, number>> = {
   'http.sse_idle_timeout_s': 300,
   'ids.idempotency_key_max': 128,
   'ids.api_key_scopes_max': 10,
+  'ids.project_members_max': 100,
+  'ids.project_rules_max': 50,
+  'ids.account_members_max': 100,
   'ids.files_per_run_hard_max': 100,
   'ids.source_warnings_per_run': 100,
   'ids.media_files_per_run_hard_max': 50000,

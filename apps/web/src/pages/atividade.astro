@@ -1,0 +1,13 @@
+---
+import { ActivityApp } from '../components/projects/ActivityApp';
+import Header from '../components/site/Header.astro';
+import Base from '../layouts/Base.astro';
+import { t } from '../lib/i18n';
+---
+
+<Base title={t('projects.activity')} hideHeader hideFooter noindex>
+  <Header variant="app" />
+  <main id="conteudo" class="container">
+    <ActivityApp client:only="react" />
+  </main>
+</Base>

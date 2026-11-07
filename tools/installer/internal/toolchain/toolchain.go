@@ -114,7 +114,7 @@ type Requirements struct {
 }
 
 // Defaults without a checkout.
-var Defaults = Requirements{GoMod: "1.27.0", GoToolchain: "go1.27.3", Node: "22.23.4", NodeMajor: "22", PNPM: "11.5.3", PNPMMin: "11.0.0", Rust: "1.93.0"}
+var Defaults = Requirements{GoMod: "1.27.0", GoToolchain: "go1.27.3", Node: "22.23.4", NodeMajor: "22", PNPM: "11.5.3", PNPMMin: "11.0.0", Rust: "1.93.1"}
 
 // MinGoAuto is the first Go that downloads the go.mod toolchain by itself (GOTOOLCHAIN=auto).
 const MinGoAuto = "1.21"

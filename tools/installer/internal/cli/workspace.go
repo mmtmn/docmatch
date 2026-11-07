@@ -8,11 +8,18 @@ import (
 
 func runWorkspace(ctx context.Context, w world, args []string, b Build) (int, error) {
 	var c common
-	var api, output string
+	var api, output, projectID, newProject, accountID, saveRunID string
+	var listProjects, uploadOnly bool
 	fs := newFlagSet("workspace")
 	c.register(fs)
 	fs.StringVar(&api, "api", "", "")
 	fs.StringVar(&output, "output", "", "")
+	fs.StringVar(&projectID, "saved-project", "", "")
+	fs.StringVar(&newProject, "new-project", "", "")
+	fs.StringVar(&saveRunID, "save-run", "", "")
+	fs.StringVar(&accountID, "account", "", "")
+	fs.BoolVar(&listProjects, "list-projects", false, "")
+	fs.BoolVar(&uploadOnly, "upload-only", false, "")
 	files, err := parseArgs(fs, args)
 	if err != nil {
 		return exitUsage, err
@@ -44,7 +51,7 @@ func runWorkspace(ctx context.Context, w world, args []string, b Build) (int, er
 		dir = w.cwd
 	}
 	prefs := w.prefs(c)
-	err = workspace.Run(ctx, workspace.Options{API: api, Key: key, Dir: dir, Output: output, Files: files, Plain: prefs.plain, Yes: c.y, NoAnimation: !prefs.animate, In: w.stdin, Out: w.stdout})
+	err = workspace.Run(ctx, workspace.Options{API: api, Key: key, ProjectID: projectID, NewProject: newProject, AccountID: accountID, SaveRunID: saveRunID, ListProjects: listProjects, UploadOnly: uploadOnly, Dir: dir, Output: output, Files: files, Plain: prefs.plain, Yes: c.y, NoAnimation: !prefs.animate, In: w.stdin, Out: w.stdout})
 	if err != nil {
 		return exitFailed, err
 	}

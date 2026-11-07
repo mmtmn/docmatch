@@ -98,6 +98,9 @@ func (u Upload) Mime() string {
 
 // APIStatus maps the persisted state to the contract's enum.
 func (u Upload) APIStatus(now time.Time) string {
+	if u.Status == StatusDeleted || u.ExpiresAt != nil && !now.Before(*u.ExpiresAt) {
+		return APIExpired
+	}
 	switch u.Status {
 	case StatusPending:
 		if u.TicketExpiry != nil && now.After(*u.TicketExpiry) {

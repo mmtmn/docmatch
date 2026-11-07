@@ -4,6 +4,7 @@
 import { ResultsDemo } from '../../components/results/ResultsDemo';
 import { ResultsLive } from '../../components/results/ResultsLive';
 import Base from '../../layouts/Base.astro';
+import Header from '../../components/site/Header.astro';
 import { apiBaseUrl, featureResults } from '../../lib/env';
 import { t } from '../../lib/i18n';
 
@@ -12,7 +13,8 @@ export function getStaticPaths() {
 }
 ---
 
-<Base title={t('results.title')} noindex>
+<Base title={t('results.title')} hideHeader noindex>
+  <Header variant="app" />
   <main id="conteudo" class="container">
     {apiBaseUrl ? <ResultsLive client:only="react" /> : <ResultsDemo client:load />}
   </main>

@@ -149,7 +149,8 @@ func (s *Service) Create(ctx context.Context, p apix.Principal, req CreateReques
 	}
 	now := s.d.Now().UTC()
 	r := Rule{
-		OrgID: p.OrgID, Title: title, Body: body, Version: 1, Status: StatusDraft, Scope: ScopeTenant, AppliesTo: req.AppliesTo,
+		ProjectID: ProjectID(ctx, p.OrgID),
+		OrgID:     p.OrgID, Title: title, Body: body, Version: 1, Status: StatusDraft, Scope: ScopeTenant, AppliesTo: req.AppliesTo,
 		Enabled: true, CreatedBy: p.UserID, CreatedAt: now, UpdatedAt: now,
 		Provenance: Provenance{Origin: OriginUser, ProposedAt: now.Format(time.RFC3339)},
 		Stats:      Stats{Currency: "BRL"},
@@ -221,7 +222,7 @@ func (s *Service) NewVersion(ctx context.Context, p apix.Principal, id uuid.UUID
 // Promote moves candidate → verified (needs history without false
 // positives) or verified → trusted.
 func (s *Service) Promote(ctx context.Context, p apix.Principal, id uuid.UUID, to string) (Rule, error) {
-	if to != StatusVerified && to != StatusTrusted {
+	if to != StatusVerified && to != StatusTrusted && to != StatusRetired {
 		return Rule{}, apix.Validation(apix.FieldError{Path: "/to", Code: "invalid"})
 	}
 	r, err := s.Get(ctx, p.OrgID, id)
@@ -354,6 +355,7 @@ func (s *Service) Propose(ctx context.Context, orgID uuid.UUID, runID *uuid.UUID
 	var out []Rule
 	for _, p := range proposals {
 		r := FromProto(orgID, runID, now, p)
+		r.ProjectID = ProjectID(ctx, orgID)
 		title, body, err := s.validateText(r.Title, r.Body, true)
 		if err != nil {
 			s.d.Logger.Warn("regra proposta ignorada", slog.String("err", err.Error()))
@@ -405,6 +407,14 @@ func (h *Handler) Mount(r *httpx.Router) {
 	r.HandleFunc(http.MethodPost, "/v1/rules", httpx.BodyJSON, h.create)
 	r.HandleFunc(http.MethodPost, "/v1/rules/{id}/versions", httpx.BodyJSON, h.version)
 	r.HandleFunc(http.MethodPost, "/v1/rules/{id}/promote", httpx.BodyJSON, h.promote)
+}
+
+// MountProject reuses the same versioned rules API behind project authorization.
+func (h *Handler) MountProject(r *httpx.Router, wrap func(http.HandlerFunc) http.HandlerFunc) {
+	r.HandleFunc(http.MethodGet, "/v1/projects/{project}/rules", httpx.BodyNone, wrap(h.list))
+	r.HandleFunc(http.MethodPost, "/v1/projects/{project}/rules", httpx.BodyJSON, wrap(h.create))
+	r.HandleFunc(http.MethodPost, "/v1/projects/{project}/rules/{id}/versions", httpx.BodyJSON, wrap(h.version))
+	r.HandleFunc(http.MethodPost, "/v1/projects/{project}/rules/{id}/promote", httpx.BodyJSON, wrap(h.promote))
 }
 
 // ListResponse is openapi RuleList.

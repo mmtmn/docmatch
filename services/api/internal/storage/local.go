@@ -23,6 +23,33 @@ import (
 // exists only in dev and tests, when R2 is not configured.
 const LocalPath = "/v1/_local/blobs/"
 
+// OriginExempt recognizes a credential-free browser write authorized by this
+// local store's own signature. Only wire this exception in development: the
+// storage handler still verifies the signature and enforces the object size.
+func (l *LocalStore) OriginExempt(r *http.Request) bool {
+	if l == nil || r.Header.Get("Cookie") != "" || r.Header.Get("Authorization") != "" ||
+		(r.Method != http.MethodPost && r.Method != http.MethodPut) || !strings.HasPrefix(r.URL.Path, LocalPath) {
+		return false
+	}
+	key := strings.TrimPrefix(r.URL.Path, LocalPath)
+	if ValidateKey(key) != nil {
+		return false
+	}
+	q := r.URL.Query()
+	if len(q["exp"]) != 1 || len(q["max"]) != 1 || len(q["sig"]) != 1 {
+		return false
+	}
+	exp, err := strconv.ParseInt(q.Get("exp"), 10, 64)
+	if err != nil || l.now().Unix() > exp {
+		return false
+	}
+	max, err := strconv.ParseInt(q.Get("max"), 10, 64)
+	if err != nil || max < 0 {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(l.sign(r.Method, key, exp, max)), []byte(q.Get("sig"))) == 1
+}
+
 // LocalStore keeps objects under a directory and serves presigned-style
 // upload and download URLs itself: the signature (HMAC with a random
 // per-process key) covers key, method, expiry and size ceiling, so the URLs

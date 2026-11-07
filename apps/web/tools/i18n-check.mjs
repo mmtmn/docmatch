@@ -25,7 +25,6 @@ export const RESERVED_KEYS = [
   'mobile.',
   // Used by the terminal installer (tools/installer), not by the web.
   'installer.',
-  'common.confirm',
   'common.yes',
   'common.no',
 ];

@@ -134,6 +134,11 @@ module "secrets" {
 
   config_values = merge({
     DM_ENV                    = local.env
+    DM_ROLLOUT_PROJECTS       = var.feature_rollouts.projects
+    DM_ROLLOUT_INVITATIONS    = var.feature_rollouts.invitations
+    DM_ROLLOUT_EXTENSIONS     = var.feature_rollouts.extensions
+    DM_EXTENSION_CLIENTS      = jsonencode(var.extension_clients)
+    APPLE_NATIVE_CLIENT_IDS   = length(var.apple_native_client_ids) > 0 ? join(",", var.apple_native_client_ids) : "__EMPTY__"
     DM_DOMAIN                 = var.domain
     DM_PUBLIC_BASE_URL        = "https://${var.domain}"
     DM_API_BASE_URL           = "https://${var.domain}"

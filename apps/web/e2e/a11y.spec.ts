@@ -32,7 +32,7 @@ test('axe: zero violações com a gaveta do achado aberta', async ({ page }) => 
 });
 
 test('axe: zero violações com a dica e o seletor abertos', async ({ page }) => {
-  await page.goto('/app');
+  await page.goto('/');
   await expect(page.locator('astro-island[client="load"][ssr]')).toHaveCount(0);
   await page.getByRole('button', { name: m.tooltips.more_info }).first().click();
   await expect(page.getByRole('tooltip').first()).toBeVisible();

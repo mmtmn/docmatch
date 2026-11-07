@@ -32,7 +32,7 @@ for (const viewport of mobile) {
       Object.defineProperty(window, 'visualViewport', { configurable: true, get: () => fake });
       (window as unknown as FakeViewportWindow).__vv = fake;
     });
-    await page.goto('/app');
+    await page.goto('/');
 
     const textarea = page.getByLabel(m.form.rules_label);
     await expect.poll(() => textarea.evaluate((el) => el.style.height)).toMatch(/px$/);

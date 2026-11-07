@@ -1,0 +1,4 @@
+# Chrome's manifest public RSA key fixes the local extension ID. Verified as DER SPKI public
+# material with node:crypto.createPublicKey. Only this historical finding is excluded;
+# new values and other credentials in the configuration remain subject to scanning.
+794f034614c51dede6ba948b473af54c73639459:apps/extensions/local.config.json:generic-api-key:7

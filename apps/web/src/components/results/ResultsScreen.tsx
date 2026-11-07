@@ -16,8 +16,10 @@ import styles from './ResultsScreen.module.css';
 
 export interface ResultsScreenProps {
   results: RunResults;
+  backHref?: string;
   onDecision?: (id: string, status: FindingStatus, note?: string) => Promise<void> | void;
   allowUndo?: boolean;
+  canDecide?: boolean;
   onExport?: (format: ExportFormat) => Promise<void> | void;
 }
 const priority: Record<string, number> = { critical: 5, high: 4, medium: 3, low: 2, info: 1 };
@@ -101,6 +103,8 @@ export function ResultsScreen({
   onDecision,
   onExport,
   allowUndo = true,
+  canDecide = true,
+  backHref = '/app',
 }: ResultsScreenProps) {
   const workspace = useWorkspace();
   const manifest = workspace?.manifest ?? defaultManifest;
@@ -168,6 +172,10 @@ export function ResultsScreen({
       else return;
       setExportStatus(t('results.export_done', { name: `docmatch-${results.runId}.${format}` }));
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        setExportStatus(null);
+        return;
+      }
       setExportFailed(true);
       setExportStatus(err instanceof Error ? err.message : t('errors.unknown'));
     } finally {
@@ -213,6 +221,7 @@ export function ResultsScreen({
                 </p>
               )}
               <ExportButtons
+                createHref={backHref}
                 preferred={manifest.export_format}
                 corrected
                 available={Boolean(onExport)}
@@ -232,6 +241,7 @@ export function ResultsScreen({
             <>
               <p className="muted">{t('results.legacy_output')}</p>
               <ExportButtons
+                createHref={backHref}
                 preferred={manifest.export_format}
                 available={Boolean(onExport)}
                 onExport={(format) => void exportAs(format)}
@@ -373,7 +383,7 @@ export function ResultsScreen({
         <footer className={styles.footer}>
           <p>{t('results.doc_preserved')}</p>
           <p>{t('results.doc_boundary')}</p>
-          <a href="/app">{t('results.back_to_form')}</a>
+          <a href={backHref}>{t('results.back_to_form')}</a>
         </footer>
         {open && (
           <FindingDrawer
@@ -382,6 +392,7 @@ export function ResultsScreen({
             onClose={closeDrawer}
             onDecision={decide}
             allowUndo={allowUndo}
+            canDecide={canDecide}
           />
         )}
         <WorkspacePanel />

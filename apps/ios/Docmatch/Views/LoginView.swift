@@ -150,7 +150,7 @@ struct LoginView: View {
                 return
             }
             let name = [credential.fullName?.givenName, credential.fullName?.familyName].compactMap { $0 }.joined(separator: " ")
-            Task { await session.apple(identityToken: token, authorizationCode: authorizationCode, fullName: name.isEmpty ? nil : name) }
+            Task { await session.apple(identityToken: token, authorizationCode: authorizationCode, fullName: name.isEmpty ? nil : name, appleUserID: credential.user) }
         case .failure(let error):
             if (error as? ASAuthorizationError)?.code == .canceled {
                 session.failed(nil)

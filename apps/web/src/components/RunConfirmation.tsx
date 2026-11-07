@@ -9,10 +9,12 @@ import styles from './RunConfirmation.module.css';
 export function RunConfirmation({
   quote,
   exempt,
+  context,
   onAnswer,
 }: {
   quote: QuoteView;
   exempt: boolean;
+  context?: { account: string; project: string };
   onAnswer: (confirmed: boolean) => void;
 }) {
   const id = useId();
@@ -56,6 +58,7 @@ export function RunConfirmation({
       <p id={`${id}-description`} className={styles.description}>
         {t('app.confirm_scope')}
       </p>
+      {context && <p className={styles.description}>{t('projects.confirm_context', context)}</p>}
       {exempt ? (
         <p className={styles.exempt}>{t('app.confirm_exempt')}</p>
       ) : (

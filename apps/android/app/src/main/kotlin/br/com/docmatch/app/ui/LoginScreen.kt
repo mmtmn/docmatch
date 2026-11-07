@@ -53,7 +53,7 @@ private val EMAIL = Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")
 
 /** Only the sign-ins the API offers; on a development API the local sign-in comes first. */
 @Composable
-fun LoginScreen(state: SessionState.SignedOut, session: SessionViewModel, serverUrl: String) {
+fun LoginScreen(state: SessionState.SignedOut, session: SessionViewModel, serverUrl: String, embedded: Boolean = false) {
     val texts = LocalTexts.current
     val activity = LocalActivity.current
     val scope = rememberCoroutineScope()
@@ -71,7 +71,7 @@ fun LoginScreen(state: SessionState.SignedOut, session: SessionViewModel, server
     val usable = m.email || m.password || m.dev || google
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(20.dp),
+        Modifier.then(if (embedded) Modifier.fillMaxWidth() else Modifier.fillMaxSize().verticalScroll(rememberScrollState())).imePadding().padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp), horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         DmIconTile(DmIcons.Check)

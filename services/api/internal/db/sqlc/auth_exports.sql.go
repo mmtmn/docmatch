@@ -129,10 +129,15 @@ func (q *Queries) AuthInsertExport(ctx context.Context, arg AuthInsertExportPara
 const authLatestExport = `-- name: AuthLatestExport :one
 SELECT id, user_id, org_id, status, requested_at, ready_at, expires_at, size_bytes, error
 FROM account_exports
-WHERE user_id = $1
+WHERE user_id = $1 AND org_id = $2
 ORDER BY requested_at DESC
 LIMIT 1
 `
+
+type AuthLatestExportParams struct {
+	UserID uuid.UUID
+	OrgID  uuid.UUID
+}
 
 type AuthLatestExportRow struct {
 	ID          uuid.UUID
@@ -146,8 +151,8 @@ type AuthLatestExportRow struct {
 	Error       *string
 }
 
-func (q *Queries) AuthLatestExport(ctx context.Context, userID uuid.UUID) (AuthLatestExportRow, error) {
-	row := q.db.QueryRow(ctx, authLatestExport, userID)
+func (q *Queries) AuthLatestExport(ctx context.Context, arg AuthLatestExportParams) (AuthLatestExportRow, error) {
+	row := q.db.QueryRow(ctx, authLatestExport, arg.UserID, arg.OrgID)
 	var i AuthLatestExportRow
 	err := row.Scan(
 		&i.ID,

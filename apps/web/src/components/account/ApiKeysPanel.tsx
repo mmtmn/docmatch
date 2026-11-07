@@ -18,7 +18,13 @@ export function ApiKeysPanel() {
   const [data, setData] = useState<Catalog | null>(null);
   const [label, setLabel] = useState('');
   const [lane, setLane] = useState('api_batch');
-  const [scopes, setScopes] = useState<string[]>(['runs:read', 'runs:write', 'uploads:write']);
+  const [scopes, setScopes] = useState<string[]>([
+    'projects:read',
+    'projects:write',
+    'runs:read',
+    'runs:write',
+    'uploads:write',
+  ]);
   const [secret, setSecret] = useState('');
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);

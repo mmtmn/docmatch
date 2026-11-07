@@ -99,23 +99,7 @@ class NewRunViewModel(private val dm: Docmatch) : ViewModel() {
      */
     fun add(context: Context, uris: List<Uri>) {
         viewModelScope.launch {
-            val resolver = context.contentResolver
-            val (accepted, problems) =
-                withContext(Dispatchers.IO) {
-                    val sources = mutableMapOf<String, Uri>()
-                    val candidates =
-                        uris.map { uri ->
-                            val (name, reported) = metadata(context, uri)
-                            val size = if (reported >= 0) reported else runCatching { measure(resolver.openInputStream(uri)) }.getOrDefault(-1L)
-                            sources["$name/$size"] = uri
-                            Candidate(name, size) { head(resolver.openInputStream(uri)) }
-                        }
-                    val (ok, refused) = Precheck.check(dm.texts, candidates, _files.value)
-                    ok.map { a ->
-                        val uri = sources.getValue("${a.name}/${a.size}")
-                        LocalFile(a.name, a.mime, a.size, a.kind) { resolver.openInputStream(uri) ?: throw IOException("sem conteúdo") }
-                    } to refused
-                }
+            val (accepted, problems) = PickedFiles.check(context, uris, dm.texts, _files.value)
             _files.value = _files.value + accepted
             _error.value = problems.joinToString("\n").ifEmpty { null }
         }
@@ -191,51 +175,6 @@ class NewRunViewModel(private val dm: Docmatch) : ViewModel() {
         _started.value = null
     }
 
-    private fun metadata(context: Context, uri: Uri): Pair<String, Long> {
-        runCatching {
-            context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use { c ->
-                if (c.moveToFirst()) {
-                    val name = c.getString(0) ?: uri.lastPathSegment.orEmpty()
-                    val size = if (c.isNull(1)) -1L else c.getLong(1)
-                    return name to size
-                }
-            }
-        }
-        return (uri.lastPathSegment ?: "arquivo") to -1L
-    }
-
-    private companion object {
-        /** The first bytes, for the content check (readNBytes is API 33+). */
-        fun head(input: InputStream?): ByteArray {
-            val stream = input ?: throw IOException("sem conteúdo")
-            stream.use {
-                val out = ByteArray(Precheck.HEAD_BYTES)
-                var n = 0
-                while (n < out.size) {
-                    val r = it.read(out, n, out.size - n)
-                    if (r < 0) break
-                    n += r
-                }
-                return out.copyOf(n)
-            }
-        }
-
-        /** The real size when the provider does not say, counted up to just past the largest cap. */
-        fun measure(input: InputStream?): Long {
-            val stream = input ?: throw IOException("sem conteúdo")
-            val cap = Precheck.mediaFileBytes + 1
-            stream.use {
-                val buffer = ByteArray(64 * 1024)
-                var total = 0L
-                while (total < cap) {
-                    val r = it.read(buffer)
-                    if (r < 0) break
-                    total += r
-                }
-                return total
-            }
-        }
-    }
 }
 
 @Composable

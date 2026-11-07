@@ -18,7 +18,30 @@ O app diz o que o site diz:
 - a pré-checagem de arquivos é a do site, com os mesmos vetores em `testdata/precheck/cases.json`;
 - as cores vêm de `packages/design-tokens/tokens.json`, via `tools/mobile/tokens.mjs`.
 
+## Projetos e equipes
+
+A entrada passa a **Projetos · Atividade · Conta**. Crie um projeto, envie os documentos e
+volte depois: nome, opções e arquivos confirmados ficam na conta. O app informa quando ainda
+há alterações sem salvar e pede confirmação antes de descartá-las. Uma nova versão de arquivo
+preserva a anterior no histórico.
+
+O seletor no topo separa a conta pessoal das empresas. Cada envio e aprovação mantém a conta
+e o projeto escolhidos. Se nada mudou desde uma conciliação concluída, o botão abre o resultado
+existente, sem reservar créditos novamente. Arquivos e resultados continuam sujeitos à retenção.
+
+Em **Conta → Equipe**, o responsável pode convidar por e-mail, escolher a permissão e acompanhar
+o aceite. Não há cobrança adicional por assento nesta etapa. Quem só adiciona documentos não
+vê resultados nem aprova gastos. Projetos privados precisam ser compartilhados explicitamente.
+Abrir um convite mostra a empresa e a permissão; só **Aceitar convite** acrescenta o acesso.
+O link `docmatch://convite#token=…` abre esse fluxo no app instalado; o link do e-mail continua
+funcionando no navegador. O token não é gravado nos logs.
+
 ## Estrutura
+
+O app também contém a extensão Safari. Ative-a nos ajustes do navegador; ela abre os mesmos
+projetos, concilia e baixa resultados. O login da extensão exige consentimento próprio no
+site e pode ser revogado em Dispositivos. A sessão do app permanece separada.
+O núcleo nativo e as telas web ficam em [apps/extensions](../extensions/README.md).
 
 | Pasta | O que tem |
 | --- | --- |
@@ -65,9 +88,15 @@ API ouvindo na rede). O build de debug troca o loopback dos links de envio pelo 
 ```bash
 make test      # testes do DocmatchKit: no Mac direto, no Linux no contêiner swift:6.1-noble
 make ci        # tokens + testes (o que o pre-push roda)
+make e2e-local # API local já iniciada; cria, renomeia e reabre um projeto no simulador
 make app       # no Mac: xcodegen + xcodebuild para o simulador, sem assinatura
 make release   # no Mac: arquivo de release (ENV=prod), com a origem lida dos outputs do Terraform
 ```
+
+O teste de retomada usa assinatura ad hoc no simulador, para testar a sessão real no Keychain.
+Um build sem assinatura compila, mas não comprova a persistência da sessão. Use
+`LOCAL_API_URL=http://localhost:18080` para outra porta e `TEST_SIMULATOR='platform=iOS Simulator,id=…'`
+para escolher o aparelho de teste. Veja a [orientação da Apple sobre acesso ao Keychain](https://developer.apple.com/documentation/security/sharing-access-to-keychain-items-among-a-collection-of-apps).
 
 Os workflows do GitHub são exclusivamente manuais. A validação acontece localmente: `make ci`
 para o núcleo e `make app` num Mac com Xcode para compilar as telas. Nenhum push inicia CI pago.
@@ -85,18 +114,22 @@ Nenhum segredo OAuth entra no app:
 | `DOCMATCH_API_BASE_URL` | Origem da API. Debug: `http://localhost:8080`. Release: obrigatória e `https://`; o `make release` lê do Terraform e o app se recusa a abrir com outra. |
 | `DOCMATCH_GOOGLE_IOS_CLIENT_ID` | Client OAuth do Google do tipo iOS, no mesmo projeto do client web. Debug já configura o cliente de `br.com.docmatch.debug`; Release continua vazio até receber um cliente de produção. Vazio esconde o botão. Ele também entra em `GOOGLE_OAUTH_NATIVE_CLIENT_IDS` da API. |
 | `DEVELOPMENT_TEAM` | O time da Apple que assina, o mesmo `APPLE_TEAM_ID` da API. |
+| `DOCMATCH_APP_GROUP` | Grupo compartilhado entre o app e a extensão Safari. Debug usa `group.br.com.docmatch.extensions.local`; Release usa `group.br.com.docmatch.extensions`. Habilite o grupo correspondente nos dois App IDs antes de assinar para aparelhos. |
 
 Para o Sign in with Apple, ative a capability no App ID `br.com.docmatch` (e no `.debug`, para
 testar), no mesmo time do Services ID do site, e ponha os bundle ids em `APPLE_NATIVE_CLIENT_IDS`.
 
-Antes de enviar à App Store, falta uma peça no servidor: quando uma conta criada com a Apple é
-excluída, a Apple pede que os tokens sejam revogados (`/auth/revoke`). Para isso a API precisa
-trocar o `authorization_code` do login nativo por um refresh token e guardá-lo cifrado. Hoje ela
-verifica o código, mas não o troca.
+A API troca o código de uso único do login por um refresh token e guarda o token cifrado.
+Ao pedir exclusão, o worker revoga o acesso na Apple. Falhas temporárias têm novas tentativas
+por até 7 dias; não impedem a exclusão dos dados. Contas antigas sem token continuam podendo
+excluir a conta, com link para remover o acesso nos Ajustes da Apple. O app verifica a revogação
+ao abrir/voltar ao primeiro plano e limpa a sessão e os rascunhos quando o acesso foi removido.
+Ver [orientação da Apple](https://developer.apple.com/documentation/technotes/tn3194-handling-account-deletions-and-revoking-tokens-for-sign-in-with-apple).
 
-O `make release` usa `-allowProvisioningUpdates`. Numa máquina de CI, passe também a chave da App
-Store Connect: `APP_STORE_CONNECT_KEY_PATH`, `APP_STORE_CONNECT_KEY_ID` e
-`APP_STORE_CONNECT_ISSUER_ID`.
+O `make release` usa a conta de desenvolvimento configurada no Xcode com
+`-allowProvisioningUpdates`. A publicação nas lojas ainda exige a configuração de distribuição.
+Ele também exige `DM_EXTENSION_CONFIG_FILE` para gerar os recursos Safari de produção.
+`make app` e `make e2e-local` geram os recursos de desenvolvimento automaticamente.
 
 ## Segurança
 
@@ -171,3 +204,11 @@ valida apenas o início do fluxo, não a troca do código nem a sessão na API.
 [Como gravar novamente](../../docs/demos/README.md#gravar-o-ios-no-mac).
 
 No Linux, os testes Swift montam apenas fontes e fixtures, sem rede e sem acesso ao `.env`.
+
+No projeto, a ação de conciliar fica fixa acima das abas. A lista de arquivos e as opções
+avançadas abrem somente quando solicitadas; o resumo continua mostrando arquivos prontos
+ou que precisam de atenção. O teclado e a área segura do aparelho preservam o botão.
+
+Para conferir uploads, resultados, exportação e repetição sem nova cobrança no cliente Swift:
+`DOCMATCH_LOCAL_API=http://localhost:18080 swift test --package-path DocmatchKit --filter LiveProjectsTests`.
+O teste exige a API local já iniciada e usa somente os dados públicos do repositório.

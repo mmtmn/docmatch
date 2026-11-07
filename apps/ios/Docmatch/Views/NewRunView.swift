@@ -121,7 +121,7 @@ struct NewRunView: View {
     }
 
     /// A picked file: name and size now, the first bytes for the precheck, the rest at upload.
-    private static func picked(_ url: URL) -> PickedFile {
+    static func picked(_ url: URL) -> PickedFile {
         let granted = url.startAccessingSecurityScopedResource()
         defer { if granted { url.stopAccessingSecurityScopedResource() } }
         let reported: Int? = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize

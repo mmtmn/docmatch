@@ -31,7 +31,7 @@ public final class RunModel {
     /// Follows the run while the screen is shown: the screen's task calls this and cancels it on
     /// leaving, so a run left open does not poll in the background.
     public func follow() async {
-        if case .done = state { return }
+        if case .done = state { await validateAccess(); return }
         do {
             let run = try await dm.reconciler.follow(runId) { step in
                 Task { @MainActor [weak self] in self?.state = .running(step) }
@@ -45,6 +45,8 @@ public final class RunModel {
                     return $0.id < $1.id
                 }
                 state = .done(run, findings)
+            case RunStatus.cancelled:
+                state = .failed(dm.texts.t("mobile.status_cancelled"))
             case RunStatus.needsApproval:
                 state = .needsApproval(run, busy: false)
             default:
@@ -54,6 +56,24 @@ public final class RunModel {
             if error is CancellationError || Task.isCancelled { return }
             state = .failed((error as? ApiError)?.message ?? dm.texts.t("errors.unknown"))
         }
+    }
+
+    public func validateAccess() async {
+        guard case .done = state else { return }
+        do { _ = try await dm.api.run(runId) }
+        catch { _ = forgetIfDenied(error) }
+    }
+    public func cancel() async {
+        do {
+            _ = try await dm.api.cancelRun(runId)
+            state = .failed(dm.texts.t("mobile.status_cancelled"))
+        } catch {
+            if !forgetIfDenied(error) { notice = (error as? ApiError)?.message ?? dm.texts.t("errors.unknown") }
+        }
+    }
+    private func forgetIfDenied(_ error: any Error) -> Bool {
+        guard let e = error as? ApiError, [401,403,404].contains(e.status) else { return false }
+        state = .failed(e.message); notice = nil; Self.clearExports(); return true
     }
 
     public func retry() {
@@ -72,6 +92,7 @@ public final class RunModel {
             state = .running(nil)
             attempt += 1
         } catch {
+            if forgetIfDenied(error) { return }
             state = .needsApproval(run, busy: false)
             notice = (error as? ApiError)?.message ?? dm.texts.t("errors.unknown")
         }
@@ -91,6 +112,7 @@ public final class RunModel {
             })
             notice = dm.texts.t("mobile.finding_decided")
         } catch {
+            if forgetIfDenied(error) { return }
             notice = (error as? ApiError)?.message ?? dm.texts.t("errors.unknown")
         }
     }
@@ -109,6 +131,7 @@ public final class RunModel {
             #endif
             return file
         } catch {
+            if forgetIfDenied(error) { return nil }
             notice = dm.texts.t("mobile.export_failed", ["message": (error as? ApiError)?.message ?? dm.texts.t("errors.unknown")])
             return nil
         }

@@ -112,11 +112,12 @@ func TestExplainBudget(t *testing.T) {
 		{name: "CountRunsInFlight", args: []any{time.Now().Add(-3 * time.Hour)}},
 		{name: "ListRecentRunTimings", args: []any{time.Now().Add(-30 * 24 * time.Hour), int32(1000)}},
 		{name: "GetRun", org: tenant, args: []any{org, runID}},
+		{name: "GetRunWithProject", org: tenant, args: []any{org, runID}},
 		{name: "ListFindingsByRun", org: tenant, args: []any{org, runID, int32(50), int32(0)}},
 		{name: "CountFindingsByRun", org: tenant, args: []any{org, runID}},
 		{name: "SearchRules", org: tenant, args: []any{org, "iof retido", int32(10)}},
 		{name: "ListRecentlyUsedRules", org: tenant, args: []any{org, int32(20)}},
-		{name: "GetRule", org: tenant, args: []any{org, uuid.New()}},
+		{name: "GetRule", org: tenant, args: []any{org, uuid.New(), nil}},
 		{name: "ClaimOutbox", args: []any{[]string{"email"}, int32(10)}},
 		{name: "CountUnsentOutbox"},
 		{name: "GetAuditChainTail", org: tenant, args: []any{org}},
@@ -148,9 +149,9 @@ func TestExplainBudget(t *testing.T) {
 	}
 }
 
-// TestExplainBudgetDetectsMissingIndex drops a hot index for real and checks
-// the budget flags the resulting sequential scan, so a green run means the
-// check is alive and not merely lenient.
+// TestExplainBudgetDetectsMissingIndex removes the refresh-hash index in the
+// isolated test database and requires the resulting scan to be flagged. This
+// lookup has no alternative tenant index (runs now has a composite key too).
 func TestExplainBudgetDetectsMissingIndex(t *testing.T) {
 	if testing.Short() {
 		t.Skip("orçamento de EXPLAIN pulado com -short")
@@ -158,16 +159,20 @@ func TestExplainBudgetDetectsMissingIndex(t *testing.T) {
 	d := testdb.Get(t)
 	ctx := context.Background()
 	queries := loadQueries(t)
-	org := seed(t, d).orgs[0]
-	if _, err := d.Admin.Exec(ctx, "DROP INDEX runs_org_recent_idx"); err != nil {
+	user := seed(t, d).userID
+	var refresh []byte
+	if err := d.Admin.QueryRow(ctx, "SELECT refresh_hash FROM sessions WHERE user_id=$1 LIMIT 1", user).Scan(&refresh); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Admin.Exec(ctx, "ALTER TABLE sessions DROP CONSTRAINT sessions_refresh_hash_key"); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if _, err := d.Admin.Exec(context.Background(), "CREATE INDEX IF NOT EXISTS runs_org_recent_idx ON runs (org_id, created_at DESC)"); err != nil {
+		if _, err := d.Admin.Exec(context.Background(), "ALTER TABLE sessions ADD CONSTRAINT sessions_refresh_hash_key UNIQUE(refresh_hash)"); err != nil {
 			t.Errorf("recriar índice: %v", err)
 		}
 	})
-	plan := explain(t, d, hotQuery{name: "ListRecentRuns", org: &org, args: []any{org, int32(20)}}, queries["ListRecentRuns"])
+	plan := explain(t, d, hotQuery{name: "GetSessionByRefreshHash", args: []any{refresh}}, queries["GetSessionByRefreshHash"])
 	flagged := false
 	for _, rel := range seqScans(plan) {
 		if relPages(t, d, rel) > minPages {
@@ -176,7 +181,7 @@ func TestExplainBudgetDetectsMissingIndex(t *testing.T) {
 	}
 	if !flagged {
 		pretty, _ := json.MarshalIndent(plan, "", "  ")
-		t.Fatalf("sem o índice, ListRecentRuns deveria ser pego pelo orçamento; plano:\n%s", pretty)
+		t.Fatalf("sem o índice, GetSessionByRefreshHash deveria ser pego pelo orçamento; plano:\n%s", pretty)
 	}
 }
 

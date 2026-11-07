@@ -17,18 +17,18 @@ WHERE org_id = $1 AND id = $2 AND deleted_at IS NULL
 RETURNING *;
 
 -- name: InsertRuleFull :one
-INSERT INTO rules (org_id, title, body, kind, source, created_by, version, status, scope, applies_to, compiled, provenance, run_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+INSERT INTO rules (org_id, title, body, kind, source, created_by, version, status, scope, applies_to, compiled, provenance, run_id, project_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 RETURNING *;
 
 -- name: ListRulesByIDs :many
-SELECT * FROM rules WHERE org_id = $1 AND id = ANY(sqlc.arg(ids)::uuid[]) AND deleted_at IS NULL;
+SELECT * FROM rules WHERE org_id = $1 AND id = ANY(sqlc.arg(ids)::uuid[]) AND deleted_at IS NULL AND (scope='global' AND project_id IS NULL OR project_id IS NOT DISTINCT FROM sqlc.narg(project_id)::uuid);
 
 -- Sem termo: as usadas recentemente primeiro (lista "já usadas" do seletor).
 -- Com termo: trigrama em título e corpo, mais parecidas primeiro.
 -- name: SearchRulesPage :many
 SELECT * FROM rules
-WHERE org_id = $1 AND deleted_at IS NULL
+WHERE org_id = $1 AND deleted_at IS NULL AND (scope='global' AND project_id IS NULL OR project_id IS NOT DISTINCT FROM sqlc.narg(project_id)::uuid)
   AND (sqlc.narg(status)::text IS NULL OR status = sqlc.narg(status)::text)
   AND (sqlc.narg(scope)::text IS NULL OR scope = sqlc.narg(scope)::text)
   AND (sqlc.narg(term)::text IS NULL
@@ -41,7 +41,7 @@ LIMIT $2 OFFSET $3;
 
 -- name: ListTrustedRules :many
 SELECT * FROM rules
-WHERE org_id = $1 AND deleted_at IS NULL AND enabled AND status = 'trusted'
+WHERE org_id = $1 AND deleted_at IS NULL AND (scope='global' AND project_id IS NULL OR project_id IS NOT DISTINCT FROM sqlc.narg(project_id)::uuid) AND enabled AND status = 'trusted'
 ORDER BY created_at, id;
 
 -- name: UpdateRuleVersion :one

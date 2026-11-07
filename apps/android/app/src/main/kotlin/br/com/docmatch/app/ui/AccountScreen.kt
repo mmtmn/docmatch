@@ -107,7 +107,7 @@ class AccountViewModel(private val dm: Docmatch, private val onSignedOut: (Strin
 }
 
 @Composable
-fun AccountScreen(vm: AccountViewModel) {
+fun AccountScreen(vm: AccountViewModel, canManage: Boolean = true, onTeam: (() -> Unit)? = null) {
     val state by vm.state.collectAsState()
     var confirmDeletion by remember { mutableStateOf(false) }
     if (confirmDeletion) {
@@ -140,7 +140,7 @@ fun AccountScreen(vm: AccountViewModel) {
                             Text(t("account.profile"), fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
                             if (s.me.user.displayName.isNotBlank()) Labeled(t("account.name_label"), s.me.user.displayName)
                             Labeled(t("account.email_label"), s.me.user.email)
-                            s.me.credits?.let { Labeled(t("account.credits"), if (it.tokenExempt) t("account.token_exempt") else t("account.credits_available", mapOf("available" to it.available))) }
+                            s.me.credits?.takeIf { canManage }?.let { Labeled(t("account.credits"), if (it.tokenExempt) t("account.token_exempt") else t("account.credits_available", mapOf("available" to it.available))) }
                             DmSecondaryButton(onClick = vm::signOut) { Text(t("account.sign_out")) }
                         }
                     }
@@ -164,7 +164,8 @@ fun AccountScreen(vm: AccountViewModel) {
                         }
                     }
                 }
-                item {
+                if (onTeam != null) item { TextButton(onTeam) { Text(t("teams.title")) } }
+                if (canManage) item {
                     Row(horizontalArrangement = Arrangement.spacedBy(DmSize.space2)) {
                         // The stores' rule: an app that creates accounts lets them be deleted in it.
                         TextButton(onClick = { confirmDeletion = true }) { Text(t("mobile.delete_account"), color = MaterialTheme.colorScheme.error) }

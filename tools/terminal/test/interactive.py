@@ -55,7 +55,7 @@ try:
             stage = 1
             due = now + 0.3
         elif stage == 1 and 'Endereço da API' in text:
-            os.write(master, b'\r')
+            os.write(master, b'\x01\x0b' + os.environ.get('DM_AUDIT_API', 'http://localhost:8080').encode() + b'\r')
             stage = 2
             due = now + 0.3
         elif stage == 2 and 'Chave da API' in text:
@@ -66,7 +66,15 @@ try:
             os.write(master, b'\r')
             stage = 4
             due = now + 0.3
-        elif stage == 4 and 'Pronto para selecionar' in text:
+        elif stage == 4 and 'Seus projetos' in text:
+            os.write(master, b'\r')
+            stage = 40
+            due = now + 0.3
+        elif stage == 40 and 'Nome do projeto' in text:
+            os.write(master, b'Projeto terminal de teste\r')
+            stage = 41
+            due = now + 0.3
+        elif stage == 41 and 'Pronto para selecionar' in text:
             os.write(master, b'a')
             stage = 5
             due = now + 0.3

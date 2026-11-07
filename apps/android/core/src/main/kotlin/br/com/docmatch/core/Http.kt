@@ -104,17 +104,18 @@ class HttpTransport(
         idempotent: Boolean = false,
         query: Map<String, String> = emptyMap(),
         idempotencyKey: String? = null,
+        organizationId: String? = null,
     ): T? {
         val key = idempotencyKey ?: if (idempotent) UUID.randomUUID().toString() else null
-        return authed(path) { send(method, path, body, serializer, key, query) }
+        return authed(path) { send(method, path, body, serializer, key, query, organizationId) }
     }
 
     /** Raw bytes of a GET (exports). */
-    suspend fun bytes(path: String, query: Map<String, String>): ByteArray =
+    suspend fun bytes(path: String, query: Map<String, String>, organizationId: String? = null): ByteArray =
         authed(path) {
             withContext(Dispatchers.IO) {
                 val url = url(path).newBuilder().apply { query.forEach { (k, v) -> addQueryParameter(k, v) } }.build()
-                execute(api, Request.Builder().url(url).get().build()) { it.body?.bytes() ?: ByteArray(0) }
+                execute(api, Request.Builder().url(url).get().apply { if (organizationId != null) header("X-Docmatch-Org", organizationId) }.build()) { it.body?.bytes() ?: ByteArray(0) }
             }
         }
 
@@ -181,6 +182,7 @@ class HttpTransport(
         serializer: KSerializer<T>?,
         idempotencyKey: String?,
         query: Map<String, String>,
+        organizationId: String? = null,
     ): T? =
         withContext(Dispatchers.IO) {
             val url = url(path).newBuilder().apply { query.forEach { (k, v) -> addQueryParameter(k, v) } }.build()
@@ -191,6 +193,7 @@ class HttpTransport(
                     else -> null
                 }
             val builder = Request.Builder().url(url).method(method, requestBody).header("Accept", "application/json")
+            if (organizationId != null) builder.header("X-Docmatch-Org", organizationId)
             if (idempotencyKey != null) builder.header("Idempotency-Key", idempotencyKey)
             execute(api, builder.build()) { res ->
                 val text = res.body?.string().orEmpty()

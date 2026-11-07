@@ -42,19 +42,20 @@ async function textareaMetrics(textarea: Locator) {
 
 for (const viewport of viewports) {
   for (const lines of lineCounts) {
-    test(`/app em ${viewport.width}×${viewport.height} com ${lines} linha(s) nunca rola a página`, async ({
+    test(`/ em ${viewport.width}×${viewport.height} com ${lines} linha(s): o formulário cabe na primeira tela`, async ({
       page,
     }) => {
       await page.setViewportSize(viewport);
-      await page.goto('/app');
+      await page.goto('/');
       const textarea = await fillRules(page, lines);
 
-      const doc = await documentScroll(page);
-      expect(doc.scrollHeight).toBeLessThanOrEqual(doc.clientHeight);
+      const firstScreen = (await page.locator('.first-screen').boundingBox())!;
+      expect(firstScreen.y + firstScreen.height).toBeLessThanOrEqual(viewport.height + 0.5);
+      expect(await page.evaluate(() => window.scrollY)).toBe(0);
 
       const ta = await textareaMetrics(textarea);
       // Rules now grow into the drop area up to the viewport budget (not a fixed six lines).
-      // Small screens may scroll the textarea even with six lines; the page must stay fixed.
+      // Small screens may scroll the textarea even with six lines; the first screen must stay within its viewport.
       expect(ta.height).toBeLessThanOrEqual(Math.min(viewport.height * 0.28, 256) + 1);
       if (ta.scrollHeight > ta.clientHeight + 1) {
         expect(ta.overflowY).toBe('auto');
@@ -73,11 +74,11 @@ for (const viewport of viewports) {
     });
   }
 
-  test(`/app em ${viewport.width}×${viewport.height}: regras crescem para cima e reduzem a área de arquivos`, async ({
+  test(`/ em ${viewport.width}×${viewport.height}: regras crescem para cima e reduzem a área de arquivos`, async ({
     page,
   }) => {
     await page.setViewportSize(viewport);
-    await page.goto('/app');
+    await page.goto('/');
     const textarea = await fillRules(page, 1);
     const drop = page.locator('[data-drop-area]');
     const beforeRules = (await textarea.boundingBox())!;
@@ -115,7 +116,7 @@ for (const viewport of viewports) {
 test('a primeira tela segue a ordem título, subtítulo, arquivos, regras, botão', async ({
   page,
 }) => {
-  await page.goto('/app');
+  await page.goto('/');
   const hero = page.getByTestId('hero');
   await expect(hero).toHaveCSS('display', 'grid');
   const rows = await hero.evaluate((el) => getComputedStyle(el).gridTemplateRows.split(' ').length);
@@ -132,7 +133,7 @@ test('a CSP gerada não bloqueia nada na primeira tela', async ({ page }) => {
     if (message.type() === 'error') violations.push(message.text());
   });
   page.on('pageerror', (error) => violations.push(error.message));
-  await page.goto('/app');
+  await page.goto('/');
   await fillRules(page, 3);
   await expect(page.locator('meta[http-equiv="content-security-policy"]')).toHaveCount(1);
   expect(violations.filter((text) => /content security policy|refused/i.test(text))).toEqual([]);
@@ -141,7 +142,7 @@ test('a CSP gerada não bloqueia nada na primeira tela', async ({ page }) => {
 test('arquivos entram pelo seletor, viram fichas e o rascunho sobrevive ao recarregar', async ({
   page,
 }) => {
-  await page.goto('/app');
+  await page.goto('/');
   await fillRules(page, 1);
   await page.locator('input[type="file"]').setInputFiles({
     name: 'nota.pdf',
@@ -172,7 +173,7 @@ test('arquivos entram pelo seletor, viram fichas e o rascunho sobrevive ao recar
 });
 
 test('o seletor de regras salvas é operável pelo teclado', async ({ page }) => {
-  await page.goto('/app');
+  await page.goto('/');
   await fillRules(page, 0);
   const trigger = page.getByRole('button', { name: /Regras salvas/ });
   await trigger.focus();

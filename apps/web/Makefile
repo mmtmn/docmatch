@@ -6,7 +6,7 @@ SHELL := /usr/bin/env bash
 ROOT := $(abspath ../..)
 PNPM ?= pnpm
 PNPM_VERSION := 11.5.3
-export PATH := $(HOME)/.local/bin:$(PATH)
+export PATH := $(HOME)/.local/bin:$(HOME)/.cargo/bin:$(PATH)
 export PLAYWRIGHT_BROWSERS_PATH ?= $(HOME)/.cache/ms-playwright
 # Port of `make preview`. The e2e targets pick a free port per run (tools/free-port.mjs) so parallel
 # worktrees never attach to each other's servers; set E2E_PORT to force one.
@@ -26,6 +26,9 @@ setup: ## pnpm (local ao usuário), dependências do workspace e o Chromium do P
 	  corepack prepare pnpm@$(PNPM_VERSION) --activate; \
 	fi
 	cd $(ROOT) && $(PNPM) install --frozen-lockfile
+	@if ! command -v mdbook >/dev/null 2>&1 || [ "$$(mdbook --version)" != 'mdbook v0.5.4' ]; then \
+	  cargo install mdbook --version 0.5.4 --locked; \
+	fi
 	@$(PNPM) exec playwright install chromium \
 	  || echo "AVISO: não foi possível baixar o Chromium do Playwright; os testes e2e serão pulados."
 
@@ -86,17 +89,21 @@ openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=localhost \
 port="$${E2E_PORT:-$$(node tools/free-port.mjs)}"; \
 echo "e2e em: $$browsers (https://$(E2E_HOST):$$port)"; \
 DM_E2E_TLS_CERT="$$tls_dir/cert.pem" DM_E2E_TLS_KEY="$$tls_dir/key.pem" \
-  DM_E2E_BROWSERS="$$browsers" DM_WEB_E2E_HOST=$(E2E_HOST) DM_WEB_E2E_PORT=$$port $(PNPM) exec playwright test
+  DM_E2E_SUITE=$(2) DM_E2E_BROWSERS="$$browsers" DM_WEB_E2E_HOST=$(E2E_HOST) DM_WEB_E2E_PORT=$$port $(PNPM) exec playwright test
 endef
 
 e2e: ## build com a tela de resultados ligada + Playwright (Chromium)
-	DM_PUBLIC_BASE_URL=https://docmatch.example.invalid PUBLIC_DM_FEATURE_RESULTS=true $(PNPM) exec astro build
-	$(call run_e2e,chromium)
+	DM_PUBLIC_BASE_URL=https://docmatch.example.invalid PUBLIC_DM_API_BASE_URL= PUBLIC_DM_FEATURE_RESULTS=true $(PNPM) exec astro build
+	$(call run_e2e,chromium,demo)
+	DM_PUBLIC_BASE_URL=https://docmatch.example.invalid PUBLIC_DM_API_BASE_URL=https://docmatch-api.example.invalid PUBLIC_DM_FEATURE_RESULTS=true $(PNPM) exec astro build
+	$(call run_e2e,chromium,live)
 
 e2e-all: ## como e2e, exige Chromium, Firefox e WebKit (certificado local temporário)
-	DM_PUBLIC_BASE_URL=https://docmatch.example.invalid PUBLIC_DM_FEATURE_RESULTS=true $(PNPM) exec astro build
 	@$(PNPM) exec playwright install chromium firefox webkit
-	$(call run_e2e,chromium firefox webkit)
+	DM_PUBLIC_BASE_URL=https://docmatch.example.invalid PUBLIC_DM_API_BASE_URL= PUBLIC_DM_FEATURE_RESULTS=true $(PNPM) exec astro build
+	$(call run_e2e,chromium firefox webkit,demo)
+	DM_PUBLIC_BASE_URL=https://docmatch.example.invalid PUBLIC_DM_API_BASE_URL=https://docmatch-api.example.invalid PUBLIC_DM_FEATURE_RESULTS=true $(PNPM) exec astro build
+	$(call run_e2e,chromium firefox webkit,live)
 
 lhci: build ## Lighthouse CI com orçamentos (fora do ci)
 	$(PNPM) exec lhci autorun --config=lighthouserc.cjs

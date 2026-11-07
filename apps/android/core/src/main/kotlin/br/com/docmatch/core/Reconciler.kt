@@ -68,9 +68,9 @@ class Reconciler(
     }
 
     /** One file: ticket, bytes to the presigned URL, then the scanner's verdict. */
-    suspend fun upload(file: LocalFile, onStep: (Step) -> Unit = {}): Upload {
+    suspend fun upload(file: LocalFile, onStep: (Step) -> Unit = {}, replacesId: String? = null): Upload {
         val sha = if (file.kind.media) null else sha256Hex(file)
-        val ticket = api.createUpload(file, sha)
+        val ticket = api.createUpload(file, sha, replacesId)
         api.putObject(ticket, file)
         var view = api.completeUpload(ticket.id, sha)
         var polls = 0

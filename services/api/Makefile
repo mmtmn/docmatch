@@ -121,7 +121,7 @@ test: tools ## unitários + fluxos de conta no PostgreSQL (Docker), com -race e 
 	  -coverpkg=./internal/... -coverprofile=$(COVER_DIR)/unit.out ./...
 	gotestsum --format pkgname -- -race -tags integration -count=1 -covermode=atomic \
 	  -coverpkg=./internal/... -coverprofile=$(COVER_DIR)/features.out -timeout 5m \
-	  ./internal/apikeys ./internal/billing ./internal/customizations ./internal/auth
+	  ./internal/apikeys ./internal/billing ./internal/customizations ./internal/auth ./internal/tenancy ./internal/projects ./internal/teams ./internal/extensions ./internal/platforms ./internal/account/accountpg
 	@awk 'FNR == 1 && NR != 1 { next } { print }' $(COVER_DIR)/unit.out $(COVER_DIR)/features.out > $(COVER_DIR)/fast.out
 	go run ./tools/covercheck -profile $(COVER_DIR)/fast.out $(UNIT_EXCLUDES) $(FLOORS)
 

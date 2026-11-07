@@ -23,3 +23,22 @@ let result = client.wait(&run.id, std::time::Duration::from_secs(600)).await?;
 Cancelar a future cancela a espera. Veja
 [contrato e limites](https://github.com/mmtmn/docmatch/blob/main/sdks/README.md) e
 [instruções de publicação](https://github.com/mmtmn/docmatch/blob/main/docs/runbooks/publicar-sdks.md).
+
+## Projetos (0.2.0)
+
+Crie com `client.create_project("Fechamento mensal").await?` e guarde o ID. `client.project("prj_ID")?` mantém os envios,
+regras e resultados no mesmo projeto. A estimativa devolve a conciliação existente quando
+nada mudou. Uma análise nova exige cotação aprovada; nunca aprove custos adicionais automaticamente.
+
+O exemplo consulta um projeto existente. Só inicia trabalho se `DOCMATCH_APPROVE_CAP`
+for maior ou igual ao limite exibido. Configure `DM_API_BASE_URL` e `DOCMATCH_API_KEY`, com
+`projects:read`, `projects:write`, `uploads:write`, `runs:read` e `runs:write`.
+
+```sh
+cargo run --example project -- prj_ID
+```
+
+Envio de substituição fica pendente até aplicar a versão com `replace_document`
+(Go: `ReplaceDocument`; TypeScript: `replaceDocument`). Atualize o projeto antes de editar:
+`version` protege o salvamento e `revision` identifica os dados estimados. Em conflito, releia
+as alterações; em acesso negado, confira o vínculo e os escopos da chave.

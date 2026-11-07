@@ -238,6 +238,9 @@ func (s *Service) UpdateMe(ctx context.Context, p session.Principal, patch MePat
 	if err != nil {
 		return MeView{}, err
 	}
+	if patch.CompanyName != nil && t.Membership.Role != RoleOwner && t.Membership.Role != RoleAdmin {
+		return MeView{}, ErrForbidden
+	}
 	changed := map[string]any{}
 	if patch.Notifications != nil {
 		merged := u.Notifications.Merge(*patch.Notifications)
@@ -350,12 +353,19 @@ type ExportStatus struct {
 // when there is none, the last one expired or failed, or a pending one
 // went stale.
 func (s *Service) Export(ctx context.Context, p session.Principal) (ExportStatus, error) {
+	u, t, err := s.me(ctx, p)
+	if err != nil {
+		return ExportStatus{}, err
+	}
+	if t.Membership.Role != RoleOwner && t.Membership.Role != RoleAdmin {
+		return ExportStatus{}, ErrForbidden
+	}
 	d, err := s.d.Limiter.Allow(ctx, "export:"+p.UserID.String(), s.d.ExportPolicy)
 	if err == nil && !d.Allowed {
 		return ExportStatus{}, ErrRateLimited
 	}
 	now := s.d.Now()
-	latest, ok, err := s.d.Store.LatestExport(ctx, p.UserID)
+	latest, ok, err := s.d.Store.LatestExport(ctx, p.UserID, p.OrgID)
 	if err != nil {
 		return ExportStatus{}, err
 	}
@@ -366,10 +376,6 @@ func (s *Service) Export(ctx context.Context, p session.Principal) (ExportStatus
 		case latest.Status == ExportPending && now.Sub(latest.RequestedAt) < StalePendingAfter:
 			return s.status(latest), nil
 		}
-	}
-	u, t, err := s.me(ctx, p)
-	if err != nil {
-		return ExportStatus{}, err
 	}
 	exp, err := s.d.Store.CreateExport(ctx, u.ID, t.Org.ID)
 	if err != nil {
@@ -434,6 +440,13 @@ func (s *Service) OpenDownload(ctx context.Context, token string) ([]byte, Expor
 	if e.Status != ExportReady || e.ExpiresAt == nil || !s.d.Now().Before(*e.ExpiresAt) {
 		return nil, Export{}, ErrExportNotReady
 	}
+	t, member, err := s.d.Store.Tenant(ctx, e.OrgID, e.UserID)
+	if err != nil {
+		return nil, Export{}, err
+	}
+	if !member || (t.Membership.Role != RoleOwner && t.Membership.Role != RoleAdmin) {
+		return nil, Export{}, ErrNotFound
+	}
 	archive, ok, err := s.d.Store.ExportArchive(ctx, id)
 	if err != nil {
 		return nil, Export{}, err
@@ -456,6 +469,9 @@ func (s *Service) RunExport(ctx context.Context, exportID uuid.UUID) error {
 	bundle, err := s.d.Store.ExportBundle(ctx, e.UserID, e.OrgID)
 	if err != nil {
 		return s.failExport(ctx, e, err)
+	}
+	if bundle.Membership.Role != RoleOwner && bundle.Membership.Role != RoleAdmin {
+		return s.failExport(ctx, e, ErrForbidden)
 	}
 	now := s.d.Now()
 	archive, err := BuildArchive(bundle, now)

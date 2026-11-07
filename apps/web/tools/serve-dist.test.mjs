@@ -10,6 +10,10 @@ describe('rewriteUri (same rules as the CloudFront function in docs/headers.md)'
     ['/', '/index.html'],
     ['/termos', '/termos.html'],
     ['/blog/', '/blog.html'],
+    ['/docs/usar/', '/docs/usar/index.html'],
+    ['/docs/desenvolver/', '/docs/desenvolver/index.html'],
+    ['/docs/desenvolver/python', '/docs/desenvolver/python.html'],
+    ['/.well-known/change-password', '/.well-known/change-password.html'],
     ['/blog/primeiro-post', '/blog/primeiro-post.html'],
     ['/.well-known/security.txt', '/.well-known/security.txt'],
     ['/_astro/app.abc123.css', '/_astro/app.abc123.css'],
@@ -79,6 +83,14 @@ describe('startDistServer', () => {
     expect(html.headers.get('content-type')).toBe('text/html; charset=utf-8');
     expect(html.headers.get('cache-control')).toBe('public, max-age=0, must-revalidate');
     expect(html.headers.get('x-content-type-options')).toBe('nosniff');
+  });
+
+  it('keeps relative book assets resolvable when an index URL lacks a slash', async () => {
+    for (const guide of ['usar', 'desenvolver']) {
+      const result = await fetch(`${url}/docs/${guide}?search=projeto`, { redirect: 'manual' });
+      expect(result.status).toBe(301);
+      expect(result.headers.get('location')).toBe(`/docs/${guide}/?search=projeto`);
+    }
   });
 
   it('serves assets with their type and the immutable policy for /_astro/', async () => {

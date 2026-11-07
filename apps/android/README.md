@@ -11,6 +11,24 @@ O app diz o que o site diz: os textos vêm de [`packages/locales/pt-BR.json`](..
 `packages/contracts/gen/Limits.kt` (gerado de `limits.yaml`, os mesmos números que a API e o site
 aplicam) e as cores de `packages/design-tokens/tokens.json` (via `tools/mobile/tokens.mjs`).
 
+## Projetos e equipes
+
+A entrada passa a **Projetos · Atividade · Conta**. Crie um projeto, envie os documentos e
+volte depois: nome, opções e arquivos confirmados ficam na conta. O app informa quando ainda
+há alterações sem salvar e pede confirmação antes de descartá-las. Uma nova versão de arquivo
+preserva a anterior no histórico.
+
+O seletor no topo separa a conta pessoal das empresas. Cada envio e aprovação mantém a conta
+e o projeto escolhidos. Se nada mudou desde uma conciliação concluída, o botão abre o resultado
+existente, sem reservar créditos novamente. Arquivos e resultados continuam sujeitos à retenção.
+
+Em **Conta → Equipe**, o responsável pode convidar por e-mail, escolher a permissão e acompanhar
+o aceite. Não há cobrança adicional por assento nesta etapa. Quem só adiciona documentos não
+vê resultados nem aprova gastos. Projetos privados precisam ser compartilhados explicitamente.
+Abrir um convite mostra a empresa e a permissão; só **Aceitar convite** acrescenta o acesso.
+O link `docmatch://convite#token=…` abre esse fluxo no app instalado; o link do e-mail continua
+funcionando no navegador. O token não é gravado nos logs.
+
 ## Estrutura
 
 | Módulo | O que tem |
@@ -37,7 +55,7 @@ aplicam) e as cores de `packages/design-tokens/tokens.json` (via `tools/mobile/t
   Apple entra no Android pelo código por e-mail, no endereço que a conta mostra (inclusive o de
   retransmissão da Apple, que entrega no e-mail de verdade).
 
-O `make e2e-local` prova isso num emulador: login local, o gêmeo público da Vantara até o gabarito,
+O `make ci` também testa os modelos de projetos e troca de conta. O `make e2e-local` verifica o fluxo num emulador: login local, o gêmeo público da Vantara até o gabarito,
 uma decisão, o aparelho na conta; depois um segundo aparelho (um navegador) entra na mesma conta,
 vê a mesma conciliação e a mesma decisão e encerra a sessão do celular, que volta para o login.
 
@@ -174,3 +192,8 @@ APKs e `adb shell am instrument` em um emulador dedicado.
 <img src="../../docs/images/mobile/android-large-text.png" width="260" alt="Resultado em modo escuro com texto a 200%" />
 
 </details>
+
+No projeto, o botão de conciliar fica fixo acima das abas. Os arquivos começam recolhidos,
+com contagem de prontos e aviso de problemas; **Ver arquivos** expande a lista rolável.
+**Como conciliar** abre as opções avançadas. O teste local também confere que o botão
+permanece visível durante a rolagem.

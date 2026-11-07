@@ -2,9 +2,18 @@
 // HttpOnly cookies and /v1/me says who is signed in.
 import { t } from './i18n';
 import { api, ApiError } from './api';
+import { clearAccountSelection, selectedAccount } from './accountContext';
+import { accounts, type Organization } from './accounts';
+import { clearProjectDrafts } from './projectDrafts';
 
 export interface Me {
-  user: { id: string; email: string; display_name: string };
+  user: {
+    id: string;
+    email: string;
+    display_name: string;
+    role?: 'owner' | 'member';
+    membership_role?: Organization['role'];
+  };
   org: { id: string; name: string };
   credits?: { balance: number; reserved: number; available: number; token_exempt?: boolean };
 }
@@ -14,13 +23,18 @@ export const APP_PATH = '/app';
 export const SESSION_CHANGED_EVENT = 'docmatch:session-changed';
 
 function sessionChanged(): void {
+  clearAccountSelection();
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(SESSION_CHANGED_EVENT));
 }
 
 /** The signed-in user, or null. */
 export async function currentUser(signal?: AbortSignal): Promise<Me | null> {
   try {
-    return await api<Me>('/v1/me', signal ? { signal } : {});
+    await accounts(signal);
+    return await api<Me>('/v1/me', {
+      orgId: selectedAccount()?.orgId ?? null,
+      ...(signal ? { signal } : {}),
+    });
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) return null;
     throw err;
@@ -54,6 +68,7 @@ export async function startGoogleLogin(redirectTo: string): Promise<void> {
 
 export async function logout(): Promise<void> {
   await api<void>('/v1/auth/logout', { method: 'POST', noRefresh: true });
+  await clearProjectDrafts();
   sessionChanged();
 }
 
@@ -132,7 +147,8 @@ export async function listDevices(signal?: AbortSignal): Promise<Device[]> {
 /** Signs one device out (this one too: the API then clears the cookies). */
 export async function revokeDevice(id: string): Promise<void> {
   await api<void>(`/v1/me/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' });
-  sessionChanged();
+  // Revoking another device must not reset this tab's selected company.
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(SESSION_CHANGED_EVENT));
 }
 
 /** Uses the existing server password flow; credentials are never persisted in the browser. */

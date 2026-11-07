@@ -72,8 +72,9 @@ if [[ $skip_build -eq 0 ]]; then
   dm_log "compilando a release $release (linux/arm64)"
   make -s -C "$root/services/api" release RELEASE_DIR="$out" VERSION="$release"
   make -s -C "$root/services/harness" release RELEASE_DIR="$out"
+  install -m 0644 "$root/config/release-compatibility.json" "$out/"
   install -m 0644 "$root/config/pricing.yaml" "$root/config/models.yaml" "$root/config/throughput.yaml" "$out/"
-  (cd "$out" && sha256sum docmatch-api docmatch-worker docmatch-migrate docmatch-harness pricing.yaml models.yaml throughput.yaml > SHA256SUMS)
+  (cd "$out" && sha256sum docmatch-api docmatch-worker docmatch-migrate docmatch-harness pricing.yaml models.yaml throughput.yaml release-compatibility.json > SHA256SUMS)
 fi
 
 bucket="$(terraform -chdir="$env_dir" output -raw releases_bucket_name)"
@@ -102,12 +103,17 @@ read -r -a ids <<<"$instances"
 instance_id="${ids[0]}"
 
 # The script that runs as root on the instance. Values are expanded here, on the operator's side.
+compatibility_sql="$(base64 < "$here/release-compatibility.sql" | tr -d '\n')"
 remote="$(cat <<EOF
 set -euo pipefail
 export AWS_REGION='$region' AWS_DEFAULT_REGION='$region' AWS_PAGER=''
 work="\$(mktemp -d)"
 elevated=""
+resume_live=""
 cleanup() {
+  if [[ -n "\$resume_live" ]]; then
+    systemctl start docmatch-api.service docmatch-worker.service || true
+  fi
   if [[ -n "\$elevated" ]]; then
     runuser -u postgres -- psql -qAt -c "ALTER ROLE \"\$elevated\" NOSUPERUSER" || true
   fi
@@ -117,6 +123,23 @@ trap cleanup EXIT
 aws s3 cp --recursive --only-show-errors 's3://$bucket/$prefix/' "\$work/"
 cd "\$work"
 sha256sum --check --strict --quiet SHA256SUMS
+systemctl start docmatch-env.service
+db_url="\$(sed -n 's/^DATABASE_URL="\(.*\)"\$/\1/p' '$env_file')"
+[[ "\$db_url" =~ ^postgres(ql)?://([^:/@]+):[^@]*@[^/]+/([^?]+) ]] || { echo "DATABASE_URL fora do formato esperado"; exit 1; }
+db_user="\${BASH_REMATCH[2]}"
+db_name="\${BASH_REMATCH[3]}"
+resume_live=1
+systemctl stop docmatch-worker.service docmatch-api.service
+account_context=0
+if [[ -f release-compatibility.json ]]; then
+  grep -Eq '^[a-f0-9]{64}  release-compatibility.json$' SHA256SUMS || { echo 'compatibility manifest missing from checksums'; exit 1; }
+  account_context="\$(jq -er '.account_context | select(. == 1)' release-compatibility.json)"
+fi
+printf '%s' '$compatibility_sql' | base64 -d > "\$work/check-compatibility.sql"
+runuser -u postgres -- psql -d "\$db_name" -v ON_ERROR_STOP=1 -qAt \\
+  -c "SELECT set_config('docmatch.release_account_context','\$account_context',false)" \\
+  -f - < "\$work/check-compatibility.sql"
+resume_live=""
 install -d -m 0755 -o root -g root '$bin_dir' '$config_dir'
 for b in docmatch-api docmatch-worker docmatch-migrate docmatch-harness; do
   install -m 0755 -o root -g root "\$b" '$bin_dir/'"\$b.new"
@@ -131,11 +154,6 @@ install -d -m 0755 /etc/systemd/system/docmatch-harness.service.d
 printf '%s\n' '[Service]' 'Environment="DM_MODELS_FILE=$config_dir/models.yaml"' > /etc/systemd/system/docmatch-harness.service.d/models.conf
 systemctl daemon-reload
 systemctl restart docmatch-env.service
-db_url="\$(sed -n 's/^DATABASE_URL="\(.*\)"\$/\1/p' '$env_file')"
-[[ "\$db_url" =~ ^postgres(ql)?://([^:/@]+):[^@]*@[^/]+/([^?]+) ]] || { echo "DATABASE_URL fora do formato esperado"; exit 1; }
-db_user="\${BASH_REMATCH[2]}"
-db_name="\${BASH_REMATCH[3]}"
-systemctl stop docmatch-worker.service docmatch-api.service
 # The first migration creates the RLS role with attributes only a superuser may set
 # (NOSUPERUSER, NOBYPASSRLS), so on the very first deploy the owner is superuser for that one
 # run, with the application stopped; cleanup() takes it back even if the migration fails.

@@ -6,6 +6,9 @@ suas evidências e baixe os dados organizados em XLSX, CSV ou PDF.
 Use o [site](https://docmatch.com.br), os apps [Android](apps/android/README.md) e
 [iOS](apps/ios/README.md), o terminal ou os [SDKs](sdks/README.md).
 
+Livro em preparação: [Usar a docmatch](docs/book/usuario/src/inicio.md) ·
+[Integrar e desenvolver](docs/book/desenvolvedor/src/inicio.md).
+
 ## Terminal
 
 ```sh

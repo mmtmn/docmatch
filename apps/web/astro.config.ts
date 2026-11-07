@@ -1,6 +1,8 @@
 import react from '@astrojs/react';
 import sitemap from '@astrojs/sitemap';
 import { defineConfig, envField } from 'astro/config';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { limitsPlugin } from './vite/limits';
 import { pricingPlugin } from './vite/pricing';
 import { transportDirectives } from './vite/csp';
@@ -42,9 +44,25 @@ export default defineConfig({
   },
   integrations: [
     react(),
+    {
+      name: 'docmatch-public-books',
+      hooks: {
+        'astro:build:done': ({ dir }) => {
+          execFileSync(
+            process.execPath,
+            [
+              fileURLToPath(new URL('./tools/build-books.mjs', import.meta.url)),
+              fileURLToPath(dir),
+            ],
+            { stdio: 'inherit' },
+          );
+        },
+      },
+    },
     sitemap({
       // Results, sign-in and account pages are per user and must not be indexed.
-      filter: (page) => !/\/(resultados|login|conta)(\/|\.html|$)/.test(page),
+      filter: (page) =>
+        !/\/(app|atividade|equipe|convite|avisos|resultados|login|conta)(\/|\.html|$)/.test(page),
     }),
   ],
   security: {

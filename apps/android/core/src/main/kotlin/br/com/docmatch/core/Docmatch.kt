@@ -3,20 +3,20 @@ package br.com.docmatch.core
 
 import okhttp3.OkHttpClient
 
-class Docmatch(
-    baseUrl: String,
-    store: SecretStore,
-    userAgent: String,
-    textsJson: String,
-    client: OkHttpClient = OkHttpClient(),
-    aliasLoopback: Boolean = false,
+class Docmatch private constructor(
+    val texts: Texts,
+    val cookies: PersistentCookieJar,
+    private val transport: HttpTransport,
+    val api: DocmatchApi,
 ) {
-    val texts = Texts(textsJson)
-    val cookies = PersistentCookieJar(store)
-    private val transport = HttpTransport(baseUrl, cookies, userAgent, texts, client, aliasLoopback)
-    val api = DocmatchApi(transport)
-
-    /** The session ended on the server (another device revoked it, for instance). */
+    constructor(baseUrl: String, store: SecretStore, userAgent: String, textsJson: String, client: OkHttpClient = OkHttpClient(), aliasLoopback: Boolean = false) :
+        this(Texts(textsJson), PersistentCookieJar(store), baseUrl, userAgent, client, aliasLoopback)
+    private constructor(texts: Texts, cookies: PersistentCookieJar, baseUrl: String, userAgent: String, client: OkHttpClient, aliasLoopback: Boolean) :
+        this(texts, cookies, HttpTransport(baseUrl, cookies, userAgent, texts, client, aliasLoopback))
+    private constructor(texts: Texts, cookies: PersistentCookieJar, transport: HttpTransport) :
+        this(texts, cookies, transport, DocmatchApi(transport))
+    fun inAccount(id: String) = Docmatch(texts, cookies, transport, api.inAccount(id))
+    fun inProject(id: String) = Docmatch(texts, cookies, transport, api.inProject(id))
     val sessionEnded = transport.sessionEnded
     val reconciler = Reconciler(api, texts)
     val baseUrl: String = transport.base.toString().trimEnd('/')

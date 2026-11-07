@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { t } from '../../lib/i18n';
+import { ACCOUNT_CHANGED_EVENT } from '../../lib/accountContext';
 import { APP_PATH, currentUser, SESSION_CHANGED_EVENT } from '../../lib/session';
 import styles from './SessionNav.module.css';
 
@@ -27,11 +28,13 @@ export function SessionNav({ path }: { path: string }) {
     };
     check();
     window.addEventListener(SESSION_CHANGED_EVENT, check);
+    window.addEventListener(ACCOUNT_CHANGED_EVENT, check);
     window.addEventListener('focus', check);
     window.addEventListener('pageshow', restore);
     return () => {
       controller?.abort();
       window.removeEventListener(SESSION_CHANGED_EVENT, check);
+      window.removeEventListener(ACCOUNT_CHANGED_EVENT, check);
       window.removeEventListener('focus', check);
       window.removeEventListener('pageshow', restore);
     };

@@ -91,6 +91,7 @@ type Rule struct {
 	Stats      Stats
 	Provenance Provenance
 	RunID      *uuid.UUID
+	ProjectID  *uuid.UUID
 	CreatedBy  *uuid.UUID
 	Enabled    bool
 	UseCount   int64

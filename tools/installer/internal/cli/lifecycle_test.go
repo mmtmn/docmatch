@@ -397,7 +397,7 @@ func (f *fakeRunner) Output(_ context.Context, _, name string, args ...string) (
 	if name == "wsl" && len(args) > 0 && args[0] == "--list" {
 		return "U\x00b\x00u\x00n\x00t\x00u\x00\r\x00\n\x00", nil // UTF-16, as wsl.exe prints it
 	}
-	return map[string]string{"go": "go version go1.27.3 linux/amd64", "node": "v22.23.4", "pnpm": "11.5.3", "cargo": "cargo 1.93.0",
+	return map[string]string{"go": "go version go1.27.3 linux/amd64", "node": "v22.23.4", "pnpm": "11.5.3", "cargo": "cargo 1.93.1",
 		"docker": "2.40.3", "apt-cache": "golang-go:\n  Installed: (none)\n  Candidate: 2:1.22~2build1\n"}[name], nil
 }
 

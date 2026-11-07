@@ -7,10 +7,22 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/mmtmn/docmatch/services/api/internal/db"
 	"github.com/mmtmn/docmatch/services/api/internal/db/sqlc"
 	"github.com/mmtmn/docmatch/services/api/internal/runs"
 	"github.com/mmtmn/docmatch/services/api/internal/sse"
 )
+
+// WithCreationTx protects the account-wide concurrency limit, including callers
+// on older SDKs. Credit reservation, run and River job commit as a single unit.
+func (s *Store) WithCreationTx(ctx context.Context, org uuid.UUID, fn func(context.Context) error) error {
+	return db.WithOrgUnit(ctx, s.pool, org, func(ctx context.Context, tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, "run-create:"+org.String()); err != nil {
+			return err
+		}
+		return fn(ctx)
+	})
+}
 
 func toRun(r sqlc.Run) (runs.Run, error) {
 	out := runs.Run{
@@ -66,14 +78,15 @@ func (s *Store) GetRun(ctx context.Context, orgID, id uuid.UUID) (runs.Run, bool
 	var out runs.Run
 	found := false
 	err := s.org(ctx, orgID, func(ctx context.Context, q *sqlc.Queries, _ pgx.Tx) error {
-		row, err := q.GetRun(ctx, sqlc.GetRunParams{OrgID: orgID, ID: id})
+		row, err := q.GetRunWithProject(ctx, sqlc.GetRunWithProjectParams{OrgID: orgID, ID: id})
 		if isNoRows(err) {
 			return nil
 		}
 		if err != nil {
 			return err
 		}
-		out, err = toRun(row)
+		out, err = toRun(row.Run)
+		out.ProjectID = row.ProjectID
 		found = err == nil
 		return err
 	})
@@ -89,12 +102,13 @@ func (s *Store) ListRuns(ctx context.Context, orgID uuid.UUID, f runs.ListFilter
 			st := string(f.Status)
 			status = &st
 		}
-		rows, err := q.ListRunsPage(ctx, sqlc.ListRunsPageParams{OrgID: orgID, Limit: int32(min(max(limit, 1), 1000)), Offset: int32(max(offset, 0)), Status: status, WorkflowID: f.WorkflowID}) //nolint:gosec // bounded
+		rows, err := q.ListRunsPage(ctx, sqlc.ListRunsPageParams{OrgID: orgID, Limit: int32(min(max(limit, 1), 1000)), Offset: int32(max(offset, 0)), Status: status, WorkflowID: f.WorkflowID, ProjectID: f.ProjectID, VisibleTo: f.VisibleTo, ProjectOnly: f.ProjectOnly}) //nolint:gosec // bounded
 		if err != nil {
 			return err
 		}
 		for _, r := range rows {
-			run, err := toRun(r)
+			run, err := toRun(r.Run)
+			run.ProjectID = r.ProjectID
 			if err != nil {
 				return err
 			}

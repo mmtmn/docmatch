@@ -43,19 +43,22 @@ public final class NewRunModel {
 
     /// Adds what the picker returned, refusing what the site would refuse (same messages).
     public func add(_ picked: [PickedFile]) async {
-        let texts = dm.texts
-        let current = files
-        let (accepted, problems) = await Task.detached { () -> ([LocalFile], [String]) in
+        let (accepted, problems) = await Self.checkedFiles(picked, texts: dm.texts, existing: files)
+        files += accepted
+        error = problems.isEmpty ? nil : problems.joined(separator: "\n")
+    }
+
+    /// The same file precheck is used by quick uploads and saved projects.
+    public static func checkedFiles(_ picked: [PickedFile], texts: Texts, existing: [LocalFile] = []) async -> ([LocalFile], [String]) {
+        return await Task.detached { () -> ([LocalFile], [String]) in
             let candidates = picked.map { p in Candidate(name: p.name, size: p.size, head: p.head) }
-            let (ok, refused) = Precheck.check(texts, candidates, existing: current)
+            let (ok, refused) = Precheck.check(texts, candidates, existing: existing)
             let files = ok.compactMap { a -> LocalFile? in
                 guard let p = picked.first(where: { $0.name == a.name && $0.size == a.size }) else { return nil }
                 return LocalFile(name: a.name, mime: a.mime, size: a.size, kind: a.kind, source: p.source)
             }
             return (files, refused)
         }.value
-        files += accepted
-        error = problems.isEmpty ? nil : problems.joined(separator: "\n")
     }
 
     public func remove(_ file: LocalFile) {

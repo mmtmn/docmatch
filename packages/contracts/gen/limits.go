@@ -16,6 +16,8 @@ const (
 	TextSavedRuleBody          = 2000
 	TextRulePickerSearch       = 100
 	TextWorkflowName           = 80
+	TextProjectName            = 120
+	TextReprocessReason        = 500
 	TextDisplayName            = 80
 	TextCompanyName            = 120
 	TextEmail                  = 254
@@ -58,6 +60,9 @@ const (
 const (
 	IDsIdempotencyKeyMax       = 128
 	IDsAPIKeyScopesMax         = 10
+	IDsProjectMembersMax       = 100
+	IDsProjectRulesMax         = 50
+	IDsAccountMembersMax       = 100
 	IDsFilesPerRunHardMax      = 100
 	IDsSourceWarningsPerRun    = 100
 	IDsMediaFilesPerRunHardMax = 50000
@@ -77,6 +82,8 @@ var limitByKey = map[string]int{
 	"text.saved_rule_body":             TextSavedRuleBody,
 	"text.rule_picker_search":          TextRulePickerSearch,
 	"text.workflow_name":               TextWorkflowName,
+	"text.project_name":                TextProjectName,
+	"text.reprocess_reason":            TextReprocessReason,
 	"text.display_name":                TextDisplayName,
 	"text.company_name":                TextCompanyName,
 	"text.email":                       TextEmail,
@@ -107,6 +114,9 @@ var limitByKey = map[string]int{
 	"http.sse_idle_timeout_s":          HTTPSSEIdleTimeoutS,
 	"ids.idempotency_key_max":          IDsIdempotencyKeyMax,
 	"ids.api_key_scopes_max":           IDsAPIKeyScopesMax,
+	"ids.project_members_max":          IDsProjectMembersMax,
+	"ids.project_rules_max":            IDsProjectRulesMax,
+	"ids.account_members_max":          IDsAccountMembersMax,
 	"ids.files_per_run_hard_max":       IDsFilesPerRunHardMax,
 	"ids.source_warnings_per_run":      IDsSourceWarningsPerRun,
 	"ids.media_files_per_run_hard_max": IDsMediaFilesPerRunHardMax,

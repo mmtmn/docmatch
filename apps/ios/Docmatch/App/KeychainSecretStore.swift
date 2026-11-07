@@ -7,7 +7,9 @@ import Security
 /// like on Android).
 final class KeychainSecretStore: SecretStore {
     private let service = "br.com.docmatch.session"
-    private let account = "cookies"
+    private let account: String
+
+    init(account: String = "cookies") { self.account = account }
 
     func read() -> Data? {
         var query = base

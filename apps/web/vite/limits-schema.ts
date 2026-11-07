@@ -9,6 +9,8 @@ export const LIMIT_GROUPS = {
     'saved_rule_body',
     'rule_picker_search',
     'workflow_name',
+    'project_name',
+    'reprocess_reason',
     'display_name',
     'company_name',
     'email',
@@ -44,6 +46,9 @@ export const LIMIT_GROUPS = {
   ids: [
     'idempotency_key_max',
     'api_key_scopes_max',
+    'project_members_max',
+    'project_rules_max',
+    'account_members_max',
     'files_per_run_hard_max',
     'media_files_per_run_hard_max',
   ],

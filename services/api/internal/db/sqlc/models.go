@@ -68,6 +68,16 @@ type ApiUsageDefault struct {
 	CreatedAt  time.Time
 }
 
+type AppleCredential struct {
+	ID            uuid.UUID
+	UserID        *uuid.UUID
+	ClientID      string
+	SealedToken   []byte
+	Attempts      int32
+	NextAttemptAt *time.Time
+	ExpiresAt     *time.Time
+}
+
 type AuditLog struct {
 	ID         uuid.UUID
 	OrgID      *uuid.UUID
@@ -284,6 +294,37 @@ type Customization struct {
 	RequestKey  *uuid.UUID
 }
 
+type ExtensionCode struct {
+	CodeHash           []byte
+	ClientID           string
+	RedirectUri        string
+	Challenge          string
+	UserID             uuid.UUID
+	OrgID              *uuid.UUID
+	AuthorizingSession uuid.UUID
+	CreatedAt          time.Time
+	ExpiresAt          time.Time
+	ConsumedAt         *time.Time
+	IssuedSession      *uuid.UUID
+}
+
+type ExtensionGrant struct {
+	SessionID           uuid.UUID
+	ClientID            string
+	AccessHash          []byte
+	RefreshHash         []byte
+	PreviousRefreshHash []byte
+	RefreshRequestID    *uuid.UUID
+	RetryUntil          *time.Time
+	RetryResponse       []byte
+}
+
+type ExtensionSpentRefresh struct {
+	TokenHash []byte
+	SessionID uuid.UUID
+	ExpiresAt time.Time
+}
+
 type Feedback struct {
 	ID               uuid.UUID
 	OrgID            uuid.UUID
@@ -443,6 +484,7 @@ type Org struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	DeletedAt *time.Time
+	Kind      string
 }
 
 type Outbox struct {
@@ -466,6 +508,91 @@ type Plan struct {
 	Overrides []byte
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+type PlatformNotice struct {
+	ID                    uuid.UUID
+	Platform              string
+	Email                 string
+	Status                string
+	ConfirmationHash      []byte
+	ConfirmationExpiresAt *time.Time
+	ConfirmationOutbox    *uuid.UUID
+	ConsentVersion        string
+	ConfirmedAt           *time.Time
+	UnsubscribedAt        *time.Time
+	NotificationQueuedAt  *time.Time
+	NotificationOutbox    *uuid.UUID
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+	ExpiresAt             time.Time
+}
+
+type PlatformNoticeSend struct {
+	ID        uuid.UUID
+	EmailHash []byte
+	IpHash    []byte
+	CreatedAt time.Time
+}
+
+type Project struct {
+	ID         uuid.UUID
+	OrgID      uuid.UUID
+	OwnerID    *uuid.UUID
+	Name       string
+	Visibility string
+	Version    int64
+	Revision   int64
+	Settings   []byte
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+	ArchivedAt *time.Time
+	DeletedAt  *time.Time
+}
+
+type ProjectDocument struct {
+	ID                   uuid.UUID
+	OrgID                uuid.UUID
+	ProjectID            uuid.UUID
+	UploadID             uuid.UUID
+	ReplacesID           *uuid.UUID
+	PendingReplacementID *uuid.UUID
+	Role                 string
+	CreatedBy            *uuid.UUID
+	CreatedAt            time.Time
+	RemovedAt            *time.Time
+}
+
+type ProjectEvent struct {
+	ID        int64
+	OrgID     uuid.UUID
+	ProjectID uuid.UUID
+	ActorID   *uuid.UUID
+	Action    string
+	Details   []byte
+	CreatedAt time.Time
+}
+
+type ProjectImport struct {
+	OrgID             uuid.UUID
+	ProjectID         uuid.UUID
+	RunID             uuid.UUID
+	BaselineSignature *string
+}
+
+type ProjectMember struct {
+	OrgID     uuid.UUID
+	ProjectID uuid.UUID
+	UserID    uuid.UUID
+}
+
+type ProjectRun struct {
+	OrgID     uuid.UUID
+	ProjectID uuid.UUID
+	RunID     uuid.UUID
+	Revision  int64
+	Signature string
+	CreatedAt time.Time
 }
 
 type Quote struct {
@@ -511,6 +638,7 @@ type Rule struct {
 	Provenance  []byte
 	RunID       *uuid.UUID
 	PromotedAt  *time.Time
+	ProjectID   *uuid.UUID
 }
 
 type RuleUse struct {
@@ -654,6 +782,31 @@ type Subscription struct {
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
 	Livemode             bool
+}
+
+type TeamEvent struct {
+	ID        int64
+	OrgID     uuid.UUID
+	ActorID   *uuid.UUID
+	TargetID  *uuid.UUID
+	Action    string
+	CreatedAt time.Time
+}
+
+type TeamInvitation struct {
+	ID         uuid.UUID
+	OrgID      uuid.UUID
+	Email      string
+	Role       string
+	TokenHash  []byte
+	Status     string
+	InvitedBy  *uuid.UUID
+	AcceptedBy *uuid.UUID
+	ExpiresAt  time.Time
+	SentAt     time.Time
+	AcceptedAt *time.Time
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }
 
 type TenantKey struct {

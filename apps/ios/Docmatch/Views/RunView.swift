@@ -7,6 +7,8 @@ struct RunView: View {
     private let dm: Docmatch
     @State private var model: RunModel
     @State private var open: String?
+    @State private var cancelling = false
+    @Environment(\.scenePhase) private var scenePhase
     @State private var share: ShareItem?
     @Environment(\.texts) private var texts
 
@@ -22,6 +24,11 @@ struct RunView: View {
             .navigationBarTitleDisplayMode(.inline)
             // Polls only while this screen is shown (and again on retry or after an approval).
             .task(id: model.attempt) { await model.follow() }
+            .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await model.validateAccess() } } }
+            .onChange(of: model.state) { _, state in if case .failed = state { open = nil; share = nil } }
+            .confirmationDialog(texts.t("projects.run_cancel_confirm"), isPresented: $cancelling, titleVisibility: .visible) {
+                Button(texts.t("projects.cancel_run"), role: .destructive) { Task { await model.cancel() } }
+            }
             .sheet(item: $share) { item in ActivityView(url: item.url) }
     }
 
@@ -33,6 +40,8 @@ struct RunView: View {
             DmPage {
                 DmProcessingScene(label: step.map { Labels.step(texts, $0) } ?? texts.t("mobile.run_waiting"))
                 Text(texts.t("mobile.processing_keep_open")).font(.caption).foregroundStyle(Color(DmColors.textMuted))
+                Button(texts.t("projects.cancel_run"), role: .destructive) { cancelling = true }
+                if let notice = model.notice { DmNotice(message: notice, error: true) }
             }
         case .needsApproval(let run, let busy):
             approval(run, busy: busy)
@@ -56,6 +65,7 @@ struct RunView: View {
                 } else {
                     Text(texts.t("mobile.status_needs_approval"))
                 }
+                Button(texts.t("projects.cancel_run"), role: .destructive) { cancelling = true }.disabled(busy)
                 if let notice = model.notice {
                     Text(notice)
                         .foregroundStyle(Color(DmColors.statusDanger))

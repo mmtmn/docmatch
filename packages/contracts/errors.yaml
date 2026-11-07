@@ -27,6 +27,10 @@ categories:
   internal: Falhas do nosso lado
 
 errors:
+  feature_paused:
+    status: 409
+    category: limits
+    message: Esta função ainda não está disponível nesta conta. O que já foi salvo continua disponível.
   disposable_email:
     status: 422
     category: auth

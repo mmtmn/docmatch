@@ -77,9 +77,9 @@ public final class Reconciler: Sendable {
     }
 
     /// One file: ticket, bytes to the presigned URL, then the scanner's verdict.
-    public func upload(_ file: LocalFile, onStep: @Sendable (Step) -> Void = { _ in }) async throws -> Upload {
+    public func upload(_ file: LocalFile, onStep: @Sendable (Step) -> Void = { _ in }, replacesID: String? = nil) async throws -> Upload {
         let sha = file.kind.media ? nil : Reconciler.sha256Hex(try api.read(file))
-        let ticket = try await api.createUpload(file, sha256: sha)
+        let ticket = try await api.createUpload(file, sha256: sha, replacesID: replacesID)
         try await api.putObject(ticket, file)
         var view = try await api.completeUpload(ticket.id, sha256: sha)
         var polls = 0

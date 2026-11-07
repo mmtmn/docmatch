@@ -36,23 +36,23 @@ func (m *MemStore) CreateRule(_ context.Context, r Rule) (Rule, error) {
 }
 
 // GetRule implements Store.
-func (m *MemStore) GetRule(_ context.Context, orgID, id uuid.UUID) (Rule, bool, error) {
+func (m *MemStore) GetRule(ctx context.Context, orgID, id uuid.UUID) (Rule, bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	r, ok := m.rows[id]
-	if !ok || r.OrgID != orgID {
+	if !ok || r.OrgID != orgID || !visible(ctx, orgID, r) {
 		return Rule{}, false, nil
 	}
 	return r, true, nil
 }
 
 // ListRulesByIDs implements Store.
-func (m *MemStore) ListRulesByIDs(_ context.Context, orgID uuid.UUID, ids []uuid.UUID) ([]Rule, error) {
+func (m *MemStore) ListRulesByIDs(ctx context.Context, orgID uuid.UUID, ids []uuid.UUID) ([]Rule, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	out := []Rule{}
 	for _, id := range ids {
-		if r, ok := m.rows[id]; ok && r.OrgID == orgID {
+		if r, ok := m.rows[id]; ok && r.OrgID == orgID && visible(ctx, orgID, r) {
 			out = append(out, r)
 		}
 	}
@@ -60,13 +60,13 @@ func (m *MemStore) ListRulesByIDs(_ context.Context, orgID uuid.UUID, ids []uuid
 }
 
 // SearchRules implements Store with a substring match standing in for the trigram index.
-func (m *MemStore) SearchRules(_ context.Context, orgID uuid.UUID, q Query) ([]Rule, error) {
+func (m *MemStore) SearchRules(ctx context.Context, orgID uuid.UUID, q Query) ([]Rule, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var all []Rule
 	term := strings.ToLower(q.Term)
 	for _, r := range m.rows {
-		if r.OrgID != orgID {
+		if r.OrgID != orgID || !visible(ctx, orgID, r) {
 			continue
 		}
 		if q.Status != "" && r.Status != q.Status {
@@ -109,12 +109,12 @@ func (m *MemStore) SearchRules(_ context.Context, orgID uuid.UUID, q Query) ([]R
 }
 
 // ListTrustedRules implements Store.
-func (m *MemStore) ListTrustedRules(_ context.Context, orgID uuid.UUID) ([]Rule, error) {
+func (m *MemStore) ListTrustedRules(ctx context.Context, orgID uuid.UUID) ([]Rule, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var out []Rule
 	for _, r := range m.rows {
-		if r.OrgID == orgID && r.Status == StatusTrusted && r.Enabled {
+		if r.OrgID == orgID && visible(ctx, orgID, r) && r.Status == StatusTrusted && r.Enabled {
 			out = append(out, r)
 		}
 	}

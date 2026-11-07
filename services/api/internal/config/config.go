@@ -166,6 +166,7 @@ type Config struct {
 	KillFlags []string
 	// Maintenance makes the API answer 503 to everything except health and version.
 	Maintenance bool
+	Rollouts    Rollouts
 
 	Database Database
 	Storage  Storage
@@ -243,6 +244,7 @@ type LLM struct {
 
 // Auth holds identity provider settings and the session secret.
 type Auth struct {
+	ExtensionClients   []ExtensionClient
 	GoogleClientID     string
 	GoogleClientSecret Secret
 	AppleTeamID        string
@@ -324,6 +326,11 @@ func LoadFrom(lookup Lookup) (*Config, error) {
 	cfg.VantaraPath = r.optional(VarVantaraPath, "")
 	cfg.KillFlags = r.list(VarKillFlags)
 	cfg.Maintenance = r.boolean(VarMaintenance, false)
+	cfg.Rollouts = Rollouts{
+		Projects:    r.accountRollout(VarRolloutProjects, cfg.IsDev()),
+		Invitations: r.accountRollout(VarRolloutInvitations, cfg.IsDev()),
+		Extensions:  r.accountRollout(VarRolloutExtensions, cfg.IsDev()),
+	}
 
 	cfg.Database.URL = r.secret(VarDatabaseURL, true)
 	if u := cfg.Database.URL.Reveal(); u != "" && !strings.HasPrefix(u, "postgres://") && !strings.HasPrefix(u, "postgresql://") {
@@ -372,6 +379,7 @@ func LoadFrom(lookup Lookup) (*Config, error) {
 	cfg.Auth.SessionSecret = r.base64Secret(VarSessionSecret, minSessionSecretBytes)
 	cfg.Auth.GoogleNativeClientIDs = r.clientIDs(VarGoogleNativeClientIDs)
 	cfg.Auth.AppleNativeClientIDs = r.clientIDs(VarAppleNativeClientIDs)
+	cfg.Auth.ExtensionClients = r.extensionClients()
 	cfg.Auth.DevLogin = r.boolean(VarDevLogin, false)
 	if cfg.Auth.DevLogin && cfg.Env != EnvDev {
 		r.problem(VarDevLogin, "só pode ser ligada com DM_ENV=dev")
@@ -915,13 +923,13 @@ func (r *reader) address(name string) *mail.Address {
 func KnownVars() []string {
 	return append([]string{
 		VarEnv, VarPublicBaseURL, VarAPIBaseURL, VarAPIListen, VarAdminListen, VarOriginSecret, VarOriginSecretHeader, VarVantaraPath,
-		VarKillFlags, VarMaintenance,
+		VarKillFlags, VarMaintenance, VarRolloutProjects, VarRolloutInvitations, VarRolloutExtensions,
 		VarDatabaseURL, VarDBAppRole, VarAWSRegion, VarAWSAccessKeyID, VarAWSSecretKey, VarS3UploadsBucket, VarS3BackupsBucket, VarS3Endpoint,
 		VarR2AccountID, VarR2AccessKeyID, VarR2SecretAccessKey, VarR2MediaBucket, VarR2Endpoint, VarMediaLocalDir,
 		VarHarnessSocket, VarScanQueueURL, VarScannerBin,
 		VarLLMMode, VarOpenRouterKey, VarLocalLLMBaseURL, VarModelsFile, VarLLMCacheDir,
 		VarGoogleClientID, VarGoogleClientSecret, VarAppleTeamID, VarAppleClientID, VarAppleKeyID, VarApplePrivateKey, VarSessionSecret,
-		VarGoogleNativeClientIDs, VarAppleNativeClientIDs, VarDevLogin,
+		VarGoogleNativeClientIDs, VarAppleNativeClientIDs, VarDevLogin, VarExtensionClients,
 		VarStripeSecretKey, VarStripeWebhookSecret, VarStripePublishableKey,
 		VarStripePriceStarter, VarStripePricePro, VarStripePriceBusiness, VarStripePriceTopup,
 		VarStripePortalConfig, VarStripePaymentConfig, VarStripeTestEmails,

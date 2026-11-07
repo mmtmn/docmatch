@@ -45,7 +45,7 @@
     src: docmatch-pgbackrest-backup.sh.j2
     dest: /usr/local/sbin/docmatch-pgbackrest-backup
     owner: root
-    group: root
+    group: postgres
     mode: "0750"
 
 - name: Enable the timers that run on every role

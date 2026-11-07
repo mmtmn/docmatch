@@ -1,4 +1,6 @@
 // Apache-2.0. No telemetry. Keep API keys in server-side environments.
+import { ProjectClient, type Project, type Page } from './projects.js';
+export * from './projects.js';
 import { operations } from './operations.js';
 export { operations };
 export interface Quote {
@@ -8,6 +10,7 @@ export interface Quote {
   cap_credits: number;
 }
 export interface Run {
+  project_id?: string;
   id: string;
   status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'needs_approval';
   summary?: Record<string, unknown>;
@@ -43,6 +46,7 @@ export class DocmatchError extends Error {
     public code: string,
     message: string,
     public requestId?: string,
+    public details?: unknown,
   ) {
     super(message);
     this.name = 'DocmatchError';
@@ -96,6 +100,13 @@ export class Client {
     if (u.search || u.hash) throw new Error('Expected API origin');
     this.baseURL = options.baseURL.replace(/\/$/, '');
   }
+  project(id: string): ProjectClient { return new ProjectClient(this,id,this.options.lane ?? 'api_batch'); }
+  listProjects({ archived = false, cursor = '', signal }: { archived?: boolean; cursor?: string; signal?: AbortSignal } = {}): Promise<Page<Project>> {
+    return this.request('GET', operations.listProjects.path + `?archived=${archived}&cursor=${encodeURIComponent(cursor)}`, undefined, signal);
+  }
+  /** Save a terminal historical run without another reconciliation or charge. */
+  importRunAsProject(runId: string, name: string, signal?: AbortSignal): Promise<Project> { return this.request('POST', operations.importRunAsProject.path, { run_id: runId, name }, signal); }
+  createProject(name: string, signal?: AbortSignal): Promise<Project> { return this.request('POST', operations.createProject.path, { name }, signal); }
   input(ids: string[], rulesText?: string): Input {
     return {
       sources: ids.map((upload_id) => ({ upload_id })),
@@ -112,7 +123,7 @@ export class Client {
     if (!path.startsWith('/v1/') || path.includes('\\'))
       throw new Error('Expected relative API path');
     const idempotencyKey = crypto.randomUUID();
-    const retry = method === 'GET' || (method === 'POST' && path === operations.createRun.path);
+    const retry = method === 'GET' || (method === 'POST' && (path === operations.createRun.path || /^\/v1\/projects\/[^/]+\/runs$/.test(path)));
     const requestSignal = AbortSignal.any([
       AbortSignal.timeout(this.options.timeoutMs ?? 120_000),
       ...(signal ? [signal] : []),
@@ -150,12 +161,14 @@ export class Client {
         code?: string;
         message?: string;
         request_id?: string;
+        details?: unknown;
       };
       throw new DocmatchError(
         res.status,
         error.code ?? 'http_error',
         error.message ?? `HTTP ${res.status}`,
         error.request_id,
+        error.details,
       );
     }
   }
@@ -189,16 +202,18 @@ export class Client {
       timeoutMs = 600_000,
       pollMs = 1000,
       onProgress,
+      projectId,
     }: {
       signal?: AbortSignal;
       timeoutMs?: number;
       pollMs?: number;
       onProgress?: (run: Run) => void;
+      projectId?: string;
     } = {},
   ): Promise<Run> {
     const bounded = AbortSignal.any([AbortSignal.timeout(timeoutMs), ...(signal ? [signal] : [])]);
     for (;;) {
-      const run = await this.getRun(id, bounded);
+      const run = await (projectId ? this.project(projectId).getRun(id, bounded) : this.getRun(id, bounded));
       onProgress?.(run);
       if (run.status === 'completed') return run;
       if (['failed', 'cancelled', 'needs_approval'].includes(run.status))
@@ -210,13 +225,13 @@ export class Client {
       await pause(pollMs, bounded);
     }
   }
-  async findings(id: string, signal?: AbortSignal): Promise<Finding[]> {
+  async findings(id: string, signal?: AbortSignal, projectId?: string): Promise<Finding[]> {
     const all: Finding[] = [];
     let cursor = '';
     for (let page = 0; page < 1000; page++) {
       const data = await this.request<{ items: Finding[]; next_cursor?: string }>(
         'GET',
-        operations.listFindings.path.replace('{id}', encodeURIComponent(id)) +
+        (projectId ? operations.projectListFindings.path.replace('{project}', encodeURIComponent(projectId)) : operations.listFindings.path).replace('{id}', encodeURIComponent(id)) +
           `?limit=100&cursor=${encodeURIComponent(cursor)}`,
         undefined,
         signal,
@@ -232,13 +247,14 @@ export class Client {
     id: string,
     format: 'xlsx' | 'csv' | 'pdf',
     signal?: AbortSignal,
+    projectId?: string,
   ): Promise<Uint8Array> {
     if (!['xlsx', 'csv', 'pdf'].includes(format)) throw new Error('Invalid export format');
     return new Uint8Array(
       await (
         await this.response(
           'GET',
-          operations.exportRun.path.replace('{id}', encodeURIComponent(id)) + '?format=' + format,
+          (projectId ? operations.projectExportRun.path.replace('{project}', encodeURIComponent(projectId)) : operations.exportRun.path).replace('{id}', encodeURIComponent(id)) + '?format=' + format,
           undefined,
           signal,
         )
@@ -250,7 +266,9 @@ export class Client {
     data: Uint8Array,
     mime = 'application/octet-stream',
     signal?: AbortSignal,
+    destination?: { projectId: string; role?: string; replacesId?: string },
   ): Promise<Upload> {
+    const prefix = destination ? operations.createProjectUpload.path.replace('{project}',encodeURIComponent(destination.projectId)) : operations.createUpload.path;
     const hash = await crypto.subtle.digest('SHA-256', new Uint8Array(data));
     const sha256 = Array.from(new Uint8Array(hash), (b) => b.toString(16).padStart(2, '0')).join(
       '',
@@ -263,8 +281,8 @@ export class Client {
       headers?: Record<string, string>;
     }>(
       'POST',
-      operations.createUpload.path,
-      { kind: 'document', file_name: name, mime, size_bytes: data.byteLength, sha256 },
+      prefix,
+      { ...(destination?.role ? {role: destination.role} : {}), ...(destination?.replacesId ? {replaces_id: destination.replacesId} : {}), kind: 'document', file_name: name, mime, size_bytes: data.byteLength, sha256 },
       signal,
     );
     safeURL(ticket.url);
@@ -289,7 +307,7 @@ export class Client {
     });
     if (!res.ok) throw new DocmatchError(res.status, 'upload_failed', 'Falha no envio do arquivo.');
     await res.body?.cancel();
-    const path = operations.completeUpload.path.replace('{id}', encodeURIComponent(ticket.id));
+    const path = `${prefix}/${encodeURIComponent(ticket.id)}/complete`;
     for (let polls = 0; polls < 120; polls++) {
       const upload = await this.request<Upload>('POST', path, { sha256 }, signal);
       if (upload.status === 'ready') return upload;

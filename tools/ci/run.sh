@@ -11,6 +11,7 @@ subsystems=(
   services/api
   services/harness
   apps/web
+  apps/extensions
   apps/admin
   infra
   sdks/python
@@ -70,7 +71,12 @@ for s in "${subsystems[@]}"; do
   if ! make -C "$s" -n "$target" >/dev/null 2>&1 && ! grep -qE "^${target}:" "$s/Makefile"; then
     continue
   fi
-  if [[ "$all" == "1" ]] || grep -q "^$s/" <<<"$changed"; then
+  # Public books are part of the site; their sources and SDK examples live outside apps/web.
+  book_changed=0
+  if [[ "$s" == "apps/web" ]] && grep -qE '^(docs/book/|sdks/(python|go|rust|typescript)/examples/)' <<<"$changed"; then
+    book_changed=1
+  fi
+  if [[ "$all" == "1" || "$book_changed" == "1" ]] || grep -q "^$s/" <<<"$changed"; then
     run_step "$s" make -C "$s" "$target"
   else
     names+=("$s"); statuses+=("pulado (sem mudanças)"); times+=("0s")

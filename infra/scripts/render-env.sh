@@ -88,6 +88,12 @@ write_atomic() { # write_atomic <path> <owner> <content>
   mv -f "$tmp" "$path"
 }
 
+prepare_runtime_dir() {
+  # Each service must traverse the parent to read its own 0400 subset. Directory search
+  # permission grants neither listing nor access to another service's environment file.
+  install -d -m 0711 -o root -g "$2" "$1"
+}
+
 main() {
   local out owner placeholder allow_placeholders instance_env count unset_keys empty_keys ssm_names
   local spec sub_user sub_file sub_keys exclude
@@ -136,7 +142,7 @@ main() {
   id "$owner" >/dev/null 2>&1 || die "usuário inexistente: $owner"
 
   run_dir="$(dirname "$out")"
-  install -d -m 0750 -o root -g "$owner" "$run_dir"
+  prepare_runtime_dir "$run_dir" "$owner"
 
   # One JSON document with the parameters of this instance (all under the path, or the list).
   params="$(fetch_params "$ssm_path" "$ssm_names")"

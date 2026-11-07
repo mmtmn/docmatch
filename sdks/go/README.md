@@ -1,8 +1,8 @@
 # SDK Go
 
 Go 1.23+, biblioteca padrão, `context.Context` em todas as operações. A versão **v0.1.0**
-está publicada no repositório privado do GitHub. Com autenticação Git e acesso ao repositório,
-instale com `GOPRIVATE=github.com/mmtmn/docmatch go get github.com/mmtmn/docmatch/sdks/go@v0.1.0`.
+está publicada no GitHub. Instale com
+`go get github.com/mmtmn/docmatch/sdks/go@v0.1.0`.
 Confira o [estado da publicação](../README.md). Para usar este checkout, no projeto consumidor use
 `go mod edit -replace github.com/mmtmn/docmatch/sdks/go=/caminho/docmatch/sdks/go` e adicione
 `github.com/mmtmn/docmatch/sdks/go v0.0.0` às dependências durante o desenvolvimento local.
@@ -26,3 +26,22 @@ login de desenvolvimento. O terminal operacional usa este cliente. Veja [contrat
 
 A tag de release deste módulo é **`sdks/go/v0.1.0`**, pois ele mora numa subpasta do repositório.
 Não é necessário criar conta ou token num registro Go. Veja o [guia de publicação](../../docs/runbooks/publicar-sdks.md).
+
+## Projetos (0.2.0)
+
+Crie com `client.CreateProject(ctx, "Fechamento mensal")` e guarde o ID. `client.Project("prj_ID")` mantém os envios,
+regras e resultados no mesmo projeto. A estimativa devolve a conciliação existente quando
+nada mudou. Uma análise nova exige cotação aprovada; nunca aprove custos adicionais automaticamente.
+
+O exemplo consulta um projeto existente. Só inicia trabalho se `DOCMATCH_APPROVE_CAP`
+for maior ou igual ao limite exibido. Configure `DM_API_BASE_URL` e `DOCMATCH_API_KEY`, com
+`projects:read`, `projects:write`, `uploads:write`, `runs:read` e `runs:write`.
+
+```sh
+go run ./examples/project prj_ID
+```
+
+Envio de substituição fica pendente até aplicar a versão com `replace_document`
+(Go: `ReplaceDocument`; TypeScript: `replaceDocument`). Atualize o projeto antes de editar:
+`version` protege o salvamento e `revision` identifica os dados estimados. Em conflito, releia
+as alterações; em acesso negado, confira o vínculo e os escopos da chave.

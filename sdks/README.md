@@ -6,8 +6,8 @@ achados paginados e baixam XLSX, CSV e PDF. Não há telemetria.
 
 Python e Rust **0.1.0** estão publicados no [PyPI](https://pypi.org/project/docmatch/0.1.0/)
 e no [crates.io](https://crates.io/crates/docmatch/0.1.0). Go **v0.1.0** está publicado
-no GitHub com a tag **`sdks/go/v0.1.0`**. O repositório é privado: a instalação Go exige
-acesso ao GitHub e `GOPRIVATE=github.com/mmtmn/docmatch`; não está disponível no proxy público.
+no GitHub com a tag **`sdks/go/v0.1.0`**. O repositório é público; Go não exige
+uma conta adicional nem configuração de acesso privado.
 As três versões foram instaladas e verificadas fora deste checkout em 6 de novembro de 2026.
 
 O SDK TypeScript `@docmatch/sdk` ainda não foi publicado no npm. O pacote npm `docmatch`
@@ -18,9 +18,25 @@ upload, verificação e correção de uma release. Os testes e builds de publica
 | Linguagem | Pacote / pasta | Instalação |
 | --- | --- | --- |
 | TypeScript | [@docmatch/sdk](typescript/README.md) | `pnpm --dir sdks/typescript build` e `pnpm --dir sdks/typescript pack` |
-| Go | [github.com/mmtmn/docmatch/sdks/go](go/README.md) | Com acesso GitHub: `GOPRIVATE=github.com/mmtmn/docmatch go get github.com/mmtmn/docmatch/sdks/go@v0.1.0` |
+| Go | [github.com/mmtmn/docmatch/sdks/go](go/README.md) | `go get github.com/mmtmn/docmatch/sdks/go@v0.1.0` |
 | Python | [docmatch](python/README.md) | `python -m pip install docmatch==0.1.0` dentro de um venv |
 | Rust | [docmatch](rust/README.md) | `cargo add docmatch@0.1.0` |
+
+## Projetos na versão 0.2.0 em preparação
+
+A versão 0.2.0 acrescenta projetos aos quatro SDKs. As versões `0.1.0` publicadas
+continuam intactas; os novos métodos só devem ser usados após a implantação da API e a
+publicação da nova versão.
+
+Crie um projeto, envie arquivos por ele e guarde seu ID para voltar depois. O objeto
+`client.project(id)` (Go: `client.Project(id)`) reúne envio, estimativa, conciliação,
+resultados, versões de documentos e regras. `estimate` pode devolver o resultado existente:
+nesse caso, abra-o sem iniciar outra execução. Para uma nova análise, apresente o limite da
+estimativa e passe a cotação aprovada a `reconcile`.
+
+A chave continua presa à conta em que foi criada. Não use outra conta em um header para
+redirecioná-la. Para o fluxo de projetos, selecione `projects:read`, `projects:write`,
+`uploads:write`, `runs:read` e `runs:write`.
 
 ## Autorização e custos
 

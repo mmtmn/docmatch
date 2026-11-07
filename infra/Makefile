@@ -9,6 +9,7 @@ SHELL := /bin/bash
 
 INFRA_DIR  := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 REPO_ROOT  := $(abspath $(INFRA_DIR)/..)
+PYTHON     ?= python3
 LOCAL_BIN  := $(HOME)/.local/bin
 VENV_DIR   := $(HOME)/.local/share/docmatch/ansible-venv
 CACHE_DIR  := $(HOME)/.cache/docmatch
@@ -21,6 +22,7 @@ ANSIBLE_LINT_VERSION  := 26.10.1
 # shellcheck-py empacota o binário do shellcheck 0.11.0 como wheel (sem root, mesmo venv).
 SHELLCHECK_PY_VERSION := 0.11.0.1
 
+GOOS := $(shell uname -s | tr "[:upper:]" "[:lower:]")
 GOARCH := $(shell uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/')
 
 # Um único cache de providers para todos os worktrees (o provider aws passa de 600 MB).
@@ -53,9 +55,9 @@ setup-tflint: ## tflint $(TFLINT_VERSION) em ~/.local/bin, com verificação de 
 	@if tflint --version 2>/dev/null | grep -q "version $(TFLINT_VERSION)"; then echo "tflint $(TFLINT_VERSION) já instalado"; exit 0; fi
 	tmp="$$(mktemp -d)"; trap 'rm -rf "$$tmp"' EXIT
 	base="https://github.com/terraform-linters/tflint/releases/download/v$(TFLINT_VERSION)"
-	curl -fsSL -o "$$tmp/tflint.zip" "$$base/tflint_linux_$(GOARCH).zip"
+	curl -fsSL -o "$$tmp/tflint.zip" "$$base/tflint_$(GOOS)_$(GOARCH).zip"
 	curl -fsSL -o "$$tmp/checksums.txt" "$$base/checksums.txt"
-	(cd "$$tmp" && grep " tflint_linux_$(GOARCH).zip$$" checksums.txt | sed 's/tflint_linux_$(GOARCH).zip/tflint.zip/' | sha256sum -c -)
+	(cd "$$tmp" && grep " tflint_$(GOOS)_$(GOARCH).zip$$" checksums.txt | sed 's/tflint_$(GOOS)_$(GOARCH).zip/tflint.zip/' | sha256sum -c -)
 	mkdir -p "$(LOCAL_BIN)" && unzip -o -q "$$tmp/tflint.zip" -d "$$tmp" && install -m 0755 "$$tmp/tflint" "$(LOCAL_BIN)/tflint"
 	tflint --version
 	@tflint --init >/dev/null && echo "plugins do tflint instalados"
@@ -64,14 +66,14 @@ setup-packer: ## packer $(PACKER_VERSION) em ~/.local/bin, com verificação de 
 	@if packer version 2>/dev/null | grep -q "v$(PACKER_VERSION)"; then echo "packer $(PACKER_VERSION) já instalado"; exit 0; fi
 	tmp="$$(mktemp -d)"; trap 'rm -rf "$$tmp"' EXIT
 	base="https://releases.hashicorp.com/packer/$(PACKER_VERSION)"
-	curl -fsSL -o "$$tmp/packer.zip" "$$base/packer_$(PACKER_VERSION)_linux_$(GOARCH).zip"
+	curl -fsSL -o "$$tmp/packer.zip" "$$base/packer_$(PACKER_VERSION)_$(GOOS)_$(GOARCH).zip"
 	curl -fsSL -o "$$tmp/SHA256SUMS" "$$base/packer_$(PACKER_VERSION)_SHA256SUMS"
-	(cd "$$tmp" && grep " packer_$(PACKER_VERSION)_linux_$(GOARCH).zip$$" SHA256SUMS | sed 's/packer_$(PACKER_VERSION)_linux_$(GOARCH).zip/packer.zip/' | sha256sum -c -)
+	(cd "$$tmp" && grep " packer_$(PACKER_VERSION)_$(GOOS)_$(GOARCH).zip$$" SHA256SUMS | sed 's/packer_$(PACKER_VERSION)_$(GOOS)_$(GOARCH).zip/packer.zip/' | sha256sum -c -)
 	mkdir -p "$(LOCAL_BIN)" && unzip -o -q "$$tmp/packer.zip" -d "$$tmp" && install -m 0755 "$$tmp/packer" "$(LOCAL_BIN)/packer"
 	packer version
 
 setup-ansible: ## ansible-core, ansible-lint e shellcheck em um venv do usuário (sem root) e as collections fixadas
-	@if [ ! -x "$(VENV_DIR)/bin/pip" ]; then python3 -m venv "$(VENV_DIR)"; fi
+	@if [ ! -x "$(VENV_DIR)/bin/pip" ]; then $(PYTHON) -m venv "$(VENV_DIR)"; fi
 	"$(VENV_DIR)/bin/pip" install --quiet --disable-pip-version-check \
 	  "ansible-core==$(ANSIBLE_CORE_VERSION)" "ansible-lint==$(ANSIBLE_LINT_VERSION)" \
 	  "shellcheck-py==$(SHELLCHECK_PY_VERSION)" passlib
@@ -131,6 +133,7 @@ test-unit: ## testes sem AWS: função de borda do CloudFront (node --test) e re
 	@command -v node >/dev/null || { echo "erro: node não encontrado (>= 20, para node --test)"; exit 1; }
 	@node --test "$(INFRA_DIR)/tests/viewer-request.test.mjs"
 	@bash "$(INFRA_DIR)/tests/render-env.test.sh"
+	@bash "$(INFRA_DIR)/tests/runtime-permissions.test.sh"
 
 trivy: ## trivy config (misconfigurações em Terraform) com .trivyignore.yaml como linha de base
 	@cd "$(INFRA_DIR)" && trivy config --quiet --exit-code 1 --severity LOW,MEDIUM,HIGH,CRITICAL \

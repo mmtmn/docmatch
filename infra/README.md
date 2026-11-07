@@ -83,6 +83,11 @@ obrigatório pela própria política do grupo), `AWS_REGION=us-east-1`. O `aws s
 do snap falha às vezes: os scripts aceitam `ACCOUNT_ID=<12 dígitos>` e, sem ele, descobrem a conta
 por `aws iam get-user` e depois por `aws ec2 describe-security-groups`.
 
+No macOS, use GNU Make 4 ou mais recente (`gmake`) e uma versão de Python compatível
+com o Ansible fixado. Exemplo validado: `gmake -C infra setup PYTHON=python3.14`.
+As ferramentas são baixadas para o sistema e a arquitetura locais; os checks não
+criam recursos AWS.
+
 1. **Bucket de estado** (uma vez por conta):
    `infra/scripts/bootstrap-state.sh` cria `docmatch-tfstate-<conta>` (versionado, SSE-S3, acesso
    público bloqueado, só TLS, ciclo de vida das versões antigas) e grava `terraform/envs/*/backend.hcl`

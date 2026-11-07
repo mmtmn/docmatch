@@ -123,10 +123,34 @@ func WithOrgTx(ctx context.Context, b Beginner, orgID uuid.UUID, fn TxFunc) erro
 	if orgID == uuid.Nil {
 		return errors.New("db: org_id vazio")
 	}
+	if unit, ok := ctx.Value(orgUnitKey{}).(orgUnit); ok {
+		pool, samePool := b.(*pgxpool.Pool)
+		if !samePool || pool != unit.pool || orgID != unit.org {
+			return errors.New("db: transação composta não pode trocar de banco ou conta")
+		}
+		return fn(ctx, unit.tx)
+	}
 	return withTx(ctx, b, func(ctx context.Context, tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT set_config('app.org_id', $1, true)", orgID.String()); err != nil {
 			return fmt.Errorf("db: definir app.org_id: %w", err)
 		}
+		return fn(ctx, tx)
+	})
+}
+
+type orgUnitKey struct{}
+type orgUnit struct {
+	pool *pgxpool.Pool
+	org  uuid.UUID
+	tx   pgx.Tx
+}
+
+// WithOrgUnit composes service operations in one transaction. Nested WithOrgTx
+// calls join it; no credit hold, run or queue job commits before the whole unit.
+// Only the outermost owner commits or rolls back, including on process failure.
+func WithOrgUnit(ctx context.Context, pool *pgxpool.Pool, org uuid.UUID, fn TxFunc) error {
+	return WithOrgTx(ctx, pool, org, func(ctx context.Context, tx pgx.Tx) error {
+		ctx = context.WithValue(ctx, orgUnitKey{}, orgUnit{pool: pool, org: org, tx: tx})
 		return fn(ctx, tx)
 	})
 }

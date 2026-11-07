@@ -145,10 +145,50 @@ func (d *Deliverer) deliver(ctx context.Context, row sqlc.Outbox) error {
 	if d.sender == nil {
 		return d.retryLater(ctx, row, email.ErrNotConfigured)
 	}
+	if msg.Tag == email.TagPlatformReady || msg.Tag == email.TagPlatformConfirmation {
+		if err := d.deliverPlatformNotice(ctx, row, msg); err != nil {
+			return d.retryLater(ctx, row, err)
+		}
+		return nil
+	}
 	if err := d.sender.Send(ctx, row.ID.String(), msg); err != nil {
 		return d.retryLater(ctx, row, err)
 	}
 	return db.WithSystemTx(ctx, d.pool, func(ctx context.Context, tx pgx.Tx) error {
+		return sqlc.New(tx).MarkOutboxSent(ctx, row.ID)
+	})
+}
+
+// A queued notice must still have consent at delivery time. The exclusive
+// row lock serializes delivery with unsubscribe and other workers; cancellation covers sweeps
+// that loaded an outbox row before the recipient withdrew consent.
+func (d *Deliverer) deliverPlatformNotice(ctx context.Context, row sqlc.Outbox, msg email.Message) error {
+	return db.WithSystemTx(ctx, d.pool, func(ctx context.Context, tx pgx.Tx) error {
+		var active bool
+		query := `SELECT status='confirmed' AND expires_at>now() FROM platform_notices WHERE notification_outbox=$1 FOR UPDATE`
+		if msg.Tag == email.TagPlatformConfirmation {
+			query = `SELECT status='pending' AND confirmation_expires_at>now() AND expires_at>now() FROM platform_notices WHERE confirmation_outbox=$1 FOR UPDATE`
+		}
+		err := tx.QueryRow(ctx, query, row.ID).Scan(&active)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		// A sweep or another worker may already have delivered the loaded row.
+		var unsent bool
+		if err := tx.QueryRow(ctx, `SELECT sent_at IS NULL FROM outbox WHERE id=$1 FOR UPDATE`, row.ID).Scan(&unsent); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil
+			}
+			return err
+		}
+		if !unsent {
+			return nil
+		}
+		if active {
+			if err := d.sender.Send(ctx, row.ID.String(), msg); err != nil {
+				return err
+			}
+		}
 		return sqlc.New(tx).MarkOutboxSent(ctx, row.ID)
 	})
 }

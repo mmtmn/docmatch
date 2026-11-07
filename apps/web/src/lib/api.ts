@@ -3,41 +3,10 @@
 // surface as ApiError with the server's pt-BR message.
 import { apiUrl } from './env';
 import { t } from './i18n';
+import { selectedAccount } from './accountContext';
 
-export class ApiError extends Error {
-  readonly status: number;
-  readonly code: string;
-  readonly requestId: string | undefined;
-  readonly details: unknown;
-
-  constructor(
-    status: number,
-    code: string,
-    message: string,
-    requestId?: string,
-    details?: unknown,
-  ) {
-    super(message);
-    this.name = 'ApiError';
-    this.status = status;
-    this.code = code;
-    this.requestId = requestId;
-    this.details = details;
-  }
-}
-
-export interface RequestOptions {
-  method?: string;
-  responseType?: 'blob';
-  body?: unknown;
-  signal?: AbortSignal;
-  /** Adds an Idempotency-Key, required by the endpoints that spend tokens. */
-  idempotent?: boolean;
-  /** Reuse this key when retrying the same purchase. */
-  idempotencyKey?: string;
-  /** Skip the silent refresh on an expired access window (used by the refresh itself). */
-  noRefresh?: boolean;
-}
+import { ApiError, type RequestOptions } from './apiTypes';
+export { ApiError, type RequestOptions } from './apiTypes';
 
 interface Envelope {
   code?: string;
@@ -60,7 +29,10 @@ function newKey(): string {
 async function send<T>(path: string, opts: RequestOptions): Promise<T> {
   const url = apiUrl(path);
   if (!url) throw new ApiError(0, 'api_unconfigured', t('results.live_unconfigured'));
-  const headers: Record<string, string> = { Accept: 'application/json' };
+  const headers: Record<string, string> = {
+    Accept: opts.responseType === 'stream' ? 'text/event-stream' : 'application/json',
+  };
+  if (opts.orgId && !path.startsWith('/v1/auth/')) headers['X-Docmatch-Org'] = opts.orgId;
   let body: string | undefined;
   if (opts.body !== undefined) {
     headers['Content-Type'] = 'application/json';
@@ -84,6 +56,7 @@ async function send<T>(path: string, opts: RequestOptions): Promise<T> {
   }
   if (res.status === 204) return undefined as T;
   if (res.ok && opts.responseType === 'blob') return (await res.blob()) as T;
+  if (res.ok && opts.responseType === 'stream') return res.body as T;
   const text = await res.text();
   let data: unknown;
   if (text) {
@@ -110,6 +83,11 @@ async function send<T>(path: string, opts: RequestOptions): Promise<T> {
 let refreshing: Promise<unknown> | null = null;
 
 export async function api<T>(path: string, opts: RequestOptions = {}): Promise<T> {
+  // Capture once: a later account switch must not redirect a retry or refresh.
+  opts = {
+    ...opts,
+    orgId: opts.orgId === undefined ? (selectedAccount()?.orgId ?? null) : opts.orgId,
+  };
   if (opts.idempotent && !opts.idempotencyKey) opts = { ...opts, idempotencyKey: newKey() };
   try {
     return await send<T>(path, opts);

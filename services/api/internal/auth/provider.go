@@ -24,6 +24,7 @@ const (
 	googleIssuer2  = "accounts.google.com"
 	appleAuthURL   = "https://appleid.apple.com/auth/authorize"
 	appleTokenURL  = "https://appleid.apple.com/auth/token" //nolint:gosec // endpoint, not a credential
+	appleRevokeURL = "https://appleid.apple.com/auth/revoke"
 	appleJWKSURL   = "https://appleid.apple.com/auth/keys"
 	appleIssuer    = "https://appleid.apple.com"
 	// appleSecretTTL bounds the client secret JWT (Apple allows up to six
@@ -40,12 +41,14 @@ type Provider struct {
 	ClientID string
 	// ClientSecret returns the secret for the token exchange (static for
 	// Google; a freshly signed ES256 JWT for Apple).
-	ClientSecret func(now time.Time) (string, error)
-	AuthURL      string
-	TokenURL     string
-	Issuers      []string
-	Keys         crypto.KeyFunc
-	Scopes       []string
+	ClientSecret      func(now time.Time) (string, error)
+	appleClientSecret func(clientID string, now time.Time) (string, error)
+	RevokeURL         string
+	AuthURL           string
+	TokenURL          string
+	Issuers           []string
+	Keys              crypto.KeyFunc
+	Scopes            []string
 	// ResponseMode is "form_post" for Apple (required when scopes are asked).
 	ResponseMode string
 	// PKCE adds code_challenge/code_verifier (Google; Apple ignores PKCE).
@@ -82,7 +85,11 @@ func NewApple(teamID, clientID, keyID, privateKeyPEM string, client *http.Client
 	return &Provider{
 		Name: ProviderApple, ClientID: clientID,
 		ClientSecret: appleSecret(key, teamID, clientID, keyID, appleIssuer),
-		AuthURL:      appleAuthURL, TokenURL: appleTokenURL, Issuers: []string{appleIssuer},
+		appleClientSecret: func(id string, now time.Time) (string, error) {
+			return appleSecret(key, teamID, id, keyID, appleIssuer)(now)
+		},
+		RevokeURL: appleRevokeURL,
+		AuthURL:   appleAuthURL, TokenURL: appleTokenURL, Issuers: []string{appleIssuer},
 		Keys: crypto.NewJWKS(appleJWKSURL, client).Key, Scopes: []string{"name", "email"}, ResponseMode: "form_post", Client: client,
 	}, nil
 }
@@ -125,21 +132,29 @@ func pkceChallenge(verifier string) string {
 }
 
 type tokenResponse struct {
-	IDToken     string `json:"id_token"`
-	AccessToken string `json:"access_token"`
-	Error       string `json:"error"`
+	IDToken      string `json:"id_token"`
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	Error        string `json:"error"`
 }
 
 // Exchange trades the authorization code for the ID token.
 func (p *Provider) Exchange(ctx context.Context, code, codeVerifier, redirectURI string, now time.Time) (string, error) {
+	tr, err := p.exchangeTokens(ctx, code, codeVerifier, redirectURI, now)
+	return tr.IDToken, err
+}
+
+func (p *Provider) exchangeTokens(ctx context.Context, code, codeVerifier, redirectURI string, now time.Time) (tokenResponse, error) {
 	secret, err := p.ClientSecret(now)
 	if err != nil {
-		return "", fmt.Errorf("%w: client secret: %w", ErrProvider, err)
+		return tokenResponse{}, fmt.Errorf("%w: client secret: %w", ErrProvider, err)
 	}
 	form := url.Values{}
 	form.Set("grant_type", "authorization_code")
 	form.Set("code", code)
-	form.Set("redirect_uri", redirectURI)
+	if redirectURI != "" {
+		form.Set("redirect_uri", redirectURI)
+	}
 	form.Set("client_id", p.ClientID)
 	form.Set("client_secret", secret)
 	if p.PKCE {
@@ -149,24 +164,26 @@ func (p *Provider) Exchange(ctx context.Context, code, codeVerifier, redirectURI
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.TokenURL, strings.NewReader(form.Encode()))
 	if err != nil {
-		return "", fmt.Errorf("%w: %w", ErrProvider, err)
+		return tokenResponse{}, fmt.Errorf("%w: %w", ErrProvider, err)
 	}
 	req.Header.Set("Content-Type", formContentType)
 	req.Header.Set("Accept", acceptJSON)
-	resp, err := p.Client.Do(req)
+	httpClient := *p.Client
+	httpClient.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	resp, err := httpClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("%w: %w", ErrProvider, err)
+		return tokenResponse{}, fmt.Errorf("%w: %w", ErrProvider, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxTokenResponse))
 	if err != nil {
-		return "", fmt.Errorf("%w: %w", ErrProvider, err)
+		return tokenResponse{}, fmt.Errorf("%w: %w", ErrProvider, err)
 	}
 	var tr tokenResponse
 	if err := json.Unmarshal(body, &tr); err != nil || resp.StatusCode != http.StatusOK || tr.IDToken == "" {
-		return "", fmt.Errorf("%w: token endpoint status %d", ErrProvider, resp.StatusCode)
+		return tokenResponse{}, fmt.Errorf("%w: token endpoint status %d", ErrProvider, resp.StatusCode)
 	}
-	return tr.IDToken, nil
+	return tr, nil
 }
 
 // Verify checks the ID token (signature against the provider keys, issuer,

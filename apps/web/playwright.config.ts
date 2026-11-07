@@ -11,6 +11,13 @@ const localTLS = Boolean(process.env['DM_E2E_TLS_CERT'] && process.env['DM_E2E_T
 const baseURL = `${localTLS ? 'https' : 'http'}://${host}:${port}`;
 const browsers = (process.env['DM_E2E_BROWSERS'] ?? 'chromium').split(',').map((b) => b.trim());
 const isCI = Boolean(process.env['CI']);
+const suite = process.env['DM_E2E_SUITE'];
+const demoTests = [
+  '**/hero.spec.ts',
+  '**/keyboard.spec.ts',
+  '**/results.spec.ts',
+  '**/a11y.spec.ts',
+];
 
 const projects = [
   browsers.includes('chromium') && { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
@@ -20,6 +27,11 @@ const projects = [
 
 export default defineConfig({
   testDir: './e2e',
+  ...(suite === 'demo'
+    ? { testMatch: demoTests }
+    : suite === 'live'
+      ? { testIgnore: demoTests }
+      : {}),
   fullyParallel: true,
   forbidOnly: isCI,
   retries: isCI ? 1 : 0,

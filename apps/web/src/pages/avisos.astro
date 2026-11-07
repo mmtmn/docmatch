@@ -1,0 +1,14 @@
+---
+import Base from '../layouts/Base.astro';
+import { NoticeConsent } from '../components/site/NoticeConsent';
+import { t } from '../lib/i18n';
+---
+
+<Base title={t('platforms.consent_title')} noindex>
+  <main id="conteudo" class="container section prose">
+    <h1>{t('platforms.consent_title')}</h1>
+    <NoticeConsent client:only="react">
+      <p slot="fallback">{t('platforms.loading')}</p>
+    </NoticeConsent>
+  </main>
+</Base>

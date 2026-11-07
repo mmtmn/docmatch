@@ -20,6 +20,7 @@ import (
 	"github.com/mmtmn/docmatch/services/api/internal/account/accountpg"
 	"github.com/mmtmn/docmatch/services/api/internal/api"
 	"github.com/mmtmn/docmatch/services/api/internal/apikeys"
+	"github.com/mmtmn/docmatch/services/api/internal/applecredentials"
 	"github.com/mmtmn/docmatch/services/api/internal/audit"
 	"github.com/mmtmn/docmatch/services/api/internal/auth"
 	"github.com/mmtmn/docmatch/services/api/internal/billing"
@@ -31,17 +32,22 @@ import (
 	"github.com/mmtmn/docmatch/services/api/internal/db/pgstore"
 	"github.com/mmtmn/docmatch/services/api/internal/email"
 	"github.com/mmtmn/docmatch/services/api/internal/email/emailpg"
+	"github.com/mmtmn/docmatch/services/api/internal/extensions"
 	"github.com/mmtmn/docmatch/services/api/internal/geo"
 	"github.com/mmtmn/docmatch/services/api/internal/httpx"
 	"github.com/mmtmn/docmatch/services/api/internal/jobs"
 	"github.com/mmtmn/docmatch/services/api/internal/jobs/jobargs"
 	"github.com/mmtmn/docmatch/services/api/internal/limits"
 	"github.com/mmtmn/docmatch/services/api/internal/logx"
+	"github.com/mmtmn/docmatch/services/api/internal/platforms"
+	"github.com/mmtmn/docmatch/services/api/internal/projects"
 	"github.com/mmtmn/docmatch/services/api/internal/ratelimit"
 	"github.com/mmtmn/docmatch/services/api/internal/runs/apix"
 	"github.com/mmtmn/docmatch/services/api/internal/runs/wire"
 	"github.com/mmtmn/docmatch/services/api/internal/session"
 	"github.com/mmtmn/docmatch/services/api/internal/session/sessionpg"
+	"github.com/mmtmn/docmatch/services/api/internal/teams"
+	"github.com/mmtmn/docmatch/services/api/internal/tenancy"
 	"github.com/mmtmn/docmatch/services/api/internal/version"
 )
 
@@ -90,9 +96,27 @@ func run() error {
 	}
 	keysSvc := apikeys.New(cfg, catalog, pool)
 	workspaceSvc := customizations.New(cfg, catalog, pool)
+	tenants := tenancy.New(pool)
+	tenants.SetRollouts(cfg.Rollouts)
+	teamsSvc, err := teams.New(cfg, pool)
+	if err != nil {
+		return err
+	}
+	extensionsSvc, err := extensions.New(cfg, pool)
+	if err != nil {
+		return err
+	}
+	platformsSvc, err := platforms.New(cfg, pool)
+	if err != nil {
+		return err
+	}
+	baseResolver := extensionsSvc.Resolve(sessionResolver(pool), keysSvc.Resolve(sessionResolver(pool)))
+	projectsSvc := projects.New(pool, baseResolver, nil)
+	projectsSvc.SetRollout(cfg.Rollouts.Projects)
+	resolve := projectsSvc.Resolve(baseResolver)
 	// Pipeline route groups (uploads, estimates, runs, workflows, rules),
 	// identified by the session the middleware above authenticated.
-	sys, err := wire.New(ctx, wire.Options{Config: cfg, Logger: log, Pool: pool, Auth: keysSvc.Resolve(sessionResolver(pool))})
+	sys, err := wire.New(ctx, wire.Options{Config: cfg, Logger: log, Pool: pool, Auth: resolve})
 	if err != nil {
 		return err
 	}
@@ -113,11 +137,14 @@ func run() error {
 	}()
 
 	billingSvc := billing.New(cfg, sys.Pricing, catalog, pool)
+	projectsSvc.SetEngine(projects.Engine{Config: cfg, Estimates: sys.Estimates, Runs: sys.Runs, Rules: sys.Rules, Uploads: sys.Uploads})
 	handler := api.NewHandler(api.Deps{
 		Config: cfg, Logger: log, Limits: limits.Must(), DB: pool,
-		Mount:        append([]func(*httpx.Router){authSvc.Mount, accountSvc.Mount, billingSvc.Mount, keysSvc.Mount, workspaceSvc.Mount}, sys.Mount()...),
-		Middleware:   []httpx.Middleware{sessions.Middleware},
-		OriginExempt: auth.OriginExempt,
+		Mount:      append([]func(*httpx.Router){authSvc.Mount, accountSvc.Mount, billingSvc.Mount, keysSvc.Mount, workspaceSvc.Mount, tenants.Mount, projectsSvc.Mount, teamsSvc.Mount, extensionsSvc.Mount, platformsSvc.Mount}, sys.Mount()...),
+		Middleware: []httpx.Middleware{sessions.Middleware, extensionsSvc.Middleware, tenants.Middleware, extensionsSvc.RolloutMiddleware},
+		OriginExempt: func(r *http.Request) bool {
+			return auth.OriginExempt(r) || extensions.OriginExempt(r) || (cfg.IsDev() && sys.Local.OriginExempt(r))
+		},
 	})
 	srv := httpx.New(httpx.ServerOptions{Addr: cfg.APIListen, Handler: handler, Limits: limits.Must(), Logger: log})
 	if err := srv.Listen(); err != nil {
@@ -172,7 +199,7 @@ func authStack(cfg *config.Config, log *slog.Logger, pool *pgxpool.Pool) (*auth.
 	}
 	authSvc, err := auth.New(auth.Deps{
 		Store: store, Sessions: sessions, Keys: keys, Limits: limits.Must(), Audit: auditSvc,
-		Google: google, Apple: apple, EmailEnabled: emailErr == nil,
+		Google: google, Apple: apple, AppleTokens: applecredentials.New(pool, keys, nil, log), EmailEnabled: emailErr == nil,
 		GoogleAudiences: cfg.Auth.GoogleNativeClientIDs, AppleAudiences: cfg.Auth.AppleNativeClientIDs, DevLogin: cfg.Auth.DevLogin, DevGrant: devGrant,
 		PublicBaseURL: cfg.PublicBaseURL, APIBaseURL: cfg.APIBaseURL, Secure: secure,
 		Limiter: limiter, Lockout: ratelimit.NewLockout(policies.Lockout, nil), Policy: policies.Auth,
@@ -228,14 +255,31 @@ func sessionResolver(pool *pgxpool.Pool) apix.Resolver {
 			}
 			return apix.Principal{}, apix.ErrUnauthenticated
 		}
+		if !p.AccessExpiresAt.IsZero() && !time.Now().Before(p.AccessExpiresAt) {
+			return apix.Principal{}, apix.ErrSessionExpired
+		}
 		var plan string
+		var role string
 		err := db.WithOrgTx(r.Context(), pool, p.OrgID, func(ctx context.Context, tx pgx.Tx) error {
+			if apix.IsRecheck(ctx) {
+				var active bool
+				if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM sessions WHERE id=$1 AND user_id=$2 AND revoked_at IS NULL AND expires_at>now())`, p.SessionID, p.UserID).Scan(&active); err != nil {
+					return err
+				}
+				if !active {
+					return apix.ErrUnauthenticated
+				}
+			}
+			var err error
+			if role, err = tenancy.Check(ctx, tx, p.OrgID, p.UserID); err != nil {
+				return err
+			}
 			return tx.QueryRow(ctx, "SELECT plan_code FROM orgs WHERE id = $1", p.OrgID).Scan(&plan)
 		})
 		if err != nil {
 			return apix.Principal{}, fmt.Errorf("plano da organização: %w", err)
 		}
 		uid := p.UserID
-		return apix.Principal{OrgID: p.OrgID, UserID: &uid, Plan: plan}, nil
+		return apix.Principal{OrgID: p.OrgID, UserID: &uid, Plan: plan, MembershipRole: role}, nil
 	}
 }

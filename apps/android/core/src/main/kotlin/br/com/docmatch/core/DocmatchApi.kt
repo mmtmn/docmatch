@@ -19,7 +19,11 @@ import okio.source
 import java.io.InputStream
 import java.net.URLEncoder
 
-class DocmatchApi(private val http: HttpTransport) {
+class DocmatchApi(internal val transport: HttpTransport, val organizationId: String? = null, val projectId: String? = null) {
+    internal val http = AccountHttp(transport, organizationId, projectId)
+    fun inAccount(id: String) = DocmatchApi(transport, id)
+    fun inProject(id: String) = DocmatchApi(transport, organizationId, id)
+
     // ------------------------------------------------------------------ account and sign-in
 
     /** The sign-ins this deployment offers; none when the API cannot be reached. */
@@ -96,7 +100,7 @@ class DocmatchApi(private val http: HttpTransport) {
     // ------------------------------------------------------------------ uploads
 
     /** A document (with its SHA-256) or media (audio, video: a PUT, no hash) upload ticket. */
-    suspend fun createUpload(file: LocalFile, sha256: String?): UploadTicket =
+    suspend fun createUpload(file: LocalFile, sha256: String?, replacesId: String? = null): UploadTicket =
         http.call(
             "POST",
             "/v1/uploads",
@@ -106,6 +110,7 @@ class DocmatchApi(private val http: HttpTransport) {
                 put("size_bytes", file.size)
                 put("mime", file.mime)
                 if (sha256 != null) put("sha256", sha256)
+                if (replacesId != null) put("replaces_id", replacesId)
             },
             UploadTicket.serializer(),
         )!!

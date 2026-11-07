@@ -1,0 +1,22 @@
+[book]
+title = "Usar a docmatch"
+description = "De seus documentos ao resultado: projetos, equipes e conciliação."
+language = "pt-BR"
+src = "src"
+
+[output.html]
+theme = "theme"
+default-theme = "light"
+preferred-dark-theme = "navy"
+additional-css = ["theme/docmatch.css"]
+additional-js = ["theme/docmatch.js"]
+no-section-label = true
+site-url = "/docs/usar/"
+input-404 = "nao-encontrado.md"
+
+[output.html.playground]
+runnable = false
+
+[output.html.search]
+use-boolean-and = true
+expand = true

@@ -48,7 +48,7 @@ func ubuntu() *fake {
 	return &fake{
 		have: map[string]string{
 			"git": "git version 2.43.0", "make": "GNU Make 4.3", "cc": "cc (Ubuntu 13.3.0) 13.3.0", "go": "go version go1.22.2 linux/amd64",
-			"rustup": "rustup 1.29.2 (d8c92c676 2026-10-21)", "cargo": "cargo 1.93.0 (083ac5135 2025-12-15)", "node": "v22.23.4",
+			"rustup": "rustup 1.29.2 (d8c92c676 2026-10-21)", "cargo": "cargo 1.93.1 (083ac5135 2025-12-15)", "node": "v22.23.4",
 			"pnpm": "11.5.3", "docker": "", "openssl": "OpenSSL 3.0.13 30 Jan 2024", "curl": "curl 8.5.0 (x86_64-pc-linux-gnu)",
 			"apt-get": "", "sudo": "", "snap": "", "npm": "10.9.2", "systemctl": "",
 		},
@@ -133,7 +133,7 @@ func TestDetectUbuntuReady(t *testing.T) {
 	if !strings.Contains(s[Go].Detail, "1.22.2") || !strings.Contains(s[Go].Detail, "go1.27.3") || !strings.Contains(s[Go].Detail, "GOTOOLCHAIN=auto") {
 		t.Fatalf("Go antigo que baixa o do go.mod: %q", s[Go].Detail)
 	}
-	if s[Docker].Detail != "Compose 2.40.3" || s[Rust].Version != "1.93.0" || s[Node].Version != "22.23.4" {
+	if s[Docker].Detail != "Compose 2.40.3" || s[Rust].Version != "1.93.1" || s[Node].Version != "22.23.4" {
 		t.Fatalf("%+v %+v %+v", s[Docker], s[Rust], s[Node])
 	}
 	for _, d := range f.dirs {
@@ -164,7 +164,7 @@ func TestDetectProblems(t *testing.T) {
 	if s[Docker].State != Outdated || s[Docker].Reason != "no_compose" {
 		t.Fatalf("%+v", s[Docker])
 	}
-	if s[Rust].State != Outdated || s[Rust].Want != "1.93.0" {
+	if s[Rust].State != Outdated || s[Rust].Want != "1.93.1" {
 		t.Fatalf("cargo da distribuição antigo, sem rustup: %+v", s[Rust])
 	}
 	if s[Git].State != Missing || s[Git].Detail != "não encontrado" {
