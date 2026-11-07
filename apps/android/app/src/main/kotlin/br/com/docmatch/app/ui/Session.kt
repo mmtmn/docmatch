@@ -9,6 +9,9 @@ import br.com.docmatch.core.Docmatch
 import br.com.docmatch.core.Me
 import br.com.docmatch.core.MemorySecretStore
 import br.com.docmatch.core.SecretStore
+import br.com.docmatch.core.ProjectDraftJournal
+import br.com.docmatch.core.ProjectDraftEditor
+import br.com.docmatch.core.ProjectDraftScope
 import br.com.docmatch.core.organizations
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -53,8 +56,14 @@ data class ProjectWork(val dirty: Boolean = false, val busy: Boolean = false)
 class SessionViewModel(
     val dm: Docmatch,
     private val accountStore: SecretStore = MemorySecretStore(),
+    draftStore: SecretStore = MemorySecretStore(),
     private val cleanup: () -> Unit = {},
 ) : ViewModel() {
+    val projectDrafts = ProjectDraftJournal(draftStore)
+    fun draftEditor(projectId: String): ProjectDraftEditor? {
+        val me = (state.value as? SessionState.SignedIn)?.me ?: return null
+        return projectDrafts.editor(ProjectDraftScope(dm.baseUrl, me.user.id, accounts.value.selected ?: me.org.id, projectId))
+    }
     private val _state = MutableStateFlow<SessionState>(SessionState.Loading)
     val state: StateFlow<SessionState> = _state
 
@@ -97,6 +106,7 @@ class SessionViewModel(
 
     private fun clearAccounts() {
         generation += 1
+        projectDrafts.clear()
         accountStore.write(null)
         _accounts.value = AccountSelection()
         _projectWork.value = ProjectWork()
@@ -281,6 +291,7 @@ class SessionViewModel(
                             ?: available.items.firstOrNull()?.id
                     }
                 if (before.userId != available.userId || before.selected != selected) {
+                    if (before.userId != null && before.userId != available.userId) projectDrafts.clear()
                     cleanup()
                     _projectWork.value = ProjectWork()
                 }
@@ -296,6 +307,7 @@ class SessionViewModel(
                 rememberAccount()
                 SessionState.SignedIn(me)
             } else {
+                projectDrafts.clear()
                 accountStore.write(null)
                 _accounts.value = AccountSelection()
                 _projectWork.value = ProjectWork()

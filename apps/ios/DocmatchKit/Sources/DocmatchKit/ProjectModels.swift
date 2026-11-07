@@ -50,7 +50,7 @@ public struct AccountMemberships: Decodable, Sendable, Equatable {
     }
 }
 
-public struct ProjectSettings: Decodable, Sendable, Equatable {
+public struct ProjectSettings: Codable, Sendable, Equatable {
     public var rulesText: String
     public var useRules: Bool
     public var ruleIds: [String]

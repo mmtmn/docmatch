@@ -2,6 +2,9 @@ package br.com.docmatch.app.ui
 
 import br.com.docmatch.core.Docmatch
 import br.com.docmatch.core.MemorySecretStore
+import br.com.docmatch.core.ProjectDraftJournal
+import br.com.docmatch.core.ProjectDraftScope
+import br.com.docmatch.core.ProjectSettings
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -211,6 +214,74 @@ class ProjectModelsTest {
         delay(800)
         assertNull(server.takeRequest(100, TimeUnit.MILLISECONDS))
         model.discardPendingEdits()
+    }
+
+    @Test
+    fun recoveryRequiresReviewAgainAfterServerChanged() = runBlocking {
+        val journal = ProjectDraftJournal(MemorySecretStore())
+        val scope = ProjectDraftScope(server.url("/").toString(), "usr_1", "org_company", "prj_test")
+        assertTrue(journal.editor(scope).save(1, "Minha cópia", ProjectSettings(rulesText = "Conferir valores")))
+        answer(project)
+        answer("""{"items":[]}""")
+        answer("""{"items":[]}""")
+        val model = ProjectViewModel(client().inAccount("org_company"), "prj_test", journal.editor(scope))
+        until { !model.state.value.busy && model.state.value.project != null }
+        repeat(3) { server.takeRequest(1, TimeUnit.SECONDS) }
+        assertEquals("Janeiro", model.state.value.name)
+        assertFalse(model.state.value.dirty)
+        val copy = model.state.value.drafts.single()
+        assertNull(server.takeRequest(100, TimeUnit.MILLISECONDS))
+        val fresh = project.replace("\"version\":1", "\"version\":2").replace("Janeiro", "Nome atual")
+        answer(fresh)
+        model.restoreDraft(copy)
+        until { !model.state.value.busy }
+        assertEquals("Nome atual", model.state.value.name)
+        assertEquals("GET", server.takeRequest(1, TimeUnit.SECONDS)!!.method)
+        assertNull(server.takeRequest(100, TimeUnit.MILLISECONDS))
+        assertEquals(1, model.state.value.drafts.size)
+        answer(fresh)
+        answer(fresh.replace("\"version\":2", "\"version\":3").replace("Nome atual", "Minha cópia"))
+        model.restoreDraft(copy)
+        until { !model.state.value.busy }
+        server.takeRequest(1, TimeUnit.SECONDS)
+        val write = server.takeRequest(1, TimeUnit.SECONDS)!!
+        assertEquals("PATCH", write.method)
+        assertTrue(write.body.readUtf8().contains("\"version\":2"))
+        assertEquals("Minha cópia", model.state.value.name)
+        assertFalse(model.state.value.dirty)
+        assertTrue(journal.editor(scope).list().isEmpty())
+    }
+
+    @Test
+    fun offlineDraftReopensWithoutApplyingAndLogoutInvalidatesOldEditor() = runBlocking {
+        val store = MemorySecretStore()
+        val journal = ProjectDraftJournal(store)
+        val scope = ProjectDraftScope(server.url("/").toString(), "usr_1", "org_company", "prj_test")
+        answer(project)
+        answer("""{"items":[]}""")
+        answer("""{"items":[]}""")
+        val model = ProjectViewModel(client(), "prj_test", journal.editor(scope))
+        until { !model.state.value.busy && model.state.value.project != null }
+        repeat(3) { server.takeRequest(1, TimeUnit.SECONDS) }
+        answer("""{"code":"unavailable","message":"Sem conexão."}""", 503)
+        model.rename("Texto sem conexão")
+        model.retrySave()
+        until { model.state.value.save == ProjectSaveState.OFFLINE }
+        server.takeRequest(1, TimeUnit.SECONDS)
+        assertTrue(model.state.value.localSaved)
+        answer(project)
+        answer("""{"items":[]}""")
+        answer("""{"items":[]}""")
+        val reopened = ProjectViewModel(client(), "prj_test", ProjectDraftJournal(store).editor(scope))
+        until { !reopened.state.value.busy && reopened.state.value.project != null }
+        repeat(3) { server.takeRequest(1, TimeUnit.SECONDS) }
+        assertEquals("Janeiro", reopened.state.value.name)
+        assertEquals("Texto sem conexão", reopened.state.value.drafts.single().name)
+        assertNull(server.takeRequest(100, TimeUnit.MILLISECONDS))
+        journal.clear()
+        model.preserveDraft()
+        assertNull(store.read())
+        assertFalse(model.state.value.localSaved)
     }
 
     @Test

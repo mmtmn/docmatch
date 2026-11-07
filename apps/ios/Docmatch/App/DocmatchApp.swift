@@ -20,7 +20,8 @@ struct DocmatchApp: App {
                 aliasLoopback: config.aliasLoopback)
             texts = dm.texts
             _session = State(initialValue: SessionModel(
-                dm: dm, accountStore: KeychainSecretStore(account: "selected-account-v1")))
+                dm: dm, accountStore: KeychainSecretStore(account: "selected-account-v1"),
+                draftStore: KeychainSecretStore(account: "project-edits-v1")))
         } catch {
             fatalError("pt-BR.json inválido no pacote do app: \(error)")
         }

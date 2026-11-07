@@ -37,12 +37,15 @@ data class ProjectState(
     val analysis: ProjectAnalysis? = null,
     val openedRun: String? = null,
     val error: String? = null,
+    val drafts: List<ProjectDraft> = emptyList(),
+    val localSaved: Boolean = false,
+    val recoveryFailed: Boolean = false,
 ) {
     val canEdit
         get() = project?.capabilities?.reconcile == true && project.archivedAt == null
 }
 
-class ProjectViewModel(dm: Docmatch, val id: String) : ViewModel() {
+class ProjectViewModel(dm: Docmatch, val id: String, private val recovery: ProjectDraftEditor? = null) : ViewModel() {
     val dm = dm.inProject(id)
     private val _state = MutableStateFlow(ProjectState())
     val state: StateFlow<ProjectState> = _state
@@ -50,6 +53,8 @@ class ProjectViewModel(dm: Docmatch, val id: String) : ViewModel() {
     private var debounce: Job? = null
     private var approvalKey = ""
     private var reprocessReason = ""
+    private var recoveryDebounce: Job? = null
+    private val restoredDrafts = mutableListOf<ProjectDraft>()
 
     init {
         load()
@@ -62,6 +67,7 @@ class ProjectViewModel(dm: Docmatch, val id: String) : ViewModel() {
                 state.value.dirty && !discardEdits
         )
             return
+        if (discardEdits) preserveDraft()
         viewModelScope.launch {
             _state.update { it.copy(busy = true, error = null) }
             try {
@@ -76,6 +82,7 @@ class ProjectViewModel(dm: Docmatch, val id: String) : ViewModel() {
                         runs = runs.items,
                         nextRuns = runs.nextCursor,
                         events = events,
+                        drafts = if (item.capabilities.reconcile && item.archivedAt == null) recovery?.list().orEmpty() else emptyList(),
                     )
             } catch (e: ApiException) {
                 fail(e)
@@ -116,12 +123,15 @@ class ProjectViewModel(dm: Docmatch, val id: String) : ViewModel() {
     fun discardPendingEdits() {
         if (state.value.save == ProjectSaveState.SAVING) return
         debounce?.cancel()
+        recoveryDebounce?.cancel()
+        recovery?.remove()
         _state.update {
             it.copy(
                 dirty = false,
                 save = ProjectSaveState.SAVED,
                 name = it.project?.name.orEmpty(),
                 settings = it.project?.settings ?: ProjectSettings(),
+                localSaved = false,
             )
         }
     }
@@ -172,6 +182,8 @@ class ProjectViewModel(dm: Docmatch, val id: String) : ViewModel() {
                         else ProjectSaveState.PENDING,
                 )
         }
+        recoveryDebounce?.cancel()
+        recoveryDebounce = viewModelScope.launch { delay(100); preserveDraft() }
         if (state.value.save == ProjectSaveState.CONFLICT) return
         debounce?.cancel()
         debounce = viewModelScope.launch {
@@ -187,6 +199,7 @@ class ProjectViewModel(dm: Docmatch, val id: String) : ViewModel() {
 
     private suspend fun flush(): Boolean = writes.withLock {
         if (state.value.save == ProjectSaveState.CONFLICT) return@withLock false
+        preserveDraft()
         while (state.value.dirty) {
             val sent = state.value
             val project = sent.project ?: return@withLock false
@@ -208,6 +221,13 @@ class ProjectViewModel(dm: Docmatch, val id: String) : ViewModel() {
                         error = null,
                     )
                 }
+                if (state.value.dirty) preserveDraft()
+                else {
+                    recovery?.remove()
+                    restoredDrafts.forEach { recovery?.remove(it) }
+                    restoredDrafts.clear()
+                    _state.update { it.copy(drafts = recovery?.list().orEmpty(), localSaved = false) }
+                }
             } catch (e: ApiException) {
                 fail(e)
                 _state.update {
@@ -221,6 +241,42 @@ class ProjectViewModel(dm: Docmatch, val id: String) : ViewModel() {
             }
         }
         true
+    }
+
+    fun preserveDraft() {
+        recoveryDebounce?.cancel()
+        recoveryDebounce = null
+        val current = state.value
+        val project = current.project ?: return
+        val editor = recovery ?: return
+        if (!current.dirty) return
+        val saved = editor.save(project.version, current.name, current.settings)
+        _state.update { it.copy(localSaved = saved, recoveryFailed = !saved) }
+    }
+
+    fun restoreDraft(draft: ProjectDraft) {
+        val current = state.value
+        if (current.busy || current.dirty || !current.canEdit || current.save == ProjectSaveState.SAVING) return
+        _state.update { it.copy(busy = true, error = null) }
+        viewModelScope.launch {
+            try {
+                val fresh = dm.api.project(id)
+                if (fresh.version != current.project?.version) {
+                    _state.update { it.copy(project = fresh, name = fresh.name, settings = fresh.settings ?: ProjectSettings(), error = dm.texts.t("projects.recovery_refresh")) }
+                    return@launch
+                }
+                restoredDrafts.add(draft)
+                _state.update { it.copy(name = draft.name, settings = draft.settings, dirty = true, save = ProjectSaveState.PENDING) }
+                flush()
+            } catch (e: ApiException) { fail(e) }
+            finally { _state.update { it.copy(busy = false) } }
+        }
+    }
+
+    fun discardDraft(draft: ProjectDraft) {
+        if (state.value.busy || state.value.save == ProjectSaveState.SAVING) return
+        val removed = recovery?.remove(draft) == true
+        _state.update { it.copy(drafts = recovery?.list().orEmpty(), recoveryFailed = !removed) }
     }
 
     fun upload(files: List<LocalFile>, replacesId: String? = null) = operation {

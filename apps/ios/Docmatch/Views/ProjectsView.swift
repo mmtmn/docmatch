@@ -105,10 +105,12 @@ struct ProjectView: View {
     @State private var result: String?
     @State private var discard = false
     @State private var managementAction: String?
+    @State private var recoveringDraft: ProjectDraft?
+    @State private var discardingDraft: ProjectDraft?
     @Environment(\.texts) private var texts
     init(dm: Docmatch, id: String, accountName: String, session: SessionModel) {
         self.session = session
-        _model = State(initialValue: ProjectModel(dm: dm, id: id))
+        _model = State(initialValue: ProjectModel(dm: dm, id: id, recovery: session.draftEditor(projectID: id)))
         self.accountName = accountName
     }
     var body: some View {
@@ -119,8 +121,11 @@ struct ProjectView: View {
                     .title2.bold()
                 ).dmField().disabled(!model.canEdit || model.busy)
                 Text(saveText).font(.caption).accessibilityAddTraits(.updatesFrequently)
+                if model.canEdit && !model.drafts.isEmpty { recoveryCopies(project) }
+                if model.recoveryFailed { DmNotice(message: texts.t("projects.recovery_unavailable"), error: true) }
+                if model.localSaved && model.saveState == .offline { DmNotice(message: texts.t("projects.recovery_stored")) }
                 if model.saveState == .conflict {
-                    DmNotice(message: texts.t("projects.conflict_help"), error: true)
+                    DmNotice(message: texts.t(model.localSaved ? "projects.conflict_recovery" : "projects.conflict_help"), error: true)
                     Button(texts.t("projects.reload")) { discard = true }
                 } else if model.saveState == .offline {
                     Button(texts.t("projects.retry_save")) { Task { await model.flush() } }
@@ -184,10 +189,13 @@ struct ProjectView: View {
                 }.disabled(model.busy || model.saveState == .saving)
             }
         }
-        .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await model.validateAccess() } } }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await model.validateAccess() } }
+            else { model.preserveDraft() }
+        }
         .onChange(of: model.hasUnsavedChanges) { _, value in session.hasUnsavedProjectChanges = value }
         .onChange(of: model.busy) { _, value in session.hasActiveProjectWork = value }
-        .onDisappear { session.hasActiveProjectWork = false }
+        .onDisappear { model.preserveDraft(); session.hasActiveProjectWork = false }
         .confirmationDialog(texts.t("projects.leave_unsaved"), isPresented: $leaving, titleVisibility: .visible) {
             Button(texts.t("projects.discard_and_continue"), role: .destructive) {
                 model.discardPendingEdits()
@@ -213,8 +221,22 @@ struct ProjectView: View {
                 removing = nil
             }
         }
-        .confirmationDialog(texts.t("projects.conflict_help"), isPresented: $discard, titleVisibility: .visible) {
-            Button(texts.t("projects.reload"), role: .destructive) { Task { await model.load(discardEdits: true) } }
+        .confirmationDialog(texts.t(model.localSaved ? "projects.conflict_recovery" : "projects.conflict_help"), isPresented: $discard, titleVisibility: .visible) {
+            Button(texts.t("projects.reload")) { Task { await model.load(discardEdits: true) } }
+        }
+        .confirmationDialog(texts.t("projects.recovery_confirm"),
+            isPresented: Binding(get: { recoveringDraft != nil }, set: { if !$0 { recoveringDraft = nil } }), titleVisibility: .visible) {
+            Button(texts.t("common.confirm")) {
+                if let draft = recoveringDraft { Task { await model.restoreDraft(draft) } }
+                recoveringDraft = nil
+            }
+        }
+        .confirmationDialog(texts.t("projects.recovery_discard_confirm"),
+            isPresented: Binding(get: { discardingDraft != nil }, set: { if !$0 { discardingDraft = nil } }), titleVisibility: .visible) {
+            Button(texts.t("projects.recovery_discard"), role: .destructive) {
+                if let draft = discardingDraft { model.discardDraft(draft) }
+                discardingDraft = nil
+            }
         }
         .sheet(isPresented: Binding(get: { model.analysis?.quote != nil }, set: { if !$0 { model.dismissApproval() } }))
         {
@@ -253,6 +275,34 @@ struct ProjectView: View {
         .navigationDestination(isPresented: Binding(get: { result != nil }, set: { if !$0 { result = nil } })) {
             if let result { RunView(dm: model.dm, runId: result) }
         }
+    }
+    private func recoveryCopies(_ project: SavedProject) -> some View {
+        DisclosureGroup(texts.t("projects.recovery_title", ["count": model.drafts.count])) {
+            Text(texts.t("projects.recovery_help")).font(.caption)
+            ForEach(model.drafts) { draft in
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(Date(timeIntervalSince1970: Double(draft.savedAt) / 1000).formatted(date: .abbreviated, time: .shortened)).font(.caption)
+                    if draft.baseVersion != project.version { Text(texts.t("projects.recovery_changed")) }
+                    Text(texts.t("projects.recovery_server")).bold()
+                    Text(project.name).textSelection(.enabled)
+                    Text(recoverySettings(project.settings ?? ProjectSettings())).textSelection(.enabled)
+                    Text(texts.t("projects.recovery_local")).bold()
+                    Text(draft.name).textSelection(.enabled)
+                    Text(recoverySettings(draft.settings)).textSelection(.enabled)
+                    Button(texts.t("projects.recovery_apply")) { recoveringDraft = draft }
+                    Button(texts.t("projects.recovery_discard")) { discardingDraft = draft }
+                }.disabled(model.busy || model.hasUnsavedChanges)
+                Divider()
+            }
+        }
+    }
+    private func recoverySettings(_ value: ProjectSettings) -> String {
+        var lines = [value.rulesText.isEmpty ? texts.t("projects.recovery_no_rules") : value.rulesText,
+         texts.t("form.use_rules") + ": " + texts.t(value.useRules ? "projects.recovery_on" : "projects.recovery_off"),
+         texts.t("form.web_search") + ": " + texts.t(value.webSearch ? "projects.recovery_on" : "projects.recovery_off"),
+         texts.t("projects.recovery_selected_rules", ["count": value.ruleIds.count])]
+        if !value.llmMode.isEmpty { lines.append(texts.t("projects.recovery_mode", ["mode": value.llmMode])) }
+        return lines.joined(separator: "\n")
     }
     private var saveText: String {
         switch model.saveState {

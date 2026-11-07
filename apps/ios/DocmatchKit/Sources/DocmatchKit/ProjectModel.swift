@@ -64,6 +64,9 @@ public final class ProjectModel {
     public private(set) var openedRun: String?
     public private(set) var deleted = false
     public private(set) var nextRuns: String?
+    public private(set) var drafts: [ProjectDraft] = []
+    public private(set) var localSaved = false
+    public private(set) var recoveryFailed = false
     public var reprocessReason = ""
     @ObservationIgnored public let dm: Docmatch
     @ObservationIgnored public let id: String
@@ -71,15 +74,20 @@ public final class ProjectModel {
     @ObservationIgnored private var saving = false
     @ObservationIgnored private var dirty = false
     @ObservationIgnored private var approvalKey = ""
+    @ObservationIgnored private let recovery: ProjectDraftEditor?
+    @ObservationIgnored private var recoveryTask: Task<Void, Never>?
+    @ObservationIgnored private var restoredDrafts: [ProjectDraft] = []
 
-    public init(dm: Docmatch, id: String) {
+    public init(dm: Docmatch, id: String, recovery: ProjectDraftEditor? = nil) {
         self.dm = dm.inProject(id)
         self.id = id
+        self.recovery = recovery
     }
     public var hasUnsavedChanges: Bool { dirty || saving }
     public var canEdit: Bool { project?.capabilities.reconcile == true && project?.archivedAt == nil }
     public func load(discardEdits: Bool = false) async {
         guard !busy, !saving, !dirty || discardEdits else { return }
+        if discardEdits { preserveDraft() }
         busy = true
         error = nil
         defer { busy = false }
@@ -90,6 +98,8 @@ public final class ProjectModel {
             settings = item.settings ?? ProjectSettings()
             dirty = false
             saveState = .saved
+            localSaved = false
+            drafts = canEdit ? recovery?.list() ?? [] : []
             if item.capabilities.readResults {
                 let page = try await dm.api.runs()
                 runs = page.items
@@ -126,6 +136,9 @@ public final class ProjectModel {
         guard !saving else { return }
         saveTask?.cancel()
         saveTask = nil
+        recoveryTask?.cancel()
+        _ = recovery?.remove()
+        localSaved = false
         dirty = false
         saveState = .saved
         name = project?.name ?? ""
@@ -142,6 +155,11 @@ public final class ProjectModel {
     private func changed() {
         guard canEdit else { return }
         dirty = true
+        recoveryTask?.cancel()
+        recoveryTask = Task { [weak self] in
+            do { try await Task.sleep(nanoseconds: 100_000_000) } catch { return }
+            self?.preserveDraft()
+        }
         analysis = nil
         if saveState == .conflict { return }
         saveState = .pending
@@ -157,6 +175,7 @@ public final class ProjectModel {
     @discardableResult public func flush() async -> Bool {
         guard !saving, saveState != .conflict else { return false }
         saving = true
+        preserveDraft()
         defer { saving = false }
         while dirty {
             guard let current = project else { return false }
@@ -169,6 +188,14 @@ public final class ProjectModel {
                 project = saved
                 dirty = name != sentName || settings != sentSettings
                 saveState = dirty ? .pending : .saved
+                if dirty { preserveDraft() }
+                else {
+                    _ = recovery?.remove()
+                    for draft in restoredDrafts { _ = recovery?.remove(draft) }
+                    restoredDrafts = []
+                    drafts = recovery?.list() ?? []
+                    localSaved = false
+                }
                 error = nil
             } catch {
                 fail(error)
@@ -177,6 +204,40 @@ public final class ProjectModel {
             }
         }
         return true
+    }
+
+    public func preserveDraft() {
+        recoveryTask?.cancel()
+        recoveryTask = nil
+        guard dirty, let project, let recovery else { return }
+        localSaved = recovery.save(version: project.version, name: name, settings: settings)
+        recoveryFailed = !localSaved
+    }
+
+    /// Called only after reviewing the displayed server/local copies and confirming.
+    public func restoreDraft(_ draft: ProjectDraft) async {
+        guard !busy, !saving, !dirty, canEdit, let current = project else { return }
+        busy = true
+        error = nil
+        do {
+            let fresh = try await dm.api.project(id)
+            guard fresh.version == current.version else {
+                project = fresh; name = fresh.name; settings = fresh.settings ?? ProjectSettings()
+                error = dm.texts.t("projects.recovery_refresh")
+                busy = false
+                return
+            }
+            restoredDrafts.append(draft)
+            name = draft.name; settings = draft.settings; dirty = true; saveState = .pending
+            busy = false
+            _ = await flush()
+        } catch { busy = false; fail(error) }
+    }
+
+    public func discardDraft(_ draft: ProjectDraft) {
+        guard !busy, !saving else { return }
+        recoveryFailed = recovery?.remove(draft) != true
+        drafts = recovery?.list() ?? []
     }
     public func add(_ picked: [PickedFile], replacesID: String? = nil) async {
         guard !busy else { return }

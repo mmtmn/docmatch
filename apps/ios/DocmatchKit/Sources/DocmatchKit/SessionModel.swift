@@ -45,6 +45,13 @@ public final class SessionModel {
     @ObservationIgnored public let dm: Docmatch
     @ObservationIgnored private let cleanup: @Sendable () -> Void
     @ObservationIgnored private let accountStore: any SecretStore
+    @ObservationIgnored public let projectDrafts: ProjectDraftJournal
+
+    public func draftEditor(projectID: String) -> ProjectDraftEditor? {
+        guard case .signedIn(let me) = state else { return nil }
+        return projectDrafts.editor(scope: ProjectDraftScope(origin: dm.baseURL.absoluteString,
+            userID: me.user.id, accountID: accountID ?? me.org.id, projectID: projectID))
+    }
 
     private struct RememberedAccount: Codable {
         let origin: String
@@ -69,10 +76,12 @@ public final class SessionModel {
     /// `cleanup` removes what a session leaves on the device (exported reports) when it ends.
     public init(
         dm: Docmatch, accountStore: any SecretStore = MemorySecretStore(),
+        draftStore: any SecretStore = MemorySecretStore(),
         cleanup: @escaping @Sendable () -> Void = { RunModel.clearExports() }
     ) {
         self.dm = dm
         self.accountStore = accountStore
+        projectDrafts = ProjectDraftJournal(store: draftStore)
         self.cleanup = cleanup
         // Revoked from another device's account page (or ended on the server): back to sign-in
         // with the API's own message, wherever the user was.
@@ -159,6 +168,7 @@ public final class SessionModel {
     }
 
     private func clearAccounts() {
+        projectDrafts.clear()
         accountStore.write(nil)
         accounts = []
         accountID = nil
@@ -273,6 +283,7 @@ public final class SessionModel {
                 let available = try await dm.api.organizations()
                 guard generation == self.generation else { return state }
                 if identityID != available.userId {
+                    if identityID != nil { projectDrafts.clear() }
                     accountID = rememberedAccount(for: available.userId)
                     cleanup()
                 }

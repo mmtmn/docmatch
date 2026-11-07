@@ -35,7 +35,7 @@ fun DocmatchRoot(dm: Docmatch, invitationUrl: String? = null, onInvitationClosed
         DocmatchTheme {
             val app = LocalContext.current.applicationContext
             val session: SessionViewModel = viewModel {
-                SessionViewModel(dm, KeystoreSecretStore(app, "selected-account-v1")) { Exports.clear(app) }
+                SessionViewModel(dm, KeystoreSecretStore(app, "selected-account-v1"), KeystoreSecretStore(app, "project-edits-v1")) { Exports.clear(app) }
             }
             val token =
                 remember(invitationUrl) {
@@ -233,7 +233,7 @@ private fun SignedIn(
             composable("project/{id}") { back ->
                 val id = back.arguments?.getString("id").orEmpty()
                 val vm: ProjectViewModel =
-                    viewModel(key = "project-$id") { ProjectViewModel(dm, id) }
+                    viewModel(key = "project-$id") { ProjectViewModel(dm, id, session.draftEditor(id)) }
                 ProjectScreen(
                     vm,
                     accounts.current?.let { accountName(it) }.orEmpty(),

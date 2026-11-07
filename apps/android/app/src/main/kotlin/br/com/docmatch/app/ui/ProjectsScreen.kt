@@ -189,6 +189,9 @@ fun ProjectScreen(
     var section by rememberSaveable { mutableStateOf("documents") }
     var showVersions by rememberSaveable { mutableStateOf(false) }
     var filesExpanded by rememberSaveable { mutableStateOf(false) }
+    var recoveryExpanded by rememberSaveable { mutableStateOf(false) }
+    var recoveringDraft by remember { mutableStateOf<ProjectDraft?>(null) }
+    var discardingDraft by remember { mutableStateOf<ProjectDraft?>(null) }
     val activeDocuments =
         s.project?.documents.orEmpty().filter {
             it.removedAt == null && it.pendingReplacementId == null
@@ -214,7 +217,18 @@ fun ProjectScreen(
     LaunchedEffect(s.dirty, s.busy, s.save) {
         session.projectWork(s.dirty, s.busy || s.save == ProjectSaveState.SAVING)
     }
-    DisposableEffect(Unit) { onDispose { session.projectWork(false, false) } }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, vm) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) vm.preserveDraft()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            vm.preserveDraft()
+            session.projectWork(false, false)
+        }
+    }
     LaunchedEffect(s.openedRun) {
         s.openedRun?.let {
             vm.openedRunShown()
@@ -238,10 +252,22 @@ fun ProjectScreen(
             onBack()
         }
     if (reload)
-        ProjectConfirmation(t("projects.conflict_help"), { reload = false }) {
+        ProjectConfirmation(t(if (s.localSaved) "projects.conflict_recovery" else "projects.conflict_help"), { reload = false }) {
             reload = false
             vm.load(discardEdits = true)
         }
+    recoveringDraft?.let { draft ->
+        ProjectConfirmation(t("projects.recovery_confirm"), { recoveringDraft = null }) {
+            recoveringDraft = null
+            vm.restoreDraft(draft)
+        }
+    }
+    discardingDraft?.let { draft ->
+        ProjectConfirmation(t("projects.recovery_discard_confirm"), { discardingDraft = null }) {
+            discardingDraft = null
+            vm.discardDraft(draft)
+        }
+    }
     removing?.let { doc ->
         ProjectConfirmation(
             t("projects.remove_document_confirm", mapOf("name" to doc.fileName)),
@@ -316,12 +342,46 @@ fun ProjectScreen(
                         modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                     )
                     if (s.save == ProjectSaveState.CONFLICT) {
-                        DmNotice(t("projects.conflict_help"), true)
+                        DmNotice(t(if (s.localSaved) "projects.conflict_recovery" else "projects.conflict_help"), true)
                         TextButton({ reload = true }) { Text(t("projects.reload")) }
                     }
                     if (s.save == ProjectSaveState.OFFLINE)
                         TextButton(vm::retrySave) { Text(t("projects.retry_save")) }
+                    if (s.localSaved && s.save in listOf(ProjectSaveState.OFFLINE, ProjectSaveState.CONFLICT))
+                        DmNotice(t("projects.recovery_stored"))
+                    if (s.recoveryFailed) DmNotice(t("projects.recovery_unavailable"), true)
                     if (!project.capabilities.readResults) DmNotice(t("projects.upload_permission"))
+                }
+                if (s.drafts.isNotEmpty()) item {
+                    DmCard {
+                        Column(Modifier.padding(DmSize.space2), verticalArrangement = Arrangement.spacedBy(DmSize.space2)) {
+                            val disclosure = t(if (recoveryExpanded) "common.expanded" else "common.collapsed")
+                            TextButton(
+                                { recoveryExpanded = !recoveryExpanded },
+                                modifier = Modifier.semantics { stateDescription = disclosure },
+                            ) { Text(t("projects.recovery_title", mapOf("count" to s.drafts.size))) }
+                            if (recoveryExpanded) {
+                                Text(t("projects.recovery_help"))
+                                s.drafts.forEach { draft ->
+                                    Text(t("projects.recovery_date", mapOf("date" to Format.dateTime(java.time.Instant.ofEpochMilli(draft.savedAt).toString()))))
+                                    if (draft.baseVersion != project.version) Text(t("projects.recovery_changed"))
+                                    Text(t("projects.recovery_server"), style = MaterialTheme.typography.titleSmall)
+                                    Text(project.name)
+                                    ProjectRecoverySettings(project.settings ?: ProjectSettings())
+                                    Text(t("projects.recovery_local"), style = MaterialTheme.typography.titleSmall)
+                                    Text(draft.name)
+                                    ProjectRecoverySettings(draft.settings)
+                                    TextButton({ recoveringDraft = draft }, enabled = s.canEdit && !s.busy && !s.dirty && s.save != ProjectSaveState.SAVING) {
+                                        Text(t("projects.recovery_apply"))
+                                    }
+                                    TextButton({ discardingDraft = draft }, enabled = !s.busy && s.save != ProjectSaveState.SAVING) {
+                                        Text(t("projects.recovery_discard"))
+                                    }
+                                    HorizontalDivider()
+                                }
+                            }
+                        }
+                    }
                 }
                 item {
                     val tabs =
@@ -595,6 +655,15 @@ fun ProjectScreen(
             }
         }
     }
+}
+
+@Composable
+private fun ProjectRecoverySettings(value: ProjectSettings) {
+    Text(value.rulesText.ifEmpty { t("projects.recovery_no_rules") })
+    Text(t("form.use_rules") + ": " + t(if (value.useRules) "projects.recovery_on" else "projects.recovery_off"))
+    Text(t("form.web_search") + ": " + t(if (value.webSearch) "projects.recovery_on" else "projects.recovery_off"))
+    Text(t("projects.recovery_selected_rules", mapOf("count" to value.ruleIds.size)))
+    if (value.llmMode.isNotEmpty()) Text(t("projects.recovery_mode", mapOf("mode" to value.llmMode)))
 }
 
 @Composable
