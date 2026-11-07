@@ -59,15 +59,15 @@ distribution_id="$(terraform -chdir="$env_dir" output -raw cloudfront_distributi
 [[ -n "$bucket" && -n "$distribution_id" ]] || dm_die "outputs do Terraform vazios; o ambiente já foi aplicado?"
 dm_log "ambiente $env: bucket $bucket, distribuição $distribution_id"
 
-extra=()
-[[ $dry_run -eq 1 ]] && extra+=(--dryrun)
+sync=(aws s3 sync)
+[[ $dry_run -eq 1 ]] && sync+=(--dryrun)
 
 if [[ -d "$dist/_astro" ]]; then
-  aws s3 sync "$dist/_astro" "s3://$bucket/_astro" "${extra[@]}" \
+  "${sync[@]}" "$dist/_astro" "s3://$bucket/_astro" \
     --cache-control "public, max-age=31536000, immutable" --size-only --no-progress | cat
 fi
 # Installer and incident status pages have separate publishers; never delete them here.
-aws s3 sync "$dist" "s3://$bucket" "${extra[@]}" --exclude "_astro/*" --exclude "install/*" --exclude "status/*" --delete --exact-timestamps \
+"${sync[@]}" "$dist" "s3://$bucket" --exclude "_astro/*" --exclude "install/*" --exclude "status/*" --delete --exact-timestamps \
   --cache-control "public, max-age=300, must-revalidate" --no-progress | cat
 
 if [[ $invalidate -eq 1 && $dry_run -eq 0 ]]; then
