@@ -14,6 +14,7 @@ import (
 )
 
 func (s *Service) Mount(r *httpx.Router) {
+	s.mountIntegrationInterests(r)
 	r.HandleFunc(http.MethodGet, "/v1/platforms", httpx.BodyNone, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		apix.WriteJSON(w, http.StatusOK, map[string]any{"items": s.catalog})

@@ -80,6 +80,38 @@ tags:
     description: Planos, saúde e versão. Sem autenticação.
 
 paths:
+  /integration-interests:
+    post:
+      operationId: recordIntegrationInterest
+      summary: Registrar interesse em uma integração futura.
+      description: Não conecta serviços nem inscreve em e-mails. Deduplica por usuário autenticado ou identificador aleatório do navegador; não armazena IP. Retenção de 365 dias.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [integration, visitor_id]
+              properties:
+                integration: {type: string, enum: [conta-azul, omie, totvs, sap, quickbooks, xero, projuris, astrea, clio, docusign]}
+                visitor_id: {type: string, format: uuid}
+      responses:
+        "202":
+          description: Interesse registrado; integração ainda indisponível.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [accepted, status]
+                properties:
+                  accepted: {type: boolean, const: true}
+                  status: {type: string, const: coming_soon}
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          description: Limite de tentativas por minuto atingido.
   /platforms:
     get:
       operationId: listPlatforms

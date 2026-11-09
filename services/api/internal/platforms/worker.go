@@ -86,6 +86,7 @@ func (s *Service) Cleanup(ctx context.Context) error {
 	return db.WithSystemTx(ctx, s.pool, func(ctx context.Context, tx pgx.Tx) error {
 		for _, query := range []string{
 			`UPDATE outbox SET sent_at=now() WHERE sent_at IS NULL AND id IN(SELECT notification_outbox FROM platform_notices WHERE expires_at<now() OR status='unsubscribed' LIMIT 1000)`,
+			`DELETE FROM integration_interests WHERE (integration_id,subject_hash) IN (SELECT integration_id,subject_hash FROM integration_interests WHERE updated_at<now()-interval '365 days' LIMIT 1000)`,
 			`DELETE FROM platform_notices WHERE id IN(SELECT id FROM platform_notices WHERE expires_at<now() LIMIT 1000)`,
 			`DELETE FROM platform_notice_sends WHERE id IN(SELECT id FROM platform_notice_sends WHERE created_at<now()-interval '31 days' LIMIT 1000)`,
 			`DELETE FROM outbox WHERE id IN(SELECT id FROM outbox WHERE payload->>'tag'='platform_confirmation' AND created_at<now()-interval '7 days' LIMIT 1000)`,
