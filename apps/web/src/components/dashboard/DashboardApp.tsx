@@ -340,6 +340,8 @@ function Overview({ data }: { data: DashboardData }) {
   );
 }
 
+// The scrollable data table is a named region that needs focus for keyboard scrolling.
+/* eslint-disable jsx-a11y-x/no-noninteractive-tabindex */
 function Trend({ data }: { data: DashboardData }) {
   const [metric, setMetric] = useState<'runs' | 'credits_spent'>('runs');
   const id = useId();
@@ -347,7 +349,7 @@ function Trend({ data }: { data: DashboardData }) {
   const maximum = Math.max(2, ...values);
   const points = values.map(
     (value, index) =>
-      `${40 + (index * 580) / Math.max(1, values.length - 1)},${170 - (value * 140) / maximum}`,
+      `${(index * 580) / Math.max(1, values.length - 1)},${140 - (value * 140) / maximum}`,
   );
   const label = t(metric === 'runs' ? 'dashboard.volume' : 'dashboard.tokens');
   const total = data.current[metric];
@@ -379,68 +381,52 @@ function Trend({ data }: { data: DashboardData }) {
         <strong>{number(total)}</strong>
         <span>{label.toLocaleLowerCase('pt-BR')}</span>
       </div>
-      <svg
-        className={styles.chart}
-        viewBox="0 0 640 210"
-        role="img"
-        aria-labelledby={`${id}-title`}
-      >
-        <title id={`${id}-title`}>{t('dashboard.chart_label', { metric: label, total })}</title>
-        {[0, 0.5, 1].map((step) => (
-          <g key={step}>
-            <line
-              x1="40"
-              x2="620"
-              y1={170 - step * 140}
-              y2={170 - step * 140}
-              stroke="var(--color-border)"
-              strokeDasharray={step === 0 ? undefined : '3 5'}
-            />
-            <text
-              x="30"
-              y={174 - step * 140}
-              textAnchor="end"
-              fill="var(--color-muted)"
-              fontSize="11"
-            >
+      <div className={styles.plot}>
+        <div className={styles.axis} aria-hidden="true">
+          {[1, 0.5, 0].map((step) => (
+            <span key={step}>
               {new Intl.NumberFormat('pt-BR', {
                 notation: 'compact',
                 maximumFractionDigits: 1,
               }).format(maximum * step)}
-            </text>
-          </g>
-        ))}
-        <path d={`M40,170 L${points.join(' L')} L620,170 Z`} fill="var(--color-accent-soft)" />
-        <polyline
-          points={points.join(' ')}
-          fill="none"
-          stroke="var(--color-accent)"
-          strokeWidth="2.5"
-          strokeLinejoin="round"
-        />
-        {data.series.length <= 8 &&
-          data.series.map((day, index) => (
-            <circle
-              key={day.date}
-              cx={40 + (index * 580) / Math.max(1, values.length - 1)}
-              cy={170 - (day[metric] * 140) / maximum}
-              r="3.5"
-              fill="var(--color-accent)"
-            >
-              <title>{`${date(day.date)}: ${number(day[metric])}`}</title>
-            </circle>
+            </span>
           ))}
-        {data.series[0] && (
-          <text x="40" y="200" fill="var(--color-muted)" fontSize="12">
-            {date(data.series[0].date)}
-          </text>
-        )}
-        {data.series.at(-1) && (
-          <text x="620" y="200" textAnchor="end" fill="var(--color-muted)" fontSize="12">
-            {date(data.series.at(-1)!.date)}
-          </text>
-        )}
-      </svg>
+        </div>
+        <svg
+          className={styles.chart}
+          viewBox="0 0 580 140"
+          preserveAspectRatio="none"
+          role="img"
+          aria-labelledby={`${id}-title`}
+        >
+          <title id={`${id}-title`}>{t('dashboard.chart_label', { metric: label, total })}</title>
+          {[0, 0.5, 1].map((step) => (
+            <line
+              key={step}
+              x1="0"
+              x2="580"
+              y1={140 - step * 140}
+              y2={140 - step * 140}
+              stroke="var(--color-border)"
+              strokeDasharray={step === 0 ? undefined : '3 5'}
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
+          <path d={`M0,140 L${points.join(' L')} L580,140 Z`} fill="var(--color-accent-soft)" />
+          <polyline
+            points={points.join(' ')}
+            fill="none"
+            stroke="var(--color-accent)"
+            strokeWidth="2.5"
+            strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
+          />
+        </svg>
+      </div>
+      <div className={styles.dates} aria-hidden="true">
+        <span>{data.series[0] && date(data.series[0].date)}</span>
+        <span>{data.series.at(-1) && date(data.series.at(-1)!.date)}</span>
+      </div>
       <details className={styles.dataTable}>
         <summary>{t('dashboard.table')}</summary>
         <div
@@ -483,6 +469,8 @@ function Trend({ data }: { data: DashboardData }) {
     </section>
   );
 }
+
+/* eslint-enable jsx-a11y-x/no-noninteractive-tabindex */
 
 function Performance({ data }: { data: DashboardData }) {
   const current = data.current;
