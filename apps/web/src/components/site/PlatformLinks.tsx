@@ -48,7 +48,9 @@ export function PlatformLinks({
         {items
           .filter(
             (item) =>
-              ['android', 'ios', 'github'].includes(item.id) || item.status !== 'coming_soon',
+              compact ||
+              ['android', 'ios', 'github'].includes(item.id) ||
+              item.status !== 'coming_soon',
           )
           .map((item) => (
             <li key={item.id}>

@@ -12,7 +12,7 @@ test('platform actions wait for hydration before accepting the first click', asy
   });
   try {
     await page.goto('/', { waitUntil: 'commit' });
-    const section = page.getByRole('region', { name: 'Use onde preferir' }).first();
+    const section = page.getByRole('contentinfo');
     const platform = section.getByRole('button', { name: 'iOS Em breve', exact: true });
     await expect(platform).toBeVisible();
     await expect(platform).toBeDisabled();
@@ -49,7 +49,13 @@ for (const width of [1280, 390]) {
       await route.fulfill({ status: 401, headers, json: { code: 'unauthenticated' } });
     });
     await page.goto('/');
-    const section = page.getByRole('region', { name: 'Use onde preferir' }).first();
+    const section = page.getByRole('contentinfo');
+    await expect(page.getByRole('heading', { name: 'Use onde preferir' })).toHaveCount(0);
+    for (const browser of ['Chrome', 'Firefox', 'Safari']) {
+      await expect(
+        section.getByRole('button', { name: `${browser} Em breve`, exact: true }),
+      ).toBeVisible();
+    }
     const platform = section.getByRole('button', { name: 'iOS Em breve', exact: true });
     await expect(platform).toBeEnabled();
     await platform.focus();
