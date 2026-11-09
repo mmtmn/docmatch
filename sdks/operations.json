@@ -1,5 +1,5 @@
 {
-  "schema_sha256": "3cb19ee4786532ed4111a7f6dfc1aa4b7856d1c262a452d851547932ac5ab55d",
+  "schema_sha256": "d91cfb6136ea96e338f47aa54eff9ddd7b56a3e2da4bd365ba566a920df76214",
   "operations": {
     "listOrganizations": {
       "method": "GET",
