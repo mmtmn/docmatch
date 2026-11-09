@@ -9,6 +9,7 @@ var Operations = map[string]struct{ Method, Path string }{
 	"getProject":                 {"GET", "/v1/projects/{project}"},
 	"updateProject":              {"PATCH", "/v1/projects/{project}"},
 	"deleteProject":              {"DELETE", "/v1/projects/{project}"},
+	"workspaceDashboard":         {"GET", "/v1/projects/dashboard"},
 	"accountActivity":            {"GET", "/v1/projects/activity"},
 	"replaceProjectDocument":     {"POST", "/v1/projects/{project}/documents/{document}/replace"},
 	"shareProject":               {"PUT", "/v1/projects/{project}/sharing"},

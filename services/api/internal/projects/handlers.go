@@ -16,6 +16,7 @@ import (
 )
 
 func (s *Service) Mount(r *httpx.Router) {
+	r.HandleFunc(http.MethodGet, "/v1/projects/dashboard", httpx.BodyNone, s.dashboard)
 	r.HandleFunc(http.MethodGet, "/v1/projects/activity", httpx.BodyNone, s.accountActivity)
 	r.HandleFunc("GET", "/v1/projects", httpx.BodyNone, s.list)
 	r.HandleFunc("POST", "/v1/projects", httpx.BodyJSON, s.create)

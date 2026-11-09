@@ -14,6 +14,7 @@ verificação, reversão e uma tabela de registro das execuções passadas.
 | [kill-switches.md](kill-switches.md) | Desligar uma capacidade (gastos, cadastros, modelos, mídia, toolsmith, API, manutenção) sem implantar código. |
 | [burst.md](burst.md) | Ligar, verificar, subir e descer à mão, diagnosticar e desligar o pool de trabalhadores sob demanda (Spot). |
 | [google-sign-in.md](google-sign-in.md) | Preparar branding, URLs e cliente OAuth Web do Google; importar o JSON como segredos. |
+| [painel.md](painel.md) | Métricas da conta, permissões, definições e verificações do painel. |
 | [publicar-sdks.md](publicar-sdks.md) | Preparar e publicar os SDKs Python, Rust e Go, com verificações locais. |
 
 | [private-test-account.md](private-test-account.md) | Acesso privado de teste, isenção de tokens e revogação. |

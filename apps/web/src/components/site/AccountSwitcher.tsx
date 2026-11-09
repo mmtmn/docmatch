@@ -52,7 +52,10 @@ export function AccountSwitcher() {
         value={orgId}
         onChange={(event) => {
           // Commit selection on the destination page, after any unsaved-work prompt.
-          window.location.assign(`/app?account=${encodeURIComponent(event.currentTarget.value)}`);
+          const destination = window.location.pathname === '/painel' ? '/painel' : '/app';
+          window.location.assign(
+            `${destination}?account=${encodeURIComponent(event.currentTarget.value)}`,
+          );
         }}
       >
         {list.items.map((item) => (

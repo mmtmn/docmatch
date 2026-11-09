@@ -1,5 +1,5 @@
 {
-  "schema_sha256": "d91cfb6136ea96e338f47aa54eff9ddd7b56a3e2da4bd365ba566a920df76214",
+  "schema_sha256": "ad21b1f8f261d562e84cf0006814e493e1312175af05350741587bd3fcda8087",
   "operations": {
     "listOrganizations": {
       "method": "GET",
@@ -28,6 +28,10 @@
     "deleteProject": {
       "method": "DELETE",
       "path": "/v1/projects/{project}"
+    },
+    "workspaceDashboard": {
+      "method": "GET",
+      "path": "/v1/projects/dashboard"
     },
     "accountActivity": {
       "method": "GET",

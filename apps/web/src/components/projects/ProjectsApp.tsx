@@ -56,6 +56,7 @@ export function ProjectsApp() {
   return (
     <section className={`${styles.page} ${projectId ? styles.detailPage : ''}`}>
       <nav className={styles.navigation} aria-label={t('projects.navigation')}>
+        {context.org.capabilities.read_results && <a href="/painel">{t('dashboard.nav')}</a>}
         <a href="/app" aria-current={!projectId ? 'page' : undefined}>
           {t('projects.title')}
         </a>

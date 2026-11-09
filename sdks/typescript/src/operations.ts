@@ -28,6 +28,10 @@ export const operations = {
     "method": "DELETE",
     "path": "/v1/projects/{project}"
   },
+  "workspaceDashboard": {
+    "method": "GET",
+    "path": "/v1/projects/dashboard"
+  },
   "accountActivity": {
     "method": "GET",
     "path": "/v1/projects/activity"

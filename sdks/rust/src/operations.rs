@@ -7,6 +7,7 @@ pub const OPERATIONS: &[(&str, &str, &str)] = &[
     ("getProject", "GET", "/v1/projects/{project}"),
     ("updateProject", "PATCH", "/v1/projects/{project}"),
     ("deleteProject", "DELETE", "/v1/projects/{project}"),
+    ("workspaceDashboard", "GET", "/v1/projects/dashboard"),
     ("accountActivity", "GET", "/v1/projects/activity"),
     (
         "replaceProjectDocument",

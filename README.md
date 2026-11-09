@@ -39,6 +39,7 @@ A nota vale para esse caso de teste; sugestões de IA continuam sujeitas à revi
 
 ## O que você recebe
 
+- [Painel da conta](https://docmatch.com.br/painel) com resultados, atividade, consumo e próximos passos.
 - Um documento consolidado para baixar, com achados e evidências abaixo.
 - Valores confirmados separados de correções propostas; os originais são preservados.
 - Modelos locais ou OpenRouter, com orçamento aprovado antes de processar.
