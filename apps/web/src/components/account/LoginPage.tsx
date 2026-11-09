@@ -26,8 +26,15 @@ function errorCode(): string | null {
     : new URLSearchParams(window.location.search).get('error');
 }
 
+function returnTo(): string {
+  return typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('next') === '/painel'
+    ? '/painel'
+    : APP_PATH;
+}
+
 function openApp(): void {
-  window.location.assign(APP_PATH);
+  window.location.assign(returnTo());
 }
 
 // Rendered with client:only (it reads the URL on the first render).
@@ -47,7 +54,7 @@ export function LoginPage() {
           if (signal.aborted) return;
           // A bookmarked /login or a click before the header hydrates should open the
           // account, not bounce back to the same app screen looking like a reload.
-          if (me) window.location.replace('/conta');
+          if (me) window.location.replace(returnTo() === '/painel' ? '/painel' : '/conta');
           else setChecking(false);
         })
         .catch(() => {
@@ -66,5 +73,14 @@ export function LoginPage() {
   }, []);
 
   if (checking) return <p role="status">{t('account.loading')}</p>;
-  return <AuthDialog open inline onClose={() => undefined} onSignedIn={openApp} notice={notice} />;
+  return (
+    <AuthDialog
+      open
+      inline
+      onClose={() => undefined}
+      onSignedIn={openApp}
+      returnTo={returnTo()}
+      notice={notice}
+    />
+  );
 }

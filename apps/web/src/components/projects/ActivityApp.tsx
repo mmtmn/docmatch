@@ -69,6 +69,7 @@ export function ActivityApp() {
   return (
     <section className={styles.page}>
       <nav className={styles.navigation} aria-label={t('projects.navigation')}>
+        {org?.capabilities.read_results && <a href="/painel">{t('dashboard.nav')}</a>}
         <a href="/app">{t('projects.title')}</a>
         <a href="/atividade" aria-current="page">
           {t('projects.activity')}

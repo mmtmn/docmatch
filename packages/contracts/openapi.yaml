@@ -1045,6 +1045,38 @@ paths:
           $ref: "#/components/responses/Conflict"
       parameters:
         - $ref: "#/components/parameters/ProjectVersion"
+  /projects/dashboard:
+    parameters:
+      - $ref: "#/components/parameters/OrgContext"
+    get:
+      operationId: workspaceDashboard
+      tags: [projects]
+      summary: Resume os projetos e as execuções acessíveis da conta
+      description: Métricas por período de criação, comparação anterior de mesma duração e séries diárias no horário de Brasília. Exige sessão com acesso a resultados. Totais incluem reprocessamentos e respeitam a retenção e a visibilidade de cada projeto.
+      security:
+        - cookieSession: []
+        - extensionSession: []
+      parameters:
+        - name: days
+          in: query
+          description: Duração do período, em dias corridos até o momento da consulta.
+          schema:
+            type: integer
+            enum: [7, 30, 90]
+            default: 30
+      responses:
+        "200":
+          description: Visão geral da conta; nunca armazenar em cache.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceDashboard"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
   /projects/activity:
     parameters:
       - $ref: "#/components/parameters/OrgContext"
@@ -4690,6 +4722,223 @@ components:
             $ref: "#/components/schemas/Error"
 
   schemas:
+    DashboardMetrics:
+      type: object
+      additionalProperties: false
+      required:
+        - runs
+        - completed
+        - failed
+        - cancelled
+        - queued
+        - running
+        - needs_approval
+        - credits_spent
+        - lines_total
+        - lines_matched
+        - findings
+        - high_findings
+        - median_seconds
+      properties:
+        runs:
+          type: integer
+          minimum: 0
+        completed:
+          type: integer
+          minimum: 0
+        failed:
+          type: integer
+          minimum: 0
+        cancelled:
+          type: integer
+          minimum: 0
+        queued:
+          type: integer
+          minimum: 0
+        running:
+          type: integer
+          minimum: 0
+        needs_approval:
+          type: integer
+          minimum: 0
+        credits_spent:
+          type: integer
+          minimum: 0
+        lines_total:
+          type: integer
+          minimum: 0
+        lines_matched:
+          type: integer
+          minimum: 0
+        findings:
+          type: integer
+          minimum: 0
+        high_findings:
+          type: integer
+          minimum: 0
+        median_seconds:
+          type:
+            - number
+            - "null"
+          minimum: 0
+    DashboardDay:
+      type: object
+      additionalProperties: false
+      required:
+        - date
+        - runs
+        - completed
+        - failed
+        - credits_spent
+      properties:
+        date:
+          type: string
+          format: date
+        runs:
+          type: integer
+          minimum: 0
+        completed:
+          type: integer
+          minimum: 0
+        failed:
+          type: integer
+          minimum: 0
+        credits_spent:
+          type: integer
+          minimum: 0
+    DashboardRun:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - project_id
+        - project_name
+        - status
+        - created_at
+        - expired
+        - findings
+      properties:
+        id:
+          type: string
+        project_id:
+          type: string
+        project_name:
+          type: string
+        status:
+          $ref: "#/components/schemas/RunStatus"
+        created_at:
+          type: string
+          format: date-time
+        expired:
+          type: boolean
+        findings:
+          type: integer
+          minimum: 0
+    DashboardProject:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - documents
+        - updated_at
+        - last_status
+        - findings
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        documents:
+          type: integer
+          minimum: 0
+        updated_at:
+          type: string
+          format: date-time
+        last_status:
+          anyOf:
+            - $ref: "#/components/schemas/RunStatus"
+            - type: "null"
+        findings:
+          type: integer
+          minimum: 0
+    WorkspaceDashboard:
+      type: object
+      additionalProperties: false
+      required:
+        - generated_at
+        - from
+        - previous_from
+        - days
+        - time_zone
+        - current
+        - previous
+        - portfolio
+        - series
+        - recent
+        - attention
+        - projects
+      properties:
+        generated_at:
+          type: string
+          format: date-time
+        from:
+          type: string
+          format: date-time
+        previous_from:
+          type: string
+          format: date-time
+        days:
+          type: integer
+          enum:
+            - 7
+            - 30
+            - 90
+        time_zone:
+          type: string
+          enum:
+            - America/Sao_Paulo
+        current:
+          $ref: "#/components/schemas/DashboardMetrics"
+        previous:
+          $ref: "#/components/schemas/DashboardMetrics"
+        portfolio:
+          type: object
+          additionalProperties: false
+          required:
+            - active
+            - archived
+            - documents
+            - unavailable_documents
+          properties:
+            active:
+              type: integer
+              minimum: 0
+            archived:
+              type: integer
+              minimum: 0
+            documents:
+              type: integer
+              minimum: 0
+            unavailable_documents:
+              type: integer
+              minimum: 0
+        series:
+          type: array
+          items:
+            $ref: "#/components/schemas/DashboardDay"
+        recent:
+          type: array
+          items:
+            $ref: "#/components/schemas/DashboardRun"
+        attention:
+          type: array
+          items:
+            $ref: "#/components/schemas/DashboardRun"
+        projects:
+          type: array
+          items:
+            $ref: "#/components/schemas/DashboardProject"
     ProjectUploadRequest:
       type: object
       required:

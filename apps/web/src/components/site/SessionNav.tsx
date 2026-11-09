@@ -45,8 +45,15 @@ export function SessionNav({ path }: { path: string }) {
   const label = goToApp ? t('nav.app') : signedIn ? t('nav.account') : t('nav.login');
 
   return (
-    <a className={`btn btn--primary ${styles.link}`} href={href}>
-      {label}
-    </a>
+    <>
+      {signedIn && path !== '/painel' && (
+        <a className={`btn btn--ghost ${styles.link}`} href="/painel">
+          {t('dashboard.nav')}
+        </a>
+      )}
+      <a className={`btn btn--primary ${styles.link}`} href={href}>
+        {label}
+      </a>
+    </>
   );
 }

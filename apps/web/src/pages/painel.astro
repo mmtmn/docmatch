@@ -1,0 +1,13 @@
+---
+import { DashboardApp } from '../components/dashboard/DashboardApp';
+import Header from '../components/site/Header.astro';
+import Base from '../layouts/Base.astro';
+import { t } from '../lib/i18n';
+---
+
+<Base title={t('dashboard.nav')} hideHeader hideFooter noindex>
+  <Header variant="app" />
+  <main id="conteudo" class="container">
+    <DashboardApp client:only="react" />
+  </main>
+</Base>

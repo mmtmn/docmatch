@@ -7,6 +7,7 @@
 - [Experimente com dois arquivos](primeiro-projeto.md)
 - [Salve e volte depois](projetos.md)
 - [Entenda o resultado](resultados.md)
+- [Acompanhe sua operação](painel.md)
 
 # Trabalhe em equipe
 
