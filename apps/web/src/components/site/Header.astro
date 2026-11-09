@@ -2,6 +2,7 @@
 import { t } from '../../lib/i18n';
 import { canonicalPath } from '../../lib/canonical';
 import { SessionNav } from './SessionNav';
+import { Integrations } from './Integrations';
 import { AccountSwitcher } from './AccountSwitcher';
 
 interface Props {
@@ -55,6 +56,7 @@ const links = [
         </details>
       </nav>
     )}
+    <Integrations client:load />
     <SessionNav path={canonicalPath(Astro.url.pathname)} client:load />
   </div>
 </header>

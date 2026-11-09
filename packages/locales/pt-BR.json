@@ -669,6 +669,13 @@
           "paragraphs": [
             "O contato do encarregado de proteção de dados e o canal de segurança estão publicados em security.txt."
           ]
+        },
+        {
+          "title": "11. Interesse em integrações",
+          "paragraphs": [
+            "Ao clicar em Integrar, registramos a ferramenta escolhida e a data do interesse. Para usuários conectados, o registro pode ser associado ao usuário. Para visitantes, usamos um identificador aleatório do navegador, armazenado localmente após o clique; o banco guarda apenas uma representação protegida desse identificador. Não guardamos o endereço IP nesse registro.",
+            "Esses registros ajudam a priorizar novas integrações e são removidos após 365 dias sem nova manifestação de interesse. Esse clique não conecta contas externas nem inscreve você em comunicações por e-mail."
+          ]
         }
       ]
     }
@@ -1635,5 +1642,22 @@
     "link_error": "Não foi possível concluir. O link pode ter vencido ou sido substituído. Tente de novo ou faça um novo pedido no site.",
     "android_attribution": "Android é uma marca do Google LLC. O robô Android é reproduzido ou modificado de trabalho criado e compartilhado pelo Google, conforme a licença",
     "android_license": "Creative Commons 3.0"
+  },
+  "integrations": {
+    "nav": "Integrações",
+    "eyebrow": "SUAS FERRAMENTAS, MAIS PERTO",
+    "title": "Seu trabalho, conectado.",
+    "intro": "Estamos preparando novas conexões. Escolha as ferramentas que fazem parte da sua rotina.",
+    "all": "Todas",
+    "finance": "Financeiro",
+    "accounting": "Contabilidade",
+    "legal": "Jurídico",
+    "integrate": "Integrar",
+    "saving": "Registrando…",
+    "soon": "Em breve",
+    "saved": "Integração com {name} em breve. Seu interesse foi registrado.",
+    "failed": "Não foi possível registrar seu interesse. Tente novamente.",
+    "close": "Fechar integrações",
+    "footer": "Seu interesse ajuda a escolher as próximas integrações. Nenhuma conta externa será conectada."
   }
 }

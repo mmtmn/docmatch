@@ -1,0 +1,82 @@
+[
+  {
+    "id": "conta-azul",
+    "name": "Conta Azul",
+    "category": "finance",
+    "mark": "CA",
+    "tone": "blue",
+    "description": "Gestão financeira e conciliação bancária."
+  },
+  {
+    "id": "omie",
+    "name": "Omie",
+    "category": "finance",
+    "mark": "O",
+    "tone": "blue",
+    "description": "Financeiro, notas fiscais e gestão empresarial."
+  },
+  {
+    "id": "totvs",
+    "name": "TOTVS",
+    "category": "finance",
+    "mark": "T",
+    "tone": "navy",
+    "description": "Operações, documentos fiscais e ERP."
+  },
+  {
+    "id": "sap",
+    "name": "SAP",
+    "category": "finance",
+    "mark": "SAP",
+    "tone": "navy",
+    "description": "Finanças e processos empresariais."
+  },
+  {
+    "id": "quickbooks",
+    "name": "QuickBooks",
+    "category": "accounting",
+    "mark": "qb",
+    "tone": "green",
+    "description": "Contabilidade, despesas e faturamento."
+  },
+  {
+    "id": "xero",
+    "name": "Xero",
+    "category": "accounting",
+    "mark": "xero",
+    "tone": "blue",
+    "description": "Contabilidade e movimentações financeiras."
+  },
+  {
+    "id": "projuris",
+    "name": "Projuris",
+    "category": "legal",
+    "mark": "P",
+    "tone": "orange",
+    "description": "Processos, contratos e rotina jurídica."
+  },
+  {
+    "id": "astrea",
+    "name": "Astrea",
+    "category": "legal",
+    "mark": "A",
+    "tone": "purple",
+    "description": "Gestão de escritórios e processos jurídicos."
+  },
+  {
+    "id": "clio",
+    "name": "Clio",
+    "category": "legal",
+    "mark": "clio",
+    "tone": "navy",
+    "description": "Casos, documentos e faturamento jurídico."
+  },
+  {
+    "id": "docusign",
+    "name": "Docusign",
+    "category": "legal",
+    "mark": "D",
+    "tone": "purple",
+    "description": "Contratos, acordos e assinaturas eletrônicas."
+  }
+]

@@ -398,6 +398,14 @@ type IdempotencyKey struct {
 	ExpiresAt      time.Time
 }
 
+type IntegrationInterest struct {
+	IntegrationID string
+	SubjectHash   []byte
+	UserID        *uuid.UUID
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
 type LibraryRequest struct {
 	ID            uuid.UUID
 	OrgID         uuid.UUID
