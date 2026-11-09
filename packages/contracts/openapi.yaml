@@ -82,6 +82,7 @@ tags:
 paths:
   /integration-interests:
     post:
+      tags: [public]
       operationId: recordIntegrationInterest
       summary: Registrar interesse em uma integração futura.
       description: Não conecta serviços nem inscreve em e-mails. Deduplica por usuário autenticado ou identificador aleatório do navegador; não armazena IP. Retenção de 365 dias.
